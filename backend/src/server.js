@@ -4,10 +4,11 @@ const prisma = require('./config/prisma');
 
 const PORT = process.env.PORT || 5000;
 
-// Enable SQLite WAL mode for better concurrent read/write performance.
-// Use query API because SQLite PRAGMAs can return rows.
-prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(console.error);
-prisma.$queryRawUnsafe('PRAGMA synchronous=NORMAL').catch(console.error);
+// SQLite WAL mode — only for local dev (not PostgreSQL/Neon on production)
+if ((process.env.DB_PROVIDER || 'sqlite') === 'sqlite') {
+  prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {});
+  prisma.$queryRawUnsafe('PRAGMA synchronous=NORMAL').catch(() => {});
+}
 
 app.listen(PORT, () => {
   console.log(`\nEduManage Pro API running on http://localhost:${PORT}`);
