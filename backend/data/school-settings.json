@@ -1,0 +1,79 @@
+{
+  "1": {
+    "payment": {
+      "bank": {
+        "bankName": "HBL",
+        "branch": "Main",
+        "accountTitle": "Demo School",
+        "accountNumber": "123"
+      },
+      "voucher": {
+        "headerText": "School Fee Voucher",
+        "footerText": "Thank you for timely payment. Keep this voucher as your receipt.",
+        "showLogo": true,
+        "showBarcode": true,
+        "copies": "3",
+        "thermalPrinter": false
+      }
+    },
+    "updatedAt": "2026-07-04T06:45:06.933Z",
+    "theme": {
+      "selectedTheme": "Teal",
+      "customPrimary": "#134E4A",
+      "customSecondary": "#0F766E",
+      "applyMode": "preset"
+    },
+    "website": {
+      "enableWebsite": "Yes",
+      "aboutUs": "",
+      "schoolTiming": "",
+      "welcomeText": "",
+      "schoolEmail": "admin@demo.com",
+      "twitterLink": "",
+      "contactNumber": "",
+      "facebookPage": "",
+      "sliderTitle": "For Every Child",
+      "sliderSubTitle": "Quality Education",
+      "sliderDetails": "",
+      "feature1Title": "",
+      "feature1Details": "",
+      "feature2Title": "",
+      "feature2Details": "",
+      "feature3Title": "",
+      "feature3Details": "",
+      "feature4Title": "",
+      "feature4Details": "",
+      "aboutSchool": "",
+      "classesText": "",
+      "studentsEnrolled": "0",
+      "classesCompleted": "0",
+      "awardsWon": "0",
+      "coursesCompleted": "0",
+      "facilitiesText": "",
+      "fac1Title": "",
+      "fac1Text": "",
+      "fac2Title": "",
+      "fac2Text": "",
+      "fac3Title": "",
+      "fac3Text": "",
+      "galleryText": "",
+      "noticeboardText": "",
+      "principalTitle": "",
+      "principalMessage": "",
+      "googleMapEmbed": "",
+      "primaryColor": "#0F766E",
+      "secondaryColor": "#D97706",
+      "logoPreview": null,
+      "sliderBg": null
+    }
+  },
+  "39": {
+    "theme": {
+      "selectedTheme": "Purple",
+      "customPrimary": "#1E3A5F",
+      "customSecondary": "#0D9488",
+      "applyMode": "preset"
+    },
+    "updatedAt": "2026-07-04T11:08:38.501Z"
+  }
+}

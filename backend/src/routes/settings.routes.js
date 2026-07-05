@@ -1,0 +1,250 @@
+const express = require('express');
+const router = express.Router();
+const prisma = require('../config/prisma');
+const fs = require('fs/promises');
+const path = require('path');
+const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
+const SETTINGS_STORE_PATH = path.join(__dirname, '../../data/school-settings.json');
+
+const readSettingsStore = async () => {
+  try {
+    const raw = await fs.readFile(SETTINGS_STORE_PATH, 'utf8');
+    return JSON.parse(raw || '{}');
+  } catch {
+    return {};
+  }
+};
+
+const writeSettingsStore = async (store) => {
+  const dir = path.dirname(SETTINGS_STORE_PATH);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(SETTINGS_STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
+};
+
+const getSchoolSettings = async (schoolId) => {
+  const store = await readSettingsStore();
+  return store[String(schoolId)] || {};
+};
+
+const setSchoolSettings = async (schoolId, patch) => {
+  const store = await readSettingsStore();
+  const key = String(schoolId);
+  store[key] = { ...(store[key] || {}), ...patch, updatedAt: new Date().toISOString() };
+  await writeSettingsStore(store);
+  return store[key];
+};
+
+router.get('/school', wrap(async (req, res) => {
+  const school = await prisma.school.findUnique({ where: { id: req.schoolId }, include: { campuses: true } });
+  res.json({ success: true, data: school });
+}));
+
+router.put('/school', wrap(async (req, res) => {
+  const allowed = ['name','address','city','phone','email','logoUrl','subdomain'];
+  const data = {};
+  allowed.forEach(k => { if (req.body[k] !== undefined) data[k] = req.body[k]; });
+  const school = await prisma.school.update({ where: { id: req.schoolId }, data });
+  res.json({ success: true, data: school });
+}));
+
+router.get('/sessions', wrap(async (req, res) => {
+  const sessions = await prisma.academicSession.findMany({ where: { schoolId: req.schoolId }, orderBy: { startDate: 'desc' } });
+  res.json({ success: true, data: sessions });
+}));
+
+router.post('/sessions', wrap(async (req, res) => {
+  const { name, startDate, endDate, isActive } = req.body;
+  if (isActive) await prisma.academicSession.updateMany({ where: { schoolId: req.schoolId }, data: { isActive: false } });
+  const session = await prisma.academicSession.create({ data: { schoolId: req.schoolId, name, startDate: new Date(startDate), endDate: new Date(endDate), isActive: isActive || false } });
+  res.status(201).json({ success: true, data: session });
+}));
+
+// ---------------------------------------------------------------------------
+// Exam settings — grade thresholds and pass percentage stored per school
+// ---------------------------------------------------------------------------
+
+// Default exam settings returned when no record exists
+const DEFAULT_EXAM_SETTINGS = {
+  passPercentage: 40,
+  gradeThresholds: [
+    { minPercent: 90, grade: 'A+' },
+    { minPercent: 80, grade: 'A' },
+    { minPercent: 70, grade: 'B' },
+    { minPercent: 60, grade: 'C' },
+    { minPercent: 50, grade: 'D' },
+    { minPercent: 0,  grade: 'F' },
+  ],
+  showGradeOnResult: true,
+  showPositionOnResult: true,
+  allowGraceMarks: false,
+  maxGraceMarksPerSubject: 0,
+};
+
+// GET /settings/exam — find ExamSettings by schoolId; if not found return defaults
+router.get('/exam', wrap(async (req, res) => {
+  try {
+    const settings = await prisma.examSettings.findFirst({ where: { schoolId: req.schoolId } });
+    if (!settings) {
+      return res.json({ success: true, data: { ...DEFAULT_EXAM_SETTINGS, schoolId: req.schoolId, isDefault: true } });
+    }
+    res.json({ success: true, data: settings });
+  } catch (err) {
+    // ExamSettings model may not exist in this schema version
+    res.json({ success: true, data: { ...DEFAULT_EXAM_SETTINGS, schoolId: req.schoolId, isDefault: true }, warning: 'ExamSettings model not available; returning defaults.' });
+  }
+}));
+
+// PUT /settings/exam — upsert ExamSettings for schoolId
+router.put('/exam', wrap(async (req, res) => {
+  const {
+    passPercentage,
+    gradeThresholds,
+    showGradeOnResult,
+    showPositionOnResult,
+    allowGraceMarks,
+    maxGraceMarksPerSubject,
+  } = req.body;
+
+  const data = {
+    ...(passPercentage !== undefined && { passPercentage: parseFloat(passPercentage) }),
+    ...(gradeThresholds !== undefined && { gradeThresholds }),
+    ...(showGradeOnResult !== undefined && { showGradeOnResult: Boolean(showGradeOnResult) }),
+    ...(showPositionOnResult !== undefined && { showPositionOnResult: Boolean(showPositionOnResult) }),
+    ...(allowGraceMarks !== undefined && { allowGraceMarks: Boolean(allowGraceMarks) }),
+    ...(maxGraceMarksPerSubject !== undefined && { maxGraceMarksPerSubject: parseInt(maxGraceMarksPerSubject) }),
+  };
+
+  try {
+    const existing = await prisma.examSettings.findFirst({ where: { schoolId: req.schoolId } });
+    let settings;
+    if (existing) {
+      settings = await prisma.examSettings.update({ where: { id: existing.id }, data });
+    } else {
+      settings = await prisma.examSettings.create({ data: { schoolId: req.schoolId, ...data } });
+    }
+    res.json({ success: true, data: settings });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Failed to save exam settings.', detail: err.message });
+  }
+}));
+
+// ---------------------------------------------------------------------------
+// Payment settings persisted in backend JSON store (school-scoped)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_PAYMENT_SETTINGS = {
+  bank: {
+    bankName: '',
+    branch: '',
+    accountTitle: '',
+    accountNumber: '',
+  },
+  voucher: {
+    headerText: 'School Fee Voucher',
+    footerText: 'Thank you for timely payment. Keep this voucher as your receipt.',
+    showLogo: true,
+    showBarcode: true,
+    copies: '2',
+    thermalPrinter: false,
+  },
+};
+
+router.get('/payment', wrap(async (req, res) => {
+  const settings = await getSchoolSettings(req.schoolId);
+  res.json({ success: true, data: settings.payment || DEFAULT_PAYMENT_SETTINGS });
+}));
+
+router.put('/payment', wrap(async (req, res) => {
+  const incoming = req.body || {};
+  const payment = {
+    bank: { ...DEFAULT_PAYMENT_SETTINGS.bank, ...(incoming.bank || {}) },
+    voucher: { ...DEFAULT_PAYMENT_SETTINGS.voucher, ...(incoming.voucher || {}) },
+  };
+  const settings = await setSchoolSettings(req.schoolId, { payment });
+  res.json({ success: true, data: settings.payment });
+}));
+
+// ---------------------------------------------------------------------------
+// Theme settings persisted in backend JSON store (school-scoped)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_THEME_SETTINGS = {
+  selectedTheme: 'Navy Blue',
+  customPrimary: '#1E3A5F',
+  customSecondary: '#0D9488',
+  applyMode: 'preset',
+};
+
+router.get('/theme', wrap(async (req, res) => {
+  const settings = await getSchoolSettings(req.schoolId);
+  res.json({ success: true, data: settings.theme || DEFAULT_THEME_SETTINGS });
+}));
+
+router.put('/theme', wrap(async (req, res) => {
+  const incoming = req.body || {};
+  const theme = { ...DEFAULT_THEME_SETTINGS, ...incoming };
+  const settings = await setSchoolSettings(req.schoolId, { theme });
+  res.json({ success: true, data: settings.theme });
+}));
+
+// ---------------------------------------------------------------------------
+// Website settings persisted in backend JSON store (school-scoped)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_WEBSITE_SETTINGS = {
+  enableWebsite: 'No',
+  aboutUs: '',
+  schoolTiming: '',
+  welcomeText: '',
+  schoolEmail: '',
+  twitterLink: '',
+  contactNumber: '',
+  facebookPage: '',
+  sliderTitle: 'For Every Child',
+  sliderSubTitle: 'Quality Education',
+  sliderDetails: '',
+  feature1Title: '',
+  feature1Details: '',
+  feature2Title: '',
+  feature2Details: '',
+  feature3Title: '',
+  feature3Details: '',
+  feature4Title: '',
+  feature4Details: '',
+  aboutSchool: '',
+  classesText: '',
+  studentsEnrolled: '0',
+  classesCompleted: '0',
+  awardsWon: '0',
+  coursesCompleted: '0',
+  facilitiesText: '',
+  fac1Title: '',
+  fac1Text: '',
+  fac2Title: '',
+  fac2Text: '',
+  fac3Title: '',
+  fac3Text: '',
+  galleryText: '',
+  noticeboardText: '',
+  principalTitle: '',
+  principalMessage: '',
+  googleMapEmbed: '',
+  primaryColor: '#0F766E',
+  secondaryColor: '#D97706',
+  logoPreview: null,
+  sliderBg: null,
+};
+
+router.get('/website', wrap(async (req, res) => {
+  const settings = await getSchoolSettings(req.schoolId);
+  res.json({ success: true, data: settings.website || DEFAULT_WEBSITE_SETTINGS });
+}));
+
+router.put('/website', wrap(async (req, res) => {
+  const website = { ...DEFAULT_WEBSITE_SETTINGS, ...(req.body || {}) };
+  const settings = await setSchoolSettings(req.schoolId, { website });
+  res.json({ success: true, data: settings.website });
+}));
+
+module.exports = router;

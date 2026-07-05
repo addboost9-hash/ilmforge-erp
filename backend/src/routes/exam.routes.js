@@ -1,0 +1,921 @@
+const express = require('express');
+const router = express.Router();
+const prisma = require('../config/prisma');
+const ExcelJS = require('exceljs');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
+const { body, param, validationResult } = require('express-validator');
+
+const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
+// Middleware: collect express-validator errors and return 400 if any
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, message: 'Validation failed.', errors: errors.array() });
+  }
+  next();
+};
+
+const canManageExams = (role) => ['super_admin', 'admin', 'teacher'].includes(role);
+
+// ---------------------------------------------------------------------------
+// Grade calculation helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Calculate grade using ExamSettings thresholds if available, otherwise
+ * fall back to hard-coded default thresholds.
+ *
+ * @param {number} obtained
+ * @param {number} total
+ * @param {Array|null} thresholds  Array of {minPercent, grade} sorted desc by minPercent
+ * @returns {string}
+ */
+const calcGradeFromThresholds = (obtained, total, thresholds) => {
+  if (!total || total === 0) return 'F';
+  const pct = (obtained / total) * 100;
+  if (thresholds && thresholds.length > 0) {
+    const sorted = [...thresholds].sort((a, b) => b.minPercent - a.minPercent);
+    for (const t of sorted) {
+      if (pct >= t.minPercent) return t.grade;
+    }
+    return 'F';
+  }
+  // Default thresholds
+  if (pct >= 90) return 'A+';
+  if (pct >= 80) return 'A';
+  if (pct >= 70) return 'B';
+  if (pct >= 60) return 'C';
+  if (pct >= 50) return 'D';
+  return 'F';
+};
+
+// Legacy helper kept for backward compatibility inside this file
+const calcGrade = (obtained, total) => calcGradeFromThresholds(obtained, total, null);
+
+/**
+ * Load ExamSettings thresholds for the school, return null if model/row absent.
+ */
+const loadThresholds = async (schoolId) => {
+  try {
+    const settings = await prisma.examSettings.findFirst({ where: { schoolId } });
+    if (settings && settings.gradeThresholds) return settings.gradeThresholds;
+  } catch (_) {
+    // ExamSettings model may not exist in older schema versions
+  }
+  return null;
+};
+
+/**
+ * Derive division string from percentage.
+ */
+const calcDivision = (pct) => {
+  if (pct >= 60) return 'First';
+  if (pct >= 45) return 'Second';
+  if (pct >= 33) return 'Third';
+  return 'Fail';
+};
+
+// ---------------------------------------------------------------------------
+// STATIC / COLLECTION routes  (must be declared BEFORE /:id param routes)
+// ---------------------------------------------------------------------------
+
+// GET /exams/template/excel — blank marks entry template for a class
+router.get('/template/excel', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const { classId, examId } = req.query;
+  if (!classId) return res.status(400).json({ success: false, message: 'classId is required.' });
+
+  const students = await prisma.student.findMany({
+    where: { schoolId: req.schoolId, classId: parseInt(classId), deletedAt: null, status: 'active' },
+    orderBy: { rollNo: 'asc' },
+  });
+
+  // Attempt to load subjects for the class
+  let subjects = [];
+  try {
+    subjects = await prisma.subject.findMany({
+      where: { schoolId: req.schoolId, classId: parseInt(classId) },
+      orderBy: { name: 'asc' },
+    });
+  } catch (_) {
+    // subject model may not have classId — skip
+  }
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Marks Template');
+
+  const baseCols = [
+    { header: 'Roll No', key: 'rollNo', width: 12 },
+    { header: 'Name', key: 'name', width: 25 },
+  ];
+  const subjectCols = subjects.map((s) => ({
+    header: `${s.name} (Obt)`,
+    key: `sub_${s.id}_obt`,
+    width: 16,
+  }));
+  const subjectTotalCols = subjects.map((s) => ({
+    header: `${s.name} (Total)`,
+    key: `sub_${s.id}_total`,
+    width: 16,
+  }));
+  ws.columns = [...baseCols, ...subjectCols, ...subjectTotalCols];
+
+  students.forEach((s) => {
+    const row = { rollNo: s.rollNo, name: s.name };
+    ws.addRow(row);
+  });
+
+  // Bold the header row
+  ws.getRow(1).font = { bold: true };
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename=marks_template.xlsx');
+  await wb.xlsx.write(res);
+  res.end();
+}));
+
+// GET /exams/cumulative — aggregated totals across all exams in a session per student
+router.get('/cumulative', wrap(async (req, res) => {
+  const { sessionId, classId } = req.query;
+  if (!sessionId) return res.status(400).json({ success: false, message: 'sessionId is required.' });
+
+  const exams = await prisma.exam.findMany({
+    where: {
+      schoolId: req.schoolId,
+      sessionId: parseInt(sessionId),
+      ...(classId && { classId: parseInt(classId) }),
+    },
+    select: { id: true, title: true },
+  });
+
+  const examIds = exams.map((e) => e.id);
+  if (examIds.length === 0) return res.json({ success: true, data: [] });
+
+  const allMarks = await prisma.examMark.findMany({
+    where: { examId: { in: examIds } },
+    include: {
+      student: { select: { id: true, name: true, rollNo: true } },
+    },
+  });
+
+  const studentMap = {};
+  for (const m of allMarks) {
+    const sid = m.studentId;
+    if (!studentMap[sid]) {
+      studentMap[sid] = {
+        studentId: sid,
+        rollNo: m.student?.rollNo,
+        name: m.student?.name,
+        totalObtained: 0,
+        totalMarks: 0,
+        examCount: 0,
+      };
+    }
+    studentMap[sid].totalObtained += m.obtainedMarks || 0;
+    studentMap[sid].totalMarks += m.totalMarks || 0;
+    studentMap[sid].examCount += 1;
+  }
+
+  const thresholds = await loadThresholds(req.schoolId);
+
+  const result = Object.values(studentMap).map((s) => {
+    const pct = s.totalMarks > 0 ? (s.totalObtained / s.totalMarks) * 100 : 0;
+    return {
+      ...s,
+      percentage: parseFloat(pct.toFixed(2)),
+      grade: calcGradeFromThresholds(s.totalObtained, s.totalMarks, thresholds),
+      division: calcDivision(pct),
+    };
+  });
+
+  result.sort((a, b) => b.percentage - a.percentage);
+  res.json({ success: true, data: result });
+}));
+
+// GET /exams/timetable — fetch ExamTimetable entries for an exam
+router.get('/timetable', wrap(async (req, res) => {
+  const { examId } = req.query;
+  if (!examId) return res.status(400).json({ success: false, message: 'examId is required.' });
+  try {
+    const rows = await prisma.examTimetable.findMany({
+      where: { examId: parseInt(examId), schoolId: req.schoolId },
+      orderBy: { date: 'asc' },
+    });
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    // ExamTimetable model may not exist
+    res.status(501).json({ success: false, message: 'ExamTimetable model not available.', detail: err.message });
+  }
+}));
+
+// POST /exams/timetable — create a timetable entry
+router.post('/timetable', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const { examId, subjectName, date, startTime, endTime, room } = req.body;
+  if (!examId || !subjectName || !date) {
+    return res.status(400).json({ success: false, message: 'examId, subjectName, and date are required.' });
+  }
+  try {
+    const entry = await prisma.examTimetable.create({
+      data: {
+        examId: parseInt(examId),
+        schoolId: req.schoolId,
+        subjectName,
+        date: new Date(date),
+        startTime: startTime || null,
+        endTime: endTime || null,
+        room: room || null,
+      },
+    });
+    res.status(201).json({ success: true, data: entry });
+  } catch (err) {
+    res.status(501).json({ success: false, message: 'ExamTimetable model not available.', detail: err.message });
+  }
+}));
+
+// PUT /exams/timetable/:id — update a timetable entry
+router.put('/timetable/:id', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const timetableId = parseInt(req.params.id);
+  const { subjectName, date, startTime, endTime, room } = req.body;
+  try {
+    // Ownership check: verify this timetable entry belongs to the requesting school
+    const existing = await prisma.examTimetable.findFirst({
+      where: { id: timetableId, schoolId: req.schoolId },
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Timetable entry not found.' });
+    }
+    const entry = await prisma.examTimetable.update({
+      where: { id: timetableId },
+      data: {
+        ...(subjectName && { subjectName }),
+        ...(date && { date: new Date(date) }),
+        ...(startTime !== undefined && { startTime }),
+        ...(endTime !== undefined && { endTime }),
+        ...(room !== undefined && { room }),
+      },
+    });
+    res.json({ success: true, data: entry });
+  } catch (err) {
+    res.status(501).json({ success: false, message: 'ExamTimetable model not available or entry not found.', detail: err.message });
+  }
+}));
+
+// DELETE /exams/timetable/:id — delete a timetable entry
+router.delete('/timetable/:id', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const timetableId = parseInt(req.params.id);
+  try {
+    // Ownership check: verify this timetable entry belongs to the requesting school
+    const existing = await prisma.examTimetable.findFirst({
+      where: { id: timetableId, schoolId: req.schoolId },
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Timetable entry not found.' });
+    }
+    await prisma.examTimetable.delete({ where: { id: timetableId } });
+    res.json({ success: true, message: 'Timetable entry deleted.' });
+  } catch (err) {
+    res.status(501).json({ success: false, message: 'ExamTimetable model not available or entry not found.', detail: err.message });
+  }
+}));
+
+// ---------------------------------------------------------------------------
+// Collection routes
+// ---------------------------------------------------------------------------
+
+// GET /exams — list exams for school
+router.get('/', wrap(async (req, res) => {
+  const { classId } = req.query;
+  const exams = await prisma.exam.findMany({
+    where: { schoolId: req.schoolId, ...(classId && { classId: parseInt(classId) }) },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json({ success: true, data: exams });
+}));
+
+// POST /exams — create exam
+router.post(
+  '/',
+  [
+    body('title')
+      .isString().withMessage('title must be a string.')
+      .trim()
+      .notEmpty().withMessage('title is required.')
+      .isLength({ max: 200 }).withMessage('title must be under 200 characters.'),
+    body('type')
+      .optional()
+      .isIn(['test', 'midterm', 'final']).withMessage('type must be one of: test, midterm, final.'),
+    body('classId')
+      .optional({ nullable: true })
+      .isInt().withMessage('classId must be an integer.'),
+  ],
+  validate,
+  wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Only admin/teacher can create exams.' });
+  }
+  const { title, type, classId, sessionId, dateStart, dateEnd } = req.body;
+  const exam = await prisma.exam.create({
+    data: {
+      schoolId: req.schoolId,
+      campusId: req.campusId,
+      title,
+      type: type || 'test',
+      classId: classId ? parseInt(classId) : null,
+      sessionId: sessionId ? parseInt(sessionId) : null,
+      dateStart: dateStart ? new Date(dateStart) : null,
+      dateEnd: dateEnd ? new Date(dateEnd) : null,
+    },
+  });
+  res.status(201).json({ success: true, data: exam });
+}));
+
+// ---------------------------------------------------------------------------
+// Single-exam routes  /:id/...
+// ---------------------------------------------------------------------------
+
+// DELETE /exams/:id — delete exam and cascade ExamMarks
+router.delete('/:id', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Only admin/teacher can delete exams.' });
+  }
+  const examId = parseInt(req.params.id);
+
+  // Verify ownership
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  // Cascade delete marks first (Prisma may not enforce cascade without schema onDelete)
+  await prisma.examMark.deleteMany({ where: { examId } });
+
+  // Delete timetable entries if model exists
+  try {
+    await prisma.examTimetable.deleteMany({ where: { examId } });
+  } catch (_) {}
+
+  await prisma.exam.delete({ where: { id: examId } });
+  res.json({ success: true, message: 'Exam and associated marks deleted.' });
+}));
+
+// PUT /exams/:id — update exam fields
+router.put('/:id', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Only admin/teacher can update exams.' });
+  }
+  const examId = parseInt(req.params.id);
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  const { title, type, dateStart, dateEnd, classId } = req.body;
+  const updated = await prisma.exam.update({
+    where: { id: examId },
+    data: {
+      ...(title !== undefined && { title }),
+      ...(type !== undefined && { type }),
+      ...(dateStart !== undefined && { dateStart: dateStart ? new Date(dateStart) : null }),
+      ...(dateEnd !== undefined && { dateEnd: dateEnd ? new Date(dateEnd) : null }),
+      ...(classId !== undefined && { classId: classId ? parseInt(classId) : null }),
+    },
+  });
+  res.json({ success: true, data: updated });
+}));
+
+// POST /exams/:id/marks — upsert marks with full field support + grade from ExamSettings
+router.post(
+  '/:id/marks',
+  [
+    param('id')
+      .isInt().withMessage('Exam id param must be an integer.'),
+    body('marks')
+      .isArray({ min: 1 }).withMessage('marks must be a non-empty array.'),
+    body('marks.*.studentId')
+      .isInt().withMessage('Each mark must have an integer studentId.'),
+    body('marks.*.obtainedMarks')
+      .isNumeric().withMessage('Each mark must have a numeric obtainedMarks.'),
+  ],
+  validate,
+  wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Only admin/teacher can enter marks.' });
+  }
+  const { marks } = req.body;
+  if (!Array.isArray(marks) || marks.length === 0) {
+    return res.status(400).json({ success: false, message: 'marks[] array is required.' });
+  }
+  const examId = parseInt(req.params.id);
+
+  // Ownership check: verify exam belongs to this school
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  const thresholds = await loadThresholds(req.schoolId);
+  const results = [];
+
+  for (const m of marks) {
+    const studentId = parseInt(m.studentId);
+    const subjectId = m.subjectId ? parseInt(m.subjectId) : null;
+    const obtainedMarks = parseFloat(m.obtainedMarks) || 0;
+    const totalMarks = parseFloat(m.totalMarks) || 100;
+    const theoryMarks = m.theoryMarks !== undefined ? parseFloat(m.theoryMarks) : null;
+    const practicalMarks = m.practicalMarks !== undefined ? parseFloat(m.practicalMarks) : null;
+    const graceMarks = m.graceMarks !== undefined ? parseFloat(m.graceMarks) : 0;
+    const isAbsent = m.isAbsent === true || m.isAbsent === 'true';
+    const effectiveObtained = isAbsent ? 0 : obtainedMarks + (graceMarks || 0);
+    const grade = isAbsent ? 'F' : calcGradeFromThresholds(effectiveObtained, totalMarks, thresholds);
+
+    const existing = await prisma.examMark.findFirst({
+      where: { examId, studentId, subjectId },
+    });
+
+    const payload = {
+      obtainedMarks: effectiveObtained,
+      totalMarks,
+      grade,
+      isAbsent,
+      ...(theoryMarks !== null && { theoryMarks }),
+      ...(practicalMarks !== null && { practicalMarks }),
+      ...(graceMarks && { graceMarks }),
+    };
+
+    let record;
+    if (existing) {
+      record = await prisma.examMark.update({ where: { id: existing.id }, data: payload });
+    } else {
+      record = await prisma.examMark.create({
+        data: { examId, studentId, subjectId, ...payload },
+      });
+    }
+    results.push(record);
+  }
+
+  res.json({ success: true, data: results, message: `${results.length} marks saved.` });
+}));
+
+// POST /exams/:id/marks/excel-import — parse Excel and bulk upsert marks
+router.post('/:id/marks/excel-import', upload.single('file'), wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const examId = parseInt(req.params.id);
+  // Ownership check: verify exam belongs to this school
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  if (!req.file) return res.status(400).json({ success: false, message: 'Excel file is required (field: file).' });
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(req.file.buffer);
+  const ws = wb.worksheets[0];
+  if (!ws) return res.status(400).json({ success: false, message: 'No worksheet found in uploaded file.' });
+
+  // Build header map from first row
+  const headerRow = ws.getRow(1).values; // index 1-based
+  const headerMap = {};
+  headerRow.forEach((h, idx) => {
+    if (h) headerMap[String(h).trim()] = idx;
+  });
+
+  // Load students for the school to match by rollNo
+  const students = await prisma.student.findMany({
+    where: { schoolId: req.schoolId, deletedAt: null },
+    select: { id: true, rollNo: true },
+  });
+  const rollNoToStudent = {};
+  students.forEach((s) => { rollNoToStudent[String(s.rollNo).trim()] = s; });
+
+  // Load subjects
+  let subjectNameToId = {};
+  try {
+    const subjects = await prisma.subject.findMany({ where: { schoolId: req.schoolId } });
+    subjects.forEach((s) => { subjectNameToId[s.name.trim()] = s.id; });
+  } catch (_) {}
+
+  const thresholds = await loadThresholds(req.schoolId);
+  const marks = [];
+  const errors = [];
+
+  ws.eachRow((row, rowNum) => {
+    if (rowNum === 1) return; // skip header
+    const rollNoIdx = headerMap['Roll No'] || headerMap['RollNo'] || headerMap['roll_no'];
+    const obtIdx = headerMap['Obtained'] || headerMap['Obt'] || headerMap['obtainedMarks'];
+    const totalIdx = headerMap['Total'] || headerMap['totalMarks'];
+
+    const rollNo = rollNoIdx ? String(row.getCell(rollNoIdx).value || '').trim() : null;
+    if (!rollNo) return;
+
+    const student = rollNoToStudent[rollNo];
+    if (!student) { errors.push(`Row ${rowNum}: Roll No ${rollNo} not found.`); return; }
+
+    const obtained = parseFloat(row.getCell(obtIdx)?.value) || 0;
+    const total = parseFloat(row.getCell(totalIdx)?.value) || 100;
+
+    marks.push({
+      studentId: student.id,
+      subjectId: null,
+      obtainedMarks: obtained,
+      totalMarks: total,
+      grade: calcGradeFromThresholds(obtained, total, thresholds),
+      isAbsent: false,
+    });
+  });
+
+  const results = [];
+  for (const m of marks) {
+    const existing = await prisma.examMark.findFirst({
+      where: { examId, studentId: m.studentId, subjectId: m.subjectId },
+    });
+    let record;
+    if (existing) {
+      record = await prisma.examMark.update({ where: { id: existing.id }, data: { obtainedMarks: m.obtainedMarks, totalMarks: m.totalMarks, grade: m.grade, isAbsent: m.isAbsent } });
+    } else {
+      record = await prisma.examMark.create({ data: { examId, ...m } });
+    }
+    results.push(record);
+  }
+
+  res.json({ success: true, data: results, errors, message: `${results.length} marks imported, ${errors.length} errors.` });
+}));
+
+// GET /exams/:id/results — existing endpoint (kept)
+router.get('/:id/results', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Only admin/teacher can view detailed exam results.' });
+  }
+  const examId = parseInt(req.params.id);
+
+  // Ownership check: verify exam belongs to this school
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  const marks = await prisma.examMark.findMany({
+    where: { examId },
+    include: { exam: true },
+  });
+  res.json({ success: true, data: marks });
+}));
+
+// ---------------------------------------------------------------------------
+// Shared gazette builder — used by gazette, merit-list, failed, excel export
+// ---------------------------------------------------------------------------
+const buildGazette = async (examId, schoolId) => {
+  const exam = await prisma.exam.findFirst({
+    where: { id: examId, schoolId },
+    include: { class: true },
+  });
+  if (!exam) return null;
+
+  const marks = await prisma.examMark.findMany({
+    where: { examId },
+    include: {
+      student: { select: { id: true, name: true, rollNo: true } },
+      subject: { select: { id: true, name: true } },
+    },
+  });
+
+  const thresholds = await loadThresholds(schoolId);
+
+  // Group by student
+  const studentMap = {};
+  for (const m of marks) {
+    const sid = m.studentId;
+    if (!studentMap[sid]) {
+      studentMap[sid] = {
+        studentId: sid,
+        rollNo: m.student?.rollNo,
+        name: m.student?.name,
+        subjects: [],
+        totalObtained: 0,
+        totalMarks: 0,
+      };
+    }
+    const subEntry = {
+      subjectId: m.subjectId,
+      subjectName: m.subject?.name || 'Unknown',
+      obtained: m.obtainedMarks,
+      total: m.totalMarks,
+      theoryMarks: m.theoryMarks,
+      practicalMarks: m.practicalMarks,
+      grade: m.grade || calcGradeFromThresholds(m.obtainedMarks, m.totalMarks, thresholds),
+      isAbsent: m.isAbsent,
+    };
+    studentMap[sid].subjects.push(subEntry);
+    if (!m.isAbsent) {
+      studentMap[sid].totalObtained += m.obtainedMarks || 0;
+      studentMap[sid].totalMarks += m.totalMarks || 0;
+    } else {
+      studentMap[sid].totalMarks += m.totalMarks || 0;
+    }
+  }
+
+  // Calculate aggregates and sort by percentage desc
+  const rows = Object.values(studentMap).map((s) => {
+    const pct = s.totalMarks > 0 ? (s.totalObtained / s.totalMarks) * 100 : 0;
+    const overallGrade = calcGradeFromThresholds(s.totalObtained, s.totalMarks, thresholds);
+    const passed = overallGrade !== 'F' && !s.subjects.some((sub) => sub.grade === 'F');
+    return {
+      ...s,
+      percentage: parseFloat(pct.toFixed(2)),
+      grade: overallGrade,
+      division: calcDivision(pct),
+      passed,
+    };
+  });
+
+  rows.sort((a, b) => b.percentage - a.percentage);
+
+  // Assign position (rank) handling ties
+  let rank = 0;
+  let prevPct = null;
+  let skipped = 0;
+  for (const row of rows) {
+    if (row.percentage !== prevPct) {
+      rank += 1 + skipped;
+      skipped = 0;
+    } else {
+      skipped += 1;
+    }
+    row.position = rank;
+    prevPct = row.percentage;
+  }
+
+  return { exam, rows };
+};
+
+// GET /exams/:id/gazette
+router.get('/:id/gazette', wrap(async (req, res) => {
+  const examId = parseInt(req.params.id);
+  // Ownership check is enforced inside buildGazette via findFirst({where:{id,schoolId}})
+  const result = await buildGazette(examId, req.schoolId);
+  if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  res.json({ success: true, data: result.rows, exam: result.exam });
+}));
+
+// GET /exams/:id/merit-list — sorted by percentage desc with rank
+router.get('/:id/merit-list', wrap(async (req, res) => {
+  const examId = parseInt(req.params.id);
+  // Ownership check is enforced inside buildGazette via findFirst({where:{id,schoolId}})
+  const result = await buildGazette(examId, req.schoolId);
+  if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  // Already sorted; expose rank as alias of position
+  const data = result.rows.map((r) => ({ ...r, rank: r.position }));
+  res.json({ success: true, data, exam: result.exam });
+}));
+
+// GET /exams/:id/failed — students with any F grade subject or absent (when failCriteria=absent)
+router.get('/:id/failed', wrap(async (req, res) => {
+  const examId = parseInt(req.params.id);
+  const { failCriteria } = req.query; // 'absent' | undefined
+  // Ownership check is enforced inside buildGazette via findFirst({where:{id,schoolId}})
+  const result = await buildGazette(examId, req.schoolId);
+  if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  const failed = result.rows.filter((s) => {
+    const hasFailSubject = s.subjects.some((sub) => sub.grade === 'F');
+    const hasAbsent = failCriteria === 'absent' && s.subjects.some((sub) => sub.isAbsent);
+    return hasFailSubject || hasAbsent;
+  });
+
+  res.json({ success: true, data: failed, exam: result.exam, total: failed.length });
+}));
+
+// GET /exams/:id/results/excel — ExcelJS workbook download
+router.get('/:id/results/excel', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const examId = parseInt(req.params.id);
+  // Ownership check is enforced inside buildGazette via findFirst({where:{id,schoolId}})
+  const result = await buildGazette(examId, req.schoolId);
+  if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  const { exam, rows } = result;
+
+  // Collect all unique subjects in column order
+  const subjectSet = new Map();
+  for (const row of rows) {
+    for (const sub of row.subjects) {
+      if (!subjectSet.has(sub.subjectId)) subjectSet.set(sub.subjectId, sub.subjectName);
+    }
+  }
+  const subjectList = [...subjectSet.entries()]; // [[id, name], ...]
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Results');
+
+  // Build columns
+  const fixedCols = [
+    { header: 'Roll No', key: 'rollNo', width: 12 },
+    { header: 'Name', key: 'name', width: 25 },
+  ];
+  const subjectCols = [];
+  for (const [sid, sname] of subjectList) {
+    subjectCols.push({ header: `${sname} Obt`, key: `sub_${sid}_obt`, width: 14 });
+    subjectCols.push({ header: `${sname} Total`, key: `sub_${sid}_total`, width: 14 });
+  }
+  const trailingCols = [
+    { header: 'Total Obt', key: 'totalObtained', width: 12 },
+    { header: 'Total Marks', key: 'totalMarks', width: 12 },
+    { header: '%', key: 'percentage', width: 8 },
+    { header: 'Grade', key: 'grade', width: 8 },
+    { header: 'Position', key: 'position', width: 10 },
+    { header: 'Division', key: 'division', width: 12 },
+    { header: 'Pass', key: 'passed', width: 8 },
+  ];
+
+  ws.columns = [...fixedCols, ...subjectCols, ...trailingCols];
+  ws.getRow(1).font = { bold: true };
+
+  for (const row of rows) {
+    const rowData = {
+      rollNo: row.rollNo,
+      name: row.name,
+      totalObtained: row.totalObtained,
+      totalMarks: row.totalMarks,
+      percentage: row.percentage,
+      grade: row.grade,
+      position: row.position,
+      division: row.division,
+      passed: row.passed ? 'Yes' : 'No',
+    };
+    for (const [sid] of subjectList) {
+      const sub = row.subjects.find((s) => s.subjectId === sid);
+      rowData[`sub_${sid}_obt`] = sub ? (sub.isAbsent ? 'ABS' : sub.obtained) : '';
+      rowData[`sub_${sid}_total`] = sub ? sub.total : '';
+    }
+    ws.addRow(rowData);
+  }
+
+  const safeTitle = (exam.title || 'exam').replace(/[^a-zA-Z0-9_-]/g, '_');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename=${safeTitle}_results.xlsx`);
+  await wb.xlsx.write(res);
+  res.end();
+}));
+
+// GET /exams/:id/subject-analysis — per-subject statistics
+router.get('/:id/subject-analysis', wrap(async (req, res) => {
+  const examId = parseInt(req.params.id);
+  // Ownership check: verify exam belongs to this school
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  const marks = await prisma.examMark.findMany({
+    where: { examId },
+    include: { subject: { select: { id: true, name: true } } },
+  });
+
+  const subjectMap = {};
+  for (const m of marks) {
+    const sid = m.subjectId || 'no_subject';
+    const sname = m.subject?.name || 'General';
+    if (!subjectMap[sid]) {
+      subjectMap[sid] = { subjectId: m.subjectId, subjectName: sname, appeared: 0, passed: 0, failed: 0, totalObtained: 0, marks: [] };
+    }
+    const sm = subjectMap[sid];
+    sm.appeared += 1;
+    if (!m.isAbsent) {
+      sm.totalObtained += m.obtainedMarks || 0;
+      sm.marks.push(m.obtainedMarks || 0);
+      if (m.grade === 'F') sm.failed += 1;
+      else sm.passed += 1;
+    } else {
+      sm.failed += 1;
+    }
+  }
+
+  const analysis = Object.values(subjectMap).map((sm) => {
+    const sortedMarks = [...sm.marks].sort((a, b) => a - b);
+    return {
+      subjectId: sm.subjectId,
+      subjectName: sm.subjectName,
+      appeared: sm.appeared,
+      passed: sm.passed,
+      failed: sm.failed,
+      passPercent: sm.appeared > 0 ? parseFloat(((sm.passed / sm.appeared) * 100).toFixed(2)) : 0,
+      avgMarks: sm.marks.length > 0 ? parseFloat((sm.totalObtained / sm.marks.length).toFixed(2)) : 0,
+      highest: sortedMarks.length > 0 ? sortedMarks[sortedMarks.length - 1] : 0,
+      lowest: sortedMarks.length > 0 ? sortedMarks[0] : 0,
+    };
+  });
+
+  res.json({ success: true, data: analysis });
+}));
+
+// POST /exams/:id/publish
+router.post('/:id/publish', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const examId = parseInt(req.params.id);
+  // Ownership check: verify exam belongs to this school
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  const updated = await prisma.exam.update({
+    where: { id: examId },
+    data: { isPublished: true, publishedAt: new Date() },
+  });
+  res.json({ success: true, data: updated, message: 'Exam published.' });
+}));
+
+// POST /exams/:id/unpublish
+router.post('/:id/unpublish', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const examId = parseInt(req.params.id);
+  // Ownership check: verify exam belongs to this school
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  const updated = await prisma.exam.update({
+    where: { id: examId },
+    data: { isPublished: false, publishedAt: null },
+  });
+  res.json({ success: true, data: updated, message: 'Exam unpublished.' });
+}));
+
+// GET /exams/:id/results/sms-blast — send SMS to parents with result summary via Twilio
+router.get('/:id/results/sms-blast', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const examId = parseInt(req.params.id);
+  // Ownership check is enforced inside buildGazette via findFirst({where:{id,schoolId}})
+  const result = await buildGazette(examId, req.schoolId);
+  if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  // Twilio credentials must be set in env
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_FROM_NUMBER;
+
+  if (!accountSid || !authToken || !fromNumber) {
+    return res.status(503).json({
+      success: false,
+      message: 'Twilio credentials not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER in environment.',
+    });
+  }
+
+  // Load Twilio lazily so the rest of the routes work even without twilio installed
+  let twilioClient;
+  try {
+    const twilio = require('twilio');
+    twilioClient = twilio(accountSid, authToken);
+  } catch (err) {
+    return res.status(503).json({ success: false, message: 'Twilio npm package not installed on server.', detail: err.message });
+  }
+
+  // Load students with parent phone numbers
+  const studentIds = result.rows.map((r) => r.studentId);
+  const students = await prisma.student.findMany({
+    where: { id: { in: studentIds } },
+    select: { id: true, name: true, parentPhone: true, fatherPhone: true, motherPhone: true },
+  });
+  const studentPhoneMap = {};
+  students.forEach((s) => {
+    studentPhoneMap[s.id] = s.parentPhone || s.fatherPhone || s.motherPhone || null;
+  });
+
+  const sent = [];
+  const failed = [];
+
+  for (const row of result.rows) {
+    const phone = studentPhoneMap[row.studentId];
+    if (!phone) { failed.push({ studentId: row.studentId, name: row.name, reason: 'No phone number' }); continue; }
+
+    const message =
+      `IlmForge Result: ${row.name} | Exam: ${result.exam.title} | ` +
+      `Total: ${row.totalObtained}/${row.totalMarks} | ` +
+      `%: ${row.percentage}% | Grade: ${row.grade} | ` +
+      `Position: ${row.position} | ${row.passed ? 'PASS' : 'FAIL'}`;
+
+    try {
+      await twilioClient.messages.create({ body: message, from: fromNumber, to: phone });
+      sent.push({ studentId: row.studentId, name: row.name, phone });
+    } catch (err) {
+      failed.push({ studentId: row.studentId, name: row.name, phone, reason: err.message });
+    }
+  }
+
+  res.json({
+    success: true,
+    message: `SMS blast complete. Sent: ${sent.length}, Failed: ${failed.length}.`,
+    sent,
+    failed,
+  });
+}));
+
+module.exports = router;
