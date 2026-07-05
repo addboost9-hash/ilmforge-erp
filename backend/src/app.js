@@ -12,6 +12,9 @@ const { errorHandler } = require('./middleware/error.middleware');
 
 const app = express();
 
+// Required for Render/Railway/Heroku — they sit behind a proxy
+app.set('trust proxy', 1);
+
 app.use(helmet());
 
 /* Allow local dev and explicit production frontend only — no wildcard patterns */
