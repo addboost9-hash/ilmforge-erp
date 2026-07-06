@@ -1003,6 +1003,49 @@ h1, h2, h3 { letter-spacing: -0.015em; }
 }
 
 /* ═══════════════════════════════════════════════════
+   COMPATIBILITY ALIASES — fix missing class crashes
+   Many pages use data-table, badge-*, page-subtitle
+═══════════════════════════════════════════════════ */
+
+/* data-table → same as table-modern */
+.data-table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; }
+.data-table thead tr { background:linear-gradient(to right,#f0f4ff,#f8f9ff); }
+.data-table thead th { padding:10px 14px; font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
+.data-table tbody tr { transition:background .12s; }
+.data-table tbody tr:hover { background:#f8faff; }
+.data-table tbody td { padding:10px 14px; border-bottom:1px solid #f1f5f9; color:#374151; vertical-align:middle; }
+.data-table tbody tr:last-child td { border-bottom:none; }
+
+/* table-wrap → scroll wrapper */
+.table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+/* page-subtitle */
+.page-subtitle { font-size:13px; color:#64748b; margin:3px 0 0; }
+
+/* badge variants */
+.badge { display:inline-flex; align-items:center; padding:2px 9px; border-radius:99px; font-size:11.5px; font-weight:600; }
+.badge-blue   { background:#dbeafe; color:#1d4ed8; }
+.badge-green  { background:#dcfce7; color:#15803d; }
+.badge-red    { background:#fee2e2; color:#b91c1c; }
+.badge-yellow { background:#fef9c3; color:#854d0e; }
+.badge-purple { background:#ede9fe; color:#6d28d9; }
+.badge-teal   { background:#ccfbf1; color:#0f766e; }
+.badge-gray   { background:#f1f5f9; color:#475569; }
+.badge-orange { background:#ffedd5; color:#c2410c; }
+.badge-amber  { background:#fef3c7; color:#92400e; }
+
+/* stats-grid shortcuts */
+.stats-grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+.stats-grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.stats-grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+@media(max-width:900px) { .stats-grid-4,.stats-grid-3 { grid-template-columns:repeat(2,1fr); } }
+@media(max-width:600px) { .stats-grid-4,.stats-grid-3,.stats-grid-2 { grid-template-columns:1fr; } }
+
+/* hub-shell */
+.hub-shell { display:flex; flex-direction:column; min-height:calc(100vh - 56px); background:#ecf0f5; }
+.hub-content { flex:1; background:#ecf0f5; }
+
+/* ═══════════════════════════════════════════════════
    UI ENHANCEMENT — IlmForge v3.4
    Pulse badges, ribbon cards, action tiles, metric
    rings, notification toasts, status chips, and RTL-

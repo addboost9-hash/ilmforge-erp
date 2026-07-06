@@ -180,10 +180,11 @@ const qc = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 60_000,            // cache 1 min — avoids re-fetching on every navigation
-      gcTime: 300_000,              // keep unused cache 5 min
+      staleTime: 3 * 60_000,         // cache 3 min — less API calls
+      gcTime:    10 * 60_000,       // keep unused cache 10 min
       refetchOnWindowFocus: false,  // don't re-fetch when tab regains focus
       refetchOnReconnect: false,    // don't auto-refetch on network reconnect
+      retry: 1,                     // only retry once on failure
     },
   },
 });
