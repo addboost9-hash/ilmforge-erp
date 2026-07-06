@@ -67,6 +67,7 @@ import ClassesPage from './pages/settings/ClassesPage';
 import SessionsPage from './pages/settings/SessionsPage';
 import SMSTemplatesPage from './pages/settings/SMSTemplatesPage';
 import EmailSettingsPage from './pages/settings/EmailSettingsPage';
+import ChannelSettingsPage from './pages/settings/ChannelSettingsPage';
 import WhatsAppSettingsPage from './pages/settings/WhatsAppSettingsPage';
 import AutomationPage from './pages/settings/AutomationPage';
 import CampusesPage from './pages/settings/CampusesPage';
@@ -373,6 +374,7 @@ export default function App() {
             <Route path="/settings/sessions"          element={<SessionsPage />} />
             <Route path="/settings/sms-templates"     element={<SMSTemplatesPage />} />
             <Route path="/settings/email"             element={<EmailSettingsPage />} />
+            <Route path="/settings/channels"          element={<ChannelSettingsPage />} />
             <Route path="/settings/whatsapp"          element={<WhatsAppSettingsPage />} />
             <Route path="/settings/automation"        element={<AutomationPage />} />
             <Route path="/settings/campuses"          element={<CampusesPage />} />

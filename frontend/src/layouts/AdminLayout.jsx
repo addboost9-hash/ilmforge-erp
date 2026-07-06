@@ -72,10 +72,11 @@ const NAV = [
     items: [
       { to: '/hub/communication', icon: MessageSquare, label: 'Communication Hub' },
       { to: '/hub/operations',    icon: Package,       label: 'Operations Hub' },
-      { to: '/push',              icon: Bell,          label: 'Push Notifications', roles: ['super_admin', 'admin', 'accountant'] },
-      { to: '/sops',              icon: ShieldCheck,   label: 'Standard Procedures', roles: ['super_admin', 'admin'] },
-      { to: '/hub/settings',      icon: Settings,      label: 'Settings Hub' },
-      { to: '/settings/backup',   icon: Database,      label: 'Backup & Restore',   roles: ['super_admin', 'admin'] },
+      { to: '/push',                icon: Bell,          label: 'Push Notifications',   roles: ['super_admin', 'admin', 'accountant'] },
+      { to: '/sops',               icon: ShieldCheck,   label: 'Standard Procedures',  roles: ['super_admin', 'admin'] },
+      { to: '/settings/channels',  icon: Settings,      label: '📡 Channel Settings',   roles: ['super_admin', 'admin'], badge: 'SMS·WA·Email' },
+      { to: '/hub/settings',       icon: Settings,      label: 'Settings Hub' },
+      { to: '/settings/backup',    icon: Database,      label: 'Backup & Restore',      roles: ['super_admin', 'admin'] },
     ],
   },
 ];

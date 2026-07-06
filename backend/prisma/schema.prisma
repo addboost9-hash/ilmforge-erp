@@ -1298,3 +1298,46 @@ model EventParticipant {
   @@index([eventId])
   @@index([studentId])
 }
+
+// ─── Notification Templates ───────────────────────────────────────────────
+
+model NotificationTemplate {
+  id          Int      @id @default(autoincrement())
+  schoolId    Int
+  name        String
+  type        String   // sms|whatsapp|email|push|all
+  category    String   // fee_reminder|absent_alert|result_published|birthday|gate_pass|holiday|custom
+  subject     String?  // for email templates
+  body        String
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([schoolId, category])
+  @@index([schoolId, type])
+}
+
+// ─── Automation Rules ─────────────────────────────────────────────────────
+
+model AutomationRule {
+  id           Int      @id @default(autoincrement())
+  schoolId     Int
+  name         String
+  trigger      String   // fee_reminder|absent_alert|birthday_wish|daily_collection|result_published|custom
+  channel      String   // sms|whatsapp|email|push|all
+  templateId   Int?
+  isActive     Boolean  @default(true)
+  runDays      String?  // JSON: [5, 10, 15] — days of month to run
+  runTime      String?  // "09:00" HH:MM
+  lastRunAt    DateTime?
+  lastRunStatus String? // success|failed|partial
+  totalRuns    Int      @default(0)
+  config       String?  // JSON: extra config per trigger type
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([schoolId, trigger])
+  @@index([schoolId, isActive])
+}

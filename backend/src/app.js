@@ -202,6 +202,8 @@ app.use('/api/v1/ptm',             protect, require('./routes/ptm.routes'));
 /* ═══ v3.5: Alumni management & Events / Tournaments ═══ */
 app.use('/api/v1/alumni',          protect, require('./routes/alumni.routes'));
 app.use('/api/v1/events',          protect, require('./routes/events.routes'));
+/* ═══ v3.6: Notification Automation ═══ */
+app.use('/api/v1/automation',      protect, ADMIN_ONLY, require('./routes/automation.routes'));
 
 app.use(errorHandler);
 
