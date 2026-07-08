@@ -3,7 +3,76 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { MessageSquare, DollarSign, AlertTriangle, RefreshCw } from 'lucide-react';
+import { MessageSquare, DollarSign, AlertTriangle, RefreshCw, Printer } from 'lucide-react';
+
+function printDefaultersReport(invoices, schoolName) {
+  // Group by parent
+  const byParent = {};
+  invoices.forEach(inv => {
+    const parentId = inv.student?.parent?.id || inv.student?.fatherName || 'unknown';
+    if (!byParent[parentId]) {
+      byParent[parentId] = {
+        parentName: inv.student?.fatherName || inv.student?.parent?.name || '—',
+        phone:      inv.student?.emergencyPhone || inv.student?.parent?.phone || '00',
+        whatsapp:   inv.student?.parent?.phone || '',
+        cnic:       inv.student?.parent?.cnic  || '',
+        children:   [],
+      };
+    }
+    byParent[parentId].children.push(inv);
+  });
+
+  const rows = Object.entries(byParent).map(([, p], idx) => {
+    const childRows = p.children.map((c, ci) => `
+      <tr>
+        <td>Child : ${ci + 1}</td>
+        <td>Roll : ${c.student?.rollNo || '—'}</td>
+        <td colspan="2">Name: ${c.student?.name || '—'}</td>
+        <td>Class/Section : ${c.student?.class?.name || '—'}</td>
+        <td>Unpaid Invoices : ${1}</td>
+        <td>Total Amount: ${Number(c.dueAmount || 0).toLocaleString('en-PK')}</td>
+      </tr>`).join('');
+    const total = p.children.reduce((s, c) => s + Number(c.dueAmount || 0), 0);
+    return `
+      <tr style="background:#e5e7eb">
+        <td><strong>PARENT# ${idx + 1}</strong></td>
+        <td>P. NAME : ${p.parentName}</td>
+        <td>PHONE : ${p.phone}</td>
+        <td>WHATSAPP : ${p.whatsapp}</td>
+        <td colspan="3">CNIC : ${p.cnic}</td>
+      </tr>
+      ${childRows}
+      <tr>
+        <td colspan="5" style="padding-left:12px">Total Invoices : ${p.children.length} - Amount Due : ${total.toLocaleString('en-PK')}</td>
+        <td colspan="2">Remarks (if any) : ___________________________</td>
+      </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><title>Defaulters Report — ${schoolName}</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 20px; }
+      h2,h3 { text-align: center; margin: 4px 0; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      td, th { border: 1px solid #333; padding: 5px 7px; font-size: 10px; }
+      .no-print { display: none; }
+      @media print { body { -webkit-print-color-adjust: exact; } }
+    </style>
+  </head><body>
+    <h2>${schoolName}</h2>
+    <h3>Defaulter Parents Report | Main Campus</h3>
+    <div style="text-align:right;margin-bottom:8px">
+      <button class="no-print" onclick="window.print()" style="background:#dc2626;color:#fff;border:none;padding:7px 18px;border-radius:6px;cursor:pointer;font-size:12px">
+        🖨️ Print Report
+      </button>
+    </div>
+    <table><tbody>${rows}</tbody></table>
+    <div style="text-align:center;margin-top:16px;font-size:9px;color:#666">
+      Print date & time : ${new Date().toLocaleString('en-PK')} | Powered by IlmForge School Management System
+    </div>
+  </body></html>`;
+  const w = window.open('', '_blank', 'width=1000,height=700');
+  w.document.write(html); w.document.close();
+}
 
 const money = v => 'Rs. ' + ((v||0)/100).toLocaleString();
 
@@ -38,6 +107,9 @@ export default function FeeDefaultersPage() {
         </div>
         <div style={{display:'flex', gap:8}}>
           <button className="btn btn-outline btn-sm" onClick={() => refetch()}><RefreshCw size={13}/></button>
+          <button className="btn btn-outline btn-sm" onClick={() => printDefaultersReport(invoices, localStorage.getItem('registeredSchoolName') || 'IlmForge School')}>
+            <Printer size={13}/> Print Report
+          </button>
           <button className="btn btn-amber" onClick={() => sendSMS.mutate()} disabled={sendSMS.isPending || invoices.length===0}>
             <MessageSquare size={15}/>
             {sendSMS.isPending ? 'Sending...' : 'Send SMS Reminder'}

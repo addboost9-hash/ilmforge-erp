@@ -139,6 +139,14 @@ const safeLazy = (importFn) =>
 
 // EXISTS
 import WorkflowHub from './pages/hub/WorkflowHub';
+import StudentAttendanceCalendarPage from './pages/reports/StudentAttendanceCalendarPage';
+import AdmissionFormPrintPage from './pages/admission/AdmissionFormPrintPage';
+import BISEResultCardPage from './pages/exams/BISEResultCardPage';
+import StudentInfoReportsPage from './pages/students/StudentInfoReportsPage';
+import HomeworkDiaryPage from './pages/homework/HomeworkDiaryPage';
+import ParentWalletPage from './pages/fees/ParentWalletPage';
+import POSPage from './pages/stock/POSPage';
+import WebsiteManagementPage from './pages/settings/WebsiteManagementPage';
 import LibraryPage from './pages/library/LibraryPage';
 import PTMSchedulerPage from './pages/academics/PTMSchedulerPage';
 import AlumniPage from './pages/students/AlumniPage';
@@ -298,7 +306,15 @@ export default function App() {
 
             {/* Dashboard */}
             <Route path="/dashboard"                  element={<DashboardPage />} />
-            <Route path="/workflow"                   element={<WorkflowHub />} />
+            <Route path="/workflow"                      element={<WorkflowHub />} />
+            <Route path="/reports/attendance-calendar"  element={<StudentAttendanceCalendarPage />} />
+            <Route path="/admissions/form-print"        element={<AdmissionFormPrintPage />} />
+            <Route path="/exams/bise-result-card"         element={<BISEResultCardPage />} />
+            <Route path="/students/info-reports"          element={<StudentInfoReportsPage />} />
+            <Route path="/homework/diary"                 element={<HomeworkDiaryPage />} />
+            <Route path="/fees/parent-wallet"             element={<ParentWalletPage />} />
+            <Route path="/stock/pos"                      element={<POSPage />} />
+            <Route path="/settings/website-management"    element={<WebsiteManagementPage />} />
 
             {/* Students */}
             <Route path="/students"                   element={<StudentsPage />} />

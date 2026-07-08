@@ -5,9 +5,9 @@ import api from '../../api/client';
 import { Save, MessageSquare, Info, Tag } from 'lucide-react';
 
 const TAGS = [
-  { tag: '{student_name}',  desc: "Student's full name" },
-  { tag: '{parent_name}',   desc: "Parent's name" },
-  { tag: '{roll_id}',       desc: "Student's roll number" },
+  { tag: '{student_name}',   desc: "Student's full name" },
+  { tag: '{parent_name}',    desc: "Parent's name" },
+  { tag: '{roll_id}',        desc: "Student's roll number" },
   { tag: '{class_name}',    desc: "Class name" },
   { tag: '{school_name}',   desc: "School name" },
   { tag: '{fee_due}',       desc: "Due amount (Rs.)" },
@@ -16,8 +16,26 @@ const TAGS = [
   { tag: '{amount_paid}',   desc: "Amount paid" },
   { tag: '{receipt_no}',    desc: "Receipt number" },
   { tag: '{date}',          desc: "Today's date" },
-  { tag: '{marks}',         desc: "Obtained marks" },
-  { tag: '{percentage}',    desc: "Result percentage" },
+  { tag: '{marks}',           desc: "Obtained marks" },
+  { tag: '{percentage}',      desc: "Result percentage" },
+  { tag: '{teacher_name}',    desc: "Teacher/Staff name" },
+  { tag: '{designation}',     desc: "Staff designation" },
+  { tag: '{salary_month}',    desc: "Salary month" },
+  { tag: '{basic_salary}',    desc: "Basic salary amount" },
+  { tag: '{present_days}',    desc: "Present days count" },
+  { tag: '{absent_days}',     desc: "Absent days count" },
+  { tag: '{late_days}',       desc: "Late arrival days" },
+  { tag: '{received_by}',     desc: "Received by (accountant)" },
+  { tag: '{time}',            desc: "Current time" },
+  { tag: '{approval_id}',     desc: "Leave approval ID" },
+  { tag: '{leave_start_date}',desc: "Leave start date" },
+  { tag: '{leave_end_date}',  desc: "Leave end date" },
+  { tag: '{diary_details}',   desc: "Homework diary content" },
+  { tag: '{to_campus_name}',  desc: "Transfer destination campus" },
+  { tag: '{by_user}',         desc: "Action performed by" },
+  { tag: '{exam_name}',       desc: "Exam name" },
+  { tag: '{section_name}',    desc: "Section name" },
+  { tag: '{campus_name}',     desc: "Campus name" },
 ];
 
 const DEFAULT_TEMPLATES = [
@@ -75,11 +93,96 @@ const DEFAULT_TEMPLATES = [
     event: 'Leave Application Approved',
     category: 'Attendance',
     enabled: false,
-    message: 'Dear {parent_name}, leave request for {student_name} has been approved. - {school_name}',
+    message: 'Respected {parent_name}, your request of leave for Student: {student_name} has been APPROVED. APPROVAL ID: {approval_id} From: {leave_start_date} To: {leave_end_date}. THANK YOU - {school_name}',
+  },
+  // ── Competitor parity templates ─────────────────────────────
+  {
+    id: 'inquiry_add',
+    event: 'Inquiry / Lead Added',
+    category: 'Admissions',
+    enabled: true,
+    message: 'Dear {student_name}, THANK YOU for your interest in {school_name}. You are now subscribed. We will inform you about admissions, latest developments and news updates via SMS.',
+  },
+  {
+    id: 'inquiry_admit',
+    event: 'Inquiry Admitted',
+    category: 'Admissions',
+    enabled: true,
+    message: 'Admission Successful: Student Name: {student_name}, Parent: {parent_name}, Roll ID: {roll_id}. THANK YOU FOR JOINING US. - {school_name}',
+  },
+  {
+    id: 'salary_issue',
+    event: 'Salary Issued to Staff',
+    category: 'Finance',
+    enabled: true,
+    message: 'Respected {teacher_name}, your salary of month {salary_month} has been issued. Basic Salary: {basic_salary}. Present Days: {present_days}. Late Arrivals: {late_days}. Absents: {absent_days}. Amount Paid: {amount_paid}. Thank You - {school_name}',
+  },
+  {
+    id: 'fee_first_reminder',
+    event: 'First Fee Reminder',
+    category: 'Finance',
+    enabled: true,
+    message: 'You are noticed that kindly pay dues of your child {student_name}. Details: Monthly Fee Of {month}: Rs. {fee_due}. Please pay before due date. - {school_name}',
+  },
+  {
+    id: 'fee_second_reminder',
+    event: 'Second Fee Reminder',
+    category: 'Finance',
+    enabled: true,
+    message: 'This is the second time you are noticed that kindly pay dues of your child {student_name} within due date. Details: Monthly Fee Of {month}: Rs. {fee_due}. - {school_name}',
+  },
+  {
+    id: 'fee_third_reminder',
+    event: 'Third / Final Fee Reminder',
+    category: 'Finance',
+    enabled: true,
+    message: 'You are noticed FINALLY that kindly pay dues of your child {student_name}. If fee dues are not paid, your child will not be allowed to attend school after given date. Parents will be responsible for it. Details: {fee_due} - {school_name}',
+  },
+  {
+    id: 'diary_sms',
+    event: 'Daily Homework Diary',
+    category: 'Academics',
+    enabled: true,
+    message: 'Daily Homework Diary For Student: {student_name}: {diary_details} - {school_name}',
+  },
+  {
+    id: 'student_transfer',
+    event: 'Student Transfer',
+    category: 'Admissions',
+    enabled: false,
+    message: 'Student: {student_name} has been successfully transferred to campus: {to_campus_name} by {by_user}. Thank you. - {school_name}',
+  },
+  {
+    id: 'staff_absent',
+    event: 'Staff Absent Alert',
+    category: 'Attendance',
+    enabled: true,
+    message: 'Respected {teacher_name}, Please be informed that you were marked as ABSENT today. Please remember to call or send a signed note explaining the reason for this absence. Thank you. - {school_name}',
+  },
+  {
+    id: 'staff_late',
+    event: 'Staff Late Arrival',
+    category: 'Attendance',
+    enabled: true,
+    message: 'Respected {teacher_name}, Please be informed that you were marked as LATE arrival today. As a {designation} it is your responsibility to be punctual. Thank you. - {school_name}',
+  },
+  {
+    id: 'fee_payment_confirm',
+    event: 'Fee Payment Confirmation',
+    category: 'Finance',
+    enabled: true,
+    message: 'THANK YOU FOR FEE SUBMISSION. Student: {student_name}, amount paid: Rs. {amount_paid} on {date} - {time} of {fee_title}. Received by {received_by}. - {school_name}',
+  },
+  {
+    id: 'direct_payment',
+    event: 'Direct Student Payment',
+    category: 'Finance',
+    enabled: true,
+    message: 'THANK YOU FOR FEE SUBMISSION. Student: {student_name}, amount paid: Rs. {amount_paid} on {date} - {time} of {fee_title}. Received by {received_by}. - {school_name}',
   },
 ];
 
-const CATEGORIES = ['All', 'Finance', 'Attendance', 'Exams', 'Admissions', 'Miscellaneous'];
+const CATEGORIES = ['All', 'Finance', 'Attendance', 'Exams', 'Admissions', 'Academics', 'Miscellaneous'];
 
 export default function SMSTemplatesPage() {
   const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);

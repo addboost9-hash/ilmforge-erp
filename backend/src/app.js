@@ -78,27 +78,28 @@ app.get('/api/v1/public/school/:slug', async (req, res) => {
 // ─── PUBLIC: Fee lookup by roll number — rate-limited, schoolSlug required, PII stripped ───
 app.get('/api/v1/public/fees/by-roll/:rollNo', publicFeeLimiter, async (req, res) => {
   try {
-    const rollNo = String(req.params.rollNo || '').trim();
+    const rollNo     = String(req.params.rollNo || '').trim();
     const schoolSlug = String(req.query.schoolSlug || '').trim();
-    if (!rollNo) return res.status(400).json({ success: false, message: 'rollNo is required.' });
+    if (!rollNo)     return res.status(400).json({ success: false, message: 'rollNo is required.' });
     if (!schoolSlug) return res.status(400).json({ success: false, message: 'schoolSlug query parameter is required.' });
 
-    // Resolve school first to scope the student lookup
     const school = await prisma.school.findFirst({
       where: { slug: schoolSlug, status: 'active' },
-      select: { id: true, name: true },
+      select: { id: true, name: true, address: true, city: true, phone: true, logoUrl: true },
     });
     if (!school) return res.status(404).json({ success: false, message: 'School not found.' });
 
     const student = await prisma.student.findFirst({
       where: {
-        schoolId: school.id,
-        deletedAt: null,
-        OR: [
-          { rollNo },
-          { rollNo: rollNo.toUpperCase() },
-          { rollNo: rollNo.toLowerCase() },
-        ],
+        schoolId: school.id, deletedAt: null,
+        OR: [{ rollNo }, { rollNo: rollNo.toUpperCase() }, { rollNo: rollNo.toLowerCase() }],
+      },
+      select: {
+        id: true, name: true, rollNo: true, status: true,
+        fatherName: true,
+        class:   { select: { id: true, name: true } },
+        section: { select: { id: true, name: true } },
+        campus:  { select: { id: true, name: true } },
       },
     });
     if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
@@ -106,29 +107,60 @@ app.get('/api/v1/public/fees/by-roll/:rollNo', publicFeeLimiter, async (req, res
     const invoices = await prisma.feeInvoice.findMany({
       where: { schoolId: school.id, studentId: student.id },
       select: {
-        id: true,
-        month: true,
-        year: true,
-        feeTitle: true,
-        totalAmount: true,
-        dueAmount: true,
-        status: true,
-        dueDate: true,
-        voucherNo: true,
+        id: true, month: true, year: true, feeTitle: true,
+        totalAmount: true, dueAmount: true, paidAmount: true,
+        lateFee: true, status: true, dueDate: true,
+        voucherNo: true, paidAt: true,
       },
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
     });
 
-    // Return only non-PII fields — no name, DOB, address, phone
+    // Payment history per month of current year
+    const currentYear = new Date().getFullYear();
+    const yearInvoices = invoices.filter(i => i.year === currentYear || i.year === String(currentYear));
+    const monthlyHistory = Array.from({ length: 12 }, (_, i) => {
+      const m = i + 1;
+      const inv = yearInvoices.find(x => parseInt(x.month) === m);
+      return { month: m, total: inv?.totalAmount || 0, paid: inv?.paidAmount || 0 };
+    });
+
+    // Bank details from school settings (stored in file-based settings)
+    let bankDetails = { bankName: '', branch: '', accountTitle: school.name, accountNumber: '' };
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const settingsPath = path.join(__dirname, '../../data/school-settings.json');
+      const raw = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : {};
+      const schoolSettings = raw[String(school.id)] || {};
+      if (schoolSettings.payment?.bank) bankDetails = { ...bankDetails, ...schoolSettings.payment.bank };
+    } catch (_) {}
+
     res.json({
       success: true,
       data: {
-        student: { rollNo: student.rollNo, status: student.status },
+        student: {
+          name: student.name,
+          rollNo: student.rollNo,
+          status: student.status,
+          fatherName: student.fatherName,
+          class:   student.class,
+          section: student.section,
+          campus:  student.campus,
+        },
         invoices,
-        school: { name: school.name },
+        monthlyHistory,
+        bankDetails,
+        school: {
+          name:    school.name,
+          address: school.address,
+          city:    school.city,
+          phone:   school.phone,
+          logoUrl: school.logoUrl,
+        },
       },
     });
   } catch (err) {
+    console.error('Public fee route error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

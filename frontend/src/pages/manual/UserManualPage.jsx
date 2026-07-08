@@ -1,6 +1,7 @@
 /**
- * IlmForge — Complete User Manual v3.3
- * Updated: Smart Workflow Hub, Exam Suite, Gate Passes, CRM, Demo Guide
+ * IlmForge — Complete User Manual v3.4
+ * Updated: BISE Result Cards, Homework Diary, POS, Parent Wallet,
+ * Admin Permissions, Website Management, WhatsApp Types, Annual Calendar
  */
 import { useState } from 'react';
 import {
@@ -689,6 +690,150 @@ const SECTIONS = [
       },
     ],
   },
+
+  /* ──────────────────────────────────────────
+     v3.4 NEW FEATURES
+  ────────────────────────────────────────── */
+  {
+    id: 'new-features',
+    icon: '🆕',
+    color: '#7c3aed',
+    title: 'New Features v3.4',
+    desc: 'BISE result cards, homework diary, POS, parent wallet, admin permissions, website management',
+    chapters: [
+      {
+        title: 'BISE / Board-Format Result Card',
+        steps: [
+          { n:1, text:'Exams → BISE Result Card (ya /exams/bise-result-card)' },
+          { n:2, text:'Student name search karo → select karo' },
+          { n:3, text:'Exam select karo dropdown se' },
+          { n:4, text:'Optional: Class Teacher Remarks field mein comment likho' },
+          { n:5, text:'Yellow header ke saath result card preview dikh jaata hai' },
+          { n:6, text:'Subject-wise marks table: 1st/2nd/3rd exam columns, Obtained, Total, Minimum, Percentage, Remarks' },
+          { n:7, text:'Bar chart automatically generate hota hai (Obtained vs Total marks)' },
+          { n:8, text:'"Print Result Card" button dabao → proper Pakistani board format mein print hoga' },
+        ],
+        tip: 'BISE format mein school logo, yellow header, student photo, complete subject table, bar chart aur teacher remarks sab included hain.',
+      },
+      {
+        title: 'Daily Homework Diary (Calendar-based)',
+        steps: [
+          { n:1, text:'Sidebar → Homework Diary (ya /homework/diary)' },
+          { n:2, text:'Class select karo' },
+          { n:3, text:'Date strip se date select karo (5-day view with arrows)' },
+          { n:4, text:'Saare subjects ke colored cards dikh jaate hain' },
+          { n:5, text:'Pending subjects pe "Assign Homework" button dabao' },
+          { n:6, text:'Homework details type karo → Save' },
+          { n:7, text:'"Send Diary via SMS" button → saare us class ke parents ko homework SMS ja jaata hai' },
+        ],
+        tip: 'Subject cards color-coded hain — red, blue, yellow, purple etc. Pending subjects clearly "Pending" badge dikhate hain.',
+      },
+      {
+        title: 'Point of Sale — Canteen / School Shop',
+        steps: [
+          { n:1, text:'Sidebar → Point of Sale (POS) (ya /stock/pos)' },
+          { n:2, text:'Products grid dikh jaata hai — categories filter available hai' },
+          { n:3, text:'Product click karo → cart mein add ho jaata hai' },
+          { n:4, text:'Cart mein quantity + / - se adjust karo' },
+          { n:5, text:'"Checkout & Print Receipt" dabao → sale complete + thermal receipt auto-print' },
+          { n:6, text:'Products add karne ke liye: Stock & Inventory → Products & Stock' },
+        ],
+        warning: 'Out-of-stock products gray aur disabled dikhte hain — click karne pe cart mein add nahi honge.',
+      },
+      {
+        title: 'Parent Wallet System',
+        steps: [
+          { n:1, text:'Fees → Parent Wallet (ya /fees/parent-wallet)' },
+          { n:2, text:'Student search karo → select karo' },
+          { n:3, text:'Wallet balance purple card mein dikh jaata hai' },
+          { n:4, text:'"Add Deposit" button → amount aur note enter karo → deposit karo' },
+          { n:5, text:'Transaction history: Deposits (green) aur Deductions (red) track hote hain' },
+          { n:6, text:'Jab fee generate hoti hai — wallet se auto-deduct ho sakta hai' },
+        ],
+        tip: 'Parents advance payment dete hain — school isko wallet mein credit karta hai. Fee due hone pe system wallet se deduct karta hai.',
+      },
+      {
+        title: 'Admin Module Permissions',
+        steps: [
+          { n:1, text:'Settings → Admin Accounts (ya /settings/admins)' },
+          { n:2, text:'Admin user ki row mein "Permissions" button (yellow) click karo' },
+          { n:3, text:'Modal khulega — 26 modules ke toggles dikhenge' },
+          { n:4, text:'Har module ke toggle pe click karo — ON/OFF ho jaata hai' },
+          { n:5, text:'"Enable All" ya "Disable All" quick buttons available hain' },
+          { n:6, text:'Progress bar dikhata hai kitne modules enabled hain' },
+          { n:7, text:'"Save Permissions" dabao — permissions save ho jaate hain' },
+        ],
+        tip: 'Admin ko sirf woh modules dikhenge jo enable kiye hain — ek accountant ko student management hide kar sakte ho.',
+      },
+      {
+        title: 'Student Info Reports (Printable)',
+        steps: [
+          { n:1, text:'Students → Student Info Reports (ya /students/info-reports)' },
+          { n:2, text:'4 report types available hain:' },
+          { n:3, text:'All Active Students — Print button → saare active students ki list' },
+          { n:4, text:'All Inactive Students — Print button → deactivated students' },
+          { n:5, text:'Class Wise Report — class select karo → Print' },
+          { n:6, text:'All Passout Students — graduated students ki list' },
+          { n:7, text:'Har report A4 print format mein generate hoti hai Excel-style table ke saath' },
+        ],
+        tip: 'KPI cards pe Total, Male, Female, Passout students ka count bhi dikh jaata hai.',
+      },
+      {
+        title: 'WhatsApp Message Types',
+        steps: [
+          { n:1, text:'Notifications → WhatsApp (ya /notifications/whatsapp)' },
+          { n:2, text:'Message Type section mein 5 types available hain:' },
+          { n:3, text:'Text — Simple text message (default)' },
+          { n:4, text:'Picture/Video/Audio/Document — Media URL + Caption enter karo' },
+          { n:5, text:'Link/URL — URL field enter karo with message' },
+          { n:6, text:'Location — Location message (coordinates)' },
+          { n:7, text:'Quiz/Poll — Question + Description + 3 Options' },
+          { n:8, text:'Type select karo → extra fields appear hote hain → Send' },
+        ],
+        warning: 'WhatsApp API bulk messages mein limitations hain — mass marketing messages number ban kar sakta hai.',
+      },
+      {
+        title: 'Website Management',
+        steps: [
+          { n:1, text:'Settings → Website Management (ya /settings/website-management)' },
+          { n:2, text:'5 tabs available hain:' },
+          { n:3, text:'System Settings — School name, address, phone, currency, running session' },
+          { n:4, text:'Theme & Logo — 9 color themes + custom color + school logo upload' },
+          { n:5, text:'About School — students enrolled, classes, awards, about text' },
+          { n:6, text:'Facilities — 3 facility sections with title + description' },
+          { n:7, text:'Gallery — 6 photo upload slots for school gallery' },
+          { n:8, text:'"Save Changes" button dabao — website content update ho jaata hai' },
+        ],
+        tip: 'School website ka theme color change karne se sab documents aur portals pe branding update hoti hai.',
+      },
+      {
+        title: 'Annual Attendance Calendar',
+        steps: [
+          { n:1, text:'Reports → Attendance Calendar (ya /reports/attendance-calendar)' },
+          { n:2, text:'Student search karo → select karo' },
+          { n:3, text:'Year select karo (current / previous year)' },
+          { n:4, text:'12-month calendar grid dikh jaata hai' },
+          { n:5, text:'P = Present (green), A = Absent (red), L = Leave (yellow), H = Holiday/Weekend (purple)' },
+          { n:6, text:'Running totals: per month Present aur Absent count, plus year total' },
+          { n:7, text:'"Print Calendar" → BISE-style annual attendance report print hota hai' },
+        ],
+        tip: 'Teacher/Parent/Principal signatures ke spaces automatically print mein include hote hain.',
+      },
+      {
+        title: 'Admissions CRM — Lead Pipeline',
+        steps: [
+          { n:1, text:'Admissions → CRM (ya /admissions/crm)' },
+          { n:2, text:'"Add Lead" → Parent name, student name, phone, class applied, source' },
+          { n:3, text:'Stages: New → Contacted → Visited → Admitted / Lost' },
+          { n:4, text:'Stage drag ya button se change karo' },
+          { n:5, text:'"Follow-Up" note add karo — reminder ke liye' },
+          { n:6, text:'"Convert to Admitted" → directly Admission Wizard khulta hai' },
+          { n:7, text:'CRM stats: total leads, conversion rate, source tracking' },
+        ],
+        tip: 'CRM se track hota hai kitni inquiries aaye aur kitne admit hue — school ka admission efficiency measure hota hai.',
+      },
+    ],
+  },
 ];
 
 /* ═══════════════════════════════════════════════════════════
@@ -806,7 +951,7 @@ export default function UserManualPage() {
             <div style={{ fontSize:40 }}>📖</div>
             <div>
               <h1 style={{ margin:0, fontSize:24, fontWeight:900 }}>IlmForge User Manual</h1>
-              <p style={{ margin:'4px 0 0', opacity:0.75, fontSize:13 }}>v3.3 — Complete step-by-step guide · Admission to Report Cards</p>
+              <p style={{ margin:'4px 0 0', opacity:0.75, fontSize:13 }}>v3.4 — 10 sections · 60+ chapters · BISE cards · POS · Homework Diary · Demo script</p>
             </div>
           </div>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
@@ -821,7 +966,7 @@ export default function UserManualPage() {
           </div>
         </div>
         <div style={{ display:'flex', gap:8, marginTop:16, flexWrap:'wrap' }}>
-          {['🔄 Workflow Hub','Student Admission','Fee Collection','Exam Suite','Merit List','ID Cards','Reports','Backup'].map(tag => (
+          {['🔄 Workflow Hub','Admission','Fees','BISE Result Card','Homework Diary','POS','Parent Wallet','Admin Permissions','Website Mgmt'].map(tag => (
             <span key={tag} style={{ background:'rgba(255,255,255,0.15)', padding:'3px 10px', borderRadius:99, fontSize:11.5, fontWeight:600 }}>{tag}</span>
           ))}
         </div>
@@ -919,7 +1064,7 @@ export default function UserManualPage() {
           Pakistan ka #1 School ERP · Live: <strong>https://ilmforge-erp.vercel.app</strong>
         </div>
         <div style={{ fontSize:12, color:'#6B7280', marginTop:4 }}>
-          Support: interface_alerts@carecloud.com · Version 3.3
+          Support: interface_alerts@carecloud.com · Version 3.4
         </div>
       </div>
 

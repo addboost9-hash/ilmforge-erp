@@ -84,4 +84,27 @@ router.get('/stats', wrap(async (req, res) => {
   res.json({ success: true, data: { total, presentToday: present, absentToday: absent } });
 }));
 
+/* ── Per-staff module permissions ── */
+router.put('/:id/permissions', wrap(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { permissions } = req.body;
+  if (!permissions || typeof permissions !== 'object')
+    return res.status(400).json({ success: false, message: 'permissions object required' });
+  const staff = await prisma.staff.findFirst({ where: { id, schoolId: req.schoolId } });
+  if (!staff) return res.status(404).json({ success: false, message: 'Staff not found' });
+  let existing = {};
+  try { existing = JSON.parse(staff.notes || '{}'); } catch {}
+  await prisma.staff.update({ where: { id }, data: { notes: JSON.stringify({ ...existing, modulePermissions: permissions }) } });
+  res.json({ success: true, message: 'Permissions updated' });
+}));
+
+router.get('/:id/permissions', wrap(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const staff = await prisma.staff.findFirst({ where: { id, schoolId: req.schoolId } });
+  if (!staff) return res.status(404).json({ success: false, message: 'Staff not found' });
+  let permissions = {};
+  try { permissions = JSON.parse(staff.notes || '{}').modulePermissions || {}; } catch {}
+  res.json({ success: true, data: { id, permissions } });
+}));
+
 module.exports = router;

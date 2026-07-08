@@ -2,29 +2,147 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { Plus, X, Shield, Eye, EyeOff, Trash2, Edit, Lock } from 'lucide-react';
+import { Plus, X, Shield, Eye, EyeOff, Trash2, Edit, Lock, CheckCircle, XCircle, Save } from 'lucide-react';
 
 const MODULES = [
-  { key:'students',     label:'Students Management' },
-  { key:'admissions',   label:'Admissions' },
-  { key:'fees',         label:'Fee Management' },
-  { key:'attendance',   label:'Attendance' },
-  { key:'staff',        label:'Staff Management' },
-  { key:'exams',        label:'Exams & Results' },
-  { key:'salary',       label:'Salary & HR' },
-  { key:'expenses',     label:'Expenses' },
-  { key:'stock',        label:'Stock / POS' },
-  { key:'reports',      label:'Reports' },
-  { key:'sms',          label:'SMS / WhatsApp' },
-  { key:'settings',     label:'School Settings' },
+  { key:'students',        label:'Student Management',      icon:'👨‍🎓' },
+  { key:'admissions',      label:'Admission Management',    icon:'📋' },
+  { key:'parents',         label:'Parent Accounts',         icon:'👪' },
+  { key:'staff',           label:'Staff Management',        icon:'👨‍🏫' },
+  { key:'id_cards',        label:'ID Card Printing',        icon:'🪪' },
+  { key:'fees',            label:'Fee Payment',             icon:'💰' },
+  { key:'accounting',      label:'Accounting',              icon:'📊' },
+  { key:'expenses',        label:'Expense Management',      icon:'💸' },
+  { key:'salary',          label:'Salary & Loan',           icon:'💼' },
+  { key:'reports',         label:'Reporting Area',          icon:'📈' },
+  { key:'stock',           label:'Stock & Inventory',       icon:'📦' },
+  { key:'attendance',      label:'Manage Attendance',       icon:'✅' },
+  { key:'exams',           label:'Exam Management',         icon:'📝' },
+  { key:'timetable',       label:'Timetable Management',    icon:'📅' },
+  { key:'online_classes',  label:'Online Classes',          icon:'🖥️' },
+  { key:'certification',   label:'Certification',           icon:'🎓' },
+  { key:'homework',        label:'Daily Homework Diary',    icon:'📚' },
+  { key:'study_materials', label:'Study Materials - LMS',   icon:'📂' },
+  { key:'leave',           label:'Leave Management',        icon:'🗓️' },
+  { key:'sms',             label:'SMS Management',          icon:'📱' },
+  { key:'whatsapp',        label:'WhatsApp Notifications',  icon:'💬' },
+  { key:'noticeboard',     label:'School Noticeboard',      icon:'📌' },
+  { key:'transport',       label:'Transport',               icon:'🚌' },
+  { key:'biometric',       label:'Biometric Devices',       icon:'🔏' },
+  { key:'website',         label:'Website Management',      icon:'🌐' },
+  { key:'settings',        label:'Settings',                icon:'⚙️' },
 ];
+
+/* ── Permissions Modal ─────────────────────────────────────── */
+function PermissionsModal({ admin, onClose }) {
+  const [perms, setPerms] = useState(() => {
+    const existing = admin.permissions || {};
+    const obj = {};
+    MODULES.forEach(m => { obj[m.key] = existing[m.key] !== false; }); // default ON
+    return obj;
+  });
+  const [saving, setSaving] = useState(false);
+
+  const toggleAll = (val) => {
+    const obj = {};
+    MODULES.forEach(m => { obj[m.key] = val; });
+    setPerms(obj);
+  };
+
+  const savePerms = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/staff/${admin.id}/permissions`, { permissions: perms });
+      toast.success(`Permissions updated for ${admin.name}`);
+      onClose(perms);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save permissions');
+    } finally { setSaving(false); }
+  };
+
+  const enabled = Object.values(perms).filter(Boolean).length;
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={e => e.target === e.currentTarget && onClose(null)}>
+      <div style={{ background:'white', borderRadius:14, width:'100%', maxWidth:680, maxHeight:'90vh', overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
+        {/* Header */}
+        <div style={{ background:'linear-gradient(135deg,#1B2F6E,#0073b7)', padding:'16px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div>
+            <div style={{ color:'white', fontWeight:800, fontSize:15 }}>Module Permissions</div>
+            <div style={{ color:'rgba(255,255,255,0.75)', fontSize:12, marginTop:2 }}>{admin.name} — {enabled}/{MODULES.length} modules enabled</div>
+          </div>
+          <button onClick={() => onClose(null)} style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', width:30, height:30, borderRadius:8, cursor:'pointer', fontSize:18, display:'flex', alignItems:'center', justifyContent:'center' }}>×</button>
+        </div>
+
+        {/* Progress bar */}
+        <div style={{ height:4, background:'#e2e8f0' }}>
+          <div style={{ height:'100%', width:`${(enabled/MODULES.length)*100}%`, background:'#0073b7', transition:'width .3s' }} />
+        </div>
+
+        {/* Quick actions */}
+        <div style={{ padding:'10px 20px', borderBottom:'1px solid #f1f5f9', display:'flex', gap:8 }}>
+          <button className="btn btn-sm btn-outline" style={{ fontSize:11 }} onClick={() => toggleAll(true)}>
+            <CheckCircle size={12} color="#15803d"/> Enable All
+          </button>
+          <button className="btn btn-sm btn-outline" style={{ fontSize:11 }} onClick={() => toggleAll(false)}>
+            <XCircle size={12} color="#dc2626"/> Disable All
+          </button>
+          <span style={{ fontSize:12, color:'#64748b', marginLeft:'auto', alignSelf:'center' }}>
+            {enabled} of {MODULES.length} enabled
+          </span>
+        </div>
+
+        {/* Module grid */}
+        <div style={{ padding:16, overflowY:'auto', flex:1 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(195px,1fr))', gap:8 }}>
+            {MODULES.map(m => (
+              <div key={m.key}
+                onClick={() => setPerms(p => ({ ...p, [m.key]: !p[m.key] }))}
+                style={{
+                  display:'flex', alignItems:'center', gap:10, padding:'10px 12px',
+                  borderRadius:8, cursor:'pointer', transition:'all .15s',
+                  background: perms[m.key] ? '#eff6ff' : '#f8f9fa',
+                  border: `1px solid ${perms[m.key] ? '#0073b7' : '#e2e8f0'}`,
+                }}>
+                <span style={{ fontSize:18, flexShrink:0 }}>{m.icon}</span>
+                <span style={{ fontSize:12.5, fontWeight:600, color: perms[m.key] ? '#1e3a5f' : '#94a3b8', flex:1 }}>{m.label}</span>
+                {/* Toggle pill */}
+                <div style={{
+                  width:36, height:20, borderRadius:10, flexShrink:0,
+                  background: perms[m.key] ? '#0073b7' : '#cbd5e1',
+                  position:'relative', transition:'background .15s',
+                }}>
+                  <div style={{
+                    position:'absolute', top:2,
+                    left: perms[m.key] ? 18 : 2,
+                    width:16, height:16, borderRadius:'50%', background:'white',
+                    transition:'left .15s', boxShadow:'0 1px 3px rgba(0,0,0,0.25)',
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding:'12px 20px', borderTop:'1px solid #e2e8f0', display:'flex', justifyContent:'flex-end', gap:10 }}>
+          <button className="btn btn-outline" onClick={() => onClose(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={savePerms} disabled={saving}>
+            <Save size={14}/> {saving ? 'Saving…' : 'Save Permissions'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminsPage() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [form, setForm] = useState({ name:'', email:'', phone:'', password:'', role:'accountant', permissions:{} });
-  const [editingPermissions, setEditingPermissions] = useState(null);
+  const [permAdmin, setPermAdmin] = useState(null); // admin object for permissions modal
 
   const { data } = useQuery({
     queryKey: ['admin-users'],
@@ -48,6 +166,7 @@ export default function AdminsPage() {
 
   return (
     <div className="page-content fade-up">
+      {permAdmin && <PermissionsModal admin={permAdmin} onClose={(saved) => { if (saved) qc.invalidateQueries(['admin-users']); setPermAdmin(null); }} />}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
         <div>
           <h1 className="page-title">Admin Accounts & Roles</h1>
@@ -139,8 +258,10 @@ export default function AdminsPage() {
                   <td><span className={`badge ${u.isActive?'badge-green':'badge-red'}`}>{u.isActive?'Active':'Inactive'}</span></td>
                   <td>
                     <div style={{ display:'flex', gap:5 }}>
-                      <button className="btn btn-outline btn-sm btn-icon" title="Edit Permissions">
-                        <Lock size={12}/>
+                      <button className="btn btn-sm" style={{ background:'#fef3c7', border:'1px solid #fde68a', color:'#92400e', padding:'4px 10px', borderRadius:6, cursor:'pointer', fontSize:11, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}
+                        onClick={() => setPermAdmin({ id: u.id, name: u.name, permissions: u.permissions || {} })}
+                        title="Edit Permissions">
+                        <Lock size={12}/> Permissions
                       </button>
                       <button className="btn btn-sm btn-icon" style={{ background:'#FEF2F2', border:'1px solid #FECACA', color:'#B91C1C' }} title="Delete">
                         <Trash2 size={12}/>

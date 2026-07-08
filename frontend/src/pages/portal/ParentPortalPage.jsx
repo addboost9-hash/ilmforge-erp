@@ -10,8 +10,9 @@ import api from '../../api/client';
 import {
   DollarSign, BookOpen, CreditCard, ChevronRight,
   Award, FileText, ChevronLeft, Send, Bell, AlertCircle,
-  CheckCircle, Clock, MessageSquare, Calendar, LogOut,
+  CheckCircle, Clock, MessageSquare, Calendar, LogOut, Printer,
 } from 'lucide-react';
+import { printFeeVoucher, exportToCSV, StatusBadge } from '../../components/PortalUtils';
 
 /* ── Helpers ──────────────────────────────────────────────── */
 const Rs       = v  => 'Rs. ' + Number(v || 0).toLocaleString('en-PK');
@@ -499,7 +500,8 @@ export default function ParentPortalPage() {
                       <span style={{ fontSize:11.5, fontWeight:700, color:'#6B7280', textTransform:'uppercase', letterSpacing:'0.04em', textAlign:'right', minWidth:70 }}>Status</span>
                     </div>
                     {invoices.map((inv, i) => {
-                      const bd = statusBadge(inv.status);
+                      const STATUS_MAP = { paid:{ bg:'#DCFCE7', c:'#15803D' }, unpaid:{ bg:'#FEE2E2', c:'#B91C1C' }, partial:{ bg:'#FEF3C7', c:'#B45309' }, overdue:{ bg:'#FCE7F3', c:'#9D174D' } };
+                      const bd = STATUS_MAP[inv.status] || STATUS_MAP.unpaid;
                       return (
                         <div key={inv.id} style={{ padding:'14px 18px', borderBottom: i<invoices.length-1 ? '1px solid #F8FAFC' : 'none', display:'flex', alignItems:'center', gap:12 }}>
                           <div style={{ width:42, height:42, borderRadius:10, background:bd.bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
@@ -508,7 +510,7 @@ export default function ParentPortalPage() {
                           <div style={{ flex:1 }}>
                             <div style={{ fontWeight:700, fontSize:13.5, color:NAVY }}>{inv.feeTitle||'Monthly Fee'}</div>
                             <div style={{ fontSize:12, color:'#94A3B8', marginTop:2 }}>
-                              {inv.month&&inv.year ? `${inv.month}/${inv.year}` : fmtDate(inv.createdAt)}
+                              {inv.month&&inv.year ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][inv.month-1]} ${inv.year}` : fmtDate(inv.createdAt)}
                               &nbsp;·&nbsp;Total: {Rs(inv.totalAmount)}
                               {inv.dueAmount > 0 && <span style={{ color:'#DC2626', fontWeight:700 }}> · Due: {Rs(inv.dueAmount)}</span>}
                             </div>
@@ -516,6 +518,11 @@ export default function ParentPortalPage() {
                           <span style={{ background:bd.bg, color:bd.c, padding:'4px 10px', borderRadius:99, fontSize:11.5, fontWeight:700, textTransform:'capitalize', flexShrink:0 }}>
                             {inv.status}
                           </span>
+                          <button onClick={() => printFeeVoucher({ student: child, invoice: inv, school: { name: 'IlmForge School' } })}
+                            style={{ width:32, height:32, borderRadius:7, border:'1px solid #e2e8f0', background:'white', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}
+                            title="Print Voucher">
+                            <Printer size={13} color="#374151"/>
+                          </button>
                         </div>
                       );
                     })}

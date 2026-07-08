@@ -17,7 +17,7 @@ import {
   Package, Receipt, Landmark,
   Bot, X, Calendar, QrCode, FileText,
   ShieldCheck, BarChart2, Database, ClipboardList,
-  Workflow,
+  Workflow, ShoppingCart, Globe, BookMarked,
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════
@@ -38,7 +38,8 @@ const NAV = [
     group: 'STUDENTS & STAFF',
     items: [
       { to: '/hub/students',         icon: GraduationCap, label: 'Students Hub' },
-      { to: '/students/bulk-import', icon: FileText,      label: 'Bulk Import',         roles: ['super_admin', 'admin'] },
+      { to: '/students/bulk-import',  icon: FileText,      label: 'Bulk Import',         roles: ['super_admin', 'admin'] },
+      { to: '/students/info-reports', icon: BarChart2,     label: 'Student Info Reports', roles: ['super_admin', 'admin'] },
       { to: '/hub/staff',            icon: Briefcase,     label: 'Staff & Teachers Hub' },
       { to: '/hub/parents',          icon: Users,         label: 'Parents & Portals Hub' },
       { to: '/gate-passes',          icon: QrCode,        label: 'Gate Passes',         roles: ['super_admin', 'admin', 'gatekeeper'] },
@@ -50,10 +51,11 @@ const NAV = [
       { to: '/hub/academics',       icon: BookOpen,    label: 'Academics Hub' },
       { to: '/hub/attendance',      icon: CheckSquare, label: 'Attendance Hub' },
       { to: '/hub/exams',           icon: Award,       label: 'Exams & Tests Hub' },
-      { to: '/exams/timetable',     icon: Calendar,    label: 'Exam Timetable',      roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/exams/merit-list',    icon: Award,       label: 'Merit List',          roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/exams/gazette',       icon: FileText,    label: 'Gazette Sheet',       roles: ['super_admin', 'admin'] },
-      { to: '/exams/annual-report', icon: ClipboardList, label: 'Annual Report Cards', roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/exams/timetable',      icon: Calendar,      label: 'Exam Timetable',      roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/exams/merit-list',     icon: Award,         label: 'Merit List',          roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/exams/gazette',        icon: FileText,      label: 'Gazette Sheet',       roles: ['super_admin', 'admin'] },
+      { to: '/exams/annual-report',  icon: ClipboardList, label: 'Annual Report Cards', roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/exams/bise-result-card',icon: FileText,     label: 'BISE Result Card',    roles: ['super_admin', 'admin', 'teacher'] },
     ],
   },
   {
@@ -61,6 +63,7 @@ const NAV = [
     items: [
       { to: '/hub/fees',              icon: Wallet,       label: 'Fees & Accounts Hub' },
       { to: '/fees/invoices',         icon: FileText,     label: 'Fee Invoices',        roles: ['super_admin', 'admin', 'accountant'] },
+      { to: '/fees/parent-wallet',    icon: Wallet,       label: 'Parent Wallet',        roles: ['super_admin', 'admin', 'accountant'] },
       { to: '/hub/payroll',           icon: Landmark,     label: 'Salary & Expenses Hub' },
       { to: '/payments/transactions', icon: Receipt,      label: 'Payment Transactions', roles: ['super_admin', 'admin', 'accountant'] },
       { to: '/library',               icon: BookOpenCheck, label: 'Library Management',  roles: ['super_admin', 'admin', 'accountant', 'teacher'] },
@@ -73,10 +76,13 @@ const NAV = [
       { to: '/hub/communication', icon: MessageSquare, label: 'Communication Hub' },
       { to: '/hub/operations',    icon: Package,       label: 'Operations Hub' },
       { to: '/push',                icon: Bell,          label: 'Push Notifications',   roles: ['super_admin', 'admin', 'accountant'] },
-      { to: '/sops',               icon: ShieldCheck,   label: 'Standard Procedures',  roles: ['super_admin', 'admin'] },
-      { to: '/settings/channels',  icon: Settings,      label: '📡 Channel Settings',   roles: ['super_admin', 'admin'], badge: 'SMS·WA·Email' },
-      { to: '/hub/settings',       icon: Settings,      label: 'Settings Hub' },
-      { to: '/settings/backup',    icon: Database,      label: 'Backup & Restore',      roles: ['super_admin', 'admin'] },
+      { to: '/sops',                        icon: ShieldCheck,   label: 'Standard Procedures',    roles: ['super_admin', 'admin'] },
+      { to: '/homework/diary',              icon: BookMarked,    label: 'Homework Diary',          roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/stock/pos',                   icon: ShoppingCart,  label: 'Point of Sale (POS)',     roles: ['super_admin', 'admin', 'accountant'] },
+      { to: '/settings/channels',           icon: Settings,      label: '📡 Channel Settings',     roles: ['super_admin', 'admin'], badge: 'SMS·WA·Email' },
+      { to: '/hub/settings',                icon: Settings,      label: 'Settings Hub' },
+      { to: '/settings/backup',             icon: Database,      label: 'Backup & Restore',        roles: ['super_admin', 'admin'] },
+      { to: '/settings/website-management', icon: Globe,         label: 'Website Management',      roles: ['super_admin', 'admin'] },
     ],
   },
 ];

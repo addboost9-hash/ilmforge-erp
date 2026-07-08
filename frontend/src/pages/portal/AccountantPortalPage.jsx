@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
+import { printFeeVoucher } from '../../components/PortalUtils';
 
 /* ── Enterprise theme tokens ─────────────────────────────── */
 const NAVY = '#1B2F6E';
@@ -218,12 +219,23 @@ function DashboardTab({ user, setActiveTab }) {
     retry: false,
   });
 
-  /* Simulated salary/expense aggregates (replace with real API when available) */
   const { data: expensesAll = [] } = useQuery({
     queryKey: ['expenses-all-today'],
     queryFn: () =>
       api.get('/expenses', { params: { date: todayISO() } }).then((r) => r.data.data || []),
     staleTime: 60_000,
+    retry: false,
+  });
+
+  /* Staff salary — current month total */
+  const { data: salaryData } = useQuery({
+    queryKey: ['salary-this-month'],
+    queryFn: () => {
+      const now = new Date();
+      return api.get('/salary', { params: { month: now.getMonth() + 1, year: now.getFullYear(), limit: 1 } })
+        .then(r => r.data?.summary || r.data?.data || null).catch(() => null);
+    },
+    staleTime: 5 * 60_000,
     retry: false,
   });
 
@@ -337,8 +349,8 @@ function DashboardTab({ user, setActiveTab }) {
         />
         <StatCard
           title="Staff Salary"
-          value="—"
-          sub="View payroll"
+          value={salaryData ? Rs(salaryData.totalAmount || salaryData.total || 0) : '—'}
+          sub={salaryData ? `${salaryData.count || ''} staff this month` : 'View payroll'}
           icon={Users}
           preset="purple"
         />
@@ -837,10 +849,15 @@ function FeeCollectionTab({ user }) {
   const payMutation = useMutation({
     mutationFn: ({ invoiceId, amount, note }) =>
       api.post(`/fees/invoices/${invoiceId}/pay`, { amount: Number(amount), note }),
-    onSuccess: () => {
+    onSuccess: (res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['student-invoices', selectedStudent?.id] });
       queryClient.invalidateQueries({ queryKey: ['today-payments'] });
       queryClient.invalidateQueries({ queryKey: ['bs-payments'] });
+      // Auto-print receipt
+      const inv = invoices.find(i => i.id === vars.invoiceId);
+      if (inv && selectedStudent) {
+        printFeeVoucher({ student: selectedStudent, invoice: { ...inv, status: 'paid', dueAmount: 0 }, school: { name: 'IlmForge School' } });
+      }
       setPayAmount('');
       setPayNote('');
       setPayingId(null);

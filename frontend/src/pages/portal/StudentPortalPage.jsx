@@ -451,17 +451,23 @@ export default function StudentPortalPage() {
   });
 
   const todayDayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+  const WEEK_DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const { data: timetableRaw = [] } = useQuery({
     queryKey: ['portal-timetable', classId, sectionId],
     queryFn:  () =>
-      api.get('/timetable', { params: { classId, sectionId, day: todayDayName } })
-         .then(r => r.data.data || []),
+      api.get('/timetable', { params: { classId, sectionId } })
+         .then(r => r.data.data || []).catch(() => []),
     enabled:   !!classId,
     staleTime: 300_000,
   });
   const todaySlots = timetableRaw
     .filter(s => !s.day || s.day?.toLowerCase() === todayDayName.toLowerCase())
     .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+  // Weekly timetable grouped by day
+  const weeklyTimetable = WEEK_DAYS.reduce((acc, day) => {
+    acc[day] = timetableRaw.filter(s => s.day?.toLowerCase() === day.toLowerCase()).sort((a,b) => (a.startTime||'').localeCompare(b.startTime||''));
+    return acc;
+  }, {});
 
   const { data: materialsRaw = [], isLoading: matsLoading } = useQuery({
     queryKey: ['portal-materials', classId, sectionId],
@@ -697,19 +703,19 @@ export default function StudentPortalPage() {
               ))}
             </div>
 
-            {/* Today's timetable */}
-            {todaySlots.length > 0 && (
+            {/* Today's timetable + weekly view toggle */}
+            {timetableRaw.length > 0 && (
               <div style={{ ...card, padding: 0, overflow: 'hidden', marginBottom: 12 }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Clock size={15} color={NAVY} />
                   <span style={{ fontWeight: 700, fontSize: 14, color: NAVY }}>Today's Classes</span>
-                  <span style={{ marginLeft: 'auto', fontSize: 11.5, color: '#94A3B8' }}>{todayDayName}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94A3B8', background: '#f1f5f9', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>{todayDayName}</span>
                 </div>
-                {todaySlots.slice(0, 6).map((slot, i) => (
+                {todaySlots.length === 0 ? (
+                  <div style={{ padding: '20px 16px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>No classes today 🎉</div>
+                ) : todaySlots.map((slot, i) => (
                   <div key={slot.id || i} style={{ padding: '10px 16px', borderBottom: '1px solid #F8FAFC', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 9, background: `${NAVY}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}>
-                      📚
-                    </div>
+                    <div style={{ width: 36, height: 36, borderRadius: 9, background: `${NAVY}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}>📚</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>{slot.subject?.name || slot.subjectName || 'Subject'}</div>
                       <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 1 }}>
@@ -720,6 +726,20 @@ export default function StudentPortalPage() {
                     </div>
                   </div>
                 ))}
+                {/* Weekly timetable strip */}
+                <div style={{ padding: '10px 12px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 6, overflowX: 'auto' }}>
+                  {WEEK_DAYS.map(day => {
+                    const slots = weeklyTimetable[day] || [];
+                    const isToday = day.toLowerCase() === todayDayName.toLowerCase();
+                    return (
+                      <div key={day} style={{ flex: '0 0 auto', minWidth: 70, background: isToday ? NAVY : 'white', border: `1px solid ${isToday ? NAVY : '#e2e8f0'}`, borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: isToday ? '#93c5fd' : '#94a3b8', textTransform: 'uppercase' }}>{day.slice(0, 3)}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: isToday ? 'white' : '#1e3a5f', margin: '2px 0' }}>{slots.length}</div>
+                        <div style={{ fontSize: 9.5, color: isToday ? 'rgba(255,255,255,0.7)' : '#94a3b8' }}>class{slots.length !== 1 ? 'es' : ''}</div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

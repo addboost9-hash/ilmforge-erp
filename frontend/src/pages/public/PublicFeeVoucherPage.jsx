@@ -10,22 +10,34 @@ import api from '../../api/client';
 import { ArrowLeft, Lock, Search, Printer, Download, MessageSquare, FileText } from 'lucide-react';
 import { getWatermarkScale } from '../../utils/watermarkPrint';
 
-const Rs = v => 'Rs. ' + ((v || 0) / 100).toLocaleString();
+const Rs = v => 'Rs. ' + Number(v || 0).toLocaleString('en-PK');
 const monthName = m => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1] || m;
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 /* ─── 3-Copy Voucher Print Template ─────────────────────── */
-function VoucherCopy({ label, student, invoice, school }) {
-  const barcodeVal = invoice?.receiptNo || `VCH-${invoice?.id || '0000'}`;
-  const dueDate    = invoice?.dueDate   ? new Date(invoice.dueDate).toLocaleDateString('en-PK')   : '—';
-  const validity   = invoice?.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-PK') : '—';
-  const bankName   = localStorage.getItem('ilmforge_bank_name')    || 'HBL Bank';
-  const bankBranch = localStorage.getItem('ilmforge_bank_branch')  || 'Main Branch';
-  const bankAccNo  = localStorage.getItem('ilmforge_bank_acc')     || '0000-0000-0';
-  const bankTitle  = localStorage.getItem('ilmforge_bank_title')   || school?.name || 'School Account';
-  const logo       = localStorage.getItem('schoolLogoPreview');
-  const schoolName = localStorage.getItem('registeredSchoolName')  || school?.name || 'IlmForge School';
-  const address    = school?.address || 'School Address, City';
+function VoucherCopy({ label, student, invoice, school, bankDetails, monthlyHistory }) {
+  const barcodeVal = invoice?.voucherNo || `VCH-${String(invoice?.id || '0000').padStart(5,'0')}`;
+  const dueDate    = invoice?.dueDate   ? new Date(invoice.dueDate).toLocaleDateString('en-PK', {day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+  const validity   = invoice?.dueDate   ? new Date(invoice.dueDate).toLocaleDateString('en-PK', {day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+
+  // Bank details — prefer from API, then localStorage fallback
+  const bankName   = bankDetails?.bankName    || localStorage.getItem('ilmforge_bank_name')   || '';
+  const bankBranch = bankDetails?.branch      || localStorage.getItem('ilmforge_bank_branch') || '';
+  const bankAccNo  = bankDetails?.accountNumber || localStorage.getItem('ilmforge_bank_acc')  || '';
+  const bankTitle  = bankDetails?.accountTitle  || localStorage.getItem('ilmforge_bank_title')|| school?.name || 'School Account';
+
+  const logo       = school?.logoUrl || localStorage.getItem('schoolLogoPreview');
+  const schoolName = school?.name    || localStorage.getItem('registeredSchoolName') || 'IlmForge School';
+  const address    = [school?.address, school?.city].filter(Boolean).join(', ') || '';
+  const phone      = school?.phone   || '';
   const compactScale = getWatermarkScale('compact');
+
+  // Fee breakdown
+  const prevBalance  = 0; // can be enhanced later
+  const subtotal     = Number(invoice?.totalAmount || 0);
+  const lateFee      = Number(invoice?.lateFee || 0);
+  const total        = subtotal + lateFee;
+  const afterDueDate = total + Math.round(total * 0.05); // 5% after due
 
   return (
     <div style={{
@@ -46,9 +58,10 @@ function VoucherCopy({ label, student, invoice, school }) {
       {/* School header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderBottom: '1px solid #ddd' }}>
         {logo && <img src={logo} alt="" style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }}/>}
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 10, color: '#0F4C45', lineHeight: 1.2 }}>{schoolName}</div>
-          <div style={{ fontSize: 8, color: '#555', lineHeight: 1.3 }}>{address}</div>
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <div style={{ fontWeight: 800, fontSize: 11, color: '#0F4C45', lineHeight: 1.2 }}>{schoolName}</div>
+          {address && <div style={{ fontSize: 7.5, color: '#555', lineHeight: 1.3 }}>{address}</div>}
+          {phone && <div style={{ fontSize: 7.5, color: '#555' }}>Contact: {phone}</div>}
         </div>
       </div>
 
@@ -77,49 +90,42 @@ function VoucherCopy({ label, student, invoice, school }) {
       </div>
 
       {/* Bank details */}
-      <div style={{ padding: '4px 8px', borderBottom: '1px solid #eee', background: '#F9FAFB' }}>
-        <div style={{ fontWeight: 700, fontSize: 8.5, color: '#0F766E', marginBottom: 3 }}>Bank Details</div>
-        {[
-          ['Branch:', bankBranch],
-          ['Acc #:', bankAccNo],
-          ['Acc Title:', bankTitle],
-        ].map(([k, v]) => (
-          <div key={k} style={{ display: 'flex', gap: 4, marginBottom: 1 }}>
-            <span style={{ width: 52, fontWeight: 700, color: '#555', flexShrink: 0, fontSize: 8 }}>{k}</span>
-            <span style={{ color: '#333', fontSize: 8 }}>{v}</span>
-          </div>
-        ))}
-      </div>
+      {(bankName || bankBranch || bankAccNo) && (
+        <div style={{ padding: '4px 8px', borderBottom: '1px solid #eee', background: '#F9FAFB', textAlign: 'center' }}>
+          {bankName && <div style={{ fontWeight: 700, fontSize: 8.5, color: '#1e3a5f' }}>{bankName}{bankBranch ? ` - Branch: ${bankBranch}` : ''}</div>}
+          {bankAccNo && <div style={{ fontSize: 8, color: '#374151' }}>Acc# {bankAccNo} - Acc. Title: {bankTitle}</div>}
+        </div>
+      )}
 
       {/* Fee description */}
       <div style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 8.5 }}>
           <thead>
             <tr style={{ background: '#F3F4F6' }}>
-              <th style={{ textAlign: 'left', padding: '2px 3px', fontWeight: 700 }}>Fee Description</th>
-              <th style={{ textAlign: 'right', padding: '2px 3px', fontWeight: 700 }}>Amount</th>
+              <th style={{ textAlign: 'left', padding: '2px 3px', fontWeight: 700, border: '1px solid #ddd' }}>Fee Description</th>
+              <th style={{ textAlign: 'right', padding: '2px 3px', fontWeight: 700, border: '1px solid #ddd' }}>Amount</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td style={{ padding: '2px 3px', color: '#333' }}>{invoice?.feeTitle || 'Monthly Fee'}</td>
-              <td style={{ padding: '2px 3px', textAlign: 'right', color: '#333' }}>{Rs(invoice?.totalAmount)}</td>
-            </tr>
+            <tr><td style={{ padding:'2px 3px', border:'1px solid #eee' }}>{invoice?.feeTitle || 'Monthly Fee'}</td><td style={{ padding:'2px 3px', textAlign:'right', border:'1px solid #eee' }}>{subtotal}</td></tr>
+            <tr><td style={{ padding:'2px 3px', border:'1px solid #eee' }}>Previous Balance</td><td style={{ padding:'2px 3px', textAlign:'right', border:'1px solid #eee' }}>{prevBalance}</td></tr>
           </tbody>
           <tfoot>
-            <tr style={{ borderTop: '1px solid #ddd' }}>
-              <td style={{ padding: '2px 3px', fontWeight: 700 }}>Subtotal</td>
-              <td style={{ padding: '2px 3px', textAlign: 'right', fontWeight: 700 }}>{Rs(invoice?.totalAmount)}</td>
+            <tr style={{ background:'#f9f9f9' }}>
+              <td style={{ padding:'2px 3px', fontWeight:700, border:'1px solid #ddd' }}>Subtotal</td>
+              <td style={{ padding:'2px 3px', textAlign:'right', fontWeight:700, border:'1px solid #ddd' }}>{subtotal}</td>
             </tr>
             <tr>
-              <td style={{ padding: '2px 3px', fontWeight: 700 }}>Total</td>
-              <td style={{ padding: '2px 3px', textAlign: 'right', fontWeight: 700, color: '#0F766E' }}>{Rs(invoice?.totalAmount)}</td>
+              <td style={{ padding:'2px 3px', border:'1px solid #eee' }}>Late Fee (For Arrears)</td>
+              <td style={{ padding:'2px 3px', textAlign:'right', border:'1px solid #eee' }}>{lateFee}</td>
+            </tr>
+            <tr style={{ fontWeight:700 }}>
+              <td style={{ padding:'2px 3px', border:'1px solid #ddd' }}>Total:</td>
+              <td style={{ padding:'2px 3px', textAlign:'right', border:'1px solid #ddd' }}>{total}</td>
             </tr>
             <tr>
-              <td style={{ padding: '2px 3px', color: '#B91C1C', fontWeight: 700 }}>After Due Date</td>
-              <td style={{ padding: '2px 3px', textAlign: 'right', color: '#B91C1C', fontWeight: 700 }}>
-                {Rs((invoice?.totalAmount || 0) + 5000)}
-              </td>
+              <td style={{ padding:'2px 3px', color:'#B91C1C', fontWeight:700, border:'1px solid #ddd' }}>After Due Date:</td>
+              <td style={{ padding:'2px 3px', textAlign:'right', color:'#B91C1C', fontWeight:700, border:'1px solid #ddd' }}>{afterDueDate}</td>
             </tr>
           </tfoot>
         </table>
@@ -133,28 +139,30 @@ function VoucherCopy({ label, student, invoice, school }) {
 
       {/* Monthly history */}
       <div style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>
-        <div style={{ fontSize: 8, fontWeight: 700, color: '#374151', marginBottom: 3 }}>Student Fee History</div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 7 }}>
+        <div style={{ fontSize: 8, fontWeight: 700, color: '#374151', marginBottom: 3, textAlign:'center' }}>Student Fee History</div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 7, border:'1px solid #ddd' }}>
           <thead>
             <tr style={{ background: '#F3F4F6' }}>
-              <th style={{ padding: '1px 2px', textAlign: 'left' }}>Year</th>
-              {['J','F','M','A','M','J','J','A','S','O','N','D'].map(m => (
-                <th key={m} style={{ padding: '1px 2px', textAlign: 'center', width: 12 }}>{m}</th>
-              ))}
+              <th style={{ padding:'1px 2px', textAlign:'left', border:'1px solid #ddd' }}>Month</th>
+              {MONTHS_SHORT.map(m => <th key={m} style={{ padding:'1px 2px', textAlign:'center', border:'1px solid #ddd', width:14 }}>{m}</th>)}
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td style={{ padding: '1px 2px' }}>{new Date().getFullYear()}</td>
-              {Array.from({ length: 12 }, (_, i) => {
-                const status = i + 1 <= (invoice?.month ? parseInt(invoice.month) : new Date().getMonth())
-                  ? '✓' : '';
-                return (
-                  <td key={i} style={{ padding: '1px 2px', textAlign: 'center', color: status ? '#15803D' : '#DDD', fontSize: 7 }}>
-                    {status || '·'}
-                  </td>
-                );
-              })}
+              <td style={{ padding:'1px 2px', fontWeight:700, border:'1px solid #ddd' }}>Total</td>
+              {(monthlyHistory || Array.from({length:12},()=>({total:0,paid:0}))).map((h,i) => (
+                <td key={i} style={{ padding:'1px 2px', textAlign:'center', border:'1px solid #ddd' }}>
+                  {h.total > 0 ? h.total : 0}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td style={{ padding:'1px 2px', fontWeight:700, border:'1px solid #ddd' }}>Paid</td>
+              {(monthlyHistory || Array.from({length:12},()=>({total:0,paid:0}))).map((h,i) => (
+                <td key={i} style={{ padding:'1px 2px', textAlign:'center', border:'1px solid #ddd', color: h.paid > 0 ? '#15803d' : '#999' }}>
+                  {h.paid > 0 ? h.paid : 0}
+                </td>
+              ))}
             </tr>
           </tbody>
         </table>
@@ -194,11 +202,13 @@ function VoucherCopy({ label, student, invoice, school }) {
 export default function PublicFeeVoucherPage() {
   const [rollId,   setRollId]   = useState('');
   const [loading,  setLoading]  = useState(false);
-  const [student,  setStudent]  = useState(null);
-  const [invoices, setInvoices] = useState([]);
-  const [school,   setSchool]   = useState(null);
-  const [selected, setSelected] = useState(null);   // selected invoice for print
-  const [step,     setStep]     = useState(1);
+  const [student,        setStudent]       = useState(null);
+  const [invoices,       setInvoices]      = useState([]);
+  const [school,         setSchool]        = useState(null);
+  const [bankDetails,    setBankDetails]   = useState(null);
+  const [monthlyHistory, setMonthlyHistory]= useState(null);
+  const [selected,       setSelected]      = useState(null);
+  const [step,           setStep]          = useState(1);
   const printRef = useRef();
 
   const handleContinue = async (e) => {
@@ -206,11 +216,14 @@ export default function PublicFeeVoucherPage() {
     if (!rollId.trim()) return toast.error('Please enter your Roll ID');
     setLoading(true);
     try {
-      const res = await api.get('/public/fees/by-roll/' + encodeURIComponent(rollId.trim()));
+      const slug = localStorage.getItem('schoolSlug') || '';
+      const res = await api.get('/public/fees/by-roll/' + encodeURIComponent(rollId.trim()) + (slug ? `?schoolSlug=${slug}` : ''));
       const payload = res.data.data || {};
       setStudent(payload.student || null);
       setInvoices(payload.invoices || []);
       setSchool(payload.school || null);
+      setBankDetails(payload.bankDetails || null);
+      setMonthlyHistory(payload.monthlyHistory || null);
       if ((payload.invoices || []).length > 0) {
         setSelected(payload.invoices[0]);
       }
@@ -405,7 +418,7 @@ export default function PublicFeeVoucherPage() {
                 {/* 3 copies side by side */}
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', overflowX: 'auto', padding: '4px 2px' }}>
                   {['BANK COPY', 'SCHOOL COPY', 'PARENT COPY'].map(label => (
-                    <VoucherCopy key={label} label={label} student={student} invoice={selected} school={school}/>
+                    <VoucherCopy key={label} label={label} student={student} invoice={selected} school={school} bankDetails={bankDetails} monthlyHistory={monthlyHistory}/>
                   ))}
                 </div>
               </div>

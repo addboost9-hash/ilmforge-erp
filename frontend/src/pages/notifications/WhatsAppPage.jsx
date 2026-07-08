@@ -73,12 +73,27 @@ function WAPreview({ text }) {
   );
 }
 
+const MSG_TYPES = [
+  { id: 'text',   label: 'Text',                icon: '📝' },
+  { id: 'media',  label: 'Picture/Video/Audio/Document', icon: '📎' },
+  { id: 'link',   label: 'Link / URL',           icon: '🔗' },
+  { id: 'location',label: 'Location',            icon: '📍' },
+  { id: 'quiz',   label: 'Multiple-choice / Quiz / Poll', icon: '📊' },
+];
+
 export default function WhatsAppPage() {
   const [classId,   setClassId]   = useState('');
   const [sectionId, setSectionId] = useState('');
   const [message,   setMessage]   = useState('');
   const [sendAll,   setSendAll]   = useState(false);
   const [results,   setResults]   = useState(null);
+  const [msgType,   setMsgType]   = useState('text');
+  const [mediaUrl,  setMediaUrl]  = useState('');
+  const [mediaCaption, setMediaCaption] = useState('');
+  const [linkUrl,   setLinkUrl]   = useState('');
+  const [quizQ,     setQuizQ]     = useState('');
+  const [quizDesc,  setQuizDesc]  = useState('');
+  const [quizOpts,  setQuizOpts]  = useState(['','','']);
 
   const { data: classes = [] } = useQuery({
     queryKey: ['classes'],
@@ -99,10 +114,19 @@ export default function WhatsAppPage() {
   const validRecipients = students.filter(s => s.emergencyPhone || s.parent?.phone);
   const invalidCount    = students.length - validRecipients.length;
 
+  const buildMessage = () => {
+    if (msgType === 'media')    return `${mediaCaption || message}\n${mediaUrl}`;
+    if (msgType === 'link')     return `${message}\n${linkUrl}`;
+    if (msgType === 'location') return message;
+    if (msgType === 'quiz')     return `*${quizQ}*\n${quizDesc}\n${quizOpts.filter(Boolean).map((o,i)=>` ${i+1}. ${o}`).join('\n')}`;
+    return message;
+  };
+
   const sendMutation = useMutation({
     mutationFn: () => api.post('/notifications/whatsapp', {
       phones:  validRecipients.map(s => s.emergencyPhone || s.parent?.phone),
-      message,
+      message: buildMessage(),
+      type:    msgType === 'text' ? 'text' : 'text', // WA API type
     }),
     onSuccess: r => {
       toast.success(r.data.message || 'WhatsApp messages sent!');
@@ -191,6 +215,40 @@ export default function WhatsAppPage() {
                         {invalidCount > 0 && <span className="chip chip-yellow"><AlertTriangle size={10} /> {invalidCount} no phone</span>}
                       </>
                   }
+                </div>
+              )}
+            </div>
+
+            {/* Message Type Selector */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>MESSAGE TYPE</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {MSG_TYPES.map(t => (
+                  <button key={t.id} onClick={() => setMsgType(t.id)}
+                    style={{ padding: '5px 12px', borderRadius: 8, border: `1.5px solid ${msgType === t.id ? '#25D366' : '#e2e8f0'}`, background: msgType === t.id ? '#dcfce7' : 'white', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: msgType === t.id ? '#15803d' : '#64748b' }}>
+                    {t.icon} {t.label}
+                  </button>
+                ))}
+              </div>
+              {/* Type-specific fields */}
+              {msgType === 'media' && (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <input className="form-input" placeholder="File URL or YouTube URL" value={mediaUrl} onChange={e => setMediaUrl(e.target.value)} />
+                  <input className="form-input" placeholder="Caption (optional)" value={mediaCaption} onChange={e => setMediaCaption(e.target.value)} />
+                </div>
+              )}
+              {msgType === 'link' && (
+                <div style={{ marginTop: 8 }}>
+                  <input className="form-input" placeholder="https://..." value={linkUrl} onChange={e => setLinkUrl(e.target.value)} />
+                </div>
+              )}
+              {msgType === 'quiz' && (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <input className="form-input" placeholder="Question / Poll message" value={quizQ} onChange={e => setQuizQ(e.target.value)} />
+                  <input className="form-input" placeholder="Description (optional)" value={quizDesc} onChange={e => setQuizDesc(e.target.value)} />
+                  {quizOpts.map((opt, i) => (
+                    <input key={i} className="form-input" placeholder={`Option ${i + 1}`} value={opt} onChange={e => setQuizOpts(opts => opts.map((o, j) => j === i ? e.target.value : o))} />
+                  ))}
                 </div>
               )}
             </div>

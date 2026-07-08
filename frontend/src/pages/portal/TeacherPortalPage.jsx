@@ -11,8 +11,10 @@ import api from '../../api/client';
 import {
   LayoutDashboard, Users, UserCheck, GraduationCap, BookMarked,
   FolderOpen, Calendar, Bell, Key, Video, LogOut, ChevronRight,
-  Save, Plus, Search, MessageSquare, Trash2,
+  Save, Plus, Search, MessageSquare, Trash2, Printer, Download,
+  CheckCircle2, XCircle, Clock, BarChart2,
 } from 'lucide-react';
+import { printAttendanceSheet, printMarksSheet, exportToCSV } from '../../components/PortalUtils';
 
 /* ── Helpers ─────────────────────────────────────────────── */
 const todayStr = () => new Date().toISOString().split('T')[0];
@@ -491,6 +493,14 @@ function AttendanceTab({ classes }) {
                 {s.charAt(0).toUpperCase() + s.slice(1)}
               </button>
             ))}
+            <button onClick={() => printAttendanceSheet({ className: classes.find(c=>c.id===parseInt(classId))?.name || 'Class', date, students: stuList.map(s=>({...s, status: attendance[s.id]})) })}
+              style={{ padding:'5px 12px', border:'1px solid #e2e8f0', borderRadius:6, background:'white', cursor:'pointer', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:5, color:'#374151' }}>
+              <Printer size={12}/> Print Sheet
+            </button>
+            <button onClick={() => exportToCSV(`attendance-${date}`, ['Roll No','Name','Status'], stuList.map(s=>[s.rollNo||'',s.name||'', attendance[s.id]||'present']))}
+              style={{ padding:'5px 12px', border:'1px solid #e2e8f0', borderRadius:6, background:'white', cursor:'pointer', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:5, color:'#374151' }}>
+              <Download size={12}/> Export CSV
+            </button>
           </div>
           <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden', marginBottom: 16 }}>
             {stuList.map((s, i) => {
@@ -682,7 +692,15 @@ function MarksTab({ classes, exams }) {
                 );
               })}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => printMarksSheet({ examTitle: exam?.name || exam?.title || 'Exam', className: classes.find(c=>c.id===parseInt(activeClassId))?.name||'Class', students: students.map(s=>({...s, obtainedMarks: marks[s.id]?.obtained, totalMarks: totalDefault, grade: gradeFor(marks[s.id]?.obtained, totalDefault, marks[s.id]?.absent)})) })}
+                style={{ padding:'10px 20px', border:'1px solid #e2e8f0', borderRadius:8, background:'white', cursor:'pointer', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:7, color:'#374151', fontFamily:'inherit' }}>
+                <Printer size={14}/> Print Marksheet
+              </button>
+              <button onClick={() => exportToCSV(`marks-${exam?.name||'exam'}`, ['Roll No','Name','Obtained','Total','Grade'], students.map(s=>[s.rollNo||'',s.name||'',marks[s.id]?.absent?'ABS':(marks[s.id]?.obtained||''),totalDefault,gradeFor(marks[s.id]?.obtained,totalDefault,marks[s.id]?.absent)]))}
+                style={{ padding:'10px 20px', border:'1px solid #e2e8f0', borderRadius:8, background:'white', cursor:'pointer', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:7, color:'#374151', fontFamily:'inherit' }}>
+                <Download size={14}/> Export CSV
+              </button>
               <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
                 style={{ padding: '11px 28px', background: NAVY, color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'inherit', fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Save size={16} />{saveMut.isPending ? 'Saving…' : 'Save Marks'}
