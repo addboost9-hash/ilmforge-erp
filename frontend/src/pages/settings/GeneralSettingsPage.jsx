@@ -71,7 +71,7 @@ export default function GeneralSettingsPage() {
       if (updateSchool) updateSchool({ ...school, ...form });
       try { localStorage.setItem('registeredSchoolName', form.name); } catch {}
     },
-    onError: () => toast.error('Failed to save settings'),
+    onError: (err) => toast.error(err?.response?.data?.message || 'Failed to save settings'),
   });
 
   const Field = ({ label, name, type = 'text', placeholder, tip, span = 1, options }) => (

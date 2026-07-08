@@ -127,12 +127,15 @@ app.get('/api/v1/public/fees/by-roll/:rollNo', publicFeeLimiter, async (req, res
     // Bank details from school settings (stored in file-based settings)
     let bankDetails = { bankName: '', branch: '', accountTitle: school.name, accountNumber: '' };
     try {
-      const fs = require('fs');
-      const path = require('path');
-      const settingsPath = path.join(__dirname, '../../data/school-settings.json');
-      const raw = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : {};
-      const schoolSettings = raw[String(school.id)] || {};
-      if (schoolSettings.payment?.bank) bankDetails = { ...bankDetails, ...schoolSettings.payment.bank };
+      // Read bank details from DB (School.settingsJson)
+      const schoolWithSettings = await prisma.school.findUnique({
+        where: { id: school.id },
+        select: { settingsJson: true },
+      });
+      if (schoolWithSettings?.settingsJson) {
+        const parsed = JSON.parse(schoolWithSettings.settingsJson);
+        if (parsed.payment?.bank) bankDetails = { ...bankDetails, ...parsed.payment.bank };
+      }
     } catch (_) {}
 
     res.json({

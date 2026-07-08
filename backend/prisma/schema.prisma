@@ -19,7 +19,8 @@ model School {
   plan        String    @default("free")
   trialEndsAt DateTime?
   status      String    @default("active")
-  subdomain   String?
+  subdomain    String?
+  settingsJson String?   // JSON blob for theme, payment, general, website settings
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?

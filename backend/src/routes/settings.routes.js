@@ -1,38 +1,33 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
-const fs = require('fs/promises');
-const path = require('path');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
-const SETTINGS_STORE_PATH = path.join(__dirname, '../../data/school-settings.json');
-
-const readSettingsStore = async () => {
+// ---------------------------------------------------------------------------
+// DB-based settings store — uses School.settingsJson column
+// Replaces the old file-based store that failed on Render (ephemeral FS)
+// ---------------------------------------------------------------------------
+const getSchoolSettings = async (schoolId) => {
   try {
-    const raw = await fs.readFile(SETTINGS_STORE_PATH, 'utf8');
-    return JSON.parse(raw || '{}');
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { settingsJson: true },
+    });
+    if (!school?.settingsJson) return {};
+    return JSON.parse(school.settingsJson);
   } catch {
     return {};
   }
 };
 
-const writeSettingsStore = async (store) => {
-  const dir = path.dirname(SETTINGS_STORE_PATH);
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(SETTINGS_STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
-};
-
-const getSchoolSettings = async (schoolId) => {
-  const store = await readSettingsStore();
-  return store[String(schoolId)] || {};
-};
-
 const setSchoolSettings = async (schoolId, patch) => {
-  const store = await readSettingsStore();
-  const key = String(schoolId);
-  store[key] = { ...(store[key] || {}), ...patch, updatedAt: new Date().toISOString() };
-  await writeSettingsStore(store);
-  return store[key];
+  const existing = await getSchoolSettings(schoolId);
+  const merged = { ...existing, ...patch, updatedAt: new Date().toISOString() };
+  await prisma.school.update({
+    where: { id: schoolId },
+    data: { settingsJson: JSON.stringify(merged) },
+  });
+  return merged;
 };
 
 router.get('/school', wrap(async (req, res) => {
@@ -245,6 +240,32 @@ router.put('/website', wrap(async (req, res) => {
   const website = { ...DEFAULT_WEBSITE_SETTINGS, ...(req.body || {}) };
   const settings = await setSchoolSettings(req.schoolId, { website });
   res.json({ success: true, data: settings.website });
+}));
+
+// ---------------------------------------------------------------------------
+// General settings alias (same as /school for backwards compat)
+// ---------------------------------------------------------------------------
+router.get('/general', wrap(async (req, res) => {
+  const school = await prisma.school.findUnique({ where: { id: req.schoolId } });
+  const extra = await getSchoolSettings(req.schoolId);
+  res.json({ success: true, data: { ...school, ...extra.general } });
+}));
+
+router.put('/general', wrap(async (req, res) => {
+  const { name, address, city, phone, email, currency, session, smsSignature } = req.body;
+  const schoolData = {};
+  if (name)    schoolData.name    = name;
+  if (address) schoolData.address = address;
+  if (city)    schoolData.city    = city;
+  if (phone)   schoolData.phone   = phone;
+  if (email)   schoolData.email   = email;
+  if (Object.keys(schoolData).length) {
+    await prisma.school.update({ where: { id: req.schoolId }, data: schoolData });
+  }
+  if (currency || session || smsSignature) {
+    await setSchoolSettings(req.schoolId, { general: { currency, session, smsSignature } });
+  }
+  res.json({ success: true, message: 'General settings saved.' });
 }));
 
 module.exports = router;

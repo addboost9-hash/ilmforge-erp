@@ -48,8 +48,14 @@ const useAuthStore = create((set) => ({
       localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('user',   JSON.stringify(user));
       localStorage.setItem('school', JSON.stringify(school));
-      if (school?.campuses?.[0]?.id) {
-        localStorage.setItem('campusId', school.campuses[0].id);
+      // Store campusId — prefer main campus, fall back to first campus
+      const mainCampus = school?.campuses?.find(c => c.isMain) || school?.campuses?.[0];
+      if (mainCampus?.id) {
+        localStorage.setItem('campusId', mainCampus.id);
+      }
+      // Store slug for public fee voucher URL
+      if (school?.slug) {
+        localStorage.setItem('schoolSlug', school.slug);
       }
       /* persist school name for branding */
       if (school?.name) {

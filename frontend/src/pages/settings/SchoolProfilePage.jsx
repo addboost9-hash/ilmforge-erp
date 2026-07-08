@@ -91,7 +91,7 @@ export default function SchoolProfilePage() {
       document.documentElement.style.setProperty('--teal', selectedColor);
       toast.success('School profile saved! 🎉');
     },
-    onError: () => toast.error('Failed to save — check your connection'),
+    onError: (err) => toast.error(err?.response?.data?.message || 'Failed to save — check your connection'),
   });
 
   return (

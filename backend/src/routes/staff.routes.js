@@ -51,20 +51,29 @@ router.post('/', wrap(async (req, res) => {
   const passwordHash = await bcrypt.hash(tempPassword, 12);
   const empCode = await generateEmpCode(req.schoolId, designation);
 
+  // Ensure we have a valid campusId — tenant middleware auto-resolves, but be safe
+  const campusId = req.campusId;
+  if (!campusId) {
+    return res.status(400).json({
+      success: false,
+      message: 'No campus found for this school. Please create a campus first in Settings → Campuses.',
+    });
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
-      data: { schoolId: req.schoolId, campusId: req.campusId || 1, name, email, phone, role: 'teacher', passwordHash, mustChangePassword: true }
+      data: { schoolId: req.schoolId, campusId, name, email, phone, role: 'teacher', passwordHash, mustChangePassword: true }
     });
     const staff = await tx.staff.create({
       data: {
-        schoolId: req.schoolId, campusId: req.campusId || 1,
+        schoolId: req.schoolId, campusId,
         userId: user.id, name, cnic, gender,
         dob: dob ? new Date(dob) : null,
         departmentId: departmentId ? parseInt(departmentId) : null,
         designation, empCode,
         joiningDate: joiningDate ? new Date(joiningDate) : null,
         basicSalary: basicSalary ? parseInt(basicSalary) : 0,
-        salaryType: salaryType || 'monthly'
+        salaryType: salaryType || 'monthly',
       }
     });
     return { user, staff };
