@@ -63,11 +63,27 @@ router.get('/', wrap(async (req, res) => {
       return { OR: wordConditions };
     })()),
   };
+  const takeNum = Math.min(parseInt(limit) || 25, 300); // cap at 300 for safety
   const [students, total] = await Promise.all([
-    prisma.student.findMany({ where, skip, take: parseInt(limit), include: { class: true, section: true }, orderBy: { name: 'asc' } }),
-    prisma.student.count({ where })
+    prisma.student.findMany({
+      where, skip, take: takeNum,
+      select: {
+        id: true, name: true, rollNo: true, gender: true, status: true,
+        photoUrl: true, dob: true, fatherName: true, emergencyPhone: true,
+        admissionDate: true, address: true, bFormNo: true,
+        classId: true, sectionId: true, campusId: true, userId: true,
+        class:   { select: { id: true, name: true } },
+        section: { select: { id: true, name: true } },
+        campus:  { select: { id: true, name: true } },
+        parent:  { select: { id: true, name: true, phone: true, email: true, cnic: true } },
+      },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.student.count({ where }),
   ]);
-  res.json({ success: true, data: students, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+  // Short cache for list queries (browser-level)
+  res.setHeader('Cache-Control', 'private, max-age=60');
+  res.json({ success: true, data: students, total, page: parseInt(page), pages: Math.ceil(total / takeNum) });
 }));
 
 /* ── Auto-generate student roll number ──────────────────── */
@@ -143,12 +159,21 @@ router.post('/', wrap(async (req, res) => {
     ? parentEmail.trim().toLowerCase()
     : `${slugify(fatherName || 'parent')}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}@${slug}.parent`;
 
+  // Resolve campusId safely — never fall back to 1
+  const resolvedCampusId = campusId || (req.body.campusId ? parseInt(req.body.campusId) : null);
+  if (!resolvedCampusId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Campus is required. Please create a campus first in Settings → Campuses.',
+    });
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     // 1) Student record
     const student = await tx.student.create({
       data: {
         schoolId,
-        campusId: campusId || parseInt(req.body.campusId) || 1,
+        campusId: resolvedCampusId,
         name, fatherName, motherName, gender,
         dob: dob ? new Date(dob) : null,
         classId:   classId   ? parseInt(classId)   : null,
@@ -224,16 +249,21 @@ router.post('/', wrap(async (req, res) => {
     // 4) Optional: first fee invoice (linked flow)
     let invoice = null;
     if (generateFirstInvoice) {
-      const now = new Date();
-      const monthName = now.toLocaleString('default', { month: 'long' });
+      const now    = new Date();
+      const monthNum  = now.getMonth() + 1;          // 1-12
+      const monthName = now.toLocaleString('default', { month: 'long' }); // "July"
       const amount = parseInt(monthlyFee) || 0;
       if (amount > 0) {
+        const vNo = `ADM-${String(student.id).padStart(4,'0')}-${now.getFullYear()}`;
         invoice = await tx.feeInvoice.create({
           data: {
             schoolId, campusId: student.campusId, studentId: student.id,
-            month: monthName, year: now.getFullYear(),
-            totalAmount: amount, paidAmount: 0, balance: amount,
-            status: 'pending', dueDate: new Date(now.getFullYear(), now.getMonth(), 10),
+            classId: student.classId,
+            feeTitle: `Monthly Fee Of ${monthName}`,
+            month: monthNum, year: now.getFullYear(),
+            totalAmount: amount, paidAmount: 0, dueAmount: amount, balance: amount,
+            status: 'unpaid', voucherNo: vNo,
+            dueDate: new Date(now.getFullYear(), now.getMonth(), 10),
           }
         }).catch(() => null);
       }

@@ -16,40 +16,92 @@ const requireFinanceRole = (req, res, next) => {
 
 // POST /api/v1/fees/generate - Generate monthly fee for a class
 router.post('/generate', requireFinanceRole, wrap(async (req, res) => {
-  const { schoolId, campusId } = req;
-  const { classId, sectionId, month, year, dueDate, lateFee = 0, feeTitle } = req.body;
-  if (!classId || !month || !year) return res.status(400).json({ success: false, message: 'classId, month, year required.' });
+  const { schoolId } = req;
+  const { classId, sectionId, campusId: bodyCampusId, month, year, dueDate, lateFee = 0, feeTitle, customAmount } = req.body;
+
+  if (!classId || !month || !year) {
+    return res.status(400).json({ success: false, message: 'classId, month, year required.' });
+  }
+
+  const monthInt = parseInt(month);
+  const yearInt  = parseInt(year);
+  const MONTHS   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthName = MONTHS[(monthInt - 1)] || String(month);
+
+  // Use campusId from body (user selection) or fall back to middleware campus
+  const filterCampusId = bodyCampusId ? parseInt(bodyCampusId) : req.campusId;
 
   // Get fee structure for this class
-  const feeStructure = await prisma.feeStructure.findFirst({ where: { schoolId, classId: parseInt(classId) } });
-
-  // Get all active students in class
-  const students = await prisma.student.findMany({
-    where: { schoolId, classId: parseInt(classId), status: 'active', deletedAt: null, ...(sectionId && { sectionId: parseInt(sectionId) }), ...(campusId && { campusId }) }
+  const feeStructure = await prisma.feeStructure.findFirst({
+    where: { schoolId, classId: parseInt(classId) },
   });
+
+  // Amount priority: customAmount > feeStructure.amount > class tuitionFee > 0
+  const cls = await prisma.class.findFirst({ where: { id: parseInt(classId), schoolId } });
+  const baseAmount = parseInt(customAmount) || feeStructure?.amount || cls?.tuitionFee || 0;
+
+  // Get ALL active students in class (campus filter optional)
+  const studentWhere = {
+    schoolId,
+    classId: parseInt(classId),
+    status:  'active',
+    deletedAt: null,
+    ...(sectionId && sectionId !== 'all' && { sectionId: parseInt(sectionId) }),
+    ...(filterCampusId && { campusId: filterCampusId }),
+  };
+
+  const students = await prisma.student.findMany({ where: studentWhere });
+
+  if (!students.length) {
+    return res.json({
+      success: true,
+      data: { generated: 0, skipped: 0, students: [] },
+      message: `0 invoices generated — no active students found in this class/section/campus combination.`,
+    });
+  }
 
   const results = { generated: 0, skipped: 0, students: [] };
 
   for (const student of students) {
+    // Check if invoice already exists for this month/year
     const existing = await prisma.feeInvoice.findFirst({
-      where: { schoolId, studentId: student.id, month, year: parseInt(year), feeTitle: feeTitle || 'Monthly Fee' }
+      where: { schoolId, studentId: student.id, month: monthInt, year: yearInt },
     });
-    if (existing) { results.skipped++; results.students.push({ ...student, status: 'already_generated' }); continue; }
+    if (existing) {
+      results.skipped++;
+      results.students.push({ id: student.id, name: student.name, rollNo: student.rollNo, status: 'skipped' });
+      continue;
+    }
 
-    const voucherNo = `${month.substring(0,3).toUpperCase()}-${String(student.id).padStart(4,'0')}-${year}`;
-    const amount = feeStructure?.amount || 0;
+    const voucherNo = `${monthName.toUpperCase()}-${String(student.id).padStart(4,'0')}-${year}`;
 
     await prisma.feeInvoice.create({
-      data: { schoolId, campusId: student.campusId, studentId: student.id, classId: parseInt(classId),
-        feeTitle: feeTitle || `Monthly Fee Of ${month}`, totalAmount: amount, dueAmount: amount,
-        month, year: parseInt(year), dueDate: dueDate ? new Date(dueDate) : null,
-        status: 'unpaid', voucherNo, lateFee: parseInt(lateFee) }
+      data: {
+        schoolId,
+        campusId: student.campusId,
+        studentId: student.id,
+        classId: parseInt(classId),
+        feeTitle: feeTitle || `Monthly Fee Of ${monthName}`,
+        totalAmount: baseAmount,
+        dueAmount:   baseAmount,
+        paidAmount:  0,
+        month:   monthInt,
+        year:    yearInt,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        status:  'unpaid',
+        voucherNo,
+        lateFee: parseInt(lateFee) || 0,
+      },
     });
     results.generated++;
-    results.students.push({ ...student, status: 'generated' });
+    results.students.push({ id: student.id, name: student.name, rollNo: student.rollNo, status: 'generated' });
   }
 
-  res.json({ success: true, data: results, message: `${results.generated} invoices generated, ${results.skipped} already existed.` });
+  res.json({
+    success: true,
+    data:    results,
+    message: `${results.generated} invoice${results.generated !== 1 ? 's' : ''} generated, ${results.skipped} already existed.`,
+  });
 }));
 
 // GET /api/v1/fees/invoices

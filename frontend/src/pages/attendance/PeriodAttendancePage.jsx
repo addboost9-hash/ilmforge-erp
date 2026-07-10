@@ -383,7 +383,7 @@ function ReportTab({ classes }) {
     queryKey: ['subjects', filters.classId],
     enabled: !!filters.classId,
     queryFn: () =>
-      api.get('/subjects', { params: { classId: filters.classId } })
+      api.get('/classes/subjects', { params: { classId: filters.classId } })
          .then(r => r.data?.data || r.data || [])
          .catch(() => []),
   });

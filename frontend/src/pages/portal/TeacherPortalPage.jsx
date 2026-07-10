@@ -416,7 +416,7 @@ function AttendanceTab({ classes }) {
     if (!classId) return;
     setLoading(true);
     try {
-      const res = await api.get('/students', { params: { classId, sectionId: sectionId || undefined, status: 'active', limit: 300 } });
+      const res = await api.get('/students', { params: { classId, sectionId: sectionId || undefined, status: 'active', limit: 150 } });
       const list = res.data.data || [];
       setStuList(list);
       const m = {};
@@ -554,14 +554,14 @@ function MarksTab({ classes, exams }) {
   const { data: subjects = [] } = useQuery({
     queryKey: ['subjects-for-exam', activeClassId],
     enabled: !!activeClassId,
-    queryFn: () => api.get('/subjects', { params: { classId: activeClassId } }).then(r => r.data.data || []),
+    queryFn: () => api.get('/classes/subjects', { params: { classId: activeClassId } }).then(r => r.data.data || []),
     retry: false,
   });
 
   const { data: students = [], isLoading: stuLoad } = useQuery({
     queryKey: ['exam-students', activeClassId],
     enabled: !!activeClassId,
-    queryFn: () => api.get('/students', { params: { classId: activeClassId, status: 'active', limit: 300 } }).then(r => r.data.data || []),
+    queryFn: () => api.get('/students', { params: { classId: activeClassId, status: 'active', limit: 150 } }).then(r => r.data.data || []),
   });
 
   useEffect(() => {
@@ -828,7 +828,7 @@ function MaterialsTab({ classes }) {
   const { data: subjects = [] } = useQuery({
     queryKey: ['mat-subjects', selectedClass],
     enabled: !!selectedClass,
-    queryFn: () => api.get('/subjects', { params: { classId: selectedClass } }).then(r => r.data.data || []),
+    queryFn: () => api.get('/classes/subjects', { params: { classId: selectedClass } }).then(r => r.data.data || []),
     retry: false,
   });
 
@@ -979,7 +979,12 @@ function LeaveTab() {
     staleTime: 60_000, retry: false,
   });
   const applyMut = useMutation({
-    mutationFn: () => api.post('/leaves', { ...form, leaveType: form.type }),
+    mutationFn: () => {
+      if (new Date(form.toDate) < new Date(form.fromDate)) {
+        throw new Error('To Date cannot be before From Date');
+      }
+      return api.post('/leaves', { ...form, type: form.type, leaveType: form.type });
+    },
     onSuccess: () => { qc.invalidateQueries(['teacher-leaves']); setForm({ fromDate: todayStr(), toDate: todayStr(), type: 'Casual', reason: '' }); toast.success('Leave application submitted!'); },
     onError: err => toast.error(err.response?.data?.message || 'Failed to submit leave'),
   });

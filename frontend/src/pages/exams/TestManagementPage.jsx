@@ -481,7 +481,7 @@ function MarksEntryTab({ classes }) {
           classId:   filterClassId   || undefined,
           sectionId: filterSectionId || undefined,
           status: 'active',
-          limit: 500,
+          limit: 100,
         },
       }).then(r => r.data.data || []),
     enabled: !!filterClassId,

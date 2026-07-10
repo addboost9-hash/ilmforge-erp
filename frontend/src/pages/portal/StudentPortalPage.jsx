@@ -93,7 +93,7 @@ const NAV_ITEMS = [
   { id: 'fees',       label: 'My Fees',    Icon: DollarSign },
   { id: 'results',    label: 'Results',    Icon: Award      },
   { id: 'homework',   label: 'Homework',   Icon: BookOpen   },
-  { id: 'attendance', label: 'Attendance', Icon: Calendar   },
+  { id: 'attendance', label: 'Attend.',    Icon: Calendar   },
   { id: 'materials',  label: 'Materials',  Icon: Library    },
 ];
 
@@ -247,9 +247,9 @@ function AttendanceCalendar({ history = [] }) {
 
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         {pct !== null && (
-          <div style={{ flex: 1, background: pct >= 75 ? '#DCFCE7' : '#FEE2E2', borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: pct >= 75 ? '#15803D' : '#B91C1C' }}>This Month</span>
-            <span style={{ fontSize: 18, fontWeight: 900, color: pct >= 75 ? '#15803D' : '#B91C1C' }}>{pct}%</span>
+          <div style={{ flex: 1, background: pct >= 70 ? '#DCFCE7' : '#FEE2E2', borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: pct >= 70 ? '#15803D' : '#B91C1C' }}>This Month</span>
+            <span style={{ fontSize: 18, fontWeight: 900, color: pct >= 70 ? '#15803D' : '#B91C1C' }}>{pct}%</span>
           </div>
         )}
         {streak > 0 && (
@@ -411,7 +411,8 @@ export default function StudentPortalPage() {
     queryFn:  () => api.get('/exams').then(r => r.data.data || []),
     staleTime: 120_000,
   });
-  const exams = examsRaw.filter(e => e.isPublished !== false);
+  // Show exams that are published OR have marks already entered (status=completed)
+  const exams = examsRaw.filter(e => e.isPublished === true || e.status === 'completed' || e.status === 'results_published');
 
   const { data: hwRaw = [] } = useQuery({
     queryKey: ['portal-homework', classId],
@@ -1016,7 +1017,7 @@ export default function StudentPortalPage() {
 
             {attendPct != null && (
               <div style={{
-                background: attendPct >= 75
+                background: attendPct >= 70
                   ? 'linear-gradient(135deg,#15803D,#16A34A)'
                   : 'linear-gradient(135deg,#B91C1C,#DC2626)',
                 borderRadius: 14, padding: '16px 20px', marginBottom: 12,
@@ -1026,7 +1027,7 @@ export default function StudentPortalPage() {
                   <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 2 }}>Overall Attendance</div>
                   <div style={{ fontSize: 36, fontWeight: 900, lineHeight: 1 }}>{attendPct}%</div>
                   <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-                    {attendPct >= 75 ? 'Good standing' : 'Below required 75% — attend more classes'}
+                    {attendPct >= 70 ? 'Good standing' : 'Below required 75% — attend more classes'}
                   </div>
                 </div>
                 <Calendar size={48} style={{ opacity: 0.25 }} />

@@ -187,12 +187,15 @@ const NotificationConfigPage    = safeLazy(() => import('./pages/settings/Notifi
 const qc = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
-      staleTime: 3 * 60_000,         // cache 3 min — less API calls
-      gcTime:    10 * 60_000,       // keep unused cache 10 min
-      refetchOnWindowFocus: false,  // don't re-fetch when tab regains focus
-      refetchOnReconnect: false,    // don't auto-refetch on network reconnect
-      retry: 1,                     // only retry once on failure
+      retry:                1,
+      staleTime:            5 * 60_000,   // 5 min — data fresh, no re-fetch
+      gcTime:               15 * 60_000,  // 15 min — keep in memory
+      refetchOnWindowFocus: false,         // never refetch on tab focus
+      refetchOnReconnect:   false,         // never refetch on reconnect
+      refetchInterval:      false,         // no polling
+    },
+    mutations: {
+      retry: 0,                            // mutations don't retry
     },
   },
 });

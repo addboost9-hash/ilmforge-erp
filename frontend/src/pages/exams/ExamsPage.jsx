@@ -45,9 +45,17 @@ export default function ExamsPage() {
             <div className="form-group" style={{marginBottom:0}}>
               <label className="form-label">Type</label>
               <select className="form-select" value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>
-                <option value="test">Test</option>
-                <option value="midterm">Mid-Term</option>
+                <option value="test">Class Test</option>
+                <option value="weekly">Weekly Test</option>
+                <option value="monthly">Monthly Test</option>
+                <option value="midterm">Mid-Term Exam</option>
                 <option value="final">Final Exam</option>
+                <option value="semester1">1st Semester</option>
+                <option value="semester2">2nd Semester</option>
+                <option value="semester3">3rd Semester</option>
+                <option value="semester4">4th Semester</option>
+                <option value="annual">Annual Exam</option>
+                <option value="mock">Mock / Practice</option>
               </select>
             </div>
             <div className="form-group" style={{marginBottom:0}}>

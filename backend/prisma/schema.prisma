@@ -305,6 +305,10 @@ model FeePayment {
   receiptNo      String?
   createdAt      DateTime @default(now())
   invoice        FeeInvoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([schoolId, paymentDate])
+  @@index([schoolId, studentId])
+  @@index([invoiceId])
 }
 
 model Expense {
@@ -318,6 +322,8 @@ model Expense {
   addedBy     Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([schoolId, date])
 }
 
 model ExpenseCategory {

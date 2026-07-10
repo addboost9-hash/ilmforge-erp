@@ -847,8 +847,12 @@ function FeeCollectionTab({ user }) {
   });
 
   const payMutation = useMutation({
-    mutationFn: ({ invoiceId, amount, note }) =>
-      api.post(`/fees/invoices/${invoiceId}/pay`, { amount: Number(amount), note }),
+    mutationFn: ({ invoiceId, amount, note }) => {
+      const numAmount = Number(amount);
+      if (!numAmount || numAmount <= 0) throw new Error('Enter a valid payment amount');
+      if (numAmount > 1000000) throw new Error('Amount seems too high — please verify');
+      return api.post(`/fees/invoices/${invoiceId}/pay`, { amount: numAmount, note });
+    },
     onSuccess: (res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['student-invoices', selectedStudent?.id] });
       queryClient.invalidateQueries({ queryKey: ['today-payments'] });
@@ -1091,7 +1095,7 @@ function ExpenseLogTab({ user }) {
                     <td style={{ padding: '8px 10px', color: '#475569' }}>{exp.description || '—'}</td>
                     <td style={{ padding: '8px 10px', color: '#B91C1C', fontWeight: 700 }}>{Rs(exp.amount)}</td>
                     <td style={{ padding: '8px 10px' }}>
-                      <button onClick={() => deleteMutation.mutate(exp.id)} disabled={deleteMutation.isPending}
+                      <button onClick={() => { if (window.confirm(`Delete expense of ${Rs(exp.amount)}? This cannot be undone.`)) deleteMutation.mutate(exp.id); }} disabled={deleteMutation.isPending}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: 4 }} title="Delete">
                         <Trash2 size={14} />
                       </button>
@@ -1138,23 +1142,28 @@ function PaymentHistoryTab({ user }) {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
 
   const handleExcel = () => {
+    // Properly escape CSV values to handle commas/quotes
+    const esc = (v) => { const s = String(v ?? '').replace(/"/g, '""'); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s; };
     const rows = [
-      ['Date', 'Roll No', 'Student', 'Class', 'Fee Title', 'Amount'],
+      ['Date', 'Receipt No', 'Roll No', 'Student', 'Class', 'Fee Title', 'Amount (Rs.)', 'Method', 'Received By'],
       ...filtered.map((p) => [
-        p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-PK') : '—',
+        p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('en-PK') : (p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-PK') : '—'),
+        p.receiptNo || p.id || '—',
         p.student?.rollNo || '—',
         p.student?.name || '—',
         p.student?.class?.name || '—',
-        p.feeTitle || p.invoice?.feeType || '—',
-        p.amount || 0,
-      ]),
+        p.feeTitle || p.invoice?.feeType || 'Monthly Fee',
+        p.amountPaid || p.amount || 0,
+        p.method || 'cash',
+        p.receivedBy || '—',
+      ].map(esc)),
     ];
-    const csvContent = rows.map((r) => r.join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const csv = '﻿' + rows.map((r) => r.join(',')).join('\n'); // BOM for Excel
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `payments_${fromDate || 'all'}_to_${toDate}.csv`;
+    a.download = `fee_payments_${fromDate || 'all'}_to_${toDate}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

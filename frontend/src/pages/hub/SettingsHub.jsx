@@ -8,9 +8,9 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Settings, Palette, School, Globe, Mail, MessageSquare,
   Fingerprint, Printer, CreditCard, Shield, FileText,
-  Bell, LayoutGrid, BookOpen, Sliders, Building2,
+  Bell, BookOpen, Sliders, Building2,
   Calendar, Layers, Bot, Zap, Users, Key, ClipboardList,
-  ChevronRight,
+  ChevronRight, Database, Smartphone, Search,
 } from 'lucide-react';
 
 /* ── Lazy-loaded setting pages ── */
@@ -27,7 +27,7 @@ const ExamSettings      = lazy(() => import('../settings/ExamSettingsPage'));
 const PaymentSettings   = lazy(() => import('../settings/PaymentSettingsPage'));
 const BiometricSettings = lazy(() => import('../settings/BiometricSettingsPage'));
 const ThermalPrinter    = lazy(() => import('../settings/ThermalPrinterPage'));
-const WebsiteSettings   = lazy(() => import('../settings/WebsiteSettingsPage'));
+const WebsiteSettings   = lazy(() => import('../settings/WebsiteManagementPage'));
 const AutomationPage    = lazy(() => import('../settings/AutomationPage'));
 const ProfilePage       = lazy(() => import('../settings/ProfilePage'));
 const ClassesPage       = lazy(() => import('../settings/ClassesPage'));
@@ -35,6 +35,7 @@ const SubjectsPage      = lazy(() => import('../settings/SubjectsPage'));
 const PermissionsMatrix = lazy(() => import('../settings/PermissionsMatrixPage'));
 const AuditLogs         = lazy(() => import('../settings/AuditLogsPage'));
 const NotificationConfig= lazy(() => import('../settings/NotificationConfigPage'));
+const BackupPage        = lazy(() => import('../backup/BackupPage'));
 
 const L = (C) => () => (
   <Suspense fallback={<div style={{ padding:'40px 20px', textAlign:'center', color:'#9CA3AF', fontSize:13 }}>Loading…</div>}>
@@ -64,11 +65,12 @@ const GROUPS = [
     icon: Globe,
     color: '#7C3AED',
     items: [
-      { id: 'email',      label: 'Email',            icon: Mail,          hint: 'SMTP config',         render: L(EmailSettings) },
-      { id: 'smstpl',     label: 'SMS Templates',    icon: MessageSquare, hint: 'Auto messages',       render: L(SMSTemplates) },
-      { id: 'whatsapp',   label: 'WhatsApp',         icon: Bot,           hint: 'Integration',         render: L(WhatsAppSettings) },
-      { id: 'automation', label: 'Automation',       icon: Zap,           hint: 'Auto triggers',       render: L(AutomationPage) },
-      { id: 'website',    label: 'Website Settings', icon: Globe,         hint: 'Public pages',        render: L(WebsiteSettings) },
+      { id: 'email',      label: 'Email (SMTP)',      icon: Mail,          hint: 'Brevo/Gmail config',  render: L(EmailSettings) },
+      { id: 'smstpl',     label: 'SMS Templates',    icon: MessageSquare, hint: '15 auto templates',   render: L(SMSTemplates) },
+      { id: 'whatsapp',   label: 'WhatsApp',         icon: Bot,           hint: 'WA Business API',     render: L(WhatsAppSettings) },
+      { id: 'automation', label: 'Automation Rules', icon: Zap,           hint: 'Auto triggers',       render: L(AutomationPage) },
+      { id: 'website',    label: 'Website Mgmt.',    icon: Globe,         hint: 'School website',      render: L(WebsiteSettings) },
+      { id: 'notifconfig',label: 'Notif. Config',    icon: Bell,          hint: 'Alert preferences',   render: L(NotificationConfig) },
     ],
   },
   {
@@ -88,12 +90,13 @@ const GROUPS = [
     icon: Shield,
     color: '#DC2626',
     items: [
-      { id: 'admins',      label: 'Admins',              icon: Users,          hint: 'Admin accounts',    render: L(AdminsPage) },
-      { id: 'permissions', label: 'Permissions Matrix',  icon: Key,            hint: 'Role permissions',  render: L(PermissionsMatrix) },
-      { id: 'auditlogs',   label: 'Audit Logs',          icon: ClipboardList,  hint: 'Activity history',  render: L(AuditLogs) },
-      { id: 'theme',       label: 'Theme',               icon: Palette,        hint: 'Colors + branding', render: L(ThemeSettings) },
-      { id: 'exam',        label: 'Exam Settings',       icon: FileText,       hint: 'Grading rules',     render: L(ExamSettings) },
-      { id: 'notifconfig', label: 'Notification Config', icon: Bell,           hint: 'Alert preferences', render: L(NotificationConfig) },
+      { id: 'admins',      label: 'Admins & Roles',      icon: Users,         hint: 'Accounts + permissions', render: L(AdminsPage) },
+      { id: 'permissions', label: 'Permissions Matrix',  icon: Key,           hint: 'Role-based access',      render: L(PermissionsMatrix) },
+      { id: 'auditlogs',   label: 'Audit Logs',          icon: ClipboardList, hint: 'Activity history',       render: L(AuditLogs) },
+      { id: 'theme',       label: 'Theme & Branding',    icon: Palette,       hint: 'Colors + logo',          render: L(ThemeSettings) },
+      { id: 'exam',        label: 'Exam Settings',       icon: FileText,      hint: 'Grading rules',          render: L(ExamSettings) },
+      { id: 'backup',      label: 'Backup & Restore',    icon: Database,      hint: 'DB export/import',       render: L(BackupPage) },
+      { id: 'myprofile',   label: 'My Profile',          icon: Users,         hint: 'Change password',        render: L(ProfilePage) },
     ],
   },
 ];
@@ -101,10 +104,11 @@ const GROUPS = [
 /* Flat list of all items for lookup */
 const ALL_ITEMS = GROUPS.flatMap(g => g.items.map(item => ({ ...item, groupId: g.id, groupColor: g.color })));
 
-const ACCENT = '#6c757d';
+const ACCENT = '#1B2F6E';
 
 export default function SettingsHub() {
   const [params, setParams] = useSearchParams();
+  const [searchQ, setSearchQ] = useState('');
   const activeId = params.get('tab') || ALL_ITEMS[0]?.id;
 
   const activeItem = useMemo(
@@ -112,32 +116,59 @@ export default function SettingsHub() {
     [activeId]
   );
 
-  const go = (id) => setParams({ tab: id }, { replace: false });
+  const go = (id) => { setParams({ tab: id }, { replace: false }); setSearchQ(''); };
+
+  // Search filter
+  const filteredGroups = useMemo(() => {
+    if (!searchQ.trim()) return GROUPS;
+    const q = searchQ.toLowerCase();
+    return GROUPS.map(g => ({
+      ...g,
+      items: g.items.filter(i => i.label.toLowerCase().includes(q) || (i.hint||'').toLowerCase().includes(q)),
+    })).filter(g => g.items.length > 0);
+  }, [searchQ]);
+
+  const totalItems = GROUPS.flatMap(g => g.items).length;
 
   return (
     <div className="hub-shell">
 
-      {/* Hub Header */}
-      <div className="hub-header" style={{ borderLeft: `4px solid ${ACCENT}` }}>
-        <div>
-          <div className="hub-title">
-            <Settings size={20} style={{ color: ACCENT }} />
-            Settings Hub
+      {/* ── Enhanced Hub Header ── */}
+      <div style={{ background: `linear-gradient(135deg, ${ACCENT} 0%, #0073b7 100%)`, padding: '18px 24px', color: 'white' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12, marginBottom:14 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:44, height:44, borderRadius:10, background:'rgba(255,255,255,0.15)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <Settings size={22} color="white"/>
+            </div>
+            <div>
+              <div style={{ fontSize:20, fontWeight:800, letterSpacing:-0.3 }}>Settings Hub</div>
+              <div style={{ fontSize:12.5, opacity:0.8, marginTop:2 }}>
+                School profile, sessions, integrations, theme — poori configuration ek jagah &nbsp;({totalItems} settings)
+              </div>
+            </div>
           </div>
-          <div className="hub-subtitle">
-            School profile, sessions, integrations, theme — poori configuration ek jagah
+          <div style={{ display:'flex', gap:8 }}>
+            <button className="btn btn-sm" onClick={() => go('profile')} style={{ background:'white', color:ACCENT, border:'none', fontWeight:700 }}>
+              <School size={13}/> School Profile
+            </button>
+            <button className="btn btn-sm" onClick={() => go('theme')} style={{ background:'rgba(255,255,255,0.15)', color:'white', border:'1px solid rgba(255,255,255,0.3)', fontWeight:600 }}>
+              <Palette size={13}/> Theme
+            </button>
+            <button className="btn btn-sm" onClick={() => go('admins')} style={{ background:'rgba(255,255,255,0.15)', color:'white', border:'1px solid rgba(255,255,255,0.3)', fontWeight:600 }}>
+              <Users size={13}/> Admins
+            </button>
           </div>
         </div>
-        <div className="hub-actions">
-          <button className="btn btn-primary" onClick={() => go('profile')}>
-            <School size={14} /> School Profile
-          </button>
-          <button className="btn btn-outline" onClick={() => go('theme')}>
-            <Palette size={14} /> Theme
-          </button>
-          <button className="btn btn-outline" onClick={() => go('admins')}>
-            <Users size={14} /> Admins
-          </button>
+
+        {/* Search settings */}
+        <div style={{ position:'relative', maxWidth:360 }}>
+          <Search size={14} style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:'rgba(255,255,255,0.6)' }}/>
+          <input
+            style={{ width:'100%', padding:'8px 12px 8px 32px', borderRadius:8, border:'1px solid rgba(255,255,255,0.25)', background:'rgba(255,255,255,0.12)', color:'white', fontSize:13, outline:'none', fontFamily:'inherit' }}
+            placeholder="Search settings…"
+            value={searchQ}
+            onChange={e => setSearchQ(e.target.value)}
+          />
         </div>
       </div>
 
@@ -155,7 +186,7 @@ export default function SettingsHub() {
             overflow: 'hidden',
             position: 'sticky', top: 80,
           }}>
-            {GROUPS.map((group, gi) => {
+            {filteredGroups.map((group, gi) => {
               const GroupIcon = group.icon;
               const isGroupActive = group.items.some(i => i.id === activeId);
               return (

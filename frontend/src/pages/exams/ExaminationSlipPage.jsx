@@ -301,7 +301,7 @@ export default function ExaminationSlipPage() {
           classId:   classId   || undefined,
           sectionId: sectionId || undefined,
           status: 'active',
-          limit: 500,
+          limit: 100,
         },
       }).then(r => r.data.data || []),
     enabled: !!classId,

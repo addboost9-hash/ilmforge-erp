@@ -83,7 +83,7 @@ export default function ExamMarksPage() {
     queryKey: ['subjects', activeClassId],
     enabled: !!activeClassId,
     queryFn: () =>
-      api.get('/subjects', { params: { classId: activeClassId } })
+      api.get('/classes/subjects', { params: { classId: activeClassId } })
         .then(r => r.data.data || []),
   });
 
@@ -92,7 +92,7 @@ export default function ExamMarksPage() {
     enabled: !!activeClassId,
     queryFn: () =>
       api.get('/students', {
-        params: { classId: activeClassId, status: 'active', limit: 300 },
+        params: { classId: activeClassId, status: 'active', limit: 150 },
       }).then(r => r.data.data),
   });
 

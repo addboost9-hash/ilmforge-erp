@@ -205,10 +205,26 @@ export default function FeeCollectionPage() {
                             <DollarSign size={12} /> Collect
                           </button>
                         )}
-                        <a href={'/api/v1/pdf/voucher/' + inv.id} target="_blank" rel="noreferrer"
-                          className="btn btn-sm btn-outline btn-icon" title="Print Voucher">
+                        <button
+                          className="btn btn-sm btn-outline btn-icon"
+                          title="Print Voucher"
+                          onClick={() => {
+                            const token = localStorage.getItem('accessToken');
+                            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+                            const url = `${apiBase}/pdf/voucher/${inv.id}`;
+                            // Open in new window with auth header via fetch
+                            fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+                              .then(r => r.text())
+                              .then(html => {
+                                const w = window.open('', '_blank', 'width=900,height=700');
+                                w.document.write(html);
+                                w.document.close();
+                                setTimeout(() => w.print(), 800);
+                              })
+                              .catch(() => window.open(url, '_blank'));
+                          }}>
                           <Printer size={12} />
-                        </a>
+                        </button>
                       </div>
                     </td>
                   </tr>

@@ -85,7 +85,7 @@ export default function SMSPage() {
     queryKey: ['sms-students', classId, sectionId, sendAll],
     enabled:  !!classId || sendAll,
     queryFn:  () => api.get('/students', {
-      params: { classId: classId || undefined, sectionId: sectionId || undefined, limit: 500, status: 'active' },
+      params: { classId: classId || undefined, sectionId: sectionId || undefined, limit: 100, status: 'active' },
     }).then(r => r.data.data || []),
   });
 

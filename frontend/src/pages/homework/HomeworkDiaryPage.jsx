@@ -140,7 +140,7 @@ export default function HomeworkDiaryPage() {
 
   const { data: subjects = [] } = useQuery({
     queryKey: ['diary-subjects', classId],
-    queryFn: () => api.get('/subjects', { params: { classId } }).then(r => r.data.data || []).catch(() => []),
+    queryFn: () => api.get('/classes/subjects', { params: { classId } }).then(r => r.data.data || []).catch(() => []),
     enabled: !!classId,
   });
 

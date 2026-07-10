@@ -209,10 +209,12 @@ export default function GatekeeperPortalPage() {
       });
       const list = res.data?.data || res.data?.attendance || [];
       setEntries(list);
-      const presentList = list.filter(e =>
-        e.status === 'Present' || e.status === 'present' || e.direction === 'IN'
-      );
-      setPresentCount(presentList.length);
+      // Count unique students who have checked IN (not both IN and OUT)
+      const inStudents  = new Set(list.filter(e => (e.direction || 'IN').toUpperCase() === 'IN').map(e => e.studentId || e.student?.id));
+      const outStudents = new Set(list.filter(e => (e.direction || '').toUpperCase() === 'OUT').map(e => e.studentId || e.student?.id));
+      // Present = IN but not OUT yet
+      const netPresent = [...inStudents].filter(id => !outStudents.has(id)).length;
+      setPresentCount(netPresent || inStudents.size);
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to load today\'s entries';
       showToast(msg, 'error');
@@ -563,8 +565,9 @@ export default function GatekeeperPortalPage() {
           }}
         >
           {[
-            { key: 'barcode', label: 'Barcode Attendance' },
-            { key: 'qr',      label: 'QR Gate Pass' },
+            { key: 'barcode', label: '📷 Barcode Attendance' },
+            { key: 'qr',      label: '🔲 QR Gate Pass' },
+            { key: 'stats',   label: '📊 Daily Stats' },
           ].map((tab, i, arr) => (
             <button
               key={tab.key}
@@ -1120,6 +1123,67 @@ export default function GatekeeperPortalPage() {
           </div>
         )}
       </div>
+
+      {/* ══ TAB: DAILY STATS ══ */}
+      {activeTab === 'stats' && (
+        <div style={{ padding: '0 18px 20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 16 }}>
+            {[
+              { label: 'Total Scans Today', v: entries.length, color: CYAN, icon: '📊' },
+              { label: 'Currently Inside', v: presentCount, color: '#22c55e', icon: '✅' },
+              { label: 'Gate Passes Today', v: entries.filter(e => (e.direction||'').toUpperCase() === 'OUT').length, color: '#f59e0b', icon: '🚪' },
+            ].map(s => (
+              <div key={s.label} style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${s.color}30`, borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 28 }}>{s.icon}</div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: s.color, marginTop: 6 }}>{s.v}</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Entries table */}
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${CYAN}20`, borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ padding: '12px 16px', borderBottom: `1px solid ${CYAN}15`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontWeight: 700, color: CYAN, fontSize: 13 }}>📋 Today's Activity Log</span>
+              <span style={{ fontSize: 11, color: '#64748b' }}>{entries.length} records</span>
+            </div>
+            <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+              {entries.length === 0 ? (
+                <div style={{ padding: 32, textAlign: 'center', color: '#475569', fontSize: 13 }}>No activity today</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                      {['Time', 'Student', 'Roll No', 'Class', 'Direction', 'Status'].map(h => (
+                        <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#94a3b8', fontWeight: 600, borderBottom: `1px solid ${CYAN}15` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entries.slice().reverse().map((e, i) => {
+                      const dir = (e.direction || 'IN').toUpperCase();
+                      return (
+                        <tr key={i} style={{ borderBottom: `1px solid rgba(255,255,255,0.04)` }}>
+                          <td style={{ padding: '7px 12px', color: '#94a3b8', fontFamily: 'monospace', fontSize: 11 }}>{e.time || (e.createdAt ? new Date(e.createdAt).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }) : '—')}</td>
+                          <td style={{ padding: '7px 12px', color: 'white', fontWeight: 600 }}>{e.student?.name || e.studentName || '—'}</td>
+                          <td style={{ padding: '7px 12px', color: CYAN, fontFamily: 'monospace', fontSize: 11 }}>{e.student?.rollNo || e.rollNo || '—'}</td>
+                          <td style={{ padding: '7px 12px', color: '#94a3b8' }}>{e.student?.class?.name || e.className || '—'}</td>
+                          <td style={{ padding: '7px 12px' }}>
+                            <span style={{ background: dir === 'IN' ? '#16a34a20' : '#dc262620', color: dir === 'IN' ? '#22c55e' : '#f87171', padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700 }}>{dir === 'IN' ? '→ IN' : '← OUT'}</span>
+                          </td>
+                          <td style={{ padding: '7px 12px' }}>
+                            <span style={{ background: '#0073b720', color: CYAN, padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700 }}>{e.status || 'Scanned'}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ FOOTER ══ */}
       <div

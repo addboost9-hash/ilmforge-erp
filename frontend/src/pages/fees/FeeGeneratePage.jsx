@@ -241,13 +241,15 @@ function MonthlyFeeTab({ classes }) {
 
   const handleGenerate = () => {
     if (!classId) return toast.error('Please select a class');
+    // Convert month name to number (1-12)
+    const monthNum = MONTHS.indexOf(month) + 1;
     mutation.mutate({
       type: 'monthly',
-      campus,
-      classId: parseInt(classId, 10),
+      campusId: campus || undefined,   // send campusId for filtering
+      classId:  parseInt(classId, 10),
       sectionId: sectionId ? parseInt(sectionId, 10) : undefined,
-      month,
-      year: parseInt(year, 10),
+      month:  monthNum,                // send number, not string
+      year:   parseInt(year, 10),
       dueDate,
       lateFee: parseFloat(lateFee) || 0,
       autoTransport,
@@ -484,13 +486,15 @@ function TransportFeeTab({ classes }) {
 
   const handleGenerate = () => {
     if (!classId) return toast.error('Please select a class');
+    const monthNum = MONTHS.indexOf(month) + 1;
     mutation.mutate({
-      type: 'transport',
-      campus,
-      classId: parseInt(classId, 10),
+      type:      'transport',
+      feeTitle:  `Transport Fee Of ${month}`,
+      campusId:  campus || undefined,
+      classId:   parseInt(classId, 10),
       sectionId: sectionId ? parseInt(sectionId, 10) : undefined,
-      month,
-      year: parseInt(year, 10),
+      month:     monthNum,
+      year:      parseInt(year, 10),
     });
   };
 

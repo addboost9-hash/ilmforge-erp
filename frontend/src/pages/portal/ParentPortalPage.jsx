@@ -77,7 +77,9 @@ const TABS = [
   { id:'results',       label:'Results',       emoji:'🏆' },
   { id:'homework',      label:'Homework',      emoji:'📚' },
   { id:'complaints',    label:'Complaints',    emoji:'📝' },
-  { id:'announcements', label:'Announcements', emoji:'📢' },
+  { id:'announcements', label:'Notices',       emoji:'📢' },
+  { id:'timetable',     label:'Timetable',     emoji:'📅' },
+  { id:'certificates',  label:'Documents',     emoji:'📄' },
 ];
 
 /* ── Inline styles (shared) ────────────────────────────────── */
@@ -716,29 +718,75 @@ export default function ParentPortalPage() {
                   <EmptyCard icon="📢" title="No Announcements" desc="School announcements will appear here."/>
                 ) : (
                   <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-                    {announcements.map(a => (
-                      <div key={a.id} className="card" style={{ background:'#fff', borderRadius:12, border:'1px solid #E5E7EB', padding:'16px 18px' }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10 }}>
-                          <div style={{ display:'flex', alignItems:'flex-start', gap:12, flex:1 }}>
-                            <div style={{ width:38, height:38, borderRadius:10, background:`${NAVY}15`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                              <Bell size={18} color={NAVY}/>
-                            </div>
+                    {announcements.map(a => {
+                      const priority = a.priority?.toLowerCase();
+                      const borderColor = priority === 'urgent' ? '#dc2626' : priority === 'high' ? '#f59e0b' : NAVY;
+                      return (
+                        <div key={a.id} style={{ background:'#fff', borderRadius:12, border:`1px solid ${borderColor}30`, borderLeft:`4px solid ${borderColor}`, padding:'14px 16px', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10 }}>
                             <div style={{ flex:1 }}>
-                              <div style={{ fontWeight:700, fontSize:14, color:NAVY, lineHeight:1.4 }}>{a.title||'Announcement'}</div>
+                              <div style={{ fontWeight:700, fontSize:14, color:NAVY, lineHeight:1.4, display:'flex', alignItems:'center', gap:8 }}>
+                                {a.title||'Announcement'}
+                                {priority === 'urgent' && <span style={{ background:'#fee2e2', color:'#dc2626', fontSize:9, fontWeight:800, padding:'2px 6px', borderRadius:99, textTransform:'uppercase' }}>URGENT</span>}
+                                {priority === 'high' && <span style={{ background:'#fef3c7', color:'#d97706', fontSize:9, fontWeight:800, padding:'2px 6px', borderRadius:99, textTransform:'uppercase' }}>HIGH</span>}
+                              </div>
                               <div style={{ fontSize:13, color:'#4B5563', marginTop:6, lineHeight:1.6 }}>{a.message||a.content||a.body||'—'}</div>
-                              <div style={{ fontSize:11.5, color:'#94A3B8', marginTop:8 }}>{fmtDate(a.createdAt||a.date)}</div>
+                              <div style={{ fontSize:11, color:'#94A3B8', marginTop:6 }}>
+                                📅 {fmtDate(a.createdAt||a.date)}
+                                {a.expiresAt && <span style={{ marginLeft:8 }}>· Expires: {fmtDate(a.expiresAt)}</span>}
+                              </div>
                             </div>
+                            {!a.isRead && <span style={{ background:`${CYAN}22`, color:CYAN, fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:99, flexShrink:0 }}>NEW</span>}
                           </div>
-                          {!a.isRead && (
-                            <span style={{ background:`${CYAN}22`, color:CYAN, fontSize:10.5, fontWeight:700, padding:'2px 8px', borderRadius:99, flexShrink:0, border:`1px solid ${CYAN}44` }}>
-                              NEW
-                            </span>
-                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* TIMETABLE TAB */}
+            {activeTab==='timetable' && child && (
+              <div>
+                <div style={{ fontWeight:700, fontSize:15, color:NAVY, marginBottom:14, display:'flex', alignItems:'center', gap:8 }}>
+                  📅 {child.name}'s Timetable — {child.class?.name}
+                </div>
+                <div style={{ background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', overflow:'hidden' }}>
+                  {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(day => (
+                    <div key={day} style={{ padding:'10px 14px', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', gap:12 }}>
+                      <div style={{ width:80, fontSize:11.5, fontWeight:700, color:NAVY, flexShrink:0 }}>{day}</div>
+                      <div style={{ fontSize:12, color:'#64748b' }}>Schedule from school timetable</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop:12, padding:'10px 14px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:8, fontSize:12, color:'#1d4ed8' }}>
+                  Contact school to get the latest timetable. It will appear here when published.
+                </div>
+              </div>
+            )}
+
+            {/* DOCUMENTS TAB */}
+            {activeTab==='certificates' && child && (
+              <div>
+                <div style={{ fontWeight:700, fontSize:15, color:NAVY, marginBottom:14 }}>📄 Documents & Certificates</div>
+                {[
+                  { title:'Fee Voucher', desc:'Download latest fee voucher for payment', icon:'💳', action:() => window.open(`/fee-voucher`, '_blank'), btn:'Download Voucher' },
+                  { title:'Character Certificate', desc:'Request character certificate from school', icon:'🎓', action:null, btn:'Request from Office' },
+                  { title:'Attendance Report', desc:'Annual attendance calendar of your child', icon:'📅', action:null, btn:'View in Results' },
+                ].map(d => (
+                  <div key={d.title} style={{ background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', padding:'16px 18px', marginBottom:12, display:'flex', alignItems:'center', gap:14 }}>
+                    <div style={{ width:44, height:44, borderRadius:10, background: NAVY + '12', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>{d.icon}</div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontWeight:700, fontSize:13.5, color:NAVY }}>{d.title}</div>
+                      <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>{d.desc}</div>
+                    </div>
+                    <button onClick={d.action || (() => {})}
+                      style={{ padding:'7px 14px', background: d.action ? NAVY : '#f1f5f9', color: d.action ? 'white' : '#64748b', border:'none', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer', flexShrink:0 }}>
+                      {d.btn}
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </>

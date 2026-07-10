@@ -114,12 +114,26 @@ export default function AdmissionWizardPage() {
     if (!validate(4)) { setStep(4); return; }
     setSubmitting(true);
     try {
-      const res = await api.post('/students', {
-        ...form,
-        classId: form.classId || null,
-        sectionId: form.sectionId || null,
-        monthlyFee: form.isFreeStudent ? 0 : form.monthlyFee,
-      });
+      // Build payload — exclude UI-only fields
+      const payload = {
+        name:          form.name,
+        fatherName:    form.fatherName,
+        motherName:    form.motherName,
+        gender:        form.gender,
+        dob:           form.dob || null,
+        bFormNo:       form.bFormNo || null,
+        address:       form.address || null,
+        classId:       form.classId || null,
+        sectionId:     form.sectionId || null,
+        emergencyPhone:form.emergencyPhone,
+        parentEmail:   form.parentEmail || null,
+        parentCnic:    form.parentCnic || null,
+        photoUrl:      form.photoBase64 || null,   // base64 photo
+        createPortalAccounts: form.createPortalAccounts,
+        generateFirstInvoice: form.generateFirstInvoice && !form.isFreeStudent,
+        monthlyFee:    form.isFreeStudent ? 0 : (form.monthlyFee || 0),
+      };
+      const res = await api.post('/students', payload);
       setResult(res.data); // { data: student, credentials, invoice }
     } catch (err) {
       alert(err.response?.data?.message || 'Admission failed. Try again.');
@@ -287,6 +301,34 @@ export default function AdmissionWizardPage() {
         {/* ─── STEP 1: Student Info ─── */}
         {step === 1 && (
           <div className="grid sm:grid-cols-2 gap-4">
+            {/* Photo upload */}
+            <div style={{ gridColumn: '1/-1', display: 'flex', gap: 16, alignItems: 'flex-start', padding: '12px 0', borderBottom: '1px solid #f1f5f9', marginBottom: 4 }}>
+              <div style={{ width: 80, height: 80, borderRadius: 10, border: '2px dashed #e2e8f0', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8f9fa', flexShrink: 0 }}>
+                {form.photoPreview
+                  ? <img src={form.photoPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <span style={{ fontSize: 32 }}>📷</span>
+                }
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Student Photo</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Upload photo for ID card (optional, max 2MB)</div>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#0073b7', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                  📷 Choose Photo
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    if (file.size > 2 * 1024 * 1024) { alert('Photo must be under 2MB'); return; }
+                    const reader = new FileReader();
+                    reader.onload = ev => { set('photoPreview', ev.target.result); set('photoBase64', ev.target.result); };
+                    reader.readAsDataURL(file);
+                  }} />
+                </label>
+                {form.photoPreview && (
+                  <button onClick={() => { set('photoPreview', ''); set('photoBase64', ''); }}
+                    style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 12 }}>✕ Remove</button>
+                )}
+              </div>
+            </div>
             <Field label="Student Full Name *" error={errors.name}>
               <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Ahmed Ali Khan" autoFocus />
             </Field>
@@ -304,8 +346,16 @@ export default function AdmissionWizardPage() {
             <Field label="Date of Birth *" error={errors.dob}>
               <input type="date" className={inputCls} value={form.dob} onChange={e => set('dob', e.target.value)} />
             </Field>
-            <Field label="B-Form Number">
-              <input className={inputCls} value={form.bFormNo} onChange={e => set('bFormNo', e.target.value)} placeholder="XXXXX-XXXXXXX-X" />
+            <Field label="B-Form Number" error={errors.bFormNo}>
+              <input className={inputCls} value={form.bFormNo}
+                onChange={e => {
+                  const v = e.target.value.replace(/[^0-9-]/g,'');
+                  set('bFormNo', v);
+                  if (v && v.length > 0 && !/^\d{5}-\d{7}-\d$/.test(v) && v.length >= 15) {
+                    setErrors(er => ({ ...er, bFormNo: 'Format: XXXXX-XXXXXXX-X' }));
+                  } else { setErrors(er => ({ ...er, bFormNo: null })); }
+                }}
+                placeholder="XXXXX-XXXXXXX-X" maxLength={15} />
             </Field>
             <Field label="Home Address" full>
               <input className={inputCls} value={form.address} onChange={e => set('address', e.target.value)} />
@@ -380,14 +430,27 @@ export default function AdmissionWizardPage() {
           <div className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Parent Phone (WhatsApp) *" error={errors.emergencyPhone}>
-                <input className={inputCls} value={form.emergencyPhone} onChange={e => set('emergencyPhone', e.target.value)} placeholder="03XX-XXXXXXX" />
+                <input className={inputCls} value={form.emergencyPhone}
+                  onChange={e => {
+                    const v = e.target.value.replace(/[^0-9+\-\s]/g,'');
+                    set('emergencyPhone', v);
+                  }}
+                  placeholder="03XX-XXXXXXX" />
                 <p className="text-[11px] text-slate-400 mt-1">Sibling detection isi number se — same parent = same account</p>
               </Field>
               <Field label="Parent Email (optional)">
-                <input className={inputCls} value={form.parentEmail} onChange={e => set('parentEmail', e.target.value)} placeholder="Auto-generate if empty" />
+                <input className={inputCls} type="email" value={form.parentEmail} onChange={e => set('parentEmail', e.target.value)} placeholder="parent@email.com (optional)" />
               </Field>
-              <Field label="Parent CNIC">
-                <input className={inputCls} value={form.parentCnic} onChange={e => set('parentCnic', e.target.value)} placeholder="XXXXX-XXXXXXX-X" />
+              <Field label="Parent CNIC" error={errors.parentCnic}>
+                <input className={inputCls} value={form.parentCnic}
+                  onChange={e => {
+                    const v = e.target.value.replace(/[^0-9-]/g,'');
+                    set('parentCnic', v);
+                    if (v && v.length > 0 && !/^\d{5}-\d{7}-\d$/.test(v) && v.length >= 15) {
+                      setErrors(er => ({ ...er, parentCnic: 'Format: XXXXX-XXXXXXX-X' }));
+                    } else { setErrors(er => ({ ...er, parentCnic: null })); }
+                  }}
+                  placeholder="XXXXX-XXXXXXX-X" maxLength={15} />
               </Field>
             </div>
 
