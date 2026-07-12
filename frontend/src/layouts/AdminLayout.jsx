@@ -31,7 +31,9 @@ const NAV = [
       { to: '/workflow',           icon: Workflow,        label: '🔄 Smart Workflow Hub', badge: 'NEW' },
       { to: '/mentor-ai',          icon: Bot,             label: 'Mentor AI Tools' },
       { to: '/robobuddy',          icon: Bot,             label: 'RoboBuddy AI',         roles: ['super_admin', 'admin'] },
-      { to: '/analytics/students', icon: BarChart2,       label: 'Student Analytics',    roles: ['super_admin', 'admin'] },
+      { to: '/analytics/students',  icon: BarChart2,      label: 'Student Analytics',     roles: ['super_admin', 'admin'] },
+      { to: '/reports-hub',         icon: BarChart2,      label: '📊 Reports Hub (110+)',  roles: ['super_admin', 'admin'], badge: 'NEW' },
+      { to: '/academic-calendar',   icon: Calendar,       label: '📅 Academic Calendar',   roles: ['super_admin', 'admin'], badge: 'NEW' },
     ],
   },
   {

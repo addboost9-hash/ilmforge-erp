@@ -180,6 +180,7 @@ const TABS = [
   { id: 'collection',   label: 'Fee Collection',     icon: Wallet          },
   { id: 'expenses',     label: 'Expense Log',        icon: TrendingDown    },
   { id: 'history',      label: 'Payment History',    icon: History         },
+  { id: 'discounts',    label: '🎓 Scholarships',    icon: Receipt         },
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1261,6 +1262,80 @@ function PaymentHistoryTab({ user }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   SCHOLARSHIP / DISCOUNT TAB
+   ═══════════════════════════════════════════════════════════════════════════ */
+function ScholarshipTab() {
+  const { data: discounted = [], isLoading } = useQuery({
+    queryKey: ['discounted-students'],
+    queryFn: () => api.get('/fees/discounts').then(r => r.data.data || []).catch(() => []),
+    staleTime: 5 * 60_000,
+  });
+
+  const totalDiscount = discounted.reduce((s, d) => s + Number(d.discountAmount || d.discount || 0), 0);
+
+  return (
+    <div>
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:22, fontWeight:800, color:NAVY }}>🎓 Scholarships & Discounts</div>
+        <div style={{ color:'#64748B', fontSize:13, marginTop:3 }}>Students with fee concessions and scholarship allocations</div>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:20 }}>
+        {[
+          { label:'Total Discounted', v:discounted.length, color:'#7c3aed', bg:'#f5f3ff', icon:'🎓' },
+          { label:'Total Discount Given', v:`Rs. ${totalDiscount.toLocaleString('en-PK')}`, color:'#15803d', bg:'#f0fdf4', icon:'💰' },
+          { label:'Scholarship Types', v:'Merit + Need-based', color:'#0073b7', bg:'#eff6ff', icon:'📋' },
+        ].map(s => (
+          <div key={s.label} style={{ background:s.bg, border:`1px solid ${s.color}22`, borderRadius:10, padding:16, textAlign:'center' }}>
+            <div style={{ fontSize:24 }}>{s.icon}</div>
+            <div style={{ fontSize:s.v.toString().length>8?16:22, fontWeight:800, color:s.color, marginTop:4, lineHeight:1.2 }}>{s.v}</div>
+            <div style={{ fontSize:11, color:'#64748b', marginTop:3 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div style={{ textAlign:'center', padding:32, color:'#94A3B8' }}>Loading discounted students…</div>
+      ) : discounted.length === 0 ? (
+        <div style={{ background:'#fff', border:'1px solid #E2E8F0', borderRadius:12, padding:'48px', textAlign:'center', color:'#94A3B8' }}>
+          <div style={{ fontSize:36, marginBottom:8 }}>🎓</div>
+          <div style={{ fontWeight:600 }}>No Scholarship Records</div>
+          <div style={{ fontSize:13, marginTop:4 }}>Go to Fees → Discounts to add scholarship concessions</div>
+        </div>
+      ) : (
+        <div style={{ background:'#fff', border:'1px solid #E2E8F0', borderRadius:12, overflow:'hidden' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+            <thead>
+              <tr style={{ background:'#f8f9fa' }}>
+                {['Student','Roll No','Class','Discount Type','Amount','Month/Year'].map(h => (
+                  <th key={h} style={{ padding:'10px 14px', textAlign:'left', fontWeight:700, color:'#374151', borderBottom:'2px solid #e2e8f0', fontSize:12 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {discounted.map((d, i) => (
+                <tr key={d.id || i} style={{ borderBottom:'1px solid #f1f5f9' }}>
+                  <td style={{ padding:'10px 14px', fontWeight:600, color:NAVY }}>{d.student?.name || d.studentName || '—'}</td>
+                  <td style={{ padding:'10px 14px', fontFamily:'monospace', fontSize:12, color:'#0D9488' }}>{d.student?.rollNo || '—'}</td>
+                  <td style={{ padding:'10px 14px' }}>{d.student?.class?.name || d.className || '—'}</td>
+                  <td style={{ padding:'10px 14px' }}>
+                    <span style={{ background:'#f5f3ff', color:'#7c3aed', padding:'2px 8px', borderRadius:99, fontSize:11, fontWeight:700 }}>
+                      {d.discountType || d.reason || 'Scholarship'}
+                    </span>
+                  </td>
+                  <td style={{ padding:'10px 14px', fontWeight:700, color:'#15803d' }}>Rs. {Number(d.discountAmount || d.discount || 0).toLocaleString('en-PK')}</td>
+                  <td style={{ padding:'10px 14px', color:'#64748b' }}>{d.month ? `${d.month}/${d.year}` : 'All months'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    ROOT PAGE
    ═══════════════════════════════════════════════════════════════════════════ */
 export default function AccountantPortalPage() {
@@ -1374,6 +1449,7 @@ export default function AccountantPortalPage() {
         {activeTab === 'collection' && <FeeCollectionTab user={user} />}
         {activeTab === 'expenses' && <ExpenseLogTab user={user} />}
         {activeTab === 'history' && <PaymentHistoryTab user={user} />}
+        {activeTab === 'discounts' && <ScholarshipTab />}
       </div>
     </div>
   );

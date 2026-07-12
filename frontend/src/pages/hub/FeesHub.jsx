@@ -1,6 +1,6 @@
 /** Fees & Accounts Hub — collect, generate, defaulters, vouchers */
 import { lazy, Suspense, useState } from 'react';
-import { DollarSign, Wallet, AlertCircle, Receipt, FileText, Settings, Tag, Percent, TrendingUp, BookOpen, ScanLine, CreditCard, Globe } from 'lucide-react';
+import { DollarSign, Wallet, AlertCircle, Receipt, FileText, Settings, Tag, Percent, TrendingUp, BookOpen, ScanLine, CreditCard, Globe, Heart } from 'lucide-react';
 
 const FeeDashboard   = lazy(() => import('../fees/FeeDashboardPage'));
 const FeeCollection  = lazy(() => import('../fees/FeeCollectionPage'));
@@ -11,7 +11,8 @@ const FamilyVoucher  = lazy(() => import('../fees/FamilyVoucherPage'));
 const FeeTypes       = lazy(() => import('../fees/FeeTypesPage'));
 const Discounted     = lazy(() => import('../fees/DiscountedStudentsPage'));
 const FeeIncrement   = lazy(() => import('../fees/FeeIncrementPage'));
-const AccountingPage = lazy(() => import('../accounting/AccountingPage'));
+const AccountingPage  = lazy(() => import('../accounting/AccountingPage'));
+const ParentWallet    = lazy(() => import('../fees/ParentWalletPage'));
 const InvoicesManage = lazy(() => import('../fees/FeeInvoicesManagePage'));
 const FeeBarcodeCollectionPage = lazy(() => import('../fees/FeeBarcodeCollectionPage'));
 const EmiPlansPage   = lazy(() => import('../fees/EmiPlansPage').catch(() => ({
@@ -54,6 +55,7 @@ const TABS = [
   { id: 'increment',       label: 'Fee Inc/Dec',      icon: TrendingUp,  render: L(FeeIncrement) },
   { id: 'accounting',      label: 'Accounting',       icon: BookOpen,    render: L(AccountingPage) },
   { id: 'barcode-collect', label: 'Barcode Collect',  icon: ScanLine,    render: L(FeeBarcodeCollectionPage) },
+  { id: 'wallet',          label: '💳 Parent Wallet',  icon: Heart,       render: L(ParentWallet) },
   { id: 'emi',             label: 'EMI Plans',        icon: CreditCard,  render: L(EmiPlansPage) },
   { id: 'online-payment',  label: 'Online Payment',   icon: Globe,       render: L(OnlinePaymentPage) },
 ];

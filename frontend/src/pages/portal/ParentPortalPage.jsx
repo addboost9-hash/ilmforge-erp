@@ -76,6 +76,7 @@ const TABS = [
   { id:'attend',        label:'Attendance',    emoji:'✅' },
   { id:'results',       label:'Results',       emoji:'🏆' },
   { id:'homework',      label:'Homework',      emoji:'📚' },
+  { id:'leave',         label:'Leave Apply',   emoji:'🗓️' },
   { id:'complaints',    label:'Complaints',    emoji:'📝' },
   { id:'announcements', label:'Notices',       emoji:'📢' },
   { id:'timetable',     label:'Timetable',     emoji:'📅' },
@@ -240,6 +241,21 @@ export default function ParentPortalPage() {
     enabled:  activeTab === 'announcements',
     staleTime: 120_000,
   });
+
+  /* ── Timetable (real API) ── */
+  const { data: timetableSlots = [] } = useQuery({
+    queryKey: ['parent-timetable', child?.classId, child?.sectionId],
+    queryFn:  () => api.get('/timetable', { params:{ classId: child?.classId, sectionId: child?.sectionId } }).then(r => r.data.data || []).catch(() => []),
+    enabled:  !!child?.classId && activeTab === 'timetable',
+    staleTime: 10 * 60_000,
+  });
+
+  const WEEK_DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const todayName = new Date().toLocaleDateString('en-US', { weekday:'long' });
+  const byDay = WEEK_DAYS.reduce((acc, d) => {
+    acc[d] = timetableSlots.filter(s => s.day?.toLowerCase() === d.toLowerCase()).sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
+    return acc;
+  }, {});
 
   const schoolName = localStorage.getItem('registeredSchoolName') || 'IlmForge School';
   const logo       = localStorage.getItem('schoolLogoPreview');
@@ -621,6 +637,13 @@ export default function ParentPortalPage() {
             )}
 
             {/* ════════════════════════════════
+                TAB: LEAVE APPLICATION
+            ════════════════════════════════ */}
+            {activeTab==='leave' && child && (
+              <LeaveTab child={child} schoolId={user?.schoolId} NAVY={NAVY} CYAN={CYAN} />
+            )}
+
+            {/* ════════════════════════════════
                 TAB: COMPLAINTS
             ════════════════════════════════ */}
             {activeTab==='complaints' && (
@@ -746,23 +769,47 @@ export default function ParentPortalPage() {
               </div>
             )}
 
-            {/* TIMETABLE TAB */}
+            {/* TIMETABLE TAB — Real API */}
             {activeTab==='timetable' && child && (
               <div>
                 <div style={{ fontWeight:700, fontSize:15, color:NAVY, marginBottom:14, display:'flex', alignItems:'center', gap:8 }}>
                   📅 {child.name}'s Timetable — {child.class?.name}
                 </div>
-                <div style={{ background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', overflow:'hidden' }}>
-                  {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(day => (
-                    <div key={day} style={{ padding:'10px 14px', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', gap:12 }}>
-                      <div style={{ width:80, fontSize:11.5, fontWeight:700, color:NAVY, flexShrink:0 }}>{day}</div>
-                      <div style={{ fontSize:12, color:'#64748b' }}>Schedule from school timetable</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ marginTop:12, padding:'10px 14px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:8, fontSize:12, color:'#1d4ed8' }}>
-                  Contact school to get the latest timetable. It will appear here when published.
-                </div>
+                {timetableSlots.length === 0 ? (
+                  <div style={{ background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', padding:32, textAlign:'center', color:'#94a3b8' }}>
+                    <div style={{ fontSize:32, marginBottom:8 }}>📅</div>
+                    <div style={{ fontWeight:600 }}>Timetable not published yet</div>
+                    <div style={{ fontSize:12, marginTop:4 }}>Contact school office for schedule</div>
+                  </div>
+                ) : (
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    {WEEK_DAYS.map(day => {
+                      const slots = byDay[day] || [];
+                      const isToday = day.toLowerCase() === todayName.toLowerCase();
+                      return (
+                        <div key={day} style={{ background:'#fff', borderRadius:10, border:`1px solid ${isToday ? NAVY : '#e2e8f0'}`, overflow:'hidden', borderLeft:`4px solid ${isToday ? CYAN : '#e2e8f0'}` }}>
+                          <div style={{ padding:'8px 14px', background: isToday ? NAVY + '08' : '#f8fafc', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid #f1f5f9' }}>
+                            <span style={{ fontWeight:700, fontSize:12.5, color: isToday ? NAVY : '#64748b' }}>{day}</span>
+                            {isToday && <span style={{ background:CYAN, color:'white', fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:99 }}>TODAY</span>}
+                            <span style={{ fontSize:11, color:'#94a3b8', marginLeft:'auto' }}>{slots.length} period{slots.length!==1?'s':''}</span>
+                          </div>
+                          {slots.length === 0 ? (
+                            <div style={{ padding:'8px 14px', fontSize:12, color:'#94a3b8' }}>No classes</div>
+                          ) : (
+                            <div style={{ display:'flex', flexWrap:'wrap', gap:6, padding:'8px 12px' }}>
+                              {slots.map((s,i) => (
+                                <div key={i} style={{ background: NAVY+'10', borderRadius:7, padding:'5px 10px', fontSize:11.5 }}>
+                                  <div style={{ fontWeight:700, color:NAVY }}>{s.subject?.name || s.subjectName || 'Subject'}</div>
+                                  <div style={{ color:'#64748b', fontSize:10 }}>{s.startTime && s.endTime ? `${s.startTime}–${s.endTime}` : ''}{s.room ? ` · Rm ${s.room}` : ''}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -810,6 +857,87 @@ function LoadingCard({ msg }) {
     <div style={{ background:'#fff', borderRadius:12, border:'1px solid #E5E7EB', padding:'36px', textAlign:'center', color:'#6B7280' }}>
       <div style={{ fontSize:28, marginBottom:8 }}>⏳</div>
       <div style={{ fontSize:13 }}>{msg}</div>
+    </div>
+  );
+}
+
+/* ── Leave Application Tab ──────────────────────────────── */
+function LeaveTab({ child, NAVY, CYAN }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({ fromDate: new Date().toISOString().split('T')[0], toDate: new Date().toISOString().split('T')[0], reason: '', leaveType: 'Sick Leave' });
+  const [submitted, setSubmitted] = useState(false);
+
+  const { data: leaves = [], isLoading } = useQuery({
+    queryKey: ['parent-leaves', child?.id],
+    queryFn: () => api.get('/leaves', { params: { studentId: child?.id, limit: 20 } }).then(r => r.data.data || []).catch(() => []),
+    enabled: !!child?.id,
+  });
+
+  const apply = useMutation({
+    mutationFn: () => {
+      if (new Date(form.toDate) < new Date(form.fromDate)) throw new Error('To date must be after from date');
+      if (!form.reason.trim()) throw new Error('Reason is required');
+      return api.post('/leaves', { ...form, studentId: child?.id, applicantType: 'student', applicantId: child?.id });
+    },
+    onSuccess: () => { qc.invalidateQueries(['parent-leaves']); setSubmitted(true); setForm({ fromDate: new Date().toISOString().split('T')[0], toDate: new Date().toISOString().split('T')[0], reason: '', leaveType: 'Sick Leave' }); },
+    onError: err => alert(err.message || err.response?.data?.message || 'Failed to submit'),
+  });
+
+  const STATUS_COLORS = { pending: { bg:'#FEF3C7', c:'#B45309' }, approved: { bg:'#DCFCE7', c:'#15803D' }, rejected: { bg:'#FEE2E2', c:'#DC2626' } };
+  const fmtD = d => d ? new Date(d).toLocaleDateString('en-PK', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+
+  return (
+    <div>
+      {/* Apply Form */}
+      <div style={{ background:'#fff', borderRadius:12, border:'1px solid #E5E7EB', padding:'18px 20px', marginBottom:16 }}>
+        <div style={{ fontWeight:700, fontSize:14, color:NAVY, marginBottom:14, display:'flex', alignItems:'center', gap:8 }}>
+          🗓️ Apply Leave for {child?.name}
+        </div>
+        {submitted && <div style={{ background:'#DCFCE7', border:'1px solid #86EFAC', borderRadius:8, padding:'10px 14px', marginBottom:12, color:'#15803D', fontSize:13, fontWeight:600 }}>✅ Leave application submitted successfully! School will review it shortly.</div>}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
+          <div>
+            <label style={{ fontSize:12, fontWeight:600, color:'#64748B', display:'block', marginBottom:5 }}>Leave Type</label>
+            <select style={{ width:'100%', padding:'9px 12px', border:'1px solid #E2E8F0', borderRadius:8, fontSize:13, fontFamily:'inherit' }} value={form.leaveType} onChange={e => setForm({...form, leaveType:e.target.value})}>
+              {['Sick Leave','Family Emergency','Personal Work','Religious Holiday','Travel','Other'].map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div style={{ gridColumn:'1/-1' }}>
+            <label style={{ fontSize:12, fontWeight:600, color:'#64748B', display:'block', marginBottom:5 }}>Reason *</label>
+            <textarea style={{ width:'100%', padding:'9px 12px', border:'1px solid #E2E8F0', borderRadius:8, fontSize:13, fontFamily:'inherit', resize:'vertical', minHeight:60 }} placeholder="Brief reason for leave…" value={form.reason} onChange={e => setForm({...form, reason:e.target.value})} />
+          </div>
+          <div>
+            <label style={{ fontSize:12, fontWeight:600, color:'#64748B', display:'block', marginBottom:5 }}>From Date</label>
+            <input type="date" style={{ width:'100%', padding:'9px 12px', border:'1px solid #E2E8F0', borderRadius:8, fontSize:13 }} value={form.fromDate} onChange={e => setForm({...form, fromDate:e.target.value})} />
+          </div>
+          <div>
+            <label style={{ fontSize:12, fontWeight:600, color:'#64748B', display:'block', marginBottom:5 }}>To Date</label>
+            <input type="date" style={{ width:'100%', padding:'9px 12px', border:'1px solid #E2E8F0', borderRadius:8, fontSize:13 }} value={form.toDate} onChange={e => setForm({...form, toDate:e.target.value})} />
+          </div>
+        </div>
+        <button onClick={() => apply.mutate()} disabled={apply.isPending}
+          style={{ padding:'10px 24px', background:NAVY, color:'white', border:'none', borderRadius:9, fontWeight:700, fontSize:13.5, cursor:'pointer', display:'flex', alignItems:'center', gap:7 }}>
+          {apply.isPending ? '⏳ Submitting…' : '📤 Submit Leave Application'}
+        </button>
+      </div>
+
+      {/* Leave History */}
+      <div style={{ background:'#fff', borderRadius:12, border:'1px solid #E5E7EB', overflow:'hidden' }}>
+        <div style={{ padding:'14px 18px', borderBottom:'1px solid #F1F5F9', fontWeight:700, fontSize:13.5, color:NAVY }}>Leave History</div>
+        {isLoading ? <div style={{ padding:24, textAlign:'center', color:'#94A3B8' }}>Loading…</div>
+        : leaves.length === 0 ? <div style={{ padding:32, textAlign:'center', color:'#94A3B8', fontSize:13 }}>No leave applications yet</div>
+        : leaves.map(l => {
+          const sc = STATUS_COLORS[l.status?.toLowerCase()] || STATUS_COLORS.pending;
+          return (
+            <div key={l.id} style={{ padding:'12px 18px', borderBottom:'1px solid #F8FAFC', display:'flex', alignItems:'flex-start', gap:12 }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:NAVY }}>{l.leaveType || l.type || 'Leave'}</div>
+                <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>{fmtD(l.fromDate)} — {fmtD(l.toDate)} · {l.reason?.slice(0,60)}{l.reason?.length>60?'…':''}</div>
+              </div>
+              <span style={{ background:sc.bg, color:sc.c, padding:'3px 10px', borderRadius:99, fontSize:11, fontWeight:700, textTransform:'capitalize', flexShrink:0 }}>{l.status||'Pending'}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

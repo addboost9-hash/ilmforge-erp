@@ -141,6 +141,8 @@ const safeLazy = (importFn) =>
 import WorkflowHub from './pages/hub/WorkflowHub';
 import StudentAttendanceCalendarPage from './pages/reports/StudentAttendanceCalendarPage';
 import AdmissionFormPrintPage from './pages/admission/AdmissionFormPrintPage';
+import AcademicCalendarPage from './pages/calendar/AcademicCalendarPage';
+import ReportsHubPage from './pages/reports/ReportsHubPage';
 import BISEResultCardPage from './pages/exams/BISEResultCardPage';
 import StudentInfoReportsPage from './pages/students/StudentInfoReportsPage';
 import HomeworkDiaryPage from './pages/homework/HomeworkDiaryPage';
@@ -312,6 +314,8 @@ export default function App() {
             <Route path="/workflow"                      element={<WorkflowHub />} />
             <Route path="/reports/attendance-calendar"  element={<StudentAttendanceCalendarPage />} />
             <Route path="/admissions/form-print"        element={<AdmissionFormPrintPage />} />
+            <Route path="/academic-calendar"            element={<AcademicCalendarPage />} />
+            <Route path="/reports-hub"                  element={<ReportsHubPage />} />
             <Route path="/exams/bise-result-card"         element={<BISEResultCardPage />} />
             <Route path="/students/info-reports"          element={<StudentInfoReportsPage />} />
             <Route path="/homework/diary"                 element={<HomeworkDiaryPage />} />

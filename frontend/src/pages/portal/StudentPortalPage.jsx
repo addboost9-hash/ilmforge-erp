@@ -6,7 +6,7 @@
  * Mobile-first design with bottom navigation bar.
  */
 import { useState, useEffect, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
@@ -111,6 +111,84 @@ const card = {
 /* ─────────────────────────────────────────────────────────
    ATTENDANCE CALENDAR
 ───────────────────────────────────────────────────────── */
+/* ─── Student Leave Tab ──────────────────────────────────── */
+function StudentLeaveTab({ student, card, NAVY, CYAN }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({ fromDate: new Date().toISOString().split('T')[0], toDate: new Date().toISOString().split('T')[0], reason:'', leaveType:'Sick Leave' });
+
+  const { data: leaves = [] } = useQuery({
+    queryKey: ['student-leaves', student?.id],
+    queryFn: () => api.get('/leaves', { params:{ studentId: student?.id, limit:20 } }).then(r => r.data.data || []).catch(() => []),
+    enabled: !!student?.id,
+  });
+
+  const applyMut = useMutation({
+    mutationFn: () => {
+      if (new Date(form.toDate) < new Date(form.fromDate)) throw new Error('End date must be after start date');
+      if (!form.reason.trim()) throw new Error('Reason is required');
+      return api.post('/leaves', { ...form, studentId: student?.id, applicantType:'student', applicantId: student?.id });
+    },
+    onSuccess: () => { qc.invalidateQueries(['student-leaves']); setForm({ fromDate: new Date().toISOString().split('T')[0], toDate: new Date().toISOString().split('T')[0], reason:'', leaveType:'Sick Leave' }); },
+    onError: err => alert(err.message || err.response?.data?.message || 'Failed'),
+  });
+
+  const STATUS_COLORS = { pending:{ bg:'#FEF3C7', c:'#B45309' }, approved:{ bg:'#DCFCE7', c:'#15803D' }, rejected:{ bg:'#FEE2E2', c:'#B91C1C' } };
+  const fmtD = d => d ? new Date(d).toLocaleDateString('en-PK', { day:'2-digit', month:'short' }) : '—';
+
+  return (
+    <div>
+      <div style={{ marginBottom:12 }}>
+        <div style={{ fontWeight:700, fontSize:16, color:NAVY }}>Apply for Leave</div>
+        <div style={{ fontSize:12.5, color:'#6B7280' }}>Request absence permission from school</div>
+      </div>
+
+      <div style={{ ...card, marginBottom:12 }}>
+        <div className="form-group">
+          <label style={{ fontSize:12, fontWeight:600, color:'#64748B', display:'block', marginBottom:5 }}>Leave Type</label>
+          <select style={{ width:'100%', padding:'9px 12px', border:'1.5px solid #E2E8F0', borderRadius:8, fontSize:13 }} value={form.leaveType} onChange={e => setForm({...form,leaveType:e.target.value})}>
+            {['Sick Leave','Family Emergency','Personal Work','Religious Holiday','Travel','Other'].map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div>
+            <label style={{ fontSize:12, fontWeight:600, color:'#64748B', display:'block', marginBottom:5 }}>From Date</label>
+            <input type="date" style={{ width:'100%', padding:'9px 12px', border:'1.5px solid #E2E8F0', borderRadius:8, fontSize:13 }} value={form.fromDate} onChange={e => setForm({...form,fromDate:e.target.value})} />
+          </div>
+          <div>
+            <label style={{ fontSize:12, fontWeight:600, color:'#64748B', display:'block', marginBottom:5 }}>To Date</label>
+            <input type="date" style={{ width:'100%', padding:'9px 12px', border:'1.5px solid #E2E8F0', borderRadius:8, fontSize:13 }} value={form.toDate} onChange={e => setForm({...form,toDate:e.target.value})} />
+          </div>
+        </div>
+        <div style={{ marginTop:10 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:'#64748B', display:'block', marginBottom:5 }}>Reason *</label>
+          <textarea style={{ width:'100%', padding:'9px 12px', border:'1.5px solid #E2E8F0', borderRadius:8, fontSize:13, resize:'vertical', minHeight:60 }} placeholder="Explain your reason…" value={form.reason} onChange={e => setForm({...form,reason:e.target.value})} />
+        </div>
+        <button onClick={() => applyMut.mutate()} disabled={applyMut.isPending}
+          style={{ marginTop:12, width:'100%', padding:'11px', background:NAVY, color:'white', border:'none', borderRadius:9, fontWeight:700, fontSize:14, cursor:'pointer' }}>
+          {applyMut.isPending ? '⏳ Submitting…' : '📤 Submit Leave Request'}
+        </button>
+      </div>
+
+      <div style={{ fontWeight:700, fontSize:14, color:NAVY, marginBottom:8 }}>My Leave History</div>
+      {leaves.length === 0
+        ? <div style={{ ...card, textAlign:'center', color:'#94A3B8', padding:24 }}>No leave applications yet</div>
+        : leaves.map(l => {
+          const sc = STATUS_COLORS[l.status?.toLowerCase()] || STATUS_COLORS.pending;
+          return (
+            <div key={l.id} style={{ ...card, marginBottom:8, display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:NAVY }}>{l.leaveType||l.type||'Leave'}</div>
+                <div style={{ fontSize:12, color:'#64748B' }}>{fmtD(l.fromDate)} — {fmtD(l.toDate)} · {(l.reason||'').slice(0,50)}</div>
+              </div>
+              <span style={{ background:sc.bg, color:sc.c, padding:'3px 10px', borderRadius:99, fontSize:11, fontWeight:700, flexShrink:0 }}>{l.status||'Pending'}</span>
+            </div>
+          );
+        })
+      }
+    </div>
+  );
+}
+
 function AttendanceCalendar({ history = [] }) {
   const today = new Date();
   const [year,  setYear]  = useState(today.getFullYear());
@@ -1005,6 +1083,11 @@ export default function StudentPortalPage() {
               ))
             )}
           </div>
+        )}
+
+        {/* ══ TAB: LEAVE (accessed from FAB or link) ══ */}
+        {activeTab === 'leave' && student && (
+          <StudentLeaveTab student={student} card={card} NAVY={NAVY} CYAN={CYAN} />
         )}
 
         {/* ══ TAB: ATTENDANCE ══ */}

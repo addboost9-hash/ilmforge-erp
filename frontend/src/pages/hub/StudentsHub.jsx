@@ -26,6 +26,9 @@ const AlumniPage          = lazy(() => import('../students/AlumniPage'));
 const StudentInfoRep      = lazy(() => import('../students/StudentInfoReportsPage'));
 const AdmFormPrint        = lazy(() => import('../admission/AdmissionFormPrintPage'));
 const AttCalendar         = lazy(() => import('../reports/StudentAttendanceCalendarPage'));
+const StudentHealthPage   = lazy(() => import('../students/StudentHealthPage'));
+const PromotionPage       = lazy(() => import('../students/StudentPromotionPage'));
+const LeavePage           = lazy(() => import('../leaves/LeavePage'));
 
 const ACCENT = '#1B2F6E';
 const CYAN   = '#0073b7';
@@ -51,6 +54,9 @@ const TABS = [
   { id:'reports',    label:'Info Reports',    icon:FileText,      color:'#374151', render:L(StudentInfoRep),      desc:'Printable student lists' },
   { id:'form',       label:'Adm. Form',       icon:Printer,       color:'#7c3aed', render:L(AdmFormPrint),        desc:'Print blank/filled forms' },
   { id:'alumni',     label:'Alumni',          icon:GraduationCap, color:'#15803d', render:L(AlumniPage),          desc:'Passout student records' },
+  { id:'health',     label:'Health Records',  icon:BookOpen,      color:'#ef4444', render:L(StudentHealthPage),   desc:'Blood group, allergies, medical' },
+  { id:'promotion',  label:'Promotion',       icon:TrendingUp,    color:'#7c3aed', render:L(PromotionPage),       desc:'Bulk class promotion' },
+  { id:'leaves',     label:'Student Leaves',  icon:Calendar,      color:'#d97706', render:L(LeavePage),           desc:'Leave applications' },
 ];
 
 const QUICK_ACTIONS = [

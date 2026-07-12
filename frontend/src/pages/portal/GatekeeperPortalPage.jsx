@@ -161,6 +161,109 @@ function CollapseHeader({ open, onToggle, title, badge, children: badgeChildren 
   );
 }
 
+/* ── Visitor Management Tab ───────────────────────── */
+function VisitorTab({ CYAN, NAVY }) {
+  const [form, setForm] = useState({ visitorName:'', phone:'', purpose:'Meeting', hostName:'', vehicleNo:'' });
+  const [visitors, setVisitors] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('gk_visitors') || '[]'); } catch { return []; }
+  });
+  const [checking, setChecking] = useState(false);
+
+  const PURPOSES = ['Meeting','Delivery','Parent Visit','Interview','Inspection','Other'];
+
+  const checkin = () => {
+    if (!form.visitorName.trim()) { alert('Visitor name required'); return; }
+    const entry = { ...form, id: Date.now(), checkinTime: new Date().toLocaleTimeString('en-PK', { hour:'2-digit', minute:'2-digit' }), checkoutTime: null, date: new Date().toLocaleDateString('en-PK') };
+    const updated = [entry, ...visitors];
+    setVisitors(updated);
+    localStorage.setItem('gk_visitors', JSON.stringify(updated.slice(0,50)));
+    setForm({ visitorName:'', phone:'', purpose:'Meeting', hostName:'', vehicleNo:'' });
+    alert(`Visitor pass issued for ${entry.visitorName}`);
+  };
+
+  const checkout = (id) => {
+    const updated = visitors.map(v => v.id === id ? { ...v, checkoutTime: new Date().toLocaleTimeString('en-PK', { hour:'2-digit', minute:'2-digit' }) } : v);
+    setVisitors(updated);
+    localStorage.setItem('gk_visitors', JSON.stringify(updated.slice(0,50)));
+  };
+
+  const todayVisitors = visitors.filter(v => v.date === new Date().toLocaleDateString('en-PK'));
+  const inside = todayVisitors.filter(v => !v.checkoutTime).length;
+
+  const inp = { width:'100%', padding:'8px 10px', border:`1px solid ${CYAN}25`, borderRadius:7, fontSize:12, fontFamily:'inherit', background:'rgba(255,255,255,0.05)', color:'white', outline:'none' };
+
+  return (
+    <div style={{ padding:'0 18px 20px' }}>
+      {/* Stats */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:16 }}>
+        {[
+          { label:'Today\'s Visitors', v:todayVisitors.length, icon:'🧑‍💼', color:CYAN },
+          { label:'Currently Inside', v:inside, icon:'✅', color:'#22c55e' },
+          { label:'Checked Out', v:todayVisitors.length - inside, icon:'🚪', color:'#f59e0b' },
+        ].map(s => (
+          <div key={s.label} style={{ background:'rgba(255,255,255,0.05)', border:`1px solid ${s.color}30`, borderRadius:10, padding:'12px', textAlign:'center' }}>
+            <div style={{ fontSize:24 }}>{s.icon}</div>
+            <div style={{ fontSize:22, fontWeight:800, color:s.color }}>{s.v}</div>
+            <div style={{ fontSize:10, color:'#64748b', marginTop:2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Check-in form */}
+      <div style={{ background:'rgba(255,255,255,0.04)', border:`1px solid ${CYAN}20`, borderRadius:12, padding:'16px 18px', marginBottom:16 }}>
+        <div style={{ fontWeight:700, color:CYAN, fontSize:14, marginBottom:12 }}>🧑‍💼 New Visitor Check-In</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          {[
+            { label:'Visitor Name *', key:'visitorName', ph:'Full name' },
+            { label:'Phone Number', key:'phone', ph:'03XXXXXXXXX' },
+            { label:'Host / Whom to Meet', key:'hostName', ph:'Teacher/Staff name' },
+            { label:'Vehicle No (optional)', key:'vehicleNo', ph:'ABC-123' },
+          ].map(f => (
+            <div key={f.key}>
+              <label style={{ fontSize:11, fontWeight:600, color:'#94a3b8', display:'block', marginBottom:4 }}>{f.label}</label>
+              <input style={inp} placeholder={f.ph} value={form[f.key]} onChange={e => setForm({...form,[f.key]:e.target.value})} />
+            </div>
+          ))}
+          <div>
+            <label style={{ fontSize:11, fontWeight:600, color:'#94a3b8', display:'block', marginBottom:4 }}>Purpose of Visit</label>
+            <select style={inp} value={form.purpose} onChange={e => setForm({...form,purpose:e.target.value})}>
+              {PURPOSES.map(p => <option key={p} value={p} style={{ background:'#1e3a5f' }}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+        <button onClick={checkin} style={{ marginTop:12, width:'100%', padding:'10px', background:CYAN, border:'none', color:'#0f172a', borderRadius:8, fontWeight:800, fontSize:13, cursor:'pointer' }}>
+          ✅ Issue Visitor Pass
+        </button>
+      </div>
+
+      {/* Today's visitor log */}
+      <div style={{ background:'rgba(255,255,255,0.03)', border:`1px solid ${CYAN}20`, borderRadius:12, overflow:'hidden' }}>
+        <div style={{ padding:'12px 16px', borderBottom:`1px solid ${CYAN}15`, fontWeight:700, color:CYAN, fontSize:13 }}>
+          📋 Today's Visitor Log ({todayVisitors.length})
+        </div>
+        {todayVisitors.length === 0 ? (
+          <div style={{ padding:24, textAlign:'center', color:'#475569', fontSize:13 }}>No visitors today</div>
+        ) : todayVisitors.map(v => (
+          <div key={v.id} style={{ padding:'10px 16px', borderBottom:`1px solid rgba(255,255,255,0.04)`, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:36, height:36, borderRadius:'50%', background:`${CYAN}20`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>🧑</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontWeight:700, color:'white', fontSize:13 }}>{v.visitorName}</div>
+              <div style={{ fontSize:11, color:'#94a3b8' }}>{v.purpose} · {v.hostName || 'No host'} · IN: {v.checkinTime}{v.checkoutTime ? ` · OUT: ${v.checkoutTime}` : ''}</div>
+            </div>
+            {!v.checkoutTime ? (
+              <button onClick={() => checkout(v.id)} style={{ padding:'5px 10px', background:'#f59e0b20', border:'1px solid #f59e0b50', color:'#f59e0b', borderRadius:6, cursor:'pointer', fontSize:11, fontWeight:700 }}>
+                Check Out
+              </button>
+            ) : (
+              <span style={{ fontSize:11, color:'#22c55e', fontWeight:600 }}>✓ Out</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main Component ───────────────────────────────── */
 export default function GatekeeperPortalPage() {
   const navigate = useNavigate();
@@ -565,9 +668,10 @@ export default function GatekeeperPortalPage() {
           }}
         >
           {[
-            { key: 'barcode', label: '📷 Barcode Attendance' },
-            { key: 'qr',      label: '🔲 QR Gate Pass' },
-            { key: 'stats',   label: '📊 Daily Stats' },
+            { key: 'barcode',  label: '📷 Barcode' },
+            { key: 'qr',       label: '🔲 Gate Pass' },
+            { key: 'visitor',  label: '🧑‍💼 Visitor' },
+            { key: 'stats',    label: '📊 Stats' },
           ].map((tab, i, arr) => (
             <button
               key={tab.key}
@@ -1123,6 +1227,11 @@ export default function GatekeeperPortalPage() {
           </div>
         )}
       </div>
+
+      {/* ══ TAB: VISITOR MANAGEMENT ══ */}
+      {activeTab === 'visitor' && (
+        <VisitorTab CYAN={CYAN} NAVY={NAVY} />
+      )}
 
       {/* ══ TAB: DAILY STATS ══ */}
       {activeTab === 'stats' && (

@@ -1,34 +1,38 @@
-/** Operations Hub — stock/POS, transport, tasks, behaviour, tutorials */
+/** Operations Hub — stock/POS, transport, tasks, behaviour, tutorials, academic calendar, reports */
 import { lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Package, Truck, CheckSquare, UserCheck, PlayCircle, BookOpen, FileText, HardDrive } from 'lucide-react';
+import { Package, Truck, CheckSquare, UserCheck, PlayCircle, BookOpen, FileText, HardDrive, Calendar, BarChart2 } from 'lucide-react';
 
-const StockPage     = lazy(() => import('../stock/StockPage'));
-const TransportPage = lazy(() => import('../transport/TransportPage'));
-const TasksPage     = lazy(() => import('../tasks/TaskManagementPage'));
-const BehaviourPage = lazy(() => import('../behaviour/BehaviourPage'));
-const Tutorials     = lazy(() => import('../tutorials/VideoTutorialsPage'));
-const ManualPage    = lazy(() => import('../manual/UserManualPage'));
-const SOPsPage      = lazy(() => import('../sops/SOPsPage'));
-const BackupPage    = lazy(() => import('../backup/BackupPage'));
-const LibraryPage   = lazy(() => import('../library/LibraryPage'));
+const StockPage        = lazy(() => import('../stock/StockPage'));
+const TransportPage    = lazy(() => import('../transport/TransportPage'));
+const TasksPage        = lazy(() => import('../tasks/TaskManagementPage'));
+const BehaviourPage    = lazy(() => import('../behaviour/BehaviourPage'));
+const Tutorials        = lazy(() => import('../tutorials/VideoTutorialsPage'));
+const ManualPage       = lazy(() => import('../manual/UserManualPage'));
+const SOPsPage         = lazy(() => import('../sops/SOPsPage'));
+const BackupPage       = lazy(() => import('../backup/BackupPage'));
+const LibraryPage      = lazy(() => import('../library/LibraryPage'));
+const AcalPage         = lazy(() => import('../calendar/AcademicCalendarPage'));
+const ReportsHubPage   = lazy(() => import('../reports/ReportsHubPage'));
 
 const L = (C) => () => (
-  <Suspense fallback={<div className="p-10 text-center text-slate-400 text-sm">Loading…</div>}>
+  <Suspense fallback={<div style={{ padding:40, textAlign:'center', color:'#94a3b8', fontSize:13 }}>Loading…</div>}>
     <C />
   </Suspense>
 );
 
 const TABS = [
-  { id: 'stock',     label: 'Stock & POS', hint: 'Inventory + sales',  icon: Package,     render: L(StockPage) },
-  { id: 'transport', label: 'Transport',   hint: 'Routes + fees',      icon: Truck,       render: L(TransportPage) },
-  { id: 'tasks',     label: 'Tasks',       hint: 'Staff assignments',  icon: CheckSquare, render: L(TasksPage) },
-  { id: 'behaviour', label: 'Behaviour',   hint: 'Student records',    icon: UserCheck,   render: L(BehaviourPage) },
-  { id: 'tutorials', label: 'Tutorials',   hint: 'Training videos',    icon: PlayCircle,  render: L(Tutorials) },
-  { id: 'manual',    label: 'User Manual', hint: 'How-to guide',       icon: BookOpen,    render: L(ManualPage) },
-  { id: 'sops',      label: 'SOPs 📖',     hint: 'School procedures',  icon: FileText,    render: L(SOPsPage) },
-  { id: 'backup',    label: 'Backups 💾',  hint: 'Full data export',   icon: HardDrive,   render: L(BackupPage) },
-  { id: 'library',   label: 'Library',     hint: 'Books & resources',  icon: BookOpen,    render: L(LibraryPage) },
+  { id: 'calendar',  label: '📅 Acad. Calendar', hint: 'Events, holidays, exams', icon: Calendar,     render: L(AcalPage) },
+  { id: 'reports',   label: '📊 Reports Hub',     hint: '110+ printable reports',  icon: BarChart2,    render: L(ReportsHubPage) },
+  { id: 'stock',     label: 'Stock & POS',        hint: 'Inventory + sales',       icon: Package,      render: L(StockPage) },
+  { id: 'transport', label: 'Transport',          hint: 'Routes + fees',           icon: Truck,        render: L(TransportPage) },
+  { id: 'tasks',     label: 'Tasks',              hint: 'Staff assignments',       icon: CheckSquare,  render: L(TasksPage) },
+  { id: 'behaviour', label: 'Behaviour',          hint: 'Student records',         icon: UserCheck,    render: L(BehaviourPage) },
+  { id: 'library',   label: 'Library',            hint: 'Books & resources',       icon: BookOpen,     render: L(LibraryPage) },
+  { id: 'tutorials', label: 'Tutorials',          hint: 'Training videos',         icon: PlayCircle,   render: L(Tutorials) },
+  { id: 'manual',    label: 'User Manual',        hint: 'How-to guide',            icon: BookOpen,     render: L(ManualPage) },
+  { id: 'sops',      label: 'SOPs 📖',            hint: 'School procedures',       icon: FileText,     render: L(SOPsPage) },
+  { id: 'backup',    label: 'Backups 💾',         hint: 'Full data export',        icon: HardDrive,    render: L(BackupPage) },
 ];
 
 const ACCENT = '#605ca8';

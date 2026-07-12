@@ -37,6 +37,7 @@ const NAV = [
   { id: 'students',    label: 'My Students',       Icon: Users           },
   { id: 'attendance',  label: 'Mark Attendance',   Icon: UserCheck       },
   { id: 'marks',       label: 'Exam Marks',        Icon: GraduationCap   },
+  { id: 'results',     label: 'Publish Results 📢',Icon: GraduationCap   },
   { id: 'homework',    label: 'Homework',          Icon: BookMarked      },
   { id: 'materials',   label: 'Study Materials',   Icon: FolderOpen      },
   { id: 'leave',       label: 'Leave Application', Icon: Calendar        },
@@ -183,6 +184,7 @@ export default function TeacherPortalPage() {
       case 'marks':       return <MarksTab        classes={classes} exams={exams} />;
       case 'homework':    return <HomeworkTab      classes={classes} homeworkApi={homeworkApi} />;
       case 'materials':   return <MaterialsTab    classes={classes} />;
+      case 'results':     return <ResultPublishTab classes={classes} exams={exams} />;
       case 'leave':       return <LeaveTab />;
       case 'noticeboard': return <NoticeboardTab  notices={notices} />;
       case 'password':    return <PasswordTab />;
@@ -1056,28 +1058,182 @@ function LeaveTab() {
    TAB: NOTICEBOARD
 ═══════════════════════════════════════════════════════════ */
 function NoticeboardTab({ notices }) {
+  const qc = useQueryClient();
+  const [showPost, setShowPost] = useState(false);
+  const [form, setForm] = useState({ title:'', message:'', priority:'normal' });
+
+  const postMut = useMutation({
+    mutationFn: () => api.post('/announcements', { ...form, targetRoles:['teacher','student','parent'] }),
+    onSuccess: () => { qc.invalidateQueries(['noticeboard']); setShowPost(false); setForm({ title:'', message:'', priority:'normal' }); toast.success('Notice posted!'); },
+    onError: err => toast.error(err.response?.data?.message || 'Failed to post notice'),
+  });
+
+  const PRIORITY_COLORS = { normal:'#0073b7', high:'#d97706', urgent:'#dc2626' };
+
   return (
     <div>
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: NAVY }}>Noticeboard</div>
-        <div style={{ color: '#64748B', fontSize: 13, marginTop: 3 }}>Latest school announcements and notices</div>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+        <div>
+          <div style={{ fontSize:22, fontWeight:800, color:NAVY }}>Noticeboard</div>
+          <div style={{ color:'#64748B', fontSize:13, marginTop:3 }}>School announcements and notices</div>
+        </div>
+        <button onClick={() => setShowPost(s=>!s)}
+          style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 18px', background:NAVY, color:'white', border:'none', borderRadius:9, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+          <Plus size={14}/> Post Notice
+        </button>
       </div>
+
+      {/* Post Notice Form */}
+      {showPost && (
+        <div className="card" style={{ background:'#fff', borderRadius:14, border:'1px solid #E2E8F0', padding:'18px 22px', marginBottom:16 }}>
+          <div style={{ fontWeight:700, fontSize:14, color:NAVY, marginBottom:12 }}>Post New Notice</div>
+          <div className="form-group">
+            <label className="form-label">Title *</label>
+            <input className="form-input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Notice title…" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Message *</label>
+            <textarea className="form-input" rows={3} value={form.message} onChange={e=>setForm({...form,message:e.target.value})} placeholder="Notice details…" />
+          </div>
+          <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:8 }}>
+            <label className="form-label" style={{ margin:0 }}>Priority:</label>
+            {['normal','high','urgent'].map(p => (
+              <button key={p} onClick={() => setForm({...form,priority:p})}
+                style={{ padding:'5px 12px', borderRadius:6, border:`2px solid ${form.priority===p?PRIORITY_COLORS[p]:'#e2e8f0'}`, background:form.priority===p?PRIORITY_COLORS[p]+'12':'white', color:form.priority===p?PRIORITY_COLORS[p]:'#64748b', fontWeight:600, fontSize:12, cursor:'pointer', textTransform:'capitalize' }}>
+                {p}
+              </button>
+            ))}
+            <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
+              <button className="btn btn-outline btn-sm" onClick={() => setShowPost(false)}>Cancel</button>
+              <button className="btn btn-teal btn-sm" onClick={() => postMut.mutate()} disabled={!form.title||!form.message||postMut.isPending}>
+                {postMut.isPending?'Posting…':'Post Notice'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {notices.length === 0 ? (
-        <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '64px', textAlign: 'center', color: '#94A3B8' }}>
-          <Bell size={40} style={{ opacity: 0.3, marginBottom: 12, display: 'block', margin: '0 auto 12px' }} />
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, color: '#64748B' }}>No Notices Yet</div>
-          <div style={{ fontSize: 13 }}>School announcements will appear here</div>
+        <div className="card" style={{ background:'#fff', borderRadius:14, border:'1px solid #E2E8F0', padding:'64px', textAlign:'center', color:'#94A3B8' }}>
+          <Bell size={40} style={{ opacity:0.3, marginBottom:12, display:'block', margin:'0 auto 12px' }} />
+          <div style={{ fontWeight:700, fontSize:15, marginBottom:6, color:'#64748B' }}>No Notices Yet</div>
+          <div style={{ fontSize:13 }}>Post a notice for students and parents</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {notices.map((n, i) => (
-            <div key={n.id || i} className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 22px', borderLeft: `4px solid ${NAVY}` }}>
-              <div style={{ fontWeight: 700, fontSize: 14.5, color: NAVY, marginBottom: 6 }}>{n.title}</div>
-              <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{n.content || n.message || n.description}</div>
-              <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 10 }}>Posted: {fmtDate(n.createdAt)}</div>
-            </div>
-          ))}
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {notices.map((n, i) => {
+            const priority = n.priority || 'normal';
+            const borderColor = PRIORITY_COLORS[priority] || NAVY;
+            return (
+              <div key={n.id || i} className="card" style={{ background:'#fff', borderRadius:14, border:'1px solid #E2E8F0', padding:'18px 22px', borderLeft:`4px solid ${borderColor}` }}>
+                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8 }}>
+                  <div style={{ fontWeight:700, fontSize:14.5, color:NAVY, marginBottom:6 }}>{n.title}</div>
+                  {priority !== 'normal' && <span style={{ background:borderColor+'18', color:borderColor, fontSize:10, fontWeight:800, padding:'2px 8px', borderRadius:99, textTransform:'uppercase', flexShrink:0 }}>{priority}</span>}
+                </div>
+                <div style={{ fontSize:13, color:'#374151', lineHeight:1.6 }}>{n.content || n.message || n.description}</div>
+                <div style={{ fontSize:11.5, color:'#94A3B8', marginTop:10 }}>Posted: {fmtDate(n.createdAt)}</div>
+              </div>
+            );
+          })}
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB: PUBLISH RESULTS
+═══════════════════════════════════════════════════════════ */
+function ResultPublishTab({ classes, exams }) {
+  const qc = useQueryClient();
+  const [selectedExam, setSelectedExam] = useState('');
+
+  const exam = exams?.find(e => e.id === parseInt(selectedExam));
+
+  const { data: results = [] } = useQuery({
+    queryKey: ['teacher-exam-results', selectedExam],
+    queryFn: () => api.get(`/exams/${selectedExam}/results`).then(r => r.data.data || []).catch(() => []),
+    enabled: !!selectedExam,
+    staleTime: 60_000,
+  });
+
+  const publishMut = useMutation({
+    mutationFn: () => api.put(`/exams/${selectedExam}`, { isPublished: true, status: 'results_published' }),
+    onSuccess: () => { qc.invalidateQueries(['exams']); toast.success('Results published! Students and parents can now view them.'); },
+    onError: err => toast.error(err.response?.data?.message || 'Failed to publish'),
+  });
+
+  const total   = results.length;
+  const passed  = results.filter(r => !r.isAbsent && r.obtainedMarks >= (r.totalMarks * 0.4)).length;
+  const absent  = results.filter(r => r.isAbsent).length;
+  const failed  = total - passed - absent;
+
+  const isPublished = exam?.isPublished || exam?.status === 'results_published';
+
+  const inputStyle = { width:'100%', padding:'9px 12px', border:'1.5px solid #E2E8F0', borderRadius:8, fontSize:13, fontFamily:'inherit', background:'#F8FAFC', outline:'none' };
+
+  return (
+    <div>
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:22, fontWeight:800, color:NAVY }}>Publish Results 📢</div>
+        <div style={{ color:'#64748B', fontSize:13, marginTop:3 }}>Review and publish exam results — students and parents will be notified</div>
+      </div>
+
+      {/* Exam selector */}
+      <div className="card" style={{ background:'#fff', borderRadius:14, border:'1px solid #E2E8F0', padding:'20px 22px', marginBottom:16 }}>
+        <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#64748B', marginBottom:6, textTransform:'uppercase', letterSpacing:'0.04em' }}>Select Exam to Publish</label>
+        <select value={selectedExam} onChange={e => setSelectedExam(e.target.value)} style={inputStyle}>
+          <option value="">-- Select an Exam --</option>
+          {(exams||[]).map(e => (
+            <option key={e.id} value={e.id}>{e.name || e.title} {e.isPublished ? '✅ Published' : '⏳ Not Published'}</option>
+          ))}
+        </select>
+      </div>
+
+      {selectedExam && (
+        <>
+          {/* Summary */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:16 }}>
+            {[
+              { label:'Total', v:total, color:'#1B2F6E', bg:'#EFF6FF' },
+              { label:'Passed', v:passed, color:'#15803D', bg:'#DCFCE7' },
+              { label:'Failed', v:failed, color:'#DC2626', bg:'#FEE2E2' },
+              { label:'Absent', v:absent, color:'#B45309', bg:'#FEF3C7' },
+            ].map(s => (
+              <div key={s.label} style={{ background:s.bg, borderRadius:10, padding:'14px', textAlign:'center' }}>
+                <div style={{ fontSize:24, fontWeight:800, color:s.color }}>{s.v}</div>
+                <div style={{ fontSize:12, color:s.color, fontWeight:600 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Publish action */}
+          <div className="card" style={{ background: isPublished ? '#F0FDF9' : '#FFF', borderRadius:14, border:`1px solid ${isPublished?'#A7F3D0':'#E2E8F0'}`, padding:'20px 22px' }}>
+            {isPublished ? (
+              <div style={{ display:'flex', alignItems:'center', gap:12, color:'#15803D' }}>
+                <div style={{ fontSize:32 }}>✅</div>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:15 }}>Results Already Published!</div>
+                  <div style={{ fontSize:13, marginTop:3 }}>Students and parents can view these results in their portals</div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontWeight:700, fontSize:15, color:NAVY, marginBottom:6 }}>Ready to Publish?</div>
+                <div style={{ fontSize:13, color:'#64748b', marginBottom:16 }}>
+                  Publishing will make results visible to ALL students and parents in their portals. This action cannot be undone easily.
+                </div>
+                <div style={{ background:'#FEF9C3', border:'1px solid #FDE68A', borderRadius:8, padding:'10px 14px', marginBottom:14, fontSize:12.5, color:'#92400E' }}>
+                  ⚠️ Make sure ALL marks are entered before publishing. Once published, students can see their results.
+                </div>
+                <button onClick={() => publishMut.mutate()} disabled={total === 0 || publishMut.isPending}
+                  style={{ display:'flex', alignItems:'center', gap:8, padding:'12px 28px', background:NAVY, color:'white', border:'none', borderRadius:10, fontWeight:700, fontSize:14, cursor: total===0 ? 'not-allowed' : 'pointer', opacity: total===0 ? 0.5 : 1 }}>
+                  {publishMut.isPending ? '⏳ Publishing…' : '📢 Publish Results Now'}
+                </button>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
