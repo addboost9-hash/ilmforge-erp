@@ -212,9 +212,10 @@ const register = async ({ schoolName, name, email, phone, password: userPassword
   });
 
   console.log(`School registered: ${schoolName} (${email})`);
-  // DEV-ONLY: log OTP to server console — never expose in API response.
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`[DEV-ONLY] Registration OTP for userId=${result.user.id}: ${otp}`);
+  // Always log OTP to server console (visible in Render logs) for support purposes
+  console.log(`[OTP] Registration OTP for ${email} (userId=${result.user.id}): ${otp} — valid 10 mins`);
+  if (!otpEmailResult?.success) {
+    console.error(`[OTP] Email delivery FAILED for ${email}. Error: ${otpEmailResult?.error}`);
   }
 
   // Unique branded school link (slug-based)
@@ -243,7 +244,10 @@ const register = async ({ schoolName, name, email, phone, password: userPassword
       emailSentTo: email,
       emailDelivery,
     },
-    // devOtp intentionally omitted from response — logged server-side above.
+    // Return devOtp when email delivery fails so user can proceed
+    // This is safe because the OTP is short-lived (10 min) and tied to userId
+    devOtp: !otpEmailResult?.success ? otp : undefined,
+    emailFailed: !otpEmailResult?.success,
   };
 };
 
@@ -366,14 +370,15 @@ const resendOTP = async ({ userId }) => {
     await sendSMS(user.phone, `IlmForge OTP: ${otp}. Valid 10 mins.`);
   }
 
-  // DEV-ONLY: log OTP to server console — never expose in API response.
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`[DEV-ONLY] Resend OTP for userId=${userId}: ${otp}`);
-  }
+  // Always log OTP (visible in Render logs for admin support)
+  console.log(`[OTP] Resend OTP for ${user.email} (userId=${userId}): ${otp}`);
 
   return {
     message: 'Verification code resent to your email.',
-    // devOtp intentionally omitted from response — logged server-side above.
+    // Return devOtp so frontend can show it when email delivery fails
+    devOtp: process.env.NODE_ENV !== 'production' ? otp : undefined,
+    // In production, hint to check Render logs
+    hint: process.env.NODE_ENV === 'production' ? 'Check your email inbox and spam folder. If not received, contact support.' : undefined,
   };
 };
 

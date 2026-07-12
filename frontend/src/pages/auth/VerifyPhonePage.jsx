@@ -21,7 +21,7 @@ export default function VerifyEmailOTPPage() {
   const [otp,         setOtp]      = useState(['','','','','','']);
   const [timeLeft,    setTimeLeft]  = useState(600);
   const [loading,     setLoading]   = useState(false);
-  const [canResend,   setCanResend] = useState(!devOtp);
+  const [canResend,   setCanResend] = useState(true); // always allow resend
   const [resending,   setResending] = useState(false);
   const refs   = useRef([]);
   const { login } = useAuthStore();
@@ -164,39 +164,53 @@ export default function VerifyEmailOTPPage() {
         <h2 style={{ fontSize:24, fontWeight:900, color:'#0F4C45', margin:'0 0 8px', letterSpacing:'-0.3px' }}>
           Verify Your Email
         </h2>
-        <p style={{ color:'#6B7280', fontSize:14, marginBottom:28, lineHeight:1.6 }}>
+        <p style={{ color:'#6B7280', fontSize:14, marginBottom:20, lineHeight:1.6 }}>
           We sent a 6-digit code to{' '}
           <strong style={{ color:'#0F766E' }}>{maskEmail(email)}</strong>
-          <br/>
-          <span style={{ fontSize:12.5 }}>Check your inbox and spam folder.</span>
         </p>
 
-        {/* ── Dev mode banner ── */}
+        {/* Spam notice — always shown */}
+        <div style={{ background:'#FEF9C3', border:'1px solid #FDE68A', borderRadius:10, padding:'10px 14px', marginBottom:20, textAlign:'left', fontSize:12.5 }}>
+          <div style={{ fontWeight:700, color:'#92400E', marginBottom:4 }}>📧 Email not received?</div>
+          <div style={{ color:'#78350F', lineHeight:1.6 }}>
+            1. Check your <strong>Spam / Junk</strong> folder<br/>
+            2. Search for "<strong>IlmForge</strong>" in your inbox<br/>
+            3. Wait 1-2 minutes, then click <strong>Resend Code</strong><br/>
+            4. Or ask admin to check <strong>Render logs</strong> for the OTP
+          </div>
+        </div>
+
+        {/* ── OTP display when email failed ── */}
         {devOtp && (
           <div style={{
-            background:'#F0FDFA', border:'2px solid #0D9488',
-            borderRadius:12, padding:'14px 16px', marginBottom:24, textAlign:'left',
+            background: '#FFF7ED', border:'2px solid #F59E0B',
+            borderRadius:12, padding:'14px 16px', marginBottom:20, textAlign:'left',
           }}>
             <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:8 }}>
-              <Zap size={14} color="#0D9488"/>
-              <span style={{ fontSize:11, fontWeight:700, color:'#0F766E', textTransform:'uppercase', letterSpacing:0.5 }}>
-                Dev Mode — OTP Auto-Filled
+              <Zap size={14} color="#D97706"/>
+              <span style={{ fontSize:11, fontWeight:700, color:'#92400E', textTransform:'uppercase', letterSpacing:0.5 }}>
+                ⚠️ Email delivery issue — Your OTP:
               </span>
             </div>
             <div style={{
               display:'flex', alignItems:'center', justifyContent:'space-between',
-              background:'rgba(13,148,136,0.08)', borderRadius:8, padding:'8px 14px',
+              background:'rgba(217,119,6,0.08)', borderRadius:8, padding:'8px 14px',
             }}>
-              <span style={{ fontFamily:'monospace', fontSize:26, fontWeight:900, color:'#0D9488', letterSpacing:10 }}>
+              <span style={{ fontFamily:'monospace', fontSize:28, fontWeight:900, color:'#D97706', letterSpacing:12 }}>
                 {devOtp}
               </span>
-              <button onClick={() => { navigator.clipboard.writeText(devOtp); toast.success('Copied!'); }}
-                style={{ background:'none', border:'none', cursor:'pointer', color:'#0D9488' }}>
-                <Copy size={16}/>
+              <button onClick={() => {
+                navigator.clipboard?.writeText(devOtp);
+                setOtp(devOtp.split(''));
+                toast.success('OTP copied and filled!');
+              }}
+                style={{ background:'#D97706', border:'none', cursor:'pointer', color:'white', padding:'6px 12px', borderRadius:6, fontSize:12, fontWeight:700 }}>
+                <Copy size={13} style={{ display:'inline', marginRight:4 }}/>
+                Use This OTP
               </button>
             </div>
-            <p style={{ fontSize:11.5, color:'#6B7280', marginTop:8, lineHeight:1.5 }}>
-              This OTP is shown only in development mode. In production, it is sent via email.
+            <p style={{ fontSize:11.5, color:'#92400E', marginTop:6 }}>
+              Email delivery failed. Use this code to verify now. Code expires in 10 minutes.
             </p>
           </div>
         )}

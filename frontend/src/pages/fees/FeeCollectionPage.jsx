@@ -212,16 +212,20 @@ export default function FeeCollectionPage() {
                             const token = localStorage.getItem('accessToken');
                             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
                             const url = `${apiBase}/pdf/voucher/${inv.id}`;
-                            // Open in new window with auth header via fetch
                             fetch(url, { headers: { Authorization: `Bearer ${token}` } })
                               .then(r => r.text())
                               .then(html => {
-                                const w = window.open('', '_blank', 'width=900,height=700');
-                                w.document.write(html);
-                                w.document.close();
-                                setTimeout(() => w.print(), 800);
+                                // Use iframe to avoid popup blocker
+                                const iframe = document.createElement('iframe');
+                                iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;background:white;';
+                                document.body.appendChild(iframe);
+                                iframe.contentDocument.write(html + `<script>window.onload=()=>{window.print();setTimeout(()=>{document.body.removeChild(parent.document.querySelector('iframe[style*="z-index:9999"]'))},500)}<\/script>`);
+                                iframe.contentDocument.close();
                               })
-                              .catch(() => window.open(url, '_blank'));
+                              .catch(() => {
+                                // Fallback: navigate to public fee voucher
+                                window.open('/fee-voucher', '_blank');
+                              });
                           }}>
                           <Printer size={12} />
                         </button>

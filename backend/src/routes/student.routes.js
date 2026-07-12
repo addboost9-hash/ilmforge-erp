@@ -159,13 +159,24 @@ router.post('/', wrap(async (req, res) => {
     ? parentEmail.trim().toLowerCase()
     : `${slugify(fatherName || 'parent')}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}@${slug}.parent`;
 
-  // Resolve campusId safely — never fall back to 1
-  const resolvedCampusId = campusId || (req.body.campusId ? parseInt(req.body.campusId) : null);
+  // Resolve campusId — auto-create Main Campus if school has none
+  let resolvedCampusId = campusId || (req.body.campusId ? parseInt(req.body.campusId) : null);
   if (!resolvedCampusId) {
-    return res.status(400).json({
-      success: false,
-      message: 'Campus is required. Please create a campus first in Settings → Campuses.',
+    // Try to find existing campus
+    const existingCampus = await prisma.campus.findFirst({
+      where: { schoolId },
+      orderBy: [{ isMain: 'desc' }, { id: 'asc' }],
+      select: { id: true },
     });
+    if (existingCampus) {
+      resolvedCampusId = existingCampus.id;
+    } else {
+      // Auto-create Main Campus so admission doesn't fail
+      const newCampus = await prisma.campus.create({
+        data: { schoolId, name: 'Main Campus', isMain: true },
+      });
+      resolvedCampusId = newCampus.id;
+    }
   }
 
   const result = await prisma.$transaction(async (tx) => {
