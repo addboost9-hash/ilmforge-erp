@@ -162,7 +162,6 @@ router.post('/', wrap(async (req, res) => {
   // Resolve campusId — auto-create Main Campus if school has none
   let resolvedCampusId = campusId || (req.body.campusId ? parseInt(req.body.campusId) : null);
   if (!resolvedCampusId) {
-    // Try to find existing campus
     const existingCampus = await prisma.campus.findFirst({
       where: { schoolId },
       orderBy: [{ isMain: 'desc' }, { id: 'asc' }],
@@ -171,13 +170,19 @@ router.post('/', wrap(async (req, res) => {
     if (existingCampus) {
       resolvedCampusId = existingCampus.id;
     } else {
-      // Auto-create Main Campus so admission doesn't fail
       const newCampus = await prisma.campus.create({
         data: { schoolId, name: 'Main Campus', isMain: true },
       });
       resolvedCampusId = newCampus.id;
     }
   }
+
+  // Pre-compute bcrypt hashes OUTSIDE transaction — bcrypt is slow (~200ms each)
+  // Doing this inside the transaction caused timeout > 5000ms
+  const [studentPasswordHash, parentPasswordHash] = await Promise.all([
+    bcrypt.hash(studentPassword, 10),
+    bcrypt.hash(parentPassword,  10),
+  ]);
 
   const result = await prisma.$transaction(async (tx) => {
     // 1) Student record
@@ -206,7 +211,7 @@ router.post('/', wrap(async (req, res) => {
           name, email: studentEmail,
           phone: emergencyPhone || null,
           role: 'student',
-          passwordHash: await bcrypt.hash(studentPassword, 10),
+          passwordHash: studentPasswordHash, // pre-computed outside tx
           phoneVerifiedAt: new Date(),
           mustChangePassword: false,
         }
@@ -238,7 +243,7 @@ router.post('/', wrap(async (req, res) => {
             email: finalParentEmail,
             phone: emergencyPhone || null,
             role: 'parent',
-            passwordHash: await bcrypt.hash(parentPassword, 10),
+            passwordHash: parentPasswordHash, // pre-computed outside tx
             phoneVerifiedAt: new Date(),
             mustChangePassword: false,
           }
@@ -291,7 +296,7 @@ router.post('/', wrap(async (req, res) => {
     }).catch(() => null);
 
     return { student, studentUser, parentUser, parentRec, invoice, parentIsExisting: !!(!parentRec && parentUser) };
-  });
+  }, { timeout: 30000, maxWait: 35000 }); // 30s timeout — bcrypt moved outside
 
   // Build credentials payload for frontend popup / print
   const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
