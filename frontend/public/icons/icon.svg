@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1B2F6E"/>
+      <stop offset="100%" style="stop-color:#0073b7"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f5c518"/>
+      <stop offset="100%" style="stop-color:#f59e0b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded rectangle background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Book/Education icon -->
+  <!-- Book base -->
+  <rect x="120" y="150" width="272" height="200" rx="16" fill="white" opacity="0.15"/>
+
+  <!-- Book pages -->
+  <rect x="136" y="166" width="112" height="168" rx="8" fill="white" opacity="0.9"/>
+  <rect x="264" y="166" width="112" height="168" rx="8" fill="white" opacity="0.85"/>
+
+  <!-- Book spine -->
+  <rect x="248" y="158" width="16" height="192" rx="4" fill="url(#gold)"/>
+
+  <!-- Lines on left page -->
+  <rect x="152" y="194" width="80" height="6" rx="3" fill="#1B2F6E" opacity="0.4"/>
+  <rect x="152" y="210" width="64" height="6" rx="3" fill="#1B2F6E" opacity="0.4"/>
+  <rect x="152" y="226" width="72" height="6" rx="3" fill="#1B2F6E" opacity="0.4"/>
+  <rect x="152" y="242" width="56" height="6" rx="3" fill="#1B2F6E" opacity="0.4"/>
+  <rect x="152" y="258" width="68" height="6" rx="3" fill="#1B2F6E" opacity="0.4"/>
+
+  <!-- Lines on right page -->
+  <rect x="280" y="194" width="80" height="6" rx="3" fill="#1B2F6E" opacity="0.4"/>
+  <rect x="280" y="210" width="64" height="6" rx="3" fill="#1B2F6E" opacity="0.4"/>
+  <rect x="280" y="226" width="72" height="6" rx="3" fill="#1B2F6E" opacity="0.4"/>
+  <rect x="280" y="242" width="56" height="6" rx="3" fill="#1B2F6E" opacity="0.4"/>
+
+  <!-- Graduation cap above book -->
+  <ellipse cx="256" cy="145" rx="60" ry="12" fill="url(#gold)"/>
+  <polygon points="256,100 196,140 316,140" fill="url(#gold)"/>
+  <rect x="300" y="140" width="6" height="28" rx="3" fill="url(#gold)"/>
+  <circle cx="306" cy="172" r="10" fill="#f5c518"/>
+
+  <!-- IlmForge text -->
+  <text x="256" y="400" font-family="Arial,sans-serif" font-size="56" font-weight="900" fill="white" text-anchor="middle" letter-spacing="2">IlmForge</text>
+  <text x="256" y="440" font-family="Arial,sans-serif" font-size="24" fill="rgba(255,255,255,0.8)" text-anchor="middle">اِلم کو آسان بنائے</text>
+
+  <!-- PK flag star (decorative) -->
+  <text x="456" y="88" font-size="40" text-anchor="middle">🇵🇰</text>
+</svg>
