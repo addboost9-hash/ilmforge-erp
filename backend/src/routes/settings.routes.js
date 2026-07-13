@@ -243,6 +243,59 @@ router.put('/website', wrap(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------------------
+// SMTP Test — send a test email to verify configuration
+// ---------------------------------------------------------------------------
+router.post('/smtp-test', wrap(async (req, res) => {
+  const { sendEmail, verifySmtpConnection, isEmailConfigured } = require('../services/email.service');
+  const { testEmail } = req.body;
+
+  if (!isEmailConfigured()) {
+    return res.status(400).json({
+      success: false,
+      message: 'SMTP not configured. Set SMTP_USER and SMTP_PASS in environment variables.',
+      configured: false,
+    });
+  }
+
+  // First verify connection
+  const verify = await verifySmtpConnection();
+  if (!verify.success) {
+    return res.status(502).json({ success: false, message: `SMTP connection failed: ${verify.error}`, configured: true, connected: false });
+  }
+
+  // Send test email
+  const to = testEmail || req.user?.email || 'test@example.com';
+  const result = await sendEmail({
+    to,
+    subject: '✅ IlmForge SMTP Test — Email Working!',
+    html: `
+      <div style="max-width:480px;margin:0 auto;font-family:Arial,sans-serif;background:white;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
+        <div style="background:linear-gradient(135deg,#1B2F6E,#0073b7);color:white;padding:24px;text-align:center;">
+          <div style="font-size:36px;">✅</div>
+          <h2 style="margin:6px 0 0;">Email Test Successful!</h2>
+        </div>
+        <div style="padding:24px;">
+          <p>Mubarak! IlmForge ka email system bilkul sahi kaam kar raha hai.</p>
+          <p><strong>Provider:</strong> ${process.env.SMTP_HOST}</p>
+          <p><strong>From:</strong> ${process.env.FROM_EMAIL || process.env.SMTP_USER}</p>
+          <p style="color:#94a3b8;font-size:12px;">— IlmForge Team</p>
+        </div>
+      </div>
+    `,
+    text: 'IlmForge SMTP test successful!',
+  });
+
+  res.json({
+    success: result.success,
+    message: result.success ? `Test email sent to ${to}` : `Email send failed: ${result.error}`,
+    configured: true,
+    connected: true,
+    sentTo: to,
+    provider: process.env.SMTP_HOST,
+  });
+}));
+
+// ---------------------------------------------------------------------------
 // General settings alias (same as /school for backwards compat)
 // ---------------------------------------------------------------------------
 router.get('/general', wrap(async (req, res) => {

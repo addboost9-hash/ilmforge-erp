@@ -589,35 +589,34 @@ export default function AdminLayout() {
         }}
       >
         {/* ── Brand area ── */}
-        <div className="sb-logo" style={{ background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className="sb-logo" style={{ background: 'rgba(0,0,0,0.22)', borderBottom: '1px solid rgba(255,255,255,0.09)' }}>
+          {/* School logo or ilmفورج icon */}
           {logo ? (
-            <img
-              src={logo}
-              alt="School Logo"
-              style={{
-                width: 34, height: 34, borderRadius: 8,
-                objectFit: 'cover', flexShrink: 0,
-                border: '2px solid rgba(255,255,255,0.25)',
-              }}
-            />
+            <img src={logo} alt="School Logo"
+              style={{ width:36, height:36, borderRadius:9, objectFit:'cover', flexShrink:0, border:'2px solid rgba(255,255,255,0.28)' }} />
           ) : (
-            /* Fallback initials circle */
-            <div style={{
-              width: 34, height: 34, borderRadius: 8, flexShrink: 0,
-              background: 'linear-gradient(135deg,#00c0ef,#0073b7)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 900, fontSize: 15, color: '#fff',
-              letterSpacing: -0.5,
-            }}>
-              {(school?.name || 'I')[0].toUpperCase()}
+            /* ilmفورج mini icon mark */
+            <div style={{ width:36, height:36, borderRadius:9, flexShrink:0, background:'linear-gradient(135deg,#1B2F6E,#0073b7)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', border:'1.5px solid rgba(255,255,255,0.2)' }}>
+              <span style={{ fontSize:11, fontWeight:900, color:'white', lineHeight:1.1, fontFamily:"'Poppins',sans-serif" }}>ilm</span>
+              <span style={{ fontSize:9, fontWeight:700, color:'#F5C518', lineHeight:1.1, fontFamily:"'Noto Nastaliq Urdu',serif" }}>فورج</span>
             </div>
           )}
           {!collapsed && (
-            <div style={{ overflow: 'hidden', flex: 1 }}>
-              <div className="sb-logo-name">
-                {school?.name || localStorage.getItem('registeredSchoolName') || 'IlmForge'}
+            <div style={{ overflow:'hidden', flex:1 }}>
+              {/* School name OR platform name */}
+              <div className="sb-logo-name" style={{ display:'flex', alignItems:'baseline', gap:3 }}>
+                {school?.name || localStorage.getItem('registeredSchoolName') ? (
+                  <span>{school?.name || localStorage.getItem('registeredSchoolName')}</span>
+                ) : (
+                  <>
+                    <span style={{ color:'white', fontFamily:"'Poppins',sans-serif", fontWeight:900, letterSpacing:'-0.02em' }}>ilm</span>
+                    <span style={{ color:'#F5C518', fontFamily:"'Noto Nastaliq Urdu',serif", fontWeight:700, fontSize:'0.95em' }}>فورج</span>
+                  </>
+                )}
               </div>
-              <div className="sb-logo-tag" style={{ color: '#f39c12' }}>v3.3 — School ERP</div>
+              <div className="sb-logo-tag" style={{ color:'#F5C518', letterSpacing:'0.04em' }}>
+                اِلم کو آسان بنائے 🇵🇰
+              </div>
             </div>
           )}
         </div>

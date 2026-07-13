@@ -192,15 +192,33 @@ router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
     }),
   ]);
 
-  // Send notification to parent
+  // Send notification to parent (WhatsApp/SMS + Email)
   if (notifyVia !== 'none') {
     const school = await prisma.school.findUnique({ where: { id: schoolId } });
-    // Send WhatsApp/SMS (fire-and-forget)
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthStr = invoice.month ? (monthNames[(parseInt(invoice.month)-1)] || invoice.month) : '';
+
+    // WhatsApp/SMS — fire and forget
     sendFeePaidNotification({
       parentPhone: invoice.student.emergencyPhone || '',
       studentName: invoice.student.name, amount: parseInt(amountPaid),
-      month: invoice.month || '', receiptNo, schoolName: school?.name || 'School'
-    }).catch(console.error);
+      month: monthStr, receiptNo, schoolName: school?.name || 'School'
+    }).catch(() => {});
+
+    // Email receipt — fire and forget
+    const parentEmail = invoice.student.parent?.email;
+    if (parentEmail) {
+      const { sendFeeReceiptEmail } = require('../services/email.service');
+      sendFeeReceiptEmail({
+        to: parentEmail,
+        parentName: invoice.student.parent?.name || invoice.student.fatherName || 'Parent',
+        studentName: invoice.student.name,
+        amount: parseInt(amountPaid),
+        month: `${monthStr} ${invoice.year || ''}`.trim(),
+        receiptNo,
+        schoolName: school?.name || 'School',
+      }).catch(() => {});
+    }
   }
 
   res.json({ success: true, data: { payment, receiptNo, newStatus, newDue }, message: 'Payment recorded successfully.' });

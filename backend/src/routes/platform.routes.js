@@ -302,4 +302,81 @@ router.post('/validate-license', (req, res, next) => next(), wrap(async (req, re
   });
 }));
 
+/* ── DELETE /platform/schools/cleanup-email ─────────────────
+   Testing only — archive a school by email so you can re-register
+   Body: { email: "test@example.com" }
+─────────────────────────────────────────────────────────── */
+router.delete('/cleanup-email', wrap(async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ success: false, message: 'email required' });
+
+  const prisma = require('../config/prisma');
+
+  // Find all schools/users with this email
+  const schools = await prisma.school.findMany({ where: { email: email.toLowerCase() } });
+  const users   = await prisma.user.findMany({ where: { email: email.toLowerCase() } });
+
+  if (schools.length === 0 && users.length === 0) {
+    return res.json({ success: true, message: `No records found for ${email} — you can register fresh!` });
+  }
+
+  // Archive (soft-delete) schools
+  const archivedSchools = [];
+  for (const school of schools) {
+    const archived = `archived-${school.id}-${Date.now()}@deleted.local`;
+    await prisma.school.update({
+      where: { id: school.id },
+      data: { email: archived, status: 'inactive', deletedAt: new Date() },
+    });
+    archivedSchools.push({ id: school.id, name: school.name, archivedEmail: archived });
+  }
+
+  // Archive users with this email
+  for (const user of users) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { email: `archived-${user.id}-${Date.now()}@deleted.local`, deletedAt: new Date(), isActive: false },
+    });
+  }
+
+  res.json({
+    success: true,
+    message: `✅ Email "${email}" cleared! Aap ab is email se nayi school register kar saktay hain.`,
+    archived: { schools: archivedSchools.length, users: users.length },
+    details: archivedSchools,
+  });
+}));
+
+/* ── POST /platform/test-email ──────────────────────────────
+   Test email sending from platform panel
+─────────────────────────────────────────────────────────── */
+router.post('/test-email', wrap(async (req, res) => {
+  const { to } = req.body;
+  if (!to) return res.status(400).json({ success: false, message: 'to email required' });
+
+  const { sendEmail, isEmailConfigured, verifySmtpConnection } = require('../services/email.service');
+
+  if (!isEmailConfigured()) {
+    return res.json({ success: false, message: 'SMTP not configured. Add SMTP_USER + SMTP_PASS to Render env vars.' });
+  }
+
+  const verify = await verifySmtpConnection();
+  if (!verify.success) {
+    return res.json({ success: false, message: `SMTP connect fail: ${verify.error}`, host: process.env.SMTP_HOST });
+  }
+
+  const result = await sendEmail({
+    to,
+    subject: '✅ IlmForge Platform Email Test',
+    html: `<h2>✅ Email Working!</h2><p>IlmForge platform email test successful.</p><p>SMTP: ${process.env.SMTP_HOST}</p>`,
+    text: 'IlmForge email test OK',
+  });
+
+  res.json({
+    success: result.success,
+    message: result.success ? `Test email sent to ${to}` : `Failed: ${result.error}`,
+    smtp: { host: process.env.SMTP_HOST, user: process.env.SMTP_USER },
+  });
+}));
+
 module.exports = router;

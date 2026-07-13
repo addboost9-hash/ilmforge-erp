@@ -1,155 +1,492 @@
 /**
- * IlmForge — Brand Components
- * ═══════════════════════════════
- * <IlmForgeLogo />  — professional logo: open-book flame forge mark + wordmark
- * <RoboBuddyMascot /> — friendly robot holding Pakistan flag 🇵🇰
- * Pure SVG — crisp at any size, no assets needed.
+ * ilmفورج — Premium Brand Identity v3.0
+ * ════════════════════════════════════════════════════════
+ *
+ *   Professional bilingual wordmark:
+ *   "ilm"   → Latin  · Poppins ExtraBold · Navy
+ *   "فورج"  → Urdu   · Nastaliq script   · Gold gradient
+ *
+ *   Variants:
+ *   <IlmForgeLogo />        — Full logo (icon + wordmark)
+ *   <IlmForgeIcon />        — Icon mark only (app icon, favicon)
+ *   <IlmForgeWordmark />    — Text only
+ *   <IlmForgeBadge />       — Pill badge (landing, cards)
+ *   <RoboBuddyMascot />     — Mascot
  */
 
-/* ─────────── PROFESSIONAL LOGO — Circular Emblem (EduDigitize-style) ─────────── */
-export function IlmForgeLogo({ size = 40, showText = true, light = false, className = '' }) {
-  const text1 = light ? '#FFFFFF' : '#0F172A';
-  const text2 = light ? 'rgba(255,255,255,0.75)' : '#0D9488';
+/* ── Brand tokens ─────────────────────────────────────── */
+const T = {
+  navy:    '#1B2F6E',
+  navyLt:  '#243e8f',
+  blue:    '#0073b7',
+  gold:    '#F5C518',
+  goldDk:  '#D97706',
+  goldLt:  '#FDE68A',
+  white:   '#FFFFFF',
+  offWhite:'#F0F6FF',
+};
+
+/* ════════════════════════════════════════════════════════
+   ICON MARK — The premium emblem
+   Used standalone: favicon, PWA icon, collapsed sidebar
+════════════════════════════════════════════════════════ */
+export function IlmForgeIcon({ size = 44, className = '', light = false }) {
+  const uid = `icon_${size}`;
   return (
-    <div className={`flex items-center gap-2.5 ${className}`} style={{ lineHeight: 1 }}>
-      <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-        <defs>
-          <linearGradient id="ifc-ring" x1="0" y1="0" x2="100" y2="100">
-            <stop offset="0%" stopColor="#0F766E" /><stop offset="100%" stopColor="#14B8A6" />
-          </linearGradient>
-          <linearGradient id="ifc-inner" x1="20" y1="15" x2="85" y2="90">
-            <stop offset="0%" stopColor="#0D9488" /><stop offset="100%" stopColor="#0F5C55" />
-          </linearGradient>
-          <linearGradient id="ifc-gold" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#FBBF24" /><stop offset="100%" stopColor="#D97706" />
-          </linearGradient>
-          <radialGradient id="ifc-glow" cx="0.5" cy="0.35" r="0.65">
-            <stop offset="0%" stopColor="#5EEAD4" stopOpacity="0.9" /><stop offset="100%" stopColor="#5EEAD4" stopOpacity="0" />
-          </radialGradient>
-        </defs>
+    <svg
+      width={size} height={size}
+      viewBox="0 0 120 120"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-label="ilmفورج"
+    >
+      <defs>
+        <linearGradient id={`${uid}_bg`} x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stopColor={light ? T.navyLt : T.navy}/>
+          <stop offset="100%" stopColor={light ? T.blue   : '#0a2356'}/>
+        </linearGradient>
+        <linearGradient id={`${uid}_gold`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%"   stopColor={T.goldLt}/>
+          <stop offset="60%"  stopColor={T.gold}/>
+          <stop offset="100%" stopColor={T.goldDk}/>
+        </linearGradient>
+        <linearGradient id={`${uid}_book`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.98"/>
+          <stop offset="100%" stopColor="#dbeafe" stopOpacity="0.88"/>
+        </linearGradient>
+        <filter id={`${uid}_glow`} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="2.5" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+        <filter id={`${uid}_drop`}>
+          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor={T.navy} floodOpacity="0.35"/>
+        </filter>
+      </defs>
 
-        {/* Outer white ring + gradient rim (circular badge) */}
-        <circle cx="50" cy="50" r="49" fill="url(#ifc-ring)" />
-        <circle cx="50" cy="50" r="45.5" fill="#FFFFFF" />
-        <circle cx="50" cy="50" r="41" fill="url(#ifc-inner)" />
+      {/* ── Rounded square background ── */}
+      <rect x="2" y="2" width="116" height="116" rx="26" fill={`url(#${uid}_bg)`} filter={`url(#${uid}_drop)`}/>
 
-        {/* Glow behind book (ilm ki roshni) */}
-        <ellipse cx="50" cy="45" rx="26" ry="20" fill="url(#ifc-glow)" />
+      {/* ── Subtle grid texture ── */}
+      <rect x="2" y="2" width="116" height="116" rx="26"
+            fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.8"/>
 
-        {/* Rising knowledge spark / flame */}
-        <path d="M50 20c3.2 4.2 5.8 7.1 5.8 10.8a5.8 5.8 0 0 1-11.6 0C44.2 27.1 46.8 24.2 50 20z" fill="url(#ifc-gold)" />
-        <path d="M50 25.5c1.6 2.1 2.8 3.6 2.8 5.4a2.8 2.8 0 0 1-5.6 0c0-1.8 1.2-3.3 2.8-5.4z" fill="#FFF7ED" />
+      {/* ── Inner glow ring ── */}
+      <rect x="8" y="8" width="104" height="104" rx="21"
+            fill="none" stroke={`url(#${uid}_gold)`} strokeWidth="1.5" opacity="0.35"/>
 
-        {/* Open book with glowing pages */}
-        <path d="M24 44c8.5-4.6 18.5-4.8 26 0v24c-7.5-4.6-17.5-4.4-26 0V44z" fill="#FFFFFF" />
-        <path d="M76 44c-8.5-4.6-18.5-4.8-26 0v24c7.5-4.6 17.5-4.4 26 0V44z" fill="#F0FDFA" />
-        <path d="M50 44v24" stroke="#0F766E" strokeWidth="2" strokeLinecap="round" />
-        {/* Page lines */}
-        <path d="M30 50c4.8-1.9 10.2-2 14.5 0M30 56c4.8-1.9 10.2-2 14.5 0M30 62c4.8-1.9 10.2-2 14.5 0" stroke="#0D9488" strokeWidth="1.6" strokeLinecap="round" opacity="0.6" />
-        <path d="M70 50c-4.8-1.9-10.2-2-14.5 0M70 56c-4.8-1.9-10.2-2-14.5 0M70 62c-4.8-1.9-10.2-2-14.5 0" stroke="#0D9488" strokeWidth="1.6" strokeLinecap="round" opacity="0.45" />
+      {/* ── Gold flame spark (top center) ── */}
+      <path d="M60 14 C 63.5 19 67 23.5 67 28.5 A 7 7 0 0 1 53 28.5 C 53 23.5 56.5 19 60 14Z"
+            fill={`url(#${uid}_gold)`} filter={`url(#${uid}_glow)`}/>
+      <path d="M60 18.5 C 61.8 21.5 63.5 24 63.5 27 A 3.5 3.5 0 0 1 56.5 27 C 56.5 24 58.2 21.5 60 18.5Z"
+            fill="white" opacity="0.6"/>
 
-        {/* Gold laurel arcs (bottom) */}
-        <path d="M26 70c4 7 12 12 24 12s20-5 24-12" stroke="url(#ifc-gold)" strokeWidth="2.6" strokeLinecap="round" fill="none" />
-        <path d="M29 74l-3.5 1.8M34 78l-2.6 2.6M40 80.6l-1.6 3.2M71 74l3.5 1.8M66 78l2.6 2.6M60 80.6l1.6 3.2" stroke="url(#ifc-gold)" strokeWidth="2.2" strokeLinecap="round" />
+      {/* ── Open book ── */}
+      {/* Left page */}
+      <path d="M22 44 C 36 38, 50 37, 60 41 L 60 88 C 50 84, 36 85, 22 91 Z"
+            fill={`url(#${uid}_book)`}/>
+      {/* Right page */}
+      <path d="M98 44 C 84 38, 70 37, 60 41 L 60 88 C 70 84, 84 85, 98 91 Z"
+            fill="white" opacity="0.82"/>
+      {/* Spine */}
+      <line x1="60" y1="41" x2="60" y2="88"
+            stroke={`url(#${uid}_gold)`} strokeWidth="2.5" strokeLinecap="round"/>
 
-        {/* علم Urdu subtle at top arc */}
-        <text x="50" y="16.5" textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#0F766E" fontFamily="'Noto Nastaliq Urdu','Segoe UI',serif" opacity="0.85">علم</text>
-      </svg>
+      {/* Left lines */}
+      <path d="M28 55 Q 43 52 54 54" stroke={T.navy} strokeWidth="2.2" strokeLinecap="round" opacity="0.22"/>
+      <path d="M28 64 Q 43 61 54 63" stroke={T.navy} strokeWidth="2.2" strokeLinecap="round" opacity="0.17"/>
+      <path d="M28 73 Q 43 70 54 72" stroke={T.navy} strokeWidth="2.2" strokeLinecap="round" opacity="0.12"/>
+      {/* Right lines */}
+      <path d="M92 55 Q 77 52 66 54" stroke={T.navy} strokeWidth="2.2" strokeLinecap="round" opacity="0.22"/>
+      <path d="M92 64 Q 77 61 66 63" stroke={T.navy} strokeWidth="2.2" strokeLinecap="round" opacity="0.17"/>
+
+      {/* ── "ilm" — bottom, styled ── */}
+      <text x="34" y="108"
+            fontFamily="'Poppins','Montserrat','Arial Black',sans-serif"
+            fontSize="22" fontWeight="900" fill="white"
+            letterSpacing="-0.5">
+        ilm
+      </text>
+      {/* ── "فورج" — bottom, gold Urdu ── */}
+      <text x="86" y="107"
+            fontFamily="'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Arabic Typesetting',serif"
+            fontSize="20" fontWeight="700"
+            fill={`url(#${uid}_gold)`}
+            textAnchor="middle" direction="rtl">
+        فورج
+      </text>
+    </svg>
+  );
+}
+
+/* ════════════════════════════════════════════════════════
+   MAIN LOGO — icon + professional wordmark
+════════════════════════════════════════════════════════ */
+export function IlmForgeLogo({
+  size      = 42,
+  showText  = true,
+  light     = false,
+  compact   = false,
+  className = '',
+}) {
+  const navyC  = light ? T.white   : T.navy;
+  const goldC  = light ? T.gold    : T.goldDk;
+  const subC   = light ? 'rgba(255,255,255,0.60)' : '#94a3b8';
+  const divC   = light ? 'rgba(255,255,255,0.25)' : '#e2e8f0';
+
+  return (
+    <div
+      className={className}
+      style={{
+        display:     'flex',
+        alignItems:  'center',
+        gap:          size * 0.3,
+        userSelect:  'none',
+      }}
+    >
+      <IlmForgeIcon size={size} light={light} />
+
       {showText && (
-        <span style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: size * 0.5, fontWeight: 900, letterSpacing: '-0.02em', color: text1, fontFamily: "'Poppins','Inter',sans-serif" }}>
-            Ilm<span style={{ color: '#D97706' }}>Forge</span>
-          </span>
-          <span style={{ fontSize: size * 0.19, fontWeight: 700, letterSpacing: '0.14em', color: text2, textTransform: 'uppercase' }}>
-            Ilm Ko Asaan Banaye
-          </span>
+        <div style={{ display:'flex', flexDirection:'column', gap: compact ? 0 : 2 }}>
+
+          {/* ── Wordmark row ── */}
+          <div style={{
+            display:     'flex',
+            alignItems:  'baseline',
+            gap:          4,
+            lineHeight:   1,
+          }}>
+            {/* "ilm" — clean Latin */}
+            <span style={{
+              fontSize:    size * 0.54,
+              fontWeight:  900,
+              color:       navyC,
+              fontFamily:  "'Poppins','Montserrat','Arial Black',sans-serif",
+              letterSpacing: '-0.035em',
+              lineHeight:  1,
+            }}>
+              ilm
+            </span>
+
+            {/* Micro divider */}
+            <span style={{
+              width:         1.5,
+              height:        size * 0.4,
+              background:    divC,
+              borderRadius:  2,
+              alignSelf:     'center',
+              flexShrink:    0,
+            }} />
+
+            {/* "فورج" — Urdu Nastaliq, gold */}
+            <span style={{
+              fontSize:    size * 0.5,
+              fontWeight:  700,
+              color:       goldC,
+              fontFamily:  "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Arabic Typesetting',serif",
+              letterSpacing: '0.01em',
+              lineHeight:  1,
+              direction:   'rtl',
+              display:     'inline-block',
+              /* Gold gradient via background-clip on modern browsers */
+              background:  `linear-gradient(135deg, ${T.goldLt}, ${T.gold}, ${T.goldDk})`,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>
+              فورج
+            </span>
+          </div>
+
+          {/* ── Tagline ── */}
+          {!compact && (
+            <span style={{
+              fontSize:      size * 0.165,
+              fontWeight:    600,
+              color:         subC,
+              letterSpacing: '0.13em',
+              textTransform: 'uppercase',
+              fontFamily:    "'Inter','Source Sans Pro',sans-serif",
+              lineHeight:    1,
+            }}>
+              اِلم کو آسان بنائے &nbsp;🇵🇰
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════
+   WORDMARK ONLY — large display use
+════════════════════════════════════════════════════════ */
+export function IlmForgeWordmark({
+  fontSize  = 32,
+  light     = false,
+  showTagline = true,
+  className = '',
+}) {
+  const navyC = light ? T.white   : T.navy;
+  const subC  = light ? 'rgba(255,255,255,0.55)' : '#94a3b8';
+
+  return (
+    <div className={className} style={{ display:'flex', flexDirection:'column', gap:4, lineHeight:1 }}>
+      <div style={{ display:'flex', alignItems:'baseline', gap:6 }}>
+        {/* ilm */}
+        <span style={{
+          fontSize,
+          fontWeight:  900,
+          color:       navyC,
+          fontFamily:  "'Poppins','Montserrat','Arial Black',sans-serif",
+          letterSpacing: '-0.04em',
+        }}>
+          ilm
+        </span>
+
+        {/* divider */}
+        <span style={{
+          width: 2, height: fontSize * 0.75,
+          background: light ? 'rgba(255,255,255,0.3)' : '#e2e8f0',
+          borderRadius: 2, alignSelf:'center',
+        }} />
+
+        {/* فورج — gradient gold */}
+        <span style={{
+          fontSize:    fontSize * 0.92,
+          fontWeight:  700,
+          fontFamily:  "'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif",
+          direction:   'rtl',
+          display:     'inline-block',
+          background:  `linear-gradient(135deg, ${T.goldLt}, ${T.gold} 40%, ${T.goldDk})`,
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+        }}>
+          فورج
+        </span>
+      </div>
+
+      {showTagline && (
+        <span style={{
+          fontSize:    fontSize * 0.28,
+          fontWeight:  600,
+          color:       subC,
+          letterSpacing:'0.15em',
+          textTransform:'uppercase',
+          fontFamily:  "'Inter',sans-serif",
+        }}>
+          اِلم کو آسان بنائے &nbsp;🇵🇰
         </span>
       )}
     </div>
   );
 }
 
-/* ─────────── ROBOBUDDY MASCOT — Pakistan flag in hand 🇵🇰 ─────────── */
-export function RoboBuddyMascot({ size = 180, waving = true, className = '' }) {
+/* ════════════════════════════════════════════════════════
+   BADGE — compact pill for cards, landing, nav
+════════════════════════════════════════════════════════ */
+export function IlmForgeBadge({ light = false, size = 'md' }) {
+  const pad = size === 'sm' ? '4px 10px' : size === 'lg' ? '8px 20px' : '6px 14px';
+  const fs  = size === 'sm' ? 11 : size === 'lg' ? 16 : 13;
+
   return (
-    <svg width={size} height={size * 1.1} viewBox="0 0 200 220" fill="none" className={className}>
+    <div style={{
+      display:        'inline-flex',
+      alignItems:     'center',
+      gap:             6,
+      padding:         pad,
+      borderRadius:    999,
+      background:      light
+        ? 'rgba(255,255,255,0.15)'
+        : `linear-gradient(135deg, ${T.navy}, #243e8f)`,
+      border:          light
+        ? '1px solid rgba(255,255,255,0.25)'
+        : '1px solid rgba(27,47,110,0.4)',
+      backdropFilter:  'blur(8px)',
+      boxShadow:       '0 2px 12px rgba(27,47,110,0.18)',
+    }}>
+      {/* Mini icon */}
+      <span style={{ fontSize: fs + 2 }}>🎓</span>
+
+      {/* ilm */}
+      <span style={{
+        fontSize,
+        fontWeight:  900,
+        color:       T.white,
+        fontFamily:  "'Poppins',sans-serif",
+        letterSpacing: '-0.02em',
+        lineHeight:  1,
+      }}>ilm</span>
+
+      {/* فورج */}
+      <span style={{
+        fontSize:   fs * 0.92,
+        fontWeight: 700,
+        fontFamily: "'Noto Nastaliq Urdu',serif",
+        direction:  'rtl',
+        background: `linear-gradient(135deg, ${T.goldLt}, ${T.goldDk})`,
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor:  'transparent',
+        backgroundClip: 'text',
+        lineHeight: 1,
+      }}>فورج</span>
+
+      {/* PK flag */}
+      <span style={{ fontSize: fs - 2 }}>🇵🇰</span>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════
+   HERO BRAND — large display for landing page
+   Full SVG with premium effects
+════════════════════════════════════════════════════════ */
+export function IlmForgeHeroBrand({ width = 420 }) {
+  const h = width * 0.28;
+  return (
+    <svg width={width} height={h} viewBox={`0 0 ${width} ${h}`} xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="rb-body" x1="60" y1="60" x2="150" y2="190">
-          <stop offset="0%" stopColor="#F8FAFC" /><stop offset="100%" stopColor="#CBD5E1" />
+        <linearGradient id="hero_navy" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%"   stopColor={T.navy}/>
+          <stop offset="100%" stopColor="#243e8f"/>
         </linearGradient>
-        <linearGradient id="rb-face" x1="70" y1="40" x2="130" y2="95">
-          <stop offset="0%" stopColor="#1E293B" /><stop offset="100%" stopColor="#0F172A" />
+        <linearGradient id="hero_gold" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%"   stopColor={T.goldLt}/>
+          <stop offset="50%"  stopColor={T.gold}/>
+          <stop offset="100%" stopColor={T.goldDk}/>
         </linearGradient>
-        <linearGradient id="rb-accent" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#0D9488" /><stop offset="100%" stopColor="#14B8A6" />
-        </linearGradient>
+        <filter id="hero_glow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
       </defs>
 
-      {/* Shadow */}
-      <ellipse cx="100" cy="208" rx="52" ry="9" fill="#0F172A" opacity="0.08" />
+      {/* "ilm" */}
+      <text
+        x="0" y={h * 0.82}
+        fontFamily="'Poppins','Montserrat','Arial Black',sans-serif"
+        fontSize={h * 0.82}
+        fontWeight="900"
+        fill="url(#hero_navy)"
+        letterSpacing="-4"
+      >ilm</text>
 
-      {/* ── Pakistan Flag (in right hand) ── */}
-      <g transform={waving ? 'rotate(-8 168 60)' : ''}>
-        {/* pole */}
-        <rect x="164" y="28" width="4.5" height="118" rx="2.2" fill="#94A3B8" />
-        <circle cx="166.2" cy="26" r="4" fill="#D97706" />
-        {/* flag cloth — waving shape */}
-        <path d="M169 34 C 190 30, 206 38, 212 35 L 212 76 C 206 79, 190 71, 169 75 Z" fill="#01411C" />
-        {/* white hoist bar */}
-        <path d="M169 34 C 172.5 33.4, 176 33.2, 179 33.4 L 179 74.5 C 176 74.3, 172.5 74.4, 169 75 Z" fill="#FFFFFF" />
-        {/* crescent */}
-        <circle cx="194" cy="54" r="9.5" fill="#FFFFFF" />
-        <circle cx="197.5" cy="52.5" r="8" fill="#01411C" />
-        {/* star */}
-        <path d="M201.5 47.5 l1.35 2.9 3.15.36 -2.33 2.15.63 3.1 -2.8-1.56 -2.8 1.56.63-3.1 -2.33-2.15 3.15-.36z" fill="#FFFFFF" />
-      </g>
+      {/* Vertical divider */}
+      <rect x={width * 0.41} y={h * 0.1} width="3" height={h * 0.8}
+            rx="1.5" fill={T.goldDk} opacity="0.5"/>
 
-      {/* ── Right arm (holding flag) ── */}
-      <path d="M138 118 C 152 108, 158 92, 163 72" stroke="url(#rb-accent)" strokeWidth="13" strokeLinecap="round" />
-      <circle cx="164" cy="68" r="10" fill="#E2E8F0" stroke="#94A3B8" strokeWidth="2" />
-
-      {/* ── Left arm (waving hello) ── */}
-      <path d="M62 118 C 48 112, 40 100, 38 88" stroke="url(#rb-accent)" strokeWidth="13" strokeLinecap="round" />
-      <circle cx="37" cy="84" r="10" fill="#E2E8F0" stroke="#94A3B8" strokeWidth="2" />
-
-      {/* ── Body ── */}
-      <rect x="58" y="105" width="84" height="72" rx="24" fill="url(#rb-body)" stroke="#94A3B8" strokeWidth="2" />
-      {/* Chest panel with IlmForge spark */}
-      <rect x="78" y="122" width="44" height="38" rx="12" fill="#0F172A" />
-      <path d="M100 128c2.6 3.4 4.9 5.9 4.9 9a4.9 4.9 0 0 1-9.8 0c0-3.1 2.3-5.6 4.9-9z" fill="#D97706" />
-      <circle cx="100" cy="150" r="3" fill="#14B8A6">
-        <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite" />
-      </circle>
-
-      {/* ── Head ── */}
-      <rect x="62" y="34" width="76" height="62" rx="22" fill="url(#rb-body)" stroke="#94A3B8" strokeWidth="2" />
-      {/* Face screen */}
-      <rect x="70" y="43" width="60" height="44" rx="15" fill="url(#rb-face)" />
-      {/* Eyes — friendly */}
-      <circle cx="88" cy="63" r="6.5" fill="#5EEAD4">
-        <animate attributeName="r" values="6.5;6.5;1.2;6.5" keyTimes="0;0.92;0.96;1" dur="4.5s" repeatCount="indefinite" />
-      </circle>
-      <circle cx="112" cy="63" r="6.5" fill="#5EEAD4">
-        <animate attributeName="r" values="6.5;6.5;1.2;6.5" keyTimes="0;0.92;0.96;1" dur="4.5s" repeatCount="indefinite" />
-      </circle>
-      {/* Smile */}
-      <path d="M90 75 Q 100 82 110 75" stroke="#5EEAD4" strokeWidth="3" strokeLinecap="round" fill="none" />
-      {/* Antenna */}
-      <line x1="100" y1="34" x2="100" y2="22" stroke="#94A3B8" strokeWidth="3.5" strokeLinecap="round" />
-      <circle cx="100" cy="18" r="5.5" fill="#D97706">
-        <animate attributeName="fill" values="#D97706;#F59E0B;#D97706" dur="1.8s" repeatCount="indefinite" />
-      </circle>
-      {/* Ear pods */}
-      <rect x="54" y="55" width="9" height="20" rx="4.5" fill="url(#rb-accent)" />
-      <rect x="137" y="55" width="9" height="20" rx="4.5" fill="url(#rb-accent)" />
-
-      {/* ── Legs ── */}
-      <rect x="72" y="176" width="16" height="24" rx="8" fill="#94A3B8" />
-      <rect x="112" y="176" width="16" height="24" rx="8" fill="#94A3B8" />
-      <ellipse cx="80" cy="202" rx="13" ry="6.5" fill="#64748B" />
-      <ellipse cx="120" cy="202" rx="13" ry="6.5" fill="#64748B" />
+      {/* "فورج" */}
+      <text
+        x={width * 0.97} y={h * 0.8}
+        fontFamily="'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif"
+        fontSize={h * 0.75}
+        fontWeight="700"
+        fill="url(#hero_gold)"
+        textAnchor="end"
+        direction="rtl"
+        filter="url(#hero_glow)"
+      >فورج</text>
     </svg>
   );
 }
 
-export default IlmForgeLogo;
+/* ════════════════════════════════════════════════════════
+   ROBOBUDDY MASCOT — updated with new brand
+════════════════════════════════════════════════════════ */
+export function RoboBuddyMascot({ size = 180, waving = true, className = '' }) {
+  return (
+    <svg width={size} height={size * 1.12} viewBox="0 0 200 224" fill="none" className={className}>
+      <defs>
+        <linearGradient id="rb2_body" x1="60" y1="60" x2="150" y2="200">
+          <stop offset="0%" stopColor="#F1F5F9"/><stop offset="100%" stopColor="#CBD5E1"/>
+        </linearGradient>
+        <linearGradient id="rb2_face" x1="70" y1="40" x2="130" y2="95">
+          <stop offset="0%" stopColor="#1e293b"/><stop offset="100%" stopColor="#0f172a"/>
+        </linearGradient>
+        <linearGradient id="rb2_brand" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={T.navy}/><stop offset="100%" stopColor={T.blue}/>
+        </linearGradient>
+        <linearGradient id="rb2_gold" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={T.goldLt}/><stop offset="100%" stopColor={T.goldDk}/>
+        </linearGradient>
+        <filter id="rb2_shadow">
+          <feDropShadow dx="0" dy="3" stdDeviation="5" floodColor={T.navy} floodOpacity="0.15"/>
+        </filter>
+      </defs>
+
+      {/* Ground shadow */}
+      <ellipse cx="100" cy="215" rx="50" ry="7" fill="#0f172a" opacity="0.07"/>
+
+      {/* ── Pakistan Flag (right hand) ── */}
+      <g transform={waving ? 'rotate(-10 167 58)' : ''}>
+        <rect x="163" y="26" width="4" height="116" rx="2" fill="#94A3B8"/>
+        <circle cx="165" cy="24" r="4" fill="url(#rb2_gold)"/>
+        <path d="M167 33 C 188 29,205 37,211 34 L 211 76 C 205 79,188 71,167 75 Z" fill="#01411C"/>
+        <path d="M167 33 C 171 32,175 32,178 33 L 178 74 C 175 73,171 73,167 75 Z" fill="white"/>
+        <circle cx="192" cy="54" r="9.5" fill="white"/>
+        <circle cx="196" cy="52.5" r="7.8" fill="#01411C"/>
+        <path d="M200 47.5 l1.3 2.9 3.1.35 -2.3 2.1.6 3-2.7-1.5-2.7 1.5.6-3-2.3-2.1 3.1-.35z" fill="white"/>
+      </g>
+
+      {/* Right arm */}
+      <path d="M137 116 C 151 106,157 90,162 70" stroke="url(#rb2_brand)" strokeWidth="13" strokeLinecap="round"/>
+      <circle cx="163" cy="66" r="10" fill="#E2E8F0" stroke="#94A3B8" strokeWidth="2"/>
+
+      {/* Body */}
+      <rect x="58" y="108" width="82" height="80" rx="16" fill="url(#rb2_body)" stroke="#CBD5E1" strokeWidth="2" filter="url(#rb2_shadow)"/>
+
+      {/* Brand strip on body */}
+      <rect x="66" y="140" width="66" height="20" rx="6" fill="url(#rb2_brand)" opacity="0.12"/>
+      <rect x="66" y="140" width="66" height="20" rx="6" fill="none" stroke="url(#rb2_brand)" strokeWidth="1" strokeOpacity="0.3"/>
+      {/* ilm text on body */}
+      <text x="80" y="154" fontFamily="'Poppins',sans-serif" fontSize="10" fontWeight="900" fill={T.navy} opacity="0.7">ilm</text>
+      {/* فورج text on body */}
+      <text x="110" y="153" fontFamily="'Noto Nastaliq Urdu',serif" fontSize="9" fontWeight="700" fill={T.goldDk} textAnchor="middle" direction="rtl">فورج</text>
+
+      {/* Chest LED dots */}
+      <rect x="74" y="120" width="46" height="14" rx="5" fill="url(#rb2_brand)" opacity="0.1" stroke="url(#rb2_brand)" strokeWidth="1" strokeOpacity="0.3"/>
+      <circle cx="85" cy="127" r="3.5" fill="url(#rb2_brand)" opacity="0.5"/>
+      <circle cx="99" cy="127" r="3.5" fill="url(#rb2_gold)" opacity="0.8"/>
+      <circle cx="113" cy="127" r="3.5" fill="#15803d" opacity="0.6"/>
+
+      {/* Left arm */}
+      <path d="M60 126 C 44 123,37 132,35 142" stroke="#CBD5E1" strokeWidth="13" strokeLinecap="round"/>
+      <circle cx="34" cy="145" r="10" fill="#E2E8F0" stroke="#94A3B8" strokeWidth="2"/>
+
+      {/* Legs */}
+      <rect x="70"  y="185" width="24" height="30" rx="9" fill="#CBD5E1"/>
+      <rect x="106" y="185" width="24" height="30" rx="9" fill="#CBD5E1"/>
+      <rect x="70"  y="205" width="24" height="10" rx="5" fill="#94A3B8"/>
+      <rect x="106" y="205" width="24" height="10" rx="5" fill="#94A3B8"/>
+
+      {/* Head */}
+      <rect x="56" y="42" width="88" height="70" rx="20" fill="url(#rb2_face)" stroke="url(#rb2_brand)" strokeWidth="2.5" filter="url(#rb2_shadow)"/>
+
+      {/* Antenna */}
+      <line x1="100" y1="42" x2="100" y2="24" stroke="#94A3B8" strokeWidth="3.5" strokeLinecap="round"/>
+      <circle cx="100" cy="20" r="7" fill="url(#rb2_gold)"/>
+      <circle cx="100" cy="20" r="3.5" fill={T.goldLt} opacity="0.8"/>
+
+      {/* Eyes */}
+      <rect x="68" y="60" width="24" height="17" rx="8.5" fill="url(#rb2_brand)"/>
+      <rect x="108" y="60" width="24" height="17" rx="8.5" fill="url(#rb2_brand)"/>
+      {/* Iris */}
+      <circle cx="80" cy="68.5" r="5.5" fill="white"/>
+      <circle cx="120" cy="68.5" r="5.5" fill="white"/>
+      {/* Pupil */}
+      <circle cx="81.5" cy="67.5" r="2.8" fill={T.navy}/>
+      <circle cx="121.5" cy="67.5" r="2.8" fill={T.navy}/>
+      {/* Shine */}
+      <circle cx="83" cy="66.2" r="1.2" fill="white" opacity="0.9"/>
+      <circle cx="123" cy="66.2" r="1.2" fill="white" opacity="0.9"/>
+
+      {/* Smile */}
+      <path d="M82 88 Q 100 100 118 88" stroke="url(#rb2_gold)" strokeWidth="3.5" strokeLinecap="round" fill="none"/>
+
+      {/* Ear bolts */}
+      <circle cx="56" cy="76" r="6" fill="#94A3B8" stroke="#CBD5E1" strokeWidth="2"/>
+      <circle cx="144" cy="76" r="6" fill="#94A3B8" stroke="#CBD5E1" strokeWidth="2"/>
+    </svg>
+  );
+}
