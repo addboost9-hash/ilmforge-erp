@@ -5,7 +5,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 15000,   // 15s — fail fast so UI doesn't hang
+  timeout: 20000, // 20s for production (Render cold starts)
 });
 
 // Request interceptor — attach token

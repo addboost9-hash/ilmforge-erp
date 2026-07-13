@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import api from '../../api/client';
 import useAuthStore from '../../store/auth.store';
+import { useTranslation } from '../../hooks/useTranslation';
 import {
   Users, Briefcase, DollarSign, AlertTriangle, CheckCircle, Calendar,
   ChevronRight, RefreshCw, ClipboardList, CreditCard, UserPlus,
@@ -148,6 +149,7 @@ function buildAttChartData(stats) {
 export default function DashboardPage() {
   const nav = useNavigate();
   const { user, school: authSchool } = useAuthStore();
+  const { t } = useTranslation();
 
   /* ── Main dashboard stats ── */
   const { data: stats, isLoading, refetch } = useQuery({
@@ -258,42 +260,42 @@ export default function DashboardPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 20 }}>
         <StatCard
           value={isLoading ? '…' : totalStudents}
-          label="Total Students"
+          label={t('dashboard','totalStudents')}
           Icon={Users}
           color="#00a65a"
           href="/hub/students"
         />
         <StatCard
           value={isLoading ? '…' : totalStaff}
-          label="Total Staff"
+          label={t('dashboard','totalStaff')}
           Icon={Briefcase}
           color="#0073b7"
           href="/hub/staff"
         />
         <StatCard
           value={isLoading ? '…' : Rs(feeToday)}
-          label="Fee Collected Today"
+          label={t('dashboard','feeToday')}
           Icon={DollarSign}
           color="#00c0ef"
           href="/fees"
         />
         <StatCard
           value={isLoading ? '…' : feeDefaulters}
-          label="Fee Defaulters"
+          label={t('dashboard','defaulters')}
           Icon={AlertTriangle}
           color="#dd4b39"
           href="/fees/defaulters"
         />
         <StatCard
           value={isLoading ? '…' : presentToday}
-          label="Present Today"
+          label={t('dashboard','presentToday')}
           Icon={CheckCircle}
           color="#605ca8"
           href="/hub/attendance"
         />
         <StatCard
           value={isLoading ? '…' : pendingLeaves}
-          label="Pending Leaves"
+          label={t('dashboard','pendingLeaves')}
           Icon={Calendar}
           color="#f39c12"
           href="/leaves"
@@ -362,7 +364,7 @@ export default function DashboardPage() {
             <ActionTile label="Academic Calendar"  to="/academic-calendar"         Icon={FileText}      bg="#fff7ed" color="#d97706" />
             <ActionTile label="Send SMS"           to="/hub/communication?tab=sms" Icon={MessageSquare} bg="#fffbeb" color="#f39c12" />
             <ActionTile label="Exam Results"       to="/hub/exams"                 Icon={FileText}      bg="#fef2f2" color="#dd4b39" />
-            <ActionTile label="Fee Defaulters"     to="/fees/defaulters"           Icon={ClipboardList} bg="#fef9c3" color="#b45309" />
+            <ActionTile label={t('dashboard','defaulters')}     to="/fees/defaulters"           Icon={ClipboardList} bg="#fef9c3" color="#b45309" />
           </div>
         </div>
       </div>

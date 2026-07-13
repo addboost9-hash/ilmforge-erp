@@ -190,14 +190,16 @@ const qc = new QueryClient({
   defaultOptions: {
     queries: {
       retry:                1,
-      staleTime:            5 * 60_000,   // 5 min — data fresh, no re-fetch
-      gcTime:               15 * 60_000,  // 15 min — keep in memory
-      refetchOnWindowFocus: false,         // never refetch on tab focus
-      refetchOnReconnect:   false,         // never refetch on reconnect
-      refetchInterval:      false,         // no polling
+      staleTime:            5 * 60_000,   // 5 min cache
+      gcTime:               20 * 60_000,  // 20 min memory
+      refetchOnWindowFocus: false,
+      refetchOnReconnect:   false,
+      refetchInterval:      false,
+      networkMode:          'offlineFirst', // use cache when offline
     },
     mutations: {
-      retry: 0,                            // mutations don't retry
+      retry:       0,
+      networkMode: 'always',
     },
   },
 });

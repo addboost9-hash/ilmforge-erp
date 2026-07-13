@@ -5,6 +5,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import useAuthStore from '../store/auth.store';
+import useLanguageStore from '../store/language.store';
+import { LANGUAGES, t as i18nT } from '../i18n/translations';
 import api from '../api/client';
 import {
   LayoutDashboard, Users, GraduationCap,
@@ -95,6 +97,79 @@ const canAccessItem = (item, role) => {
 };
 
 /* ═══════════════════════════════════════════════════
+   LANGUAGE TOGGLE COMPONENT
+═══════════════════════════════════════════════════ */
+function LanguageToggle() {
+  const { lang, setLang } = useLanguageStore();
+  const [open, setOpen] = useState(false);
+  const current = LANGUAGES.find(l => l.code === lang) || LANGUAGES[0];
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Change Language / زبان تبدیل کریں"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '5px 10px', borderRadius: 6,
+          border: '1px solid #dee2e6', background: open ? '#e8f4fd' : '#fff',
+          cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
+          color: '#374151', transition: 'all .12s', whiteSpace: 'nowrap',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor='#0073b7'; e.currentTarget.style.background='#e8f4fd'; }}
+        onMouseLeave={e => { if(!open){ e.currentTarget.style.borderColor='#dee2e6'; e.currentTarget.style.background='#fff'; }}}
+      >
+        <span style={{ fontSize: 16 }}>{current.flag}</span>
+        <span>{current.nativeLabel}</span>
+        <span style={{ fontSize: 10, color: '#94a3b8' }}>▼</span>
+      </button>
+
+      {open && (
+        <>
+          {/* Backdrop */}
+          <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setOpen(false)} />
+          {/* Dropdown */}
+          <div style={{
+            position: 'absolute', top: '110%', right: 0, zIndex: 1000,
+            background: 'white', border: '1px solid #e2e8f0', borderRadius: 10,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: 180, overflow: 'hidden',
+          }}>
+            <div style={{ padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.7px', borderBottom: '1px solid #f1f5f9' }}>
+              Language / زبان
+            </div>
+            {LANGUAGES.map(l => (
+              <button key={l.code} onClick={() => { setLang(l.code); setOpen(false); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  width: '100%', padding: '10px 14px', border: 'none',
+                  background: lang === l.code ? '#eff6ff' : 'transparent',
+                  cursor: 'pointer', textAlign: 'left', transition: 'background .12s',
+                  borderLeft: lang === l.code ? '3px solid #0073b7' : '3px solid transparent',
+                }}
+                onMouseEnter={e => { if(lang !== l.code) e.currentTarget.style.background = '#f8fafc'; }}
+                onMouseLeave={e => { if(lang !== l.code) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <span style={{ fontSize: 20 }}>{l.flag}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: lang === l.code ? 700 : 600, color: lang === l.code ? '#0073b7' : '#374151' }}>
+                    {l.nativeLabel}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#94a3b8' }}>{l.label}</div>
+                </div>
+                {lang === l.code && <span style={{ marginLeft: 'auto', color: '#0073b7', fontSize: 14 }}>✓</span>}
+              </button>
+            ))}
+            <div style={{ padding: '8px 12px', fontSize: 11, color: '#94a3b8', borderTop: '1px solid #f1f5f9', background: '#fafafa' }}>
+              RTL automatically enabled for اردو
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
    NAV ITEM COMPONENT
 ═══════════════════════════════════════════════════ */
 function NavItem({ item, collapsed, onNavigate }) {
@@ -152,14 +227,61 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  /* Sidebar state */
-  const [isPinnedOpen, setIsPinnedOpen]     = useState(false);
+  /* Sidebar state — load user preference from localStorage */
+  const [isPinnedOpen, setIsPinnedOpen] = useState(() => {
+    const saved = localStorage.getItem('sb_pinned');
+    return saved === null ? true : saved === 'true'; // default: expanded
+  });
   const [isHoverExpanded, setIsHoverExpanded] = useState(false);
-  const [isDesktop, setIsDesktop]           = useState(() =>
+  const [isDesktop, setIsDesktop] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth > 768 : true
   );
-  const [mobileOpen, setMobileOpen]         = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  /* Auto-collapse refs */
+  const inactivityTimerRef = useRef(null);
+  const sidebarRef         = useRef(null);
+  const isMouseInSidebar   = useRef(false);
+
+  /* Save pin preference */
+  const togglePin = useCallback(() => {
+    setIsPinnedOpen(v => {
+      const next = !v;
+      localStorage.setItem('sb_pinned', String(next));
+      return next;
+    });
+  }, []);
+
+  /* 5-second inactivity auto-collapse — only when pinned open */
+  const resetInactivityTimer = useCallback(() => {
+    if (!isDesktop) return;
+    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    inactivityTimerRef.current = setTimeout(() => {
+      // Auto-collapse only if mouse is NOT inside sidebar
+      if (!isMouseInSidebar.current) {
+        setIsPinnedOpen(prev => {
+          if (prev) {
+            localStorage.setItem('sb_pinned', 'false');
+            return false;
+          }
+          return prev;
+        });
+      }
+    }, 5000);
+  }, [isDesktop]);
+
+  /* Track global mouse movement for inactivity */
+  useEffect(() => {
+    if (!isDesktop) return;
+    const onMove = () => resetInactivityTimer();
+    document.addEventListener('mousemove', onMove, { passive: true });
+    resetInactivityTimer(); // start timer on mount
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    };
+  }, [isDesktop, resetInactivityTimer]);
 
   /* Search state */
   const [searchQuery,   setSearchQuery]   = useState('');
@@ -181,6 +303,7 @@ export default function AdminLayout() {
   const SW = isDesktop ? (collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_WIDTH) : SIDEBAR_WIDTH;
 
   const role = user?.role || '';
+  const { lang } = useLanguageStore();
 
   const navForRole = useMemo(() =>
     NAV
@@ -200,16 +323,110 @@ export default function AdminLayout() {
     ? localStorage.getItem('schoolLogoPreview')
     : null;
 
-  /* ── Debounced search ── */
+  /* ── Module index for smart search ── */
+  const MODULE_INDEX = useMemo(() => [
+    // Students
+    { label: 'All Students', desc: 'View student roster', path: '/hub/students', icon: '👨‍🎓', group: 'Students' },
+    { label: 'Admit New Student', desc: 'Admission wizard', path: '/hub/students?tab=admit', icon: '📋', group: 'Students' },
+    { label: 'Bulk Import Students', desc: 'Import from Excel/CSV', path: '/students/bulk-import', icon: '📁', group: 'Students' },
+    { label: 'Admissions CRM', desc: 'Lead pipeline', path: '/admissions/crm', icon: '🎯', group: 'Students' },
+    { label: 'Student Promotion', desc: 'Promote to next class', path: '/students/promote', icon: '⬆️', group: 'Students' },
+    { label: 'Student Health Records', desc: 'Medical info', path: '/student-health', icon: '🏥', group: 'Students' },
+    { label: 'Gate Passes', desc: 'Student exit management', path: '/gate-passes', icon: '🔲', group: 'Students' },
+    // Fees
+    { label: 'Collect Fee', desc: 'Receive fee payment', path: '/hub/fees?tab=collect', icon: '💰', group: 'Fees' },
+    { label: 'Generate Monthly Fee', desc: 'Create invoices', path: '/hub/fees?tab=generate', icon: '📄', group: 'Fees' },
+    { label: 'Fee Defaulters', desc: 'Unpaid fees list', path: '/fees/defaulters', icon: '⚠️', group: 'Fees' },
+    { label: 'Fee Structure', desc: 'Set fee per class', path: '/fees/structure', icon: '🗂️', group: 'Fees' },
+    { label: 'Fee Voucher Download', desc: 'Public fee slip', path: '/fee-voucher', icon: '🎫', group: 'Fees' },
+    { label: 'Parent Wallet', desc: 'Advance credit system', path: '/fees/parent-wallet', icon: '💳', group: 'Fees' },
+    { label: 'EMI Plans', desc: 'Instalment schedules', path: '/fees/emi', icon: '📅', group: 'Fees' },
+    // Attendance
+    { label: 'Mark Attendance', desc: 'Daily class attendance', path: '/attendance', icon: '✅', group: 'Attendance' },
+    { label: 'Barcode Attendance', desc: 'Scan ID cards', path: '/attendance/barcode', icon: '📷', group: 'Attendance' },
+    { label: 'Attendance Report', desc: 'View reports', path: '/attendance/report', icon: '📊', group: 'Attendance' },
+    { label: 'Annual Attendance Calendar', desc: 'P/A/H full year', path: '/reports/attendance-calendar', icon: '🗓️', group: 'Attendance' },
+    // Exams
+    { label: 'Exams & Tests', desc: 'Create and manage exams', path: '/hub/exams', icon: '📝', group: 'Exams' },
+    { label: 'Enter Marks', desc: 'Subject-wise marks', path: '/exams', icon: '✏️', group: 'Exams' },
+    { label: 'Merit List', desc: 'Rank list', path: '/exams/merit-list', icon: '🏆', group: 'Exams' },
+    { label: 'BISE Result Card', desc: 'Pakistani board format', path: '/exams/bise-result-card', icon: '🎓', group: 'Exams' },
+    { label: 'Exam Timetable', desc: 'Date sheet', path: '/exams/timetable', icon: '📅', group: 'Exams' },
+    // Staff
+    { label: 'All Staff', desc: 'Teaching & non-teaching', path: '/staff', icon: '👨‍🏫', group: 'Staff' },
+    { label: 'Add New Staff', desc: 'Register staff member', path: '/staff/new', icon: '➕', group: 'Staff' },
+    { label: 'Generate Salary', desc: 'Monthly payroll', path: '/salary', icon: '💵', group: 'Staff' },
+    { label: 'Staff Attendance', desc: 'Daily staff attendance', path: '/attendance/staff', icon: '✅', group: 'Staff' },
+    // Reports
+    { label: 'Reports Hub (110+)', desc: 'All reports', path: '/reports-hub', icon: '📊', group: 'Reports' },
+    { label: 'Daily Balance Sheet', desc: 'Finance summary', path: '/accounting/balancesheet', icon: '📒', group: 'Reports' },
+    { label: 'Student Info Reports', desc: 'Printable lists', path: '/students/info-reports', icon: '📋', group: 'Reports' },
+    { label: 'Academic Calendar', desc: 'Events & holidays', path: '/academic-calendar', icon: '📅', group: 'Reports' },
+    // Settings
+    { label: 'School Profile', desc: 'Logo & basic info', path: '/settings', icon: '🏫', group: 'Settings' },
+    { label: 'Classes & Sections', desc: 'Grade management', path: '/settings/classes', icon: '🏛️', group: 'Settings' },
+    { label: 'SMS Templates', desc: '15+ auto templates', path: '/settings/sms-templates', icon: '📱', group: 'Settings' },
+    { label: 'Admin Accounts', desc: 'Manage admins', path: '/settings/admins', icon: '👤', group: 'Settings' },
+    { label: 'Backup & Restore', desc: 'Database export', path: '/settings/backup', icon: '💾', group: 'Settings' },
+    // Notifications
+    { label: 'Send SMS', desc: 'Bulk SMS to parents', path: '/notifications/sms', icon: '💬', group: 'Communication' },
+    { label: 'WhatsApp Notifications', desc: 'Bulk WhatsApp', path: '/notifications/whatsapp', icon: '📲', group: 'Communication' },
+    { label: 'Push Notifications', desc: 'FCM push alerts', path: '/push', icon: '🔔', group: 'Communication' },
+    { label: 'Announcements', desc: 'School-wide notices', path: '/announcements', icon: '📢', group: 'Communication' },
+    // Portals
+    { label: 'Parent Portal Setup', desc: 'Send credentials', path: '/portal-management', icon: '👪', group: 'Portals' },
+    { label: 'Homework Diary', desc: 'Daily homework', path: '/homework/diary', icon: '📚', group: 'Academics' },
+    { label: 'Timetable', desc: 'Class schedule', path: '/timetable', icon: '🕐', group: 'Academics' },
+    { label: 'Library', desc: 'Book management', path: '/library', icon: '📖', group: 'Academics' },
+    { label: 'Transport', desc: 'Bus routes', path: '/transport', icon: '🚌', group: 'Operations' },
+    { label: 'Smart Workflow Hub', desc: 'Admission to leaving cycle', path: '/workflow', icon: '🔄', group: 'Navigation' },
+  ], []);
+
+  /* Recent actions — stored in localStorage */
+  const getRecentActions = useCallback(() => {
+    try { return JSON.parse(localStorage.getItem('ilm_recent_search') || '[]').slice(0, 4); } catch { return []; }
+  }, []);
+
+  const saveRecentAction = useCallback((item) => {
+    try {
+      const existing = JSON.parse(localStorage.getItem('ilm_recent_search') || '[]');
+      const updated = [item, ...existing.filter(e => e.path !== item.path)].slice(0, 8);
+      localStorage.setItem('ilm_recent_search', JSON.stringify(updated));
+    } catch {}
+  }, []);
+
+  /* ── Debounced search (students/staff + module suggestions) ── */
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
 
-    if (searchQuery.length < 2) {
+    if (searchQuery.length < 1) {
       setShowResults(false);
-      setSearchResults({ students: [], staff: [] });
+      setSearchResults({ students: [], staff: [], modules: [], recent: getRecentActions() });
       return;
     }
 
+    if (searchQuery.length < 2) {
+      // Show recent + top module matches immediately
+      const q = searchQuery.toLowerCase();
+      const modules = MODULE_INDEX.filter(m =>
+        m.label.toLowerCase().includes(q) || m.group.toLowerCase().includes(q)
+      ).slice(0, 5);
+      setSearchResults({ students: [], staff: [], modules, recent: getRecentActions() });
+      setShowResults(true);
+      return;
+    }
+
+    // Module search is instant (client-side)
+    const q = searchQuery.toLowerCase();
+    const modules = MODULE_INDEX.filter(m =>
+      m.label.toLowerCase().includes(q) ||
+      m.desc.toLowerCase().includes(q) ||
+      m.group.toLowerCase().includes(q)
+    ).slice(0, 6);
+    setSearchResults(prev => ({ ...prev, modules }));
+    setShowResults(true);
+
+    // API search for students/staff (debounced)
     searchDebounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
@@ -219,22 +436,22 @@ export default function AdminLayout() {
         ]);
         setSearchResults({
           students: studentsRes.status === 'fulfilled'
-            ? (studentsRes.value.data?.data || studentsRes.value.data || [])
-            : [],
+            ? (studentsRes.value.data?.data || []) : [],
           staff: staffRes.status === 'fulfilled'
-            ? (staffRes.value.data?.data || staffRes.value.data || [])
-            : [],
+            ? (staffRes.value.data?.data || []) : [],
+          modules,
+          recent: [],
         });
         setShowResults(true);
       } catch {
-        setSearchResults({ students: [], staff: [] });
+        setSearchResults(prev => ({ ...prev, students: [], staff: [] }));
       } finally {
         setSearching(false);
       }
-    }, 300);
+    }, 250);
 
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [searchQuery]);
+  }, [searchQuery, MODULE_INDEX, getRecentActions]);
 
   /* ── Click outside → close search ── */
   useEffect(() => {
@@ -247,18 +464,27 @@ export default function AdminLayout() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  /* ── Escape → close search ── */
+  /* ── Keyboard: Escape close + Ctrl+K focus search ── */
+  const searchInputRef = useRef(null);
   useEffect(() => {
     const handler = (e) => {
-      if (e.key === 'Escape') { setShowResults(false); setSearchQuery(''); }
+      if (e.key === 'Escape') { setShowResults(false); setSearchQuery(''); searchInputRef.current?.blur(); }
+      // Ctrl+K or Cmd+K — focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setShowResults(true);
+        setSearchResults(prev => ({ ...prev, recent: getRecentActions() }));
+      }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, []);
+  }, [getRecentActions]);
 
-  const handleSearchResultClick = (path) => {
+  const handleSearchResultClick = (path, item) => {
     setShowResults(false);
     setSearchQuery('');
+    if (item) saveRecentAction(item);
     navigate(path);
   };
 
@@ -294,15 +520,24 @@ export default function AdminLayout() {
     if (mobileOpen) setMobileOpen(false);
   }, [mobileOpen]);
 
-  const hasResults = searchResults.students.length > 0 || searchResults.staff.length > 0;
+  const hasResults = searchResults.students?.length > 0 || searchResults.staff?.length > 0
+    || searchResults.modules?.length > 0 || searchResults.recent?.length > 0;
 
-  /* ── Breadcrumb page label ── */
+  /* ── Breadcrumb page label — translatable ── */
   const pageMap = {
-    '/dashboard': 'Dashboard', '/students': 'Students', '/admissions': 'Admissions',
-    '/fees': 'Fee Management', '/attendance': 'Attendance', '/staff': 'Staff',
-    '/exams': 'Exams', '/salary': 'Salary', '/expenses': 'Expenses',
-    '/reports': 'Reports', '/settings': 'Settings', '/profile': 'My Profile',
-    '/library': 'Library',
+    '/dashboard':  i18nT('dashboard','title',lang),
+    '/students':   i18nT('students','title',lang),
+    '/admissions': i18nT('students','admitStudent',lang),
+    '/fees':       i18nT('fees','title',lang),
+    '/attendance': i18nT('attendance','title',lang),
+    '/staff':      i18nT('staff','title',lang),
+    '/exams':      i18nT('exams','title',lang),
+    '/salary':     i18nT('staff','salary',lang),
+    '/expenses':   i18nT('common','total',lang),
+    '/reports':    i18nT('nav','reports',lang),
+    '/settings':   i18nT('settings','title',lang),
+    '/profile':    i18nT('common','profile',lang),
+    '/library':    i18nT('nav','library',lang),
   };
   const pageLabel = pageMap[location.pathname]
     || location.pathname.split('/').filter(Boolean).pop()?.replace(/-/g, ' ')
@@ -334,13 +569,23 @@ export default function AdminLayout() {
 
       {/* ════════ SIDEBAR ════════ */}
       <aside
+        ref={sidebarRef}
         className={`sidebar${collapsed ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}
-        onMouseEnter={() => { if (isDesktop && !isPinnedOpen) setIsHoverExpanded(true); }}
-        onMouseLeave={() => { if (isDesktop && !isPinnedOpen) setIsHoverExpanded(false); }}
+        onMouseEnter={() => {
+          isMouseInSidebar.current = true;
+          if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+          if (isDesktop && !isPinnedOpen) setIsHoverExpanded(true);
+        }}
+        onMouseLeave={() => {
+          isMouseInSidebar.current = false;
+          if (isDesktop && !isPinnedOpen) setIsHoverExpanded(false);
+          resetInactivityTimer(); // restart timer when mouse leaves sidebar
+        }}
         style={{
           width: SW,
           background: '#1B2F6E',
           boxShadow: '3px 0 16px rgba(5,20,60,0.35)',
+          transition: 'width 0.28s cubic-bezier(0.4,0,0.2,1)',
         }}
       >
         {/* ── Brand area ── */}
@@ -513,17 +758,24 @@ export default function AdminLayout() {
           {/* Left: hamburger + breadcrumb */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
-              aria-label="Toggle sidebar"
-              onClick={() => isDesktop ? setIsPinnedOpen(v => !v) : setMobileOpen(o => !o)}
+              aria-label={isPinnedOpen ? 'Collapse sidebar (auto-collapses after 5s inactivity)' : 'Pin sidebar open'}
+              title={isPinnedOpen ? '📌 Pinned — click to unpin (auto-collapses in 5s)' : '📌 Click to pin sidebar'}
+              onClick={() => isDesktop ? togglePin() : setMobileOpen(o => !o)}
               style={{
                 width: 36, height: 36, borderRadius: 6,
-                border: '1px solid #dee2e6',
-                background: '#fff', cursor: 'pointer',
+                border: `1px solid ${isPinnedOpen && isDesktop ? '#0073b7' : '#dee2e6'}`,
+                background: isPinnedOpen && isDesktop ? '#e8f4fd' : '#fff',
+                cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#666', transition: 'all .12s', flexShrink: 0,
+                color: isPinnedOpen && isDesktop ? '#0073b7' : '#666',
+                transition: 'all .12s', flexShrink: 0,
               }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#0073b7'; e.currentTarget.style.color = '#0073b7'; e.currentTarget.style.background = '#e8f4fd'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#dee2e6'; e.currentTarget.style.color = '#666'; e.currentTarget.style.background = '#fff'; }}
+              onMouseLeave={e => {
+                if (!(isPinnedOpen && isDesktop)) {
+                  e.currentTarget.style.borderColor = '#dee2e6'; e.currentTarget.style.color = '#666'; e.currentTarget.style.background = '#fff';
+                }
+              }}
             >
               <Menu size={17} />
             </button>
@@ -542,13 +794,15 @@ export default function AdminLayout() {
           <div
             className="hdr-search"
             ref={searchContainerRef}
-            style={{ position: 'relative', flex: '0 0 300px' }}
+            style={{ position: 'relative', flex: '0 0 340px' }}
           >
             <Search size={14} className="hdr-search-icon" />
             <input
-              placeholder="Search students, staff..."
+              ref={searchInputRef}
+              placeholder="Search students, staff, modules... (Ctrl+K)"
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={e => { setSearchQuery(e.target.value); if (e.target.value.length < 1) { setShowResults(false); } }}
+              onFocus={() => { setShowResults(true); if (!searchQuery) setSearchResults(prev => ({ ...prev, recent: getRecentActions() })); }}
               aria-label="Global search"
               aria-autocomplete="list"
               aria-expanded={showResults}
@@ -580,128 +834,160 @@ export default function AdminLayout() {
               </button>
             )}
 
-            {/* Search dropdown */}
+            {/* ══ INTELLIGENT SEARCH DROPDOWN ══ */}
             {showResults && (
               <div
                 role="listbox"
                 aria-label="Search results"
                 style={{
-                  position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
-                  background: '#fff', border: '1px solid #dee2e6',
-                  borderRadius: 6, boxShadow: '0 10px 28px rgba(0,0,0,0.12)',
-                  zIndex: 500, overflow: 'hidden', maxHeight: 380, overflowY: 'auto',
+                  position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0,
+                  background: '#fff', border: '1px solid #e2e8f0',
+                  borderRadius: 12, boxShadow: '0 16px 48px rgba(0,0,0,0.14)',
+                  zIndex: 500, overflow: 'hidden', maxHeight: 480, overflowY: 'auto',
+                  minWidth: 380,
                 }}
               >
-                {!hasResults ? (
-                  <div style={{ padding: '20px 16px', textAlign: 'center', color: '#999', fontSize: 13 }}>
-                    No results found for "{searchQuery}"
+                {/* ── Search header ── */}
+                {searchQuery && (
+                  <div style={{ padding:'8px 14px 6px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #f1f5f9', background:'#fafbff' }}>
+                    <span style={{ fontSize:11, color:'#94a3b8', fontWeight:600 }}>
+                      {searching ? '🔍 Searching…' : `Results for "${searchQuery}"`}
+                    </span>
+                    <span style={{ fontSize:10, color:'#cbd5e1' }}>ESC to close</span>
                   </div>
-                ) : (
-                  <>
-                    {searchResults.students.length > 0 && (
-                      <div>
-                        <div style={{
-                          padding: '8px 14px 4px',
-                          fontSize: 10, fontWeight: 800, letterSpacing: 1.2,
-                          color: '#999', textTransform: 'uppercase',
-                          borderBottom: '1px solid #f1f3f5', background: '#f8f9fa',
-                        }}>
-                          Students
-                        </div>
-                        {searchResults.students.map(student => (
-                          <button
-                            key={student._id || student.id}
-                            role="option"
-                            onClick={() => handleSearchResultClick(`/students/${student._id || student.id}`)}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: 10,
-                              width: '100%', padding: '9px 14px',
-                              background: 'none', border: 'none',
-                              cursor: 'pointer', textAlign: 'left',
-                              borderBottom: '1px solid #f9fafb',
-                              transition: 'background .1s', fontFamily: 'inherit',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#e8f4fd'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
-                          >
-                            <div style={{
-                              width: 32, height: 32, borderRadius: '50%',
-                              background: 'linear-gradient(135deg,#0073b7,#00c0ef)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              color: '#fff', fontWeight: 800, fontSize: 12, flexShrink: 0,
-                            }}>
-                              {(student.name || student.fullName || 'S')[0].toUpperCase()}
-                            </div>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {student.name || student.fullName || 'Unknown'}
-                              </div>
-                              <div style={{ fontSize: 11, color: '#999', marginTop: 1 }}>
-                                {student.rollNo ? `Roll: ${student.rollNo}` : ''}
-                                {student.rollNo && student.class ? ' · ' : ''}
-                                {student.class
-                                  ? (typeof student.class === 'object' ? student.class.name : student.class)
-                                  : ''}
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {searchResults.staff.length > 0 && (
-                      <div>
-                        <div style={{
-                          padding: '8px 14px 4px',
-                          fontSize: 10, fontWeight: 800, letterSpacing: 1.2,
-                          color: '#999', textTransform: 'uppercase',
-                          borderBottom: '1px solid #f1f3f5', background: '#f8f9fa',
-                        }}>
-                          Staff
-                        </div>
-                        {searchResults.staff.map(member => (
-                          <button
-                            key={member._id || member.id}
-                            role="option"
-                            onClick={() => handleSearchResultClick(`/staff/${member._id || member.id}`)}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: 10,
-                              width: '100%', padding: '9px 14px',
-                              background: 'none', border: 'none',
-                              cursor: 'pointer', textAlign: 'left',
-                              borderBottom: '1px solid #f9fafb',
-                              transition: 'background .1s', fontFamily: 'inherit',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#fff3cd'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
-                          >
-                            <div style={{
-                              width: 32, height: 32, borderRadius: '50%',
-                              background: 'linear-gradient(135deg,#f39c12,#d68910)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              color: '#fff', fontWeight: 800, fontSize: 12, flexShrink: 0,
-                            }}>
-                              {(member.name || member.fullName || 'T')[0].toUpperCase()}
-                            </div>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {member.name || member.fullName || 'Unknown'}
-                              </div>
-                              <div style={{ fontSize: 11, color: '#999', marginTop: 1 }}>
-                                {member.designation || member.role || 'Staff'}
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </>
                 )}
+
+                {/* ── Recent actions (shown when no query) ── */}
+                {!searchQuery && searchResults.recent?.length > 0 && (
+                  <div>
+                    <div style={{ padding:'8px 14px 5px', fontSize:10, fontWeight:800, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.8px', background:'#fafbff', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', gap:6 }}>
+                      🕐 Recent
+                    </div>
+                    {searchResults.recent.map((item, i) => (
+                      <button key={i} role="option"
+                        onClick={() => handleSearchResultClick(item.path, item)}
+                        style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'8px 14px', background:'none', border:'none', cursor:'pointer', textAlign:'left', borderBottom:'1px solid #f8fafc', fontFamily:'inherit', transition:'background .1s' }}
+                        onMouseEnter={e => { e.currentTarget.style.background='#f8faff'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background='none'; }}>
+                        <span style={{ fontSize:18, flexShrink:0 }}>{item.icon || '📄'}</span>
+                        <div>
+                          <div style={{ fontSize:12.5, fontWeight:600, color:'#374151' }}>{item.label}</div>
+                          <div style={{ fontSize:11, color:'#94a3b8' }}>{item.group}</div>
+                        </div>
+                        <ChevronRight size={12} color="#cbd5e1" style={{ marginLeft:'auto' }}/>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── Module suggestions ── */}
+                {searchResults.modules?.length > 0 && (
+                  <div>
+                    <div style={{ padding:'8px 14px 5px', fontSize:10, fontWeight:800, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.8px', background:'#fafbff', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', gap:6 }}>
+                      ⚡ Features & Modules
+                    </div>
+                    {searchResults.modules.map((m, i) => (
+                      <button key={i} role="option"
+                        onClick={() => handleSearchResultClick(m.path, m)}
+                        style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'9px 14px', background:'none', border:'none', cursor:'pointer', textAlign:'left', borderBottom:'1px solid #f8fafc', fontFamily:'inherit', transition:'background .1s' }}
+                        onMouseEnter={e => { e.currentTarget.style.background='#eff6ff'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background='none'; }}>
+                        <div style={{ width:32, height:32, borderRadius:8, background:'#eff6ff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+                          {m.icon}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:700, color:'#1e3a5f', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.label}</div>
+                          <div style={{ fontSize:11, color:'#94a3b8' }}>{m.desc} · <span style={{ color:'#bfdbfe' }}>{m.group}</span></div>
+                        </div>
+                        <ChevronRight size={12} color="#bfdbfe" style={{ flexShrink:0 }}/>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── Students ── */}
+                {searchResults.students?.length > 0 && (
+                  <div>
+                    <div style={{ padding:'8px 14px 5px', fontSize:10, fontWeight:800, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.8px', background:'#fafbff', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', gap:6 }}>
+                      👨‍🎓 Students
+                    </div>
+                    {searchResults.students.map(student => {
+                      const sItem = { label: student.name || 'Student', icon:'👨‍🎓', group:'Students', path:`/students/${student.id}` };
+                      return (
+                        <button key={student._id || student.id} role="option"
+                          onClick={() => handleSearchResultClick(`/students/${student._id || student.id}`, sItem)}
+                          style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'9px 14px', background:'none', border:'none', cursor:'pointer', textAlign:'left', borderBottom:'1px solid #f8fafc', fontFamily:'inherit', transition:'background .1s' }}
+                          onMouseEnter={e => { e.currentTarget.style.background='#e8f4fd'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background='none'; }}>
+                          <div style={{ width:34, height:34, borderRadius:'50%', background:'linear-gradient(135deg,#1B2F6E,#0073b7)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:13, flexShrink:0 }}>
+                            {(student.name || 'S')[0].toUpperCase()}
+                          </div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:'#333', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{student.name}</div>
+                            <div style={{ fontSize:11, color:'#94a3b8' }}>
+                              {student.rollNo ? `Roll: ${student.rollNo}` : ''}
+                              {student.rollNo && student.class ? ' · ' : ''}
+                              {student.class ? (typeof student.class === 'object' ? student.class.name : student.class) : ''}
+                            </div>
+                          </div>
+                          <span style={{ fontSize:11, background:'#dbeafe', color:'#1d4ed8', padding:'2px 7px', borderRadius:99, fontWeight:600, flexShrink:0 }}>Student</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ── Staff ── */}
+                {searchResults.staff?.length > 0 && (
+                  <div>
+                    <div style={{ padding:'8px 14px 5px', fontSize:10, fontWeight:800, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.8px', background:'#fafbff', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', gap:6 }}>
+                      👨‍🏫 Staff & Teachers
+                    </div>
+                    {searchResults.staff.map(member => {
+                      const sItem = { label: member.name || 'Staff', icon:'👨‍🏫', group:'Staff', path:`/staff` };
+                      return (
+                        <button key={member._id || member.id} role="option"
+                          onClick={() => handleSearchResultClick(`/staff`, sItem)}
+                          style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'9px 14px', background:'none', border:'none', cursor:'pointer', textAlign:'left', borderBottom:'1px solid #f8fafc', fontFamily:'inherit', transition:'background .1s' }}
+                          onMouseEnter={e => { e.currentTarget.style.background='#fffbeb'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background='none'; }}>
+                          <div style={{ width:34, height:34, borderRadius:'50%', background:'linear-gradient(135deg,#d97706,#f59e0b)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:13, flexShrink:0 }}>
+                            {(member.name || 'T')[0].toUpperCase()}
+                          </div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:'#333', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{member.name}</div>
+                            <div style={{ fontSize:11, color:'#94a3b8' }}>{member.designation || member.role || 'Staff'}</div>
+                          </div>
+                          <span style={{ fontSize:11, background:'#fef3c7', color:'#92400e', padding:'2px 7px', borderRadius:99, fontWeight:600, flexShrink:0 }}>Staff</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ── No results ── */}
+                {searchQuery.length >= 2 && !hasResults && !searching && (
+                  <div style={{ padding:'28px 16px', textAlign:'center' }}>
+                    <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
+                    <div style={{ fontWeight:600, color:'#374151', marginBottom:4 }}>No results for "{searchQuery}"</div>
+                    <div style={{ fontSize:12, color:'#94a3b8' }}>Try different keywords or check spelling</div>
+                  </div>
+                )}
+
+                {/* ── Footer ── */}
+                <div style={{ padding:'7px 14px', background:'#f8f9fa', borderTop:'1px solid #f1f5f9', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <span style={{ fontSize:10.5, color:'#94a3b8' }}>↑↓ navigate · Enter select · Esc close</span>
+                  <span style={{ fontSize:10.5, color:'#94a3b8' }}>Ctrl+K to open</span>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Right: notification bell + session badge + user avatar */}
+          {/* Right: language toggle + notification bell + session badge + user avatar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+
+            {/* Language Toggle */}
+            <LanguageToggle />
 
             {/* Notification bell with red dot */}
             <button
@@ -782,30 +1068,73 @@ export default function AdminLayout() {
       </div>
 
       {/* ════════ LOGOUT CONFIRM MODAL ════════ */}
+      {/* ═══ PROFESSIONAL LOGOUT MODAL ═══ */}
       {showLogoutConfirm && (
-        <div className="modal-overlay" onClick={() => setShowLogoutConfirm(false)}>
-          <div className="modal modal-sm caution-popup" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <AlertCircle size={18} />
-                Confirm Logout
-              </h3>
+        <div
+          onClick={() => setShowLogoutConfirm(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(15,23,42,0.55)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20, animation: 'fadeIn .18s ease',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: 20,
+              width: '100%', maxWidth: 400,
+              boxShadow: '0 24px 60px rgba(0,0,0,0.18)',
+              overflow: 'hidden',
+              animation: 'fadeUp .2s ease',
+            }}
+          >
+            {/* School branding header */}
+            <div style={{ background: 'linear-gradient(135deg, #1B2F6E 0%, #0073b7 100%)', padding: '20px 24px', textAlign: 'center' }}>
+              {logo
+                ? <img src={logo} alt="" style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover', border: '2px solid rgba(255,255,255,0.4)', marginBottom: 8 }} />
+                : <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px', fontSize: 22 }}>🎓</div>
+              }
+              <div style={{ color: 'white', fontWeight: 800, fontSize: 15 }}>{school?.name || 'IlmForge School'}</div>
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>Ilm Ko Asaan Banaye 🇵🇰</div>
             </div>
-            <div className="modal-body">
-              <p className="validation-caption">Validation check: active session will end on logout.</p>
-              <p style={{ marginTop: 10, fontSize: 13, color: '#4B5563' }}>
-                Are you sure you want to sign out?
+
+            {/* Content */}
+            <div style={{ padding: '24px 28px' }}>
+              {/* Icon */}
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#fef2f2', border: '2px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 26 }}>
+                🚪
+              </div>
+              <h3 style={{ textAlign: 'center', fontSize: 20, fontWeight: 800, color: '#1e3a5f', margin: '0 0 8px' }}>
+                Sign Out?
+              </h3>
+              <p style={{ textAlign: 'center', fontSize: 14, color: '#64748b', lineHeight: 1.6, margin: '0 0 6px' }}>
+                You're signed in as <strong style={{ color: '#1e3a5f' }}>{user?.name || 'Admin'}</strong>
+              </p>
+              <p style={{ textAlign: 'center', fontSize: 13, color: '#94a3b8', lineHeight: 1.5 }}>
+                Your session will end and you'll need to sign in again to access the system.
               </p>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-outline" onClick={() => setShowLogoutConfirm(false)}>
+
+            {/* Actions */}
+            <div style={{ padding: '0 28px 24px', display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#f8f9fa', color: '#374151', fontSize: 14, fontWeight: 700, cursor: 'pointer', transition: 'all .12s', fontFamily: 'inherit' }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#f8f9fa'; }}
+              >
                 Cancel
               </button>
               <button
-                className="btn btn-red"
                 onClick={() => { setShowLogoutConfirm(false); logout(); navigate('/login'); }}
+                style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(220,38,38,0.35)', transition: 'all .12s', fontFamily: 'inherit' }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(220,38,38,0.45)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 12px rgba(220,38,38,0.35)'; }}
               >
-                Logout
+                🚪 Sign Out
               </button>
             </div>
           </div>

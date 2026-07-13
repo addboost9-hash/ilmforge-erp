@@ -11,10 +11,188 @@
  * Everything is engaged: portal accounts, fee invoice, class link,
  * teacher visibility, roll number — all auto.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
+
+/* ═══════════════════════════════════════════════════════
+   LIVE PHOTO CAPTURE COMPONENT
+   Supports: File upload + Live camera (mobile/tablet/PC)
+═══════════════════════════════════════════════════════ */
+function PhotoCapture({ preview, onCapture, onClear }) {
+  const [mode, setMode] = useState('idle'); // idle | camera | captured
+  const [cameraError, setCameraError] = useState('');
+  const [facing, setFacing] = useState('user'); // user=front, environment=back
+  const videoRef  = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  const startCamera = async () => {
+    setCameraError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      setMode('camera');
+    } catch (err) {
+      setCameraError('Camera not available. Please allow camera access or use file upload.');
+    }
+  };
+
+  const capture = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const v = videoRef.current;
+    const c = canvasRef.current;
+    c.width  = v.videoWidth  || 640;
+    c.height = v.videoHeight || 480;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(v, 0, 0);
+    const base64 = c.toDataURL('image/jpeg', 0.85);
+    stopCamera();
+    onCapture(base64);
+    setMode('captured');
+  };
+
+  const flipCamera = async () => {
+    stopCamera();
+    const nextFacing = facing === 'user' ? 'environment' : 'user';
+    setFacing(nextFacing);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: nextFacing }, audio: false });
+      streamRef.current = stream;
+      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
+    } catch {}
+  };
+
+  const reset = () => {
+    stopCamera();
+    onClear();
+    setMode('idle');
+    setCameraError('');
+  };
+
+  useEffect(() => () => stopCamera(), [stopCamera]);
+
+  return (
+    <div style={{ gridColumn:'1/-1', marginBottom:8 }}>
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+        <span style={{ fontSize:20 }}>📸</span>
+        <div>
+          <div style={{ fontWeight:700, fontSize:13.5, color:'#1e3a5f' }}>Student Photo</div>
+          <div style={{ fontSize:11.5, color:'#64748b' }}>Upload or capture live — used in ID cards, certificates, and profile</div>
+        </div>
+      </div>
+
+      <div style={{ display:'flex', gap:14, alignItems:'flex-start', flexWrap:'wrap' }}>
+        {/* Preview / Camera area */}
+        <div style={{ width:120, height:140, borderRadius:12, overflow:'hidden', border:'2px solid #e2e8f0', background:'#f8f9fa', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', position:'relative' }}>
+          {mode === 'camera' ? (
+            <video ref={videoRef} autoPlay playsInline muted style={{ width:'100%', height:'100%', objectFit:'cover', transform: facing==='user' ? 'scaleX(-1)' : 'none' }} />
+          ) : preview ? (
+            <img src={preview} alt="Student" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+          ) : (
+            <div style={{ textAlign:'center', color:'#94a3b8' }}>
+              <div style={{ fontSize:36 }}>👤</div>
+              <div style={{ fontSize:10, marginTop:4 }}>No Photo</div>
+            </div>
+          )}
+          {/* Overlay flash animation on capture */}
+          <canvas ref={canvasRef} style={{ display:'none' }} />
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ flex:1, minWidth:160 }}>
+          {mode === 'idle' && !preview && (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {/* Live camera button */}
+              <button type="button" onClick={startCamera}
+                style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 16px', background:'linear-gradient(135deg,#1B2F6E,#0073b7)', color:'white', border:'none', borderRadius:9, cursor:'pointer', fontWeight:700, fontSize:13, boxShadow:'0 3px 10px rgba(0,115,183,0.3)' }}>
+                📷 Take Live Photo
+              </button>
+              {/* File upload */}
+              <label style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 16px', background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:9, cursor:'pointer', fontWeight:600, fontSize:13, color:'#374151' }}>
+                📁 Upload from Device
+                <input type="file" accept="image/*" capture="environment" style={{ display:'none' }} onChange={e => {
+                  const file = e.target.files[0];
+                  if (!file) return;
+                  if (file.size > 3 * 1024 * 1024) { alert('Photo must be under 3MB'); return; }
+                  const reader = new FileReader();
+                  reader.onload = ev => { onCapture(ev.target.result); setMode('captured'); };
+                  reader.readAsDataURL(file);
+                }} />
+              </label>
+              <div style={{ fontSize:11, color:'#94a3b8' }}>✓ ID Card printing &nbsp;✓ Certificates &nbsp;✓ Profile</div>
+            </div>
+          )}
+
+          {mode === 'camera' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              <button type="button" onClick={capture}
+                style={{ padding:'10px 20px', background:'#15803d', color:'white', border:'none', borderRadius:9, cursor:'pointer', fontWeight:800, fontSize:14, boxShadow:'0 3px 10px rgba(21,128,61,0.3)', display:'flex', alignItems:'center', gap:7 }}>
+                📸 Capture Photo
+              </button>
+              <button type="button" onClick={flipCamera}
+                style={{ padding:'8px 14px', background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:600, color:'#374151' }}>
+                🔄 Flip Camera
+              </button>
+              <button type="button" onClick={reset}
+                style={{ padding:'6px 12px', background:'none', border:'1px solid #fca5a5', borderRadius:7, cursor:'pointer', fontSize:12, color:'#dc2626', fontWeight:600 }}>
+                ✕ Cancel
+              </button>
+            </div>
+          )}
+
+          {(mode === 'captured' || preview) && (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, color:'#15803d', fontWeight:700, fontSize:13 }}>
+                ✅ Photo captured!
+              </div>
+              <button type="button" onClick={startCamera}
+                style={{ padding:'7px 14px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:600, color:'#0073b7' }}>
+                📷 Retake Photo
+              </button>
+              <label style={{ padding:'7px 14px', background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:8, cursor:'pointer', fontSize:12, fontWeight:600, color:'#374151', display:'flex', alignItems:'center', gap:5 }}>
+                📁 Change File
+                <input type="file" accept="image/*" style={{ display:'none' }} onChange={e => {
+                  const file = e.target.files[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = ev => { onCapture(ev.target.result); setMode('captured'); };
+                  reader.readAsDataURL(file);
+                }} />
+              </label>
+              <button type="button" onClick={reset}
+                style={{ padding:'5px 10px', background:'none', border:'1px solid #fca5a5', borderRadius:6, cursor:'pointer', fontSize:11.5, color:'#dc2626' }}>
+                ✕ Remove Photo
+              </button>
+            </div>
+          )}
+
+          {cameraError && (
+            <div style={{ marginTop:6, padding:'8px 10px', background:'#fef2f2', border:'1px solid #fecaca', borderRadius:7, fontSize:11.5, color:'#b91c1c' }}>
+              ⚠️ {cameraError}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 import {
   User, GraduationCap, Wallet, Users, ClipboardCheck, CheckCircle2,
   ChevronRight, ChevronLeft, Printer, Copy, KeyRound, Link2, AlertCircle,
@@ -301,34 +479,12 @@ export default function AdmissionWizardPage() {
         {/* ─── STEP 1: Student Info ─── */}
         {step === 1 && (
           <div className="grid sm:grid-cols-2 gap-4">
-            {/* Photo upload */}
-            <div style={{ gridColumn: '1/-1', display: 'flex', gap: 16, alignItems: 'flex-start', padding: '12px 0', borderBottom: '1px solid #f1f5f9', marginBottom: 4 }}>
-              <div style={{ width: 80, height: 80, borderRadius: 10, border: '2px dashed #e2e8f0', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8f9fa', flexShrink: 0 }}>
-                {form.photoPreview
-                  ? <img src={form.photoPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <span style={{ fontSize: 32 }}>📷</span>
-                }
-              </div>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Student Photo</div>
-                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Upload photo for ID card (optional, max 2MB)</div>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#0073b7', color: 'white', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                  📷 Choose Photo
-                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    if (file.size > 2 * 1024 * 1024) { alert('Photo must be under 2MB'); return; }
-                    const reader = new FileReader();
-                    reader.onload = ev => { set('photoPreview', ev.target.result); set('photoBase64', ev.target.result); };
-                    reader.readAsDataURL(file);
-                  }} />
-                </label>
-                {form.photoPreview && (
-                  <button onClick={() => { set('photoPreview', ''); set('photoBase64', ''); }}
-                    style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 12 }}>✕ Remove</button>
-                )}
-              </div>
-            </div>
+            {/* Photo capture — upload OR live camera */}
+            <PhotoCapture
+              preview={form.photoPreview}
+              onCapture={(base64) => { set('photoPreview', base64); set('photoBase64', base64); }}
+              onClear={() => { set('photoPreview', ''); set('photoBase64', ''); }}
+            />
             <Field label="Student Full Name *" error={errors.name}>
               <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Ahmed Ali Khan" autoFocus />
             </Field>
