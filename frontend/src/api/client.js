@@ -17,11 +17,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor — handle 401
+// Response interceptor — handle 401 + school suspension
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
-    if (err.response?.status === 401 && err.response?.data?.code === 'TOKEN_EXPIRED') {
+    const code = err.response?.data?.code;
+
+    // School suspended by platform owner
+    if (err.response?.status === 403 && ['SCHOOL_SUSPENDED','SCHOOL_INACTIVE','TRIAL_EXPIRED','LICENSE_EXPIRED'].includes(code)) {
+      const msg = err.response.data;
+      localStorage.clear();
+      // Show suspension page
+      window.location.href = `/suspended?reason=${encodeURIComponent(msg.message)}&contact=${encodeURIComponent(msg.contact || msg.renew || msg.upgrade || '')}`;
+      return Promise.reject(err);
+    }
+
+    // Token expired — refresh
+    if (err.response?.status === 401 && code === 'TOKEN_EXPIRED') {
       try {
         const refresh = localStorage.getItem('refreshToken');
         const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken: refresh });
@@ -33,6 +45,7 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
     }
+
     return Promise.reject(err);
   }
 );

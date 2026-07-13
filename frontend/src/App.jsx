@@ -140,6 +140,8 @@ const safeLazy = (importFn) =>
 
 // EXISTS
 import WorkflowHub from './pages/hub/WorkflowHub';
+import PlatformControlPage from './pages/platform/PlatformControlPage';
+import SuspendedPage from './pages/public/SuspendedPage';
 import StudentAttendanceCalendarPage from './pages/reports/StudentAttendanceCalendarPage';
 import AdmissionFormPrintPage from './pages/admission/AdmissionFormPrintPage';
 import AcademicCalendarPage from './pages/calendar/AcademicCalendarPage';
@@ -301,6 +303,9 @@ export default function App() {
           <Route path="/setup"             element={<Protected><OnboardingPage /></Protected>} />
           <Route path="/apply-admission"   element={<PublicAdmissionPage />} />
           <Route path="/fee-voucher"       element={<PublicFeeVoucherPage />} />
+          {/* Platform Owner Control — Hidden URL, key-protected */}
+          <Route path="/platform-control"  element={<PlatformControlPage />} />
+          <Route path="/suspended"         element={<SuspendedPage />} />
 
           {/* ── Role-specific portals — auth required, NO admin layout ─ */}
           <Route path="/parent-portal"     element={<RoleRoute allow={['parent']}><ParentPortalPage /></RoleRoute>}/>

@@ -16,9 +16,16 @@ model School {
   city        String?
   phone       String?
   email       String    @unique
-  plan        String    @default("free")
-  trialEndsAt DateTime?
-  status      String    @default("active")
+  plan           String    @default("free")    // free|starter|standard|premium
+  trialEndsAt    DateTime?
+  status         String    @default("active")   // active|inactive|suspended|trial|expired
+  licenseKey     String?   @unique              // offline license key
+  licenseExpiry  DateTime?                      // when license expires
+  suspendedAt    DateTime?                      // when suspended by platform owner
+  suspendReason  String?                        // reason for suspension
+  maxStudents    Int       @default(100)        // plan limit
+  activatedAt    DateTime?                      // when school was activated
+  lastSeenAt     DateTime?                      // last platform login
   subdomain    String?
   settingsJson String?   // JSON blob for theme, payment, general, website settings
   createdAt   DateTime  @default(now())
