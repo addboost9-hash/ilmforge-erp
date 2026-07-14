@@ -120,25 +120,25 @@ function Run-Install($cfg) {
 
     # Progress window (non-blocking)
     $pf=New-Object System.Windows.Forms.Form
-    $pf.Text="IlmForge Setup - Installing..."; $pf.Size=[System.Drawing.Size]::new(480,380)
+    $pf.Text="IlmForge Setup - Installing..."; $pf.Size=[System.Drawing.Size]::new(500,460)
     $pf.StartPosition="CenterScreen"; $pf.FormBorderStyle="FixedSingle"
     $pf.MaximizeBox=$false; $pf.ControlBox=$false; $pf.BackColor=[System.Drawing.Color]::White
 
     $ph=New-Object System.Windows.Forms.Panel
-    $ph.Size=[System.Drawing.Size]::new(480,65); $ph.BackColor=$BRAND_NAVY
-    $ph.Controls.Add((Make-Label "Installing IlmForge..." 18 10 440 28 14 $true $BRAND_WHITE))
-    $ph.Controls.Add((Make-Label "Please wait - this may take 3-5 minutes" 20 42 440 18 9 $false ([System.Drawing.Color]::FromArgb(150,195,240))))
+    $ph.Size=[System.Drawing.Size]::new(500,75); $ph.BackColor=$BRAND_NAVY
+    $ph.Controls.Add((Make-Label "Installing IlmForge..." 18 12 460 30 15 $true $BRAND_WHITE))
+    $ph.Controls.Add((Make-Label "Please wait - this may take 3-5 minutes" 20 48 460 20 9 $false ([System.Drawing.Color]::FromArgb(150,195,240))))
     $pf.Controls.Add($ph)
 
     $pb=New-Object System.Windows.Forms.ProgressBar
-    $pb.Location=[System.Drawing.Point]::new(18,80); $pb.Size=[System.Drawing.Size]::new(440,20)
+    $pb.Location=[System.Drawing.Point]::new(18,88); $pb.Size=[System.Drawing.Size]::new(458,24)
     $pb.Minimum=0; $pb.Maximum=100; $pf.Controls.Add($pb)
 
-    $lbSt=Make-Label "Starting..." 18 106 440 20 9 $false ([System.Drawing.Color]::FromArgb(50,50,50))
+    $lbSt=Make-Label "Starting..." 18 118 460 20 9 $false ([System.Drawing.Color]::FromArgb(50,50,50))
     $pf.Controls.Add($lbSt)
 
     $lb=New-Object System.Windows.Forms.RichTextBox
-    $lb.Location=[System.Drawing.Point]::new(18,132); $lb.Size=[System.Drawing.Size]::new(440,190)
+    $lb.Location=[System.Drawing.Point]::new(18,144); $lb.Size=[System.Drawing.Size]::new(458,220)
     $lb.Font=New-Object System.Drawing.Font("Consolas",8)
     $lb.BackColor=[System.Drawing.Color]::FromArgb(8,12,25)
     $lb.ForeColor=[System.Drawing.Color]::FromArgb(80,220,80)
@@ -296,12 +296,22 @@ function Run-Install($cfg) {
 
     $pf.ControlBox=$true; $pf.Text="IlmForge Setup - Done!"
 
+    # Success message bar
+    $successBar=New-Object System.Windows.Forms.Panel
+    $successBar.Location=[System.Drawing.Point]::new(18,374); $successBar.Size=[System.Drawing.Size]::new(458,38)
+    $successBar.BackColor=[System.Drawing.Color]::FromArgb(240,253,244)
+    $pf.Controls.Add($successBar)
+    $successBar.Controls.Add((Make-Label "IlmForge successfully installed!" 12 10 250 20 9 $true ([System.Drawing.Color]::FromArgb(22,163,74))))
+    $successBar.Controls.Add((Make-Label "Open: http://localhost:3000" 260 10 198 20 9 $false ([System.Drawing.Color]::FromArgb(22,163,74))))
+
     $bFin=New-Object System.Windows.Forms.Button
-    $bFin.Text="Finish and Launch"; $bFin.Location=[System.Drawing.Point]::new(290,335)
-    $bFin.Size=[System.Drawing.Size]::new(168,34)
-    $bFin.Font=New-Object System.Drawing.Font("Segoe UI",10,[System.Drawing.FontStyle]::Bold)
+    $bFin.Text="Finish and Launch IlmForge"
+    $bFin.Location=[System.Drawing.Point]::new(18,418)
+    $bFin.Size=[System.Drawing.Size]::new(458,30)
+    $bFin.Font=New-Object System.Drawing.Font("Segoe UI",11,[System.Drawing.FontStyle]::Bold)
     $bFin.BackColor=[System.Drawing.Color]::FromArgb(22,163,74)
     $bFin.ForeColor=$BRAND_WHITE; $bFin.FlatStyle="Flat"
+    $bFin.Cursor=[System.Windows.Forms.Cursors]::Hand
     $bFin.Add_Click({$pf.Close();Start-Process "wscript.exe" "`"$dir\IlmForge.vbs`""})
     $pf.Controls.Add($bFin); $pf.Refresh()
 
