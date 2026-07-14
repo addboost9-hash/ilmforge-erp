@@ -251,24 +251,25 @@ function Run-Install($cfg) {
     $bat += "npx serve dist -l 3000 -s`r`n"
     [System.IO.File]::WriteAllText("$dir\IlmForge.bat", $bat, [System.Text.Encoding]::ASCII)
 
-    # VBScript launcher — use Chr(34) for quotes to avoid escaping issues
-    $q = [char]34
-    $vbs  = "Set sh = CreateObject(${q}WScript.Shell${q})" + "`r`n"
-    $vbs += "sh.CurrentDirectory = ${q}$dir${q}" + "`r`n"
-    $vbs += "sh.Run ${q}IlmForge.bat${q}, 0, False" + "`r`n"
-    $vbs += "WScript.Sleep 6000" + "`r`n"
-    $vbs += "sh.Run ${q}http://localhost:3000${q}, 1, False" + "`r`n"
-    [System.IO.File]::WriteAllText("$dir\IlmForge.vbs", $vbs, [System.Text.Encoding]::ASCII)
-    L "Launchers created" "g"
+    # PowerShell hidden launcher (no VBScript — antivirus won't block)
+    $ps1  = "Set-Location `"$dir`"`r`n"
+    $ps1 += "Start-Process cmd -ArgumentList `"/c `"`"`"$dir\IlmForge.bat`"`"`"`" -WindowStyle Minimized`r`n"
+    $ps1 += "Start-Sleep 6`r`n"
+    $ps1 += "Start-Process `"http://localhost:3000`"`r`n"
+    [System.IO.File]::WriteAllText("$dir\IlmForge_Launch.ps1", $ps1, [System.Text.Encoding]::UTF8)
+    L "PowerShell launcher created" "g"
 
-    # 9 - Desktop shortcut
+    # 9 - Desktop shortcut → points to PowerShell (hidden window)
     if($cfg.desktop){
         S "Creating desktop shortcut..." 90
         try{
             $sh=New-Object -ComObject WScript.Shell
             $lnk=$sh.CreateShortcut("$env:USERPROFILE\Desktop\IlmForge.lnk")
-            $lnk.TargetPath="wscript.exe"; $lnk.Arguments="`"$dir\IlmForge.vbs`""
-            $lnk.WorkingDirectory=$dir; $lnk.Description="IlmForge School Management System"
+            $lnk.TargetPath="powershell.exe"
+            $lnk.Arguments="-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$dir\IlmForge_Launch.ps1`""
+            $lnk.WorkingDirectory=$dir
+            $lnk.Description="IlmForge School Management System"
+            $lnk.IconLocation="$env:SystemRoot\System32\shell32.dll,23"
             $lnk.Save(); L "Desktop shortcut created" "g"
         }catch{L "Shortcut error: $_" "y"}
     }
@@ -280,7 +281,8 @@ function Run-Install($cfg) {
             $stDir=[Environment]::GetFolderPath("Startup")
             $sh=New-Object -ComObject WScript.Shell
             $lnk=$sh.CreateShortcut("$stDir\IlmForge.lnk")
-            $lnk.TargetPath="wscript.exe"; $lnk.Arguments="`"$dir\IlmForge.vbs`""
+            $lnk.TargetPath="powershell.exe"
+            $lnk.Arguments="-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$dir\IlmForge_Launch.ps1`""
             $lnk.WorkingDirectory=$dir; $lnk.Save()
             L "Auto-start enabled" "g"
         }catch{L "Auto-start error: $_" "y"}
@@ -312,7 +314,10 @@ function Run-Install($cfg) {
     $bFin.BackColor=[System.Drawing.Color]::FromArgb(22,163,74)
     $bFin.ForeColor=$BRAND_WHITE; $bFin.FlatStyle="Flat"
     $bFin.Cursor=[System.Windows.Forms.Cursors]::Hand
-    $bFin.Add_Click({$pf.Close();Start-Process "wscript.exe" "`"$dir\IlmForge.vbs`""})
+    $bFin.Add_Click({
+        $pf.Close()
+        Start-Process "powershell.exe" "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$dir\IlmForge_Launch.ps1`""
+    })
     $pf.Controls.Add($bFin); $pf.Refresh()
 
     # Wait for user to close
