@@ -113,6 +113,12 @@ export default function PlatformControlPage() {
     onError: err => toast.error(err.response?.data?.message || 'Failed'),
   });
 
+  const deleteMut = useMutation({
+    mutationFn: (id) => platformApi.delete(`/platform/schools/${id}`),
+    onSuccess: () => { qc.invalidateQueries(['platform-schools']); qc.invalidateQueries(['platform-stats']); toast.success('School permanently deleted!'); },
+    onError: err => toast.error(err.response?.data?.message || 'Failed to delete'),
+  });
+
   /* ══ LOGIN SCREEN ══════════════════════════════════════════════ */
   if (!authenticated) {
     return (
@@ -203,6 +209,19 @@ export default function PlatformControlPage() {
             <option value="suspended">Suspended ❌</option>
             <option value="inactive">Inactive ⏸️</option>
           </select>
+          {/* Activate ALL suspended schools at once */}
+          <button onClick={async () => {
+            if (!window.confirm(`Activate ALL ${schools.filter(s=>s.status!=='active').length} suspended schools?`)) return;
+            for (const s of schools.filter(s => s.status !== 'active')) {
+              await platformApi.post(`/platform/schools/${s.id}/activate`, { plan: s.plan || 'free' }).catch(() => {});
+            }
+            qc.invalidateQueries(['platform-schools']);
+            qc.invalidateQueries(['platform-stats']);
+            toast.success('All schools activated!');
+          }}
+            style={{ padding:'9px 16px', background:'#dcfce7', border:'1px solid #86efac', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:700, color:'#15803d' }}>
+            ✅ Activate All
+          </button>
           <button onClick={() => qc.invalidateQueries(['platform-schools'])}
             style={{ padding:'9px 14px', background:'white', border:'1px solid #e2e8f0', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:600 }}>
             <RefreshCw size={13}/> Refresh
@@ -280,11 +299,11 @@ export default function PlatformControlPage() {
                             {/* Suspend */}
                             {school.status === 'active' && (
                               <button onClick={() => {
-                                const reason = prompt(`Suspend "${school.name}" — Reason (Urdu/English):`);
+                                const reason = prompt(`Suspend "${school.name}" — Reason:`);
                                 if (reason !== null) suspendMut.mutate({ id: school.id, reason: reason || 'Suspended by admin' });
                               }}
                                 title="Suspend School"
-                                style={{ padding:'5px 10px', background:'#fee2e2', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:6, cursor:'pointer', fontSize:11, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}>
+                                style={{ padding:'5px 10px', background:'#fff7ed', border:'1px solid #fed7aa', color:'#c2410c', borderRadius:6, cursor:'pointer', fontSize:11, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}>
                                 <PowerOff size={11}/> Suspend
                               </button>
                             )}
@@ -293,6 +312,23 @@ export default function PlatformControlPage() {
                               title="License Management"
                               style={{ padding:'5px 10px', background:'#fef3c7', border:'1px solid #fde68a', color:'#92400e', borderRadius:6, cursor:'pointer', fontSize:11, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}>
                               <Key size={11}/> License
+                            </button>
+                            {/* DELETE — Permanent */}
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`⚠️ PERMANENTLY DELETE "${school.name}"?\n\nThis will delete ALL data:\n• All students (${school._count?.users || 0} users)\n• All fees, attendance, exams\n• Cannot be undone!\n\nType the school name to confirm: ${school.name}`)) {
+                                  const typed = window.prompt(`Type school name to confirm deletion:\n"${school.name}"`);
+                                  if (typed === school.name) {
+                                    deleteMut.mutate(school.id);
+                                  } else if (typed !== null) {
+                                    toast.error('School name did not match. Deletion cancelled.');
+                                  }
+                                }
+                              }}
+                              disabled={deleteMut.isPending}
+                              title="Permanently Delete School"
+                              style={{ padding:'5px 10px', background:'#fef2f2', border:'1px solid #fecaca', color:'#dc2626', borderRadius:6, cursor:'pointer', fontSize:11, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}>
+                              🗑️ Delete
                             </button>
                           </div>
                         </td>

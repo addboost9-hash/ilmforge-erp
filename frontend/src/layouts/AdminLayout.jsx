@@ -380,6 +380,32 @@ export default function AdminLayout() {
     { label: 'Library', desc: 'Book management', path: '/library', icon: '📖', group: 'Academics' },
     { label: 'Transport', desc: 'Bus routes', path: '/transport', icon: '🚌', group: 'Operations' },
     { label: 'Smart Workflow Hub', desc: 'Admission to leaving cycle', path: '/workflow', icon: '🔄', group: 'Navigation' },
+    // Certificates & ID Cards
+    { label: 'Certificates', desc: 'Leaving, character, merit certificates', path: '/certificates', icon: '🎓', group: 'Certificates' },
+    { label: 'Leaving Certificate', desc: 'Print leaving certificate', path: '/certificates', icon: '📜', group: 'Certificates' },
+    { label: 'Character Certificate', desc: 'Print character certificate', path: '/certificates', icon: '📜', group: 'Certificates' },
+    { label: 'Merit Certificate', desc: 'Print merit certificate', path: '/certificates', icon: '🏅', group: 'Certificates' },
+    { label: 'Certificate Registry', desc: 'All issued certificates log', path: '/certificates/registry', icon: '📋', group: 'Certificates' },
+    { label: 'Student ID Cards', desc: 'Print student ID cards', path: '/students/id-cards', icon: '🪪', group: 'Certificates' },
+    { label: 'Staff ID Cards', desc: 'Print staff ID cards', path: '/staff/id-cards', icon: '🪪', group: 'Certificates' },
+    { label: 'Admission Form Print', desc: 'Print admission form', path: '/admissions/form-print', icon: '📄', group: 'Certificates' },
+    // Academics
+    { label: 'Online Classes', desc: 'Virtual classroom links', path: '/online-classes', icon: '🖥️', group: 'Academics' },
+    { label: 'Study Materials', desc: 'Upload PDFs, videos, links', path: '/study-materials', icon: '📂', group: 'Academics' },
+    { label: 'Quizzes', desc: 'Quick assessments', path: '/quiz', icon: '📝', group: 'Academics' },
+    { label: 'PTM Scheduler', desc: 'Parent-teacher meetings', path: '/ptm', icon: '👨‍👩‍👧', group: 'Academics' },
+    // Operations
+    { label: 'Behaviour Tracking', desc: 'Student discipline records', path: '/behaviour', icon: '⚡', group: 'Operations' },
+    { label: 'Task Management', desc: 'Staff task assignments', path: '/tasks', icon: '✅', group: 'Operations' },
+    { label: 'Events Calendar', desc: 'School events', path: '/events', icon: '🎉', group: 'Operations' },
+    { label: 'Alumni Management', desc: 'Passout students', path: '/alumni', icon: '🎓', group: 'Operations' },
+    { label: 'Complaints', desc: 'Parent complaints', path: '/complaints', icon: '📢', group: 'Operations' },
+    { label: 'Point of Sale', desc: 'Canteen / school shop', path: '/stock/pos', icon: '🛒', group: 'Operations' },
+    // Payroll
+    { label: 'Staff Salary', desc: 'Generate monthly salaries', path: '/salary', icon: '💵', group: 'Payroll' },
+    { label: 'Loan Management', desc: 'Staff loans & advances', path: '/salary/loans', icon: '🏦', group: 'Payroll' },
+    { label: 'Expense Management', desc: 'Track school expenses', path: '/expense-management', icon: '💸', group: 'Payroll' },
+    { label: 'Accounting', desc: 'Income & expense tracking', path: '/accounting', icon: '📒', group: 'Payroll' },
   ], []);
 
   /* Recent actions — stored in localStorage */
@@ -589,33 +615,24 @@ export default function AdminLayout() {
         }}
       >
         {/* ── Brand area ── */}
-        <div className="sb-logo" style={{ background: 'rgba(0,0,0,0.22)', borderBottom: '1px solid rgba(255,255,255,0.09)' }}>
-          {/* School logo or ilmفورج icon */}
+        <div className="sb-logo" style={{ background: 'rgba(0,0,0,0.22)', borderBottom: '1px solid rgba(255,255,255,0.09)', padding: '10px 14px' }}>
+          {/* School logo or IlmForge icon */}
           {logo ? (
             <img src={logo} alt="School Logo"
               style={{ width:36, height:36, borderRadius:9, objectFit:'cover', flexShrink:0, border:'2px solid rgba(255,255,255,0.28)' }} />
           ) : (
-            /* ilmفورج mini icon mark */
-            <div style={{ width:36, height:36, borderRadius:9, flexShrink:0, background:'linear-gradient(135deg,#1B2F6E,#0073b7)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', border:'1.5px solid rgba(255,255,255,0.2)' }}>
-              <span style={{ fontSize:11, fontWeight:900, color:'white', lineHeight:1.1, fontFamily:"'Poppins',sans-serif" }}>ilm</span>
-              <span style={{ fontSize:9, fontWeight:700, color:'#F5C518', lineHeight:1.1, fontFamily:"'Noto Nastaliq Urdu',serif" }}>فورج</span>
+            <div style={{ width:36, height:36, borderRadius:9, flexShrink:0, background:'linear-gradient(135deg,#1B2F6E,#0073b7)', display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid rgba(255,255,255,0.2)', fontSize:20 }}>
+              🎓
             </div>
           )}
           {!collapsed && (
-            <div style={{ overflow:'hidden', flex:1 }}>
-              {/* School name OR platform name */}
-              <div className="sb-logo-name" style={{ display:'flex', alignItems:'baseline', gap:3 }}>
-                {school?.name || localStorage.getItem('registeredSchoolName') ? (
-                  <span>{school?.name || localStorage.getItem('registeredSchoolName')}</span>
-                ) : (
-                  <>
-                    <span style={{ color:'white', fontFamily:"'Poppins',sans-serif", fontWeight:900, letterSpacing:'-0.02em' }}>ilm</span>
-                    <span style={{ color:'#F5C518', fontFamily:"'Noto Nastaliq Urdu',serif", fontWeight:700, fontSize:'0.95em' }}>فورج</span>
-                  </>
-                )}
+            <div style={{ overflow:'hidden', flex:1, minWidth:0 }}>
+              {/* School name OR IlmForge */}
+              <div style={{ fontFamily:"'Poppins','Inter',sans-serif", fontWeight:800, fontSize:14.5, color:'white', letterSpacing:'-0.02em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', lineHeight:1.2 }}>
+                {school?.name || localStorage.getItem('registeredSchoolName') || 'IlmForge'}
               </div>
-              <div className="sb-logo-tag" style={{ color:'#F5C518', letterSpacing:'0.04em' }}>
-                اِلم کو آسان بنائے 🇵🇰
+              <div style={{ fontSize:10.5, color:'rgba(255,255,255,0.55)', letterSpacing:'0.08em', textTransform:'uppercase', fontWeight:600, marginTop:2, fontFamily:"'Inter',sans-serif" }}>
+                School Management System
               </div>
             </div>
           )}
@@ -705,40 +722,40 @@ export default function AdminLayout() {
           )}
         </div>
 
-        {/* ── Footer: user profile chip + logout ── */}
+        {/* ── Footer: user profile + WhatsApp support + logout ── */}
         <div className="sb-footer">
+          {/* WhatsApp Support link */}
+          {!collapsed && (
+            <a
+              href="https://wa.me/923465146609"
+              target="_blank"
+              rel="noreferrer"
+              style={{ display:'flex', alignItems:'center', gap:7, padding:'7px 14px', textDecoration:'none', borderTop:'1px solid rgba(255,255,255,0.07)', color:'rgba(255,255,255,0.55)', fontSize:11, transition:'color .12s' }}
+              onMouseEnter={e => e.currentTarget.style.color='rgba(255,255,255,0.9)'}
+              onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,0.55)'}
+            >
+              <span style={{ fontSize:13 }}>💬</span>
+              <span style={{ fontWeight:600, letterSpacing:'0.02em' }}>0346-5146609 Support</span>
+            </a>
+          )}
           {!collapsed && (
             <Link to="/profile" style={{ textDecoration: 'none', display: 'block' }}>
               <div className="sb-user">
-                {/* Avatar circle */}
-                <div style={{
-                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                  background: 'linear-gradient(135deg,#0073b7,#00c0ef)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', fontWeight: 800, fontSize: 11,
-                }}>
+                <div style={{ width:32, height:32, borderRadius:'50%', flexShrink:0, background:'linear-gradient(135deg,#0073b7,#00c0ef)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:11 }}>
                   {initials}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex:1, minWidth:0 }}>
                   <div className="sb-user-name">{user?.name || 'Admin'}</div>
-                  <div className="sb-user-role" style={{ color: 'rgba(255,255,255,0.5)', textTransform: 'capitalize' }}>
+                  <div className="sb-user-role" style={{ color:'rgba(255,255,255,0.5)', textTransform:'capitalize' }}>
                     {user?.role || 'admin'}
                   </div>
                 </div>
               </div>
             </Link>
           )}
-          <button
-            aria-label="Log out"
-            className="sb-logout"
-            onClick={() => setShowLogoutConfirm(true)}
+          <button aria-label="Log out" className="sb-logout" onClick={() => setShowLogoutConfirm(true)}
             title={collapsed ? 'Logout' : undefined}
-            style={{
-              justifyContent: collapsed ? 'center' : 'flex-start',
-              width: '100%', background: 'none', border: 'none',
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
+            style={{ justifyContent: collapsed ? 'center' : 'flex-start', width:'100%', background:'none', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
             <LogOut size={14} />
             {!collapsed && <span>Logout</span>}
           </button>
@@ -793,12 +810,12 @@ export default function AdminLayout() {
           <div
             className="hdr-search"
             ref={searchContainerRef}
-            style={{ position: 'relative', flex: '0 0 340px' }}
+            style={{ position: 'relative', flex: '1 1 300px', maxWidth: 440 }}
           >
             <Search size={14} className="hdr-search-icon" />
             <input
               ref={searchInputRef}
-              placeholder="Search students, staff, modules... (Ctrl+K)"
+              placeholder="Search students, certificates, fees, reports... (Ctrl+K)"
               value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); if (e.target.value.length < 1) { setShowResults(false); } }}
               onFocus={() => { setShowResults(true); if (!searchQuery) setSearchResults(prev => ({ ...prev, recent: getRecentActions() })); }}

@@ -41,9 +41,9 @@ const authMiddleware = async (req, res, next) => {
         return res.status(403).json({
           success: false,
           code: 'SCHOOL_SUSPENDED',
-          message: 'Aapka school account suspend kar diya gaya hai.',
-          reason: school.suspendReason || 'Contact IlmForge support.',
-          contact: 'WhatsApp: 0348-5321483 | ilmforge-erp.vercel.app',
+          message: 'Your school account has been suspended.',
+          reason: school.suspendReason || 'Contact IlmForge support to reactivate.',
+          contact: 'WhatsApp: 0346-5146609',
         });
       }
 
@@ -53,7 +53,7 @@ const authMiddleware = async (req, res, next) => {
           success: false,
           code: 'SCHOOL_INACTIVE',
           message: 'School account inactive hai. IlmForge se rabta karein.',
-          contact: 'WhatsApp: 0348-5321483',
+          contact: 'WhatsApp: 0346-5146609',
         });
       }
 
@@ -64,7 +64,7 @@ const authMiddleware = async (req, res, next) => {
           code: 'TRIAL_EXPIRED',
           message: 'Aapka free trial khatam ho gaya hai.',
           detail: `Trial ${new Date(school.trialEndsAt).toLocaleDateString('en-PK')} ko expire hua.`,
-          upgrade: 'Plan upgrade karne ke liye: WhatsApp 0348-5321483',
+          upgrade: 'Plan upgrade karne ke liye: WhatsApp 0346-5146609',
         });
       }
 
@@ -75,7 +75,7 @@ const authMiddleware = async (req, res, next) => {
           code: 'LICENSE_EXPIRED',
           message: 'Aapka offline license expire ho gaya hai.',
           expiredOn: school.licenseExpiry,
-          renew: 'License renew karne ke liye: WhatsApp 0348-5321483',
+          renew: 'License renew karne ke liye: WhatsApp 0346-5146609',
         });
       }
 

@@ -302,6 +302,69 @@ router.post('/validate-license', (req, res, next) => next(), wrap(async (req, re
   });
 }));
 
+/* ── DELETE /platform/schools/:id — Permanently delete a school ─
+   Deletes ALL school data: students, staff, fees, exams, etc.
+   Use with extreme caution — irreversible!
+─────────────────────────────────────────────────────────── */
+router.delete('/schools/:id', wrap(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const prisma = require('../config/prisma');
+
+  const school = await prisma.school.findUnique({
+    where: { id },
+    select: { id: true, name: true, email: true },
+  });
+  if (!school) return res.status(404).json({ success: false, message: 'School not found' });
+
+  // Delete in correct order (FK constraints)
+  // Archive email first so same email can re-register
+  const archivedEmail = `deleted-${id}-${Date.now()}@deleted.local`;
+
+  try {
+    // Use a transaction for atomicity
+    await prisma.$transaction([
+      // Archive school email first (unique constraint)
+      prisma.school.update({ where: { id }, data: { email: archivedEmail, status: 'deleted', deletedAt: new Date() } }),
+    ], { timeout: 30000 });
+
+    // Then cascade delete all data
+    await prisma.notificationLog.deleteMany({ where: { schoolId: id } });
+    await prisma.auditLog.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.automationRule.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.notificationTemplate.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.feePayment.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.feeInvoice.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.expense.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.attendanceRecord.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.attendance.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.homework.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.examResult.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.exam.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.parentStudent.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.parent.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.student.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.staff.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.user.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.campus.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.section.deleteMany({ where: { schoolId: id } }).catch(() => {}).catch(() => {});
+    await prisma.subject.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.class.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    await prisma.academicSession.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    // Finally delete the school
+    await prisma.school.delete({ where: { id } });
+
+    res.json({
+      success: true,
+      message: `School "${school.name}" permanently deleted. Original email "${school.email}" can be re-used to register.`,
+      originalEmail: school.email,
+    });
+  } catch (err) {
+    // Rollback: restore email
+    await prisma.school.update({ where: { id }, data: { email: school.email } }).catch(() => {});
+    res.status(500).json({ success: false, message: `Delete failed: ${err.message}` });
+  }
+}));
+
 /* ── DELETE /platform/schools/cleanup-email ─────────────────
    Testing only — archive a school by email so you can re-register
    Body: { email: "test@example.com" }

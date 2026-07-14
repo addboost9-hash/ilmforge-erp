@@ -185,7 +185,7 @@ const sendOTPEmail = async ({ to, otp, name, schoolName, password, loginUrl }) =
 
           <p style="color:#94a3b8;font-size:12px;margin:24px 0 0;text-align:center;">
             Agar aapne register nahi kiya to is email ko ignore karein.<br>
-            Madad ke liye: WhatsApp 0348-5321483
+            Madad ke liye: WhatsApp 0346-5146609
           </p>
         </div>
         <!-- Footer -->
@@ -251,7 +251,7 @@ const sendWelcomeEmail = async ({ to, name, schoolName, email, schoolSlug, passw
         </div>
         <div style="background:#f8f9fa;padding:16px 32px;text-align:center;border-top:1px solid #e2e8f0;">
           <p style="color:#94a3b8;font-size:12px;margin:0;">
-            Madad chahiye? WhatsApp: <strong>0348-5321483</strong><br>
+            Madad chahiye? WhatsApp: <strong>0346-5146609</strong><br>
             IlmForge — اِلم کو آسان بنائے 🇵🇰
           </p>
         </div>
