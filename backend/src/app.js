@@ -240,6 +240,9 @@ app.use('/api/v1/events',          protect, require('./routes/events.routes'));
 /* ═══ v3.6: Notification Automation ═══ */
 app.use('/api/v1/automation',      protect, ADMIN_ONLY, require('./routes/automation.routes'));
 
+/* ═══ LICENSE management (offline mode) ═══ */
+app.use('/api/v1/license', require('./routes/license.routes'));
+
 /* ═══ PLATFORM OWNER CONTROL PANEL — No school auth needed ══════
    Only accessible with x-platform-key header
    This is YOUR master control over all schools

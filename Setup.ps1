@@ -4,7 +4,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-$INSTALL_DIR    = "$env:PROGRAMFILES\IlmForge"
+$INSTALL_DIR    = "C:\IlmForge"
 $APP_DIR        = $PSScriptRoot
 $BRAND_NAVY     = [System.Drawing.Color]::FromArgb(27, 47, 110)
 $BRAND_WHITE    = [System.Drawing.Color]::White

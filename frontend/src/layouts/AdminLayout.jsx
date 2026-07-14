@@ -21,6 +21,7 @@ import {
   ShieldCheck, BarChart2, Database, ClipboardList,
   Workflow, ShoppingCart, Globe, BookMarked,
 } from 'lucide-react';
+import LicenseBanner from '../components/license/LicenseBanner';
 
 /* ═══════════════════════════════════════════════════
    NAVIGATION TREE
@@ -1079,6 +1080,7 @@ export default function AdminLayout() {
 
         {/* Page content */}
         <main style={{ flex: 1, overflowY: 'auto' }}>
+          <LicenseBanner />
           <Outlet />
         </main>
       </div>

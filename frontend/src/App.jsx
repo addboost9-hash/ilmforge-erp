@@ -161,6 +161,7 @@ import DailyBalancesheetPage from './pages/accounting/DailyBalancesheetPage';
 import AttendanceDeficitPage from './pages/attendance/AttendanceDeficitPage';
 // Previously unrouted — now wired
 import BackupPage              from './pages/backup/BackupPage';
+import LicenseRenewalPage      from './pages/settings/LicenseRenewalPage';
 import AdmissionCRMPage        from './pages/crm/AdmissionCRMPage';
 import GatePassPage            from './pages/gatepass/GatePassPage';
 import SOPsPage                from './pages/sops/SOPsPage';
@@ -516,6 +517,7 @@ export default function App() {
 
             {/* ── Previously unrouted — now wired ── */}
             <Route path="/settings/backup"            element={<BackupPage />} />
+            <Route path="/settings/license"           element={<LicenseRenewalPage />} />
             <Route path="/admissions/crm"             element={<AdmissionCRMPage />} />
             <Route path="/gate-passes"                element={<GatePassPage />} />
             <Route path="/sops"                       element={<SOPsPage />} />
