@@ -13,7 +13,8 @@ const FROM_NAME     = process.env.FROM_NAME  || 'IlmForge School ERP';
 
 /* ── Brevo HTTP API sender (uses HTTPS port 443 — never blocked) ── */
 const sendViaBrevoApi = async ({ to, subject, html, text }) => {
-  const apiKey = process.env.SMTP_PASS || process.env.BREVO_API_KEY || '';
+  // BREVO_API_KEY takes priority (starts with xkeysib-); fall back to SMTP_PASS
+  const apiKey = process.env.BREVO_API_KEY || process.env.SMTP_PASS || '';
   if (!apiKey) return { success: false, error: 'No Brevo API key' };
 
   const toArr = Array.isArray(to) ? to : [to];
@@ -142,7 +143,7 @@ const verifySmtpConnection = async () => {
     return new Promise((resolve) => {
       const req = https.request({
         hostname: 'api.brevo.com', path: '/v3/account', method: 'GET',
-        headers: { 'api-key': process.env.SMTP_PASS || process.env.BREVO_API_KEY },
+        headers: { 'api-key': process.env.BREVO_API_KEY || process.env.SMTP_PASS },
       }, (res) => {
         resolve(res.statusCode === 200
           ? { success: true, host: 'api.brevo.com (HTTP API)', user: process.env.SMTP_USER }
