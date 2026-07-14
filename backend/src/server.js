@@ -1,7 +1,7 @@
 require('dotenv').config();
 const app = require('./app');
 const prisma = require('./config/prisma');
-const { initScheduler } = require('./services/scheduler.service');
+const { initScheduler, startKeepAlivePing } = require('./services/scheduler.service');
 const os = require('os');
 
 const PORT = process.env.PORT || 5000;
@@ -55,6 +55,8 @@ app.listen(PORT, '0.0.0.0', () => {  // 0.0.0.0 = accept connections from all ne
 
   // Start notification scheduler
   initScheduler();
+  // Keep Render free tier alive (prevents 15-min spin-down)
+  startKeepAlivePing();
 });
 
 /* ── Graceful shutdown ── */

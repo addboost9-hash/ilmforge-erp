@@ -391,8 +391,31 @@ function initScheduler() {
   }
 }
 
+/* ─── Render Keep-Alive Ping ──────────────────────────────────────
+   Pings own /health endpoint every 14 min to prevent Render free tier
+   from spinning down (Render spins down after 15 min inactivity)
+─────────────────────────────────────────────────────────────────── */
+function startKeepAlivePing() {
+  const appUrl = process.env.APP_URL || '';
+  if (!appUrl || process.env.NODE_ENV !== 'production') return;
+
+  const https = require('https');
+  const http  = require('http');
+  const url   = new URL('/health', appUrl);
+  const lib   = url.protocol === 'https:' ? https : http;
+
+  setInterval(() => {
+    lib.get(url.toString(), (res) => {
+      console.log(`[KeepAlive] Ping → ${url.hostname} → ${res.statusCode}`);
+    }).on('error', () => {});
+  }, 14 * 60 * 1000); // every 14 minutes
+
+  console.log('[KeepAlive] Render keep-alive ping active (every 14 min)');
+}
+
 module.exports = {
   initScheduler,
+  startKeepAlivePing,
   runFeeReminders,
   runAbsentAlerts,
   runBirthdayWishes,
