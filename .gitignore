@@ -5,3 +5,11 @@ dist/
 *.log
 .prisma/
 screenshot/
+
+# Local SQLite files — do not push to GitHub
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+backend/prisma/dev.db-shm
+backend/prisma/dev.db-wal
+backend/prisma/*.pg.bak
+backend/.env.sqlite
