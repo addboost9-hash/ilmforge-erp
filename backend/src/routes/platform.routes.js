@@ -328,28 +328,30 @@ router.delete('/schools/:id', wrap(async (req, res) => {
     ], { timeout: 30000 });
 
     // Then cascade delete all data
-    await prisma.notificationLog.deleteMany({ where: { schoolId: id } });
-    await prisma.auditLog.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.automationRule.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.notificationTemplate.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.feePayment.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.feeInvoice.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.expense.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.attendanceRecord.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.attendance.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.homework.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.examResult.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.exam.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.parentStudent.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.parent.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.student.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.staff.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.user.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.campus.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.section.deleteMany({ where: { schoolId: id } }).catch(() => {}).catch(() => {});
-    await prisma.subject.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.class.deleteMany({ where: { schoolId: id } }).catch(() => {});
-    await prisma.academicSession.deleteMany({ where: { schoolId: id } }).catch(() => {});
+    // Delete all school data in FK-safe order
+    const w = { schoolId: id };
+    const schoolTables = [
+      'chatMessage','conversationParticipant','conversation',
+      'quizAttempt','quizQuestion','quiz','testMark','test',
+      'ptmBooking','ptmSlot','ptmEvent','eventParticipant','schoolEvent',
+      'alumniProfile','bookIssue','libraryBook','paymentTransaction','certificateRegistry',
+      'leaveBalance','attendanceCorrection','examTimetable',
+      'biometricPunch','faceEnrollment','biometricDevice','gatePass',
+      'leadFollowUp','admissionLead','behaviorRecord','schoolTask','certificate',
+      'announcement','videoTutorial','holidayEvent','leaveApplication',
+      'onlineClass','studyMaterial','noticeboard','staffLoan','timetableEntry',
+      'auditLog','admissionInquiry','parentComplaint','transportRoute',
+      'stockTransaction','product','staffAppraisal','payrollAdjustment',
+      'salaryRecord','staffAttendance','notificationLog','automationRule',
+      'notificationTemplate','deviceToken','roboBuddyConfig','dbBackup',
+      'rolePermission','feePayment','feeInvoice','feeStructure','expense',
+      'expenseCategory','attendance','homeworkDiary','examMark','examSettings',
+      'exam','otpToken','parentStudent','parent','student','staff','user',
+      'section','subject','class','campus','academicSession','department',
+    ];
+    for (const t of schoolTables) {
+      if (prisma[t]) await prisma[t].deleteMany({ where: w }).catch(() => {});
+    }
     // Finally delete the school
     await prisma.school.delete({ where: { id } });
 
@@ -381,16 +383,46 @@ router.delete('/schools', wrap(async (req, res) => {
     return res.json({ success: true, message: 'No schools — database already empty.' });
   }
 
+  // Delete in FK-safe order using correct Prisma model names
   const tables = [
-    'notificationLog','automationRule','notificationTemplate',
-    'feePayment','feeInvoice','expense',
-    'attendanceRecord','attendance',
-    'homework','examResult','exam',
+    'chatMessage','conversationParticipant','conversation',
+    'quizAttempt','quizQuestion','quiz',
+    'testMark','test',
+    'ptmBooking','ptmSlot','ptmEvent',
+    'eventParticipant','schoolEvent',
+    'alumniProfile',
+    'bookIssue','libraryBook',
+    'paymentTransaction','certificateRegistry',
+    'leaveBalance','attendanceCorrection',
+    'examTimetable',
+    'biometricPunch','faceEnrollment','biometricDevice',
+    'gatePass',
+    'leadFollowUp','admissionLead',
+    'behaviorRecord','schoolTask','certificate',
+    'announcement','videoTutorial','holidayEvent',
+    'leaveApplication','onlineClass','studyMaterial','noticeboard',
+    'staffLoan','timetableEntry',
+    'auditLog','admissionInquiry','parentComplaint',
+    'transportRoute',
+    'stockTransaction','product',
+    'staffAppraisal','payrollAdjustment','salaryRecord','staffAttendance',
+    'notificationLog','automationRule','notificationTemplate','deviceToken',
+    'roboBuddyConfig','dbBackup','sopDocument',
+    'rolePermission',
+    'feePayment','feeInvoice','feeStructure','expense','expenseCategory',
+    'attendance',
+    'homeworkDiary',
+    'examMark','examSettings','exam',
+    'otpToken',
     'parentStudent','parent','student',
-    'staff','user',
-    'campus','section','subject','class','academicSession',
+    'staff',
+    'user',
+    'section','subject','class',
+    'campus','academicSession','department',
   ];
-  for (const t of tables) { await prisma[t].deleteMany({}).catch(() => {}); }
+  for (const t of tables) {
+    if (prisma[t]) await prisma[t].deleteMany({}).catch(() => {});
+  }
   await prisma.school.deleteMany({});
 
   res.json({ success: true, message: `✅ All ${schools.length} schools deleted. Fresh start ready!`, deleted: schools.map(s => s.name) });
