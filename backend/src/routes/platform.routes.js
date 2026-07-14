@@ -259,6 +259,32 @@ router.post('/schools/:id/plan', wrap(async (req, res) => {
   res.json({ success: true, message: `Plan updated to ${plan} for "${school.name}"`, data: school });
 }));
 
+/* ── POST /platform/check-license (public — offline remote suspend check) ──
+   Called by offline app on startup to check if platform owner suspended it
+   No auth needed — just the license key
+─────────────────────────────────────────────────────────────────── */
+router.post('/check-license', wrap(async (req, res) => {
+  const { key } = req.body;
+  if (!key) return res.json({ valid: false, reason: 'No key' });
+
+  const school = await prisma.school.findFirst({
+    where: { licenseKey: key },
+    select: { id: true, name: true, status: true, suspendReason: true, licenseExpiry: true },
+  });
+
+  if (!school) return res.json({ valid: true, suspended: false, note: 'Key not in cloud DB — offline only' });
+
+  if (school.status === 'suspended') {
+    return res.json({ valid: false, suspended: true, reason: school.suspendReason || 'Suspended by platform admin' });
+  }
+
+  if (school.licenseExpiry && new Date(school.licenseExpiry) < new Date()) {
+    return res.json({ valid: false, suspended: true, reason: 'License expired in cloud — contact IlmForge' });
+  }
+
+  res.json({ valid: true, suspended: false, schoolName: school.name });
+}));
+
 /* ── POST /platform/validate-license (public — for offline check) ── */
 // Remove platform auth for this one endpoint
 router.post('/validate-license', (req, res, next) => next(), wrap(async (req, res) => {

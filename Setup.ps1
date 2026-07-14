@@ -183,35 +183,40 @@ function Run-Install($cfg) {
         L "Files copied OK" "g"
     }catch{L "Copy FAILED: $_" "r";$pf.Close();return $false}
 
-    # 3 - Switch schema to SQLite
-    S "Switching database to SQLite..." 35
-    L ">>> Patching schema.prisma for SQLite..." "a"
+    # 3 - Write .env for local SQLite (Prisma reads this automatically)
+    S "Setting up local database config..." 35
+    L ">>> Writing .env for SQLite..." "a"
+    $envContent = "DATABASE_URL=`"file:./prisma/dev.db`"`r`nNODE_ENV=production`r`nPORT=5000`r`nJWT_SECRET=IlmForgeLocal@2026#OfflineKey`r`nJWT_EXPIRES_IN=24h`r`nPLATFORM_OWNER_KEY=IlmForge@GhulamMujtaba#PlatformOwner2026!Master`r`nLICENSE_SECRET=IlmForgeLicense@Secret#2026!OfflineKey`r`nFRONTEND_URL=http://localhost:3000`r`nAPP_URL=http://localhost:5000"
+    [System.IO.File]::WriteAllText("$dir\backend\.env", $envContent, [System.Text.Encoding]::ASCII)
+    L ".env file written" "g"
+
+    # Ensure schema is SQLite
     $sch="$dir\backend\prisma\schema.prisma"
     if(Test-Path $sch){
-        $content = Get-Content $sch -Raw
-        $content = $content -replace 'provider\s*=\s*"postgresql"','provider = "sqlite"'
-        [System.IO.File]::WriteAllText($sch, $content, [System.Text.Encoding]::UTF8)
-        L "Schema switched to SQLite" "g"
-        # Verify
-        $check = Get-Content $sch -TotalCount 10 | Out-String
-        if($check -match 'sqlite'){L "Verified: provider = sqlite" "g"}
-        else{L "WARNING: patch may not have worked" "y"}
-    }else{L "schema.prisma not found at $sch" "r"}
+        $raw = [System.IO.File]::ReadAllText($sch)
+        if($raw -match 'provider\s*=\s*"postgresql"'){
+            $raw = $raw -replace 'provider\s*=\s*"postgresql"','provider = "sqlite"'
+            [System.IO.File]::WriteAllText($sch, $raw, [System.Text.Encoding]::UTF8)
+            L "Schema patched to SQLite" "g"
+        } else { L "Schema already SQLite" "g" }
+    } else { L "WARNING: schema.prisma not found" "y" }
 
     # 4 - npm install backend
-    S "Installing backend packages (npm install)..." 45
+    S "Installing backend packages..." 45
     L ">>> npm install backend..." "a"
     $p=Start-Process "cmd" -ArgumentList "/c npm install" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
     L "npm install done (exit: $($p.ExitCode))" "g"
 
-    # 5 - Prisma (DATABASE_URL must be inline — Start-Process doesn't inherit PS env)
+    # 5 - Prisma (reads DATABASE_URL from .env file)
     S "Creating local database..." 60
-    L ">>> prisma generate + db push..." "a"
-    $dbUrl = "file:./prisma/dev.db"
-    $p2=Start-Process "cmd" -ArgumentList "/c set DATABASE_URL=$dbUrl && npx prisma generate" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
-    L "prisma generate done (exit: $($p2.ExitCode))" "g"
-    $p3=Start-Process "cmd" -ArgumentList "/c set DATABASE_URL=$dbUrl && npx prisma db push --accept-data-loss" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
-    L "prisma db push done (exit: $($p3.ExitCode))" "g"
+    L ">>> prisma generate..." "a"
+    $p2=Start-Process "cmd" -ArgumentList "/c npx prisma generate" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
+    L "prisma generate (exit: $($p2.ExitCode))" "g"
+    L ">>> prisma db push..." "a"
+    $p3=Start-Process "cmd" -ArgumentList "/c npx prisma db push --accept-data-loss" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
+    L "prisma db push (exit: $($p3.ExitCode))" "g"
+    if(Test-Path "$dir\backend\prisma\dev.db"){ L "Database file created OK" "g" }
+    else { L "WARNING: dev.db not found - check errors above" "y" }
 
     # 6 - Save license
     S "Saving license..." 70
@@ -246,10 +251,13 @@ function Run-Install($cfg) {
     $bat += "npx serve dist -l 3000 -s`r`n"
     [System.IO.File]::WriteAllText("$dir\IlmForge.bat", $bat, [System.Text.Encoding]::ASCII)
 
-    $vbs = "Set sh = CreateObject(" + [char]34 + "WScript.Shell" + [char]34 + ")" + "`r`n"
-    $vbs += "sh.Run " + [char]34 + "cmd /c " + [char]34 + [char]34 + [char]34 + "$dir\IlmForge.bat" + [char]34 + [char]34 + [char]34 + [char]34 + ", 0, False" + "`r`n"
-    $vbs += "WScript.Sleep 5000" + "`r`n"
-    $vbs += "sh.Run " + [char]34 + "http://localhost:3000" + [char]34 + ", 1, False" + "`r`n"
+    # VBScript launcher — use Chr(34) for quotes to avoid escaping issues
+    $q = [char]34
+    $vbs  = "Set sh = CreateObject(${q}WScript.Shell${q})" + "`r`n"
+    $vbs += "sh.CurrentDirectory = ${q}$dir${q}" + "`r`n"
+    $vbs += "sh.Run ${q}IlmForge.bat${q}, 0, False" + "`r`n"
+    $vbs += "WScript.Sleep 6000" + "`r`n"
+    $vbs += "sh.Run ${q}http://localhost:3000${q}, 1, False" + "`r`n"
     [System.IO.File]::WriteAllText("$dir\IlmForge.vbs", $vbs, [System.Text.Encoding]::ASCII)
     L "Launchers created" "g"
 

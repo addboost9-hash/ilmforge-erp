@@ -35,26 +35,59 @@ if (isOffline) {
   }
 
   if (lic.expiry) {
-    const expiry  = new Date(lic.expiry);
-    const today   = new Date();
+    const expiry   = new Date(lic.expiry);
+    const today    = new Date();
     const daysLeft = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
 
     if (daysLeft <= 0) {
-      console.error('\n╔══════════════════════════════════════════════════╗');
-      console.error('║  ❌  LICENSE EXPIRED                             ║');
-      console.error(`║  Expiry: ${lic.expiry}                          ║`);
-      console.error('║  Renewal: WhatsApp 0346-5146609                  ║');
-      console.error('║  IlmForge support se nayi key mangwayein.        ║');
-      console.error('╚══════════════════════════════════════════════════╝\n');
+      console.error('\n========================================');
+      console.error('  LICENSE EXPIRED');
+      console.error(`  Expiry: ${lic.expiry}`);
+      console.error('  Renewal: WhatsApp 0346-5146609');
+      console.error('========================================\n');
       process.exit(1);
     }
-
     if (daysLeft <= 7) {
-      console.warn(`\n⚠️  LICENSE EXPIRING SOON: ${daysLeft} days left (${lic.expiry})`);
-      console.warn('   Renewal: WhatsApp 0346-5146609\n');
+      console.warn(`WARNING: License expiring in ${daysLeft} days (${lic.expiry}) — WhatsApp 0346-5146609`);
     } else {
-      console.log(`✅ License valid — ${daysLeft} days remaining (expires: ${lic.expiry})`);
+      console.log(`License OK — ${daysLeft} days remaining (${lic.expiry})`);
     }
+  }
+
+  // Remote suspend check — ping cloud server if internet available (non-blocking)
+  if (lic.key) {
+    const checkUrl = 'https://ilmforge-erp.onrender.com/api/v1/platform/check-license';
+    const http2 = require('https');
+    const body = JSON.stringify({ key: lic.key });
+    const req = http2.request(checkUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    }, (res) => {
+      let data = '';
+      res.on('data', d => { data += d; });
+      res.on('end', () => {
+        try {
+          const r = JSON.parse(data);
+          if (r.suspended) {
+            console.error('\n========================================');
+            console.error('  ACCESS SUSPENDED BY PLATFORM OWNER');
+            console.error(`  Reason: ${r.reason || 'Contact IlmForge support'}`);
+            console.error('  WhatsApp: 0346-5146609');
+            console.error('========================================\n');
+            process.exit(1);
+          }
+          if (r.valid === false) {
+            console.warn('Remote license check: invalid key — running in offline mode');
+          } else {
+            console.log('Remote license verified OK');
+          }
+        } catch {}
+      });
+    });
+    req.on('error', () => { /* No internet — skip remote check, local license still valid */ });
+    req.setTimeout(5000, () => { req.destroy(); });
+    req.write(body);
+    req.end();
   }
 
 /* ── Get local network IPs for LAN access ── */
