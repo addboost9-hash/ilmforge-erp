@@ -10,6 +10,21 @@ import toast from 'react-hot-toast';
 import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
 
+/* Generate unique gradient from school name — every school looks different */
+function schoolColor(name = '') {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
+  const hue  = Math.abs(h) % 360;
+  const sat  = 55 + (Math.abs(h >> 8) % 20);
+  const lite = 22 + (Math.abs(h >> 16) % 10);
+  const hue2 = (hue + 30) % 360;
+  return {
+    from: `hsl(${hue},${sat}%,${lite}%)`,
+    to:   `hsl(${hue2},${sat + 10}%,${lite + 15}%)`,
+    accent: `hsl(${(hue + 180) % 360},80%,65%)`,
+  };
+}
+
 export default function BrandedLoginPage() {
   const navigate    = useNavigate();
   const [params]    = useSearchParams();
@@ -65,6 +80,7 @@ export default function BrandedLoginPage() {
   const schoolName = school?.name || (schoolError ? 'School Not Found' : 'IlmForge School');
   const schoolCity = school?.city || school?.address || 'Pakistan';
   const logo       = school?.logoUrl || (localStorage.getItem('schoolLogoPreview') || null);
+  const clr        = schoolColor(schoolName);
 
   /* Loading */
   if (loadingSch) return (
@@ -81,7 +97,7 @@ export default function BrandedLoginPage() {
     <div style={{
       minHeight: '100vh',
       display: 'flex',
-      background: 'linear-gradient(145deg, #0f1e4a 0%, #1B2F6E 40%, #0073b7 100%)',
+      background: `linear-gradient(145deg, ${clr.from} 0%, ${clr.to} 100%)`,
       fontFamily: "'Segoe UI','Inter',system-ui,sans-serif",
     }}>
       <style>{`
@@ -108,7 +124,7 @@ export default function BrandedLoginPage() {
           <div style={{ display:'inline-flex', alignItems:'center', gap:10, marginBottom:6 }}>
             <GraduationCap size={28} color="#D97706"/>
             <span style={{ fontSize:28, fontWeight:900, color:'white', letterSpacing:'-0.5px' }}>
-              ilm<span style={{ color:'#D97706', fontFamily:"'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif" }}>فورج</span>
+              ilm<span style={{ color: clr.accent, fontFamily:"'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif" }}>فورج</span>
             </span>
           </div>
           <p style={{ color:'rgba(255,255,255,0.5)', fontSize:12, margin:0, letterSpacing:2, textTransform:'uppercase' }}>
@@ -233,7 +249,7 @@ export default function BrandedLoginPage() {
 
             {/* Login button */}
             <button type="submit" className="login-btn" disabled={isLoading}
-              style={{ width:'100%', padding:'13px', borderRadius:10, border:'none', background:'linear-gradient(135deg,#1B2F6E,#0073b7)', color:'white', fontSize:15, fontWeight:700, cursor: isLoading ? 'not-allowed' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, fontFamily:'inherit', boxShadow:'0 4px 16px rgba(27,47,110,0.3)', transition:'all .15s', opacity: isLoading ? 0.8 : 1 }}>
+              style={{ width:'100%', padding:'13px', borderRadius:10, border:'none', background:`linear-gradient(135deg,${clr.from},${clr.to})`, color:'white', fontSize:15, fontWeight:700, cursor: isLoading ? 'not-allowed' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, fontFamily:'inherit', boxShadow:`0 4px 16px rgba(0,0,0,0.25)`, transition:'all .15s', opacity: isLoading ? 0.8 : 1 }}>
               {isLoading
                 ? <><Loader2 size={17} style={{ animation:'spin .8s linear infinite' }}/> Logging in…</>
                 : <><ArrowRight size={17}/> Login Karein</>
