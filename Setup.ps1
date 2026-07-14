@@ -56,19 +56,29 @@ function Show-License {
     $lbSt=Make-Label "" 14 78 396 20 9 $false ([System.Drawing.Color]::Gray)
     $grp.Controls.Add($lbSt)
 
-    $f.Controls.Add((Make-Label "Installation Folder:" 28 316 200 20 9 $true $BRAND_NAVY))
+    # Expiry date
+    $f.Controls.Add((Make-Label "License Expiry Date:" 28 200 200 20 9 $true $BRAND_NAVY))
+    $f.Controls.Add((Make-Label "(Platform Control me dikhi thi - e.g. 13/08/2026)" 230 202 240 18 8 $false ([System.Drawing.Color]::Gray)))
+    $dtPick=New-Object System.Windows.Forms.DateTimePicker
+    $dtPick.Location=[System.Drawing.Point]::new(28,222); $dtPick.Size=[System.Drawing.Size]::new(200,26)
+    $dtPick.Font=New-Object System.Drawing.Font("Segoe UI",10); $dtPick.Format="Short"
+    $dtPick.Value=(Get-Date).AddDays(30)
+    $f.Controls.Add($dtPick)
+    $f.Controls.Add((Make-Label "Expiry ke baad app kaam nahi karega. Renewal ke liye WhatsApp 0346-5146609" 28 250 440 18 8 $false ([System.Drawing.Color]::FromArgb(200,80,80))))
+
+    $f.Controls.Add((Make-Label "Installation Folder:" 28 276 200 20 9 $true $BRAND_NAVY))
     $tDir=New-Object System.Windows.Forms.TextBox
-    $tDir.Location=[System.Drawing.Point]::new(28,338); $tDir.Size=[System.Drawing.Size]::new(310,26)
+    $tDir.Location=[System.Drawing.Point]::new(28,298); $tDir.Size=[System.Drawing.Size]::new(310,26)
     $tDir.Font=New-Object System.Drawing.Font("Segoe UI",9); $tDir.Text=$INSTALL_DIR
     $f.Controls.Add($tDir)
     $bBr=New-Object System.Windows.Forms.Button
-    $bBr.Location=[System.Drawing.Point]::new(346,337); $bBr.Size=[System.Drawing.Size]::new(106,28)
+    $bBr.Location=[System.Drawing.Point]::new(346,297); $bBr.Size=[System.Drawing.Size]::new(106,28)
     $bBr.Text="Browse..."; $bBr.Font=New-Object System.Drawing.Font("Segoe UI",9)
     $bBr.Add_Click({ $dlg=New-Object System.Windows.Forms.FolderBrowserDialog; if($dlg.ShowDialog()-eq"OK"){$tDir.Text=$dlg.SelectedPath} })
     $f.Controls.Add($bBr)
 
     $cDesk=New-Object System.Windows.Forms.CheckBox
-    $cDesk.Text="Desktop shortcut"; $cDesk.Location=[System.Drawing.Point]::new(28,376)
+    $cDesk.Text="Desktop shortcut"; $cDesk.Location=[System.Drawing.Point]::new(28,336)
     $cDesk.Size=[System.Drawing.Size]::new(180,22); $cDesk.Checked=$true
     $cDesk.Font=New-Object System.Drawing.Font("Segoe UI",9); $f.Controls.Add($cDesk)
 
@@ -78,12 +88,12 @@ function Show-License {
     $cAuto.Font=New-Object System.Drawing.Font("Segoe UI",9); $f.Controls.Add($cAuto)
 
     $bCan=New-Object System.Windows.Forms.Button
-    $bCan.Text="Cancel"; $bCan.Location=[System.Drawing.Point]::new(278,430)
+    $bCan.Text="Cancel"; $bCan.Location=[System.Drawing.Point]::new(278,390)
     $bCan.Size=[System.Drawing.Size]::new(82,34); $bCan.Font=New-Object System.Drawing.Font("Segoe UI",9)
     $bCan.Add_Click({$f.Tag="cancel";$f.Close()}); $f.Controls.Add($bCan)
 
     $bIns=New-Object System.Windows.Forms.Button
-    $bIns.Text="Install"; $bIns.Location=[System.Drawing.Point]::new(368,430)
+    $bIns.Text="Install"; $bIns.Location=[System.Drawing.Point]::new(368,390)
     $bIns.Size=[System.Drawing.Size]::new(88,34)
     $bIns.Font=New-Object System.Drawing.Font("Segoe UI",10,[System.Drawing.FontStyle]::Bold)
     $bIns.BackColor=$BRAND_NAVY; $bIns.ForeColor=$BRAND_WHITE; $bIns.FlatStyle="Flat"
@@ -94,7 +104,7 @@ function Show-License {
         if(-not(Validate-Key $k)){$lbSt.ForeColor=[System.Drawing.Color]::Red;$lbSt.Text="Format: ILM-0010-STAR-XXXXXXXXXXXX";return}
         $lbSt.ForeColor=[System.Drawing.Color]::Green; $lbSt.Text="License OK!"
         $f.Refresh(); Start-Sleep -Milliseconds 400
-        $f.Tag=@{key=$k;installDir=$tDir.Text;desktop=$cDesk.Checked;startup=$cAuto.Checked}
+        $f.Tag=@{key=$k;expiry=$dtPick.Value.ToString("yyyy-MM-dd");installDir=$tDir.Text;desktop=$cDesk.Checked;startup=$cAuto.Checked}
         $f.Close()
     })
     $f.Controls.Add($bIns)
@@ -206,7 +216,8 @@ function Run-Install($cfg) {
     # 6 - Save license
     S "Saving license..." 70
     L ">>> Saving license key..." "a"
-    @{key=$cfg.key;installedAt=(Get-Date -Format "yyyy-MM-dd")} | ConvertTo-Json | Out-File "$dir\license.json" -Encoding UTF8
+    @{key=$cfg.key;expiry=$cfg.expiry;installedAt=(Get-Date -Format "yyyy-MM-dd")} | ConvertTo-Json | Out-File "$dir\license.json" -Encoding UTF8
+    L "Expiry: $($cfg.expiry)" "g"
     L "License saved" "g"
 
     # 7 - serve

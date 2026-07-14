@@ -1,11 +1,61 @@
 require('dotenv').config();
-const app = require('./app');
+const app    = require('./app');
 const prisma = require('./config/prisma');
 const { initScheduler, startKeepAlivePing } = require('./services/scheduler.service');
-const os = require('os');
+const os   = require('os');
+const fs   = require('fs');
+const path = require('path');
 
-const PORT = process.env.PORT || 5000;
+const PORT    = process.env.PORT || 5000;
 const isLocal = process.env.NODE_ENV !== 'production';
+const dbUrl   = process.env.DATABASE_URL || '';
+const isOffline = dbUrl.startsWith('file:');
+
+/* ── Offline License Check ───────────────────────────────────────────
+   Reads license.json one level above backend (installed by Setup.ps1)
+   If expired → server refuses to start with clear message
+─────────────────────────────────────────────────────────────────── */
+if (isOffline) {
+  const licPaths = [
+    path.join(__dirname, '..', '..', '..', 'license.json'),  // C:\Program Files\IlmForge\license.json
+    path.join(__dirname, '..', '..', 'license.json'),
+  ];
+  let lic = null;
+  for (const p of licPaths) {
+    if (fs.existsSync(p)) { try { lic = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {} break; }
+  }
+
+  if (!lic) {
+    console.error('\n╔══════════════════════════════════════════════════╗');
+    console.error('║  ❌  LICENSE NOT FOUND                           ║');
+    console.error('║  license.json missing. Re-install IlmForge.     ║');
+    console.error('║  Support: WhatsApp 0346-5146609                  ║');
+    console.error('╚══════════════════════════════════════════════════╝\n');
+    process.exit(1);
+  }
+
+  if (lic.expiry) {
+    const expiry  = new Date(lic.expiry);
+    const today   = new Date();
+    const daysLeft = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+
+    if (daysLeft <= 0) {
+      console.error('\n╔══════════════════════════════════════════════════╗');
+      console.error('║  ❌  LICENSE EXPIRED                             ║');
+      console.error(`║  Expiry: ${lic.expiry}                          ║`);
+      console.error('║  Renewal: WhatsApp 0346-5146609                  ║');
+      console.error('║  IlmForge support se nayi key mangwayein.        ║');
+      console.error('╚══════════════════════════════════════════════════╝\n');
+      process.exit(1);
+    }
+
+    if (daysLeft <= 7) {
+      console.warn(`\n⚠️  LICENSE EXPIRING SOON: ${daysLeft} days left (${lic.expiry})`);
+      console.warn('   Renewal: WhatsApp 0346-5146609\n');
+    } else {
+      console.log(`✅ License valid — ${daysLeft} days remaining (expires: ${lic.expiry})`);
+    }
+  }
 
 /* ── Get local network IPs for LAN access ── */
 function getLocalIPs() {
@@ -21,9 +71,10 @@ function getLocalIPs() {
   return ips;
 }
 
+}
+
 // SQLite WAL mode — only when using local file-based SQLite
-const dbUrl = process.env.DATABASE_URL || '';
-if (dbUrl.startsWith('file:') || dbUrl === '') {
+if (isOffline) {
   prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {});
   prisma.$queryRawUnsafe('PRAGMA synchronous=NORMAL').catch(() => {});
   prisma.$queryRawUnsafe('PRAGMA cache_size=10000').catch(() => {});
