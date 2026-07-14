@@ -194,14 +194,13 @@ function Run-Install($cfg) {
     $p=Start-Process "cmd" -ArgumentList "/c npm install" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
     L "npm install done (exit: $($p.ExitCode))" "g"
 
-    # 5 - Prisma
+    # 5 - Prisma (DATABASE_URL must be inline — Start-Process doesn't inherit PS env)
     S "Creating local database..." 60
-    L ">>> prisma generate..." "a"
-    $env:DATABASE_URL = "file:./prisma/dev.db"
-    $p2=Start-Process "cmd" -ArgumentList "/c npx prisma generate" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
+    L ">>> prisma generate + db push..." "a"
+    $dbUrl = "file:./prisma/dev.db"
+    $p2=Start-Process "cmd" -ArgumentList "/c set DATABASE_URL=$dbUrl && npx prisma generate" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
     L "prisma generate done (exit: $($p2.ExitCode))" "g"
-    L ">>> prisma db push..." "a"
-    $p3=Start-Process "cmd" -ArgumentList "/c npx prisma db push --accept-data-loss" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
+    $p3=Start-Process "cmd" -ArgumentList "/c set DATABASE_URL=$dbUrl && npx prisma db push --accept-data-loss" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
     L "prisma db push done (exit: $($p3.ExitCode))" "g"
 
     # 6 - Save license
