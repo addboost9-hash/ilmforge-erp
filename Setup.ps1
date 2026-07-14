@@ -191,17 +191,17 @@ function Run-Install($cfg) {
     # 4 - npm install backend
     S "Installing backend packages (npm install)..." 45
     L ">>> npm install backend..." "a"
-    $p=Start-Process "npm" "install" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
+    $p=Start-Process "cmd" -ArgumentList "/c npm install" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
     L "npm install done (exit: $($p.ExitCode))" "g"
 
     # 5 - Prisma
     S "Creating local database..." 60
     L ">>> prisma generate..." "a"
-    $env:DATABASE_URL="file:./prisma/dev.db"
-    $p2=Start-Process "npx" "prisma generate" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
+    $env:DATABASE_URL = "file:./prisma/dev.db"
+    $p2=Start-Process "cmd" -ArgumentList "/c npx prisma generate" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
     L "prisma generate done (exit: $($p2.ExitCode))" "g"
     L ">>> prisma db push..." "a"
-    $p3=Start-Process "npx" "prisma db push --accept-data-loss" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
+    $p3=Start-Process "cmd" -ArgumentList "/c npx prisma db push --accept-data-loss" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
     L "prisma db push done (exit: $($p3.ExitCode))" "g"
 
     # 6 - Save license
@@ -213,7 +213,7 @@ function Run-Install($cfg) {
     # 7 - serve
     S "Installing frontend server..." 78
     L ">>> npm install -g serve..." "a"
-    Start-Process "npm" "install -g serve" -Wait -NoNewWindow
+    Start-Process "cmd" -ArgumentList "/c npm install -g serve" -Wait -NoNewWindow
     L "serve installed" "g"
 
     # 8 - Launcher
