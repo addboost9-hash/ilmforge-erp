@@ -21,12 +21,13 @@ function getLocalIPs() {
   return ips;
 }
 
-// SQLite WAL mode for local/offline — faster writes
-if ((process.env.DB_PROVIDER || 'sqlite') === 'sqlite') {
+// SQLite WAL mode — only when using local file-based SQLite
+const dbUrl = process.env.DATABASE_URL || '';
+if (dbUrl.startsWith('file:') || dbUrl === '') {
   prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {});
   prisma.$queryRawUnsafe('PRAGMA synchronous=NORMAL').catch(() => {});
-  prisma.$queryRawUnsafe('PRAGMA cache_size=10000').catch(() => {});   // 40MB cache
-  prisma.$queryRawUnsafe('PRAGMA temp_store=MEMORY').catch(() => {});  // faster temp ops
+  prisma.$queryRawUnsafe('PRAGMA cache_size=10000').catch(() => {});
+  prisma.$queryRawUnsafe('PRAGMA temp_store=MEMORY').catch(() => {});
 }
 
 app.listen(PORT, '0.0.0.0', () => {  // 0.0.0.0 = accept connections from all network interfaces (LAN)

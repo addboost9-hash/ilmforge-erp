@@ -369,6 +369,33 @@ router.delete('/schools/:id', wrap(async (req, res) => {
    Testing only — archive a school by email so you can re-register
    Body: { email: "test@example.com" }
 ─────────────────────────────────────────────────────────── */
+/* ── DELETE /platform/schools — Nuclear reset: delete ALL schools ── */
+router.delete('/schools', wrap(async (req, res) => {
+  const { confirm } = req.body;
+  if (confirm !== 'DELETE_ALL_SCHOOLS') {
+    return res.status(400).json({ success: false, message: 'Send { confirm: "DELETE_ALL_SCHOOLS" } to proceed' });
+  }
+
+  const schools = await prisma.school.findMany({ select: { id: true, name: true } });
+  if (schools.length === 0) {
+    return res.json({ success: true, message: 'No schools — database already empty.' });
+  }
+
+  const tables = [
+    'notificationLog','automationRule','notificationTemplate',
+    'feePayment','feeInvoice','expense',
+    'attendanceRecord','attendance',
+    'homework','examResult','exam',
+    'parentStudent','parent','student',
+    'staff','user',
+    'campus','section','subject','class','academicSession',
+  ];
+  for (const t of tables) { await prisma[t].deleteMany({}).catch(() => {}); }
+  await prisma.school.deleteMany({});
+
+  res.json({ success: true, message: `✅ All ${schools.length} schools deleted. Fresh start ready!`, deleted: schools.map(s => s.name) });
+}));
+
 router.delete('/cleanup-email', wrap(async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ success: false, message: 'email required' });

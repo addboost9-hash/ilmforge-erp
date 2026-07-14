@@ -222,6 +222,21 @@ export default function PlatformControlPage() {
             style={{ padding:'9px 16px', background:'#dcfce7', border:'1px solid #86efac', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:700, color:'#15803d' }}>
             ✅ Activate All
           </button>
+          {/* Delete ALL schools */}
+          <button onClick={async () => {
+            if (!window.confirm(`⚠️ DELETE ALL ${schools.length} SCHOOLS?\n\nThis will permanently delete ALL data!\nCannot be undone!`)) return;
+            const typed = window.prompt('Type "DELETE ALL" to confirm nuclear reset:');
+            if (typed !== 'DELETE ALL') { toast.error('Cancelled'); return; }
+            try {
+              const r = await platformApi.delete('/platform/schools', { data: { confirm: 'DELETE_ALL_SCHOOLS' } });
+              toast.success(r.data.message);
+              qc.invalidateQueries(['platform-schools']);
+              qc.invalidateQueries(['platform-stats']);
+            } catch(e) { toast.error(e.response?.data?.message || 'Failed'); }
+          }}
+            style={{ padding:'9px 16px', background:'#fef2f2', border:'1px solid #fecaca', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:700, color:'#dc2626' }}>
+            🗑️ Delete All
+          </button>
           <button onClick={() => qc.invalidateQueries(['platform-schools'])}
             style={{ padding:'9px 14px', background:'white', border:'1px solid #e2e8f0', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:600 }}>
             <RefreshCw size={13}/> Refresh
