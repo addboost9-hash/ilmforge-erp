@@ -120,7 +120,7 @@ function Run-Install($cfg) {
 
     # Progress window (non-blocking)
     $pf=New-Object System.Windows.Forms.Form
-    $pf.Text="IlmForge Setup - Installing..."; $pf.Size=[System.Drawing.Size]::new(500,460)
+    $pf.Text="IlmForge Setup - Installing..."; $pf.Size=[System.Drawing.Size]::new(500,530)
     $pf.StartPosition="CenterScreen"; $pf.FormBorderStyle="FixedSingle"
     $pf.MaximizeBox=$false; $pf.ControlBox=$false; $pf.BackColor=[System.Drawing.Color]::White
 
@@ -300,7 +300,7 @@ function Run-Install($cfg) {
 
     # Success message bar
     $successBar=New-Object System.Windows.Forms.Panel
-    $successBar.Location=[System.Drawing.Point]::new(18,374); $successBar.Size=[System.Drawing.Size]::new(458,38)
+    $successBar.Location=[System.Drawing.Point]::new(18,384); $successBar.Size=[System.Drawing.Size]::new(458,38)
     $successBar.BackColor=[System.Drawing.Color]::FromArgb(240,253,244)
     $pf.Controls.Add($successBar)
     $successBar.Controls.Add((Make-Label "IlmForge successfully installed!" 12 10 250 20 9 $true ([System.Drawing.Color]::FromArgb(22,163,74))))
@@ -308,7 +308,7 @@ function Run-Install($cfg) {
 
     $bFin=New-Object System.Windows.Forms.Button
     $bFin.Text="Finish and Launch IlmForge"
-    $bFin.Location=[System.Drawing.Point]::new(18,418)
+    $bFin.Location=[System.Drawing.Point]::new(18,432)
     $bFin.Size=[System.Drawing.Size]::new(458,30)
     $bFin.Font=New-Object System.Drawing.Font("Segoe UI",11,[System.Drawing.FontStyle]::Bold)
     $bFin.BackColor=[System.Drawing.Color]::FromArgb(22,163,74)
