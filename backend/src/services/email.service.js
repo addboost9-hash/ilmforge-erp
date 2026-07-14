@@ -1,17 +1,61 @@
 /**
- * IlmForge — Email Service v2.0
- * Multi-provider: Brevo / Gmail / Office365 / Any SMTP
- * Auto-detects provider from SMTP_HOST and applies correct TLS config
- * OTP emails, welcome emails, fee notifications, reports — all here
+ * IlmForge — Email Service v3.0
+ * Primary: Brevo HTTP API (HTTPS, never blocked by Render/Vercel/Railway)
+ * Fallback: Nodemailer SMTP for Gmail/Office365/generic
  */
 
 const nodemailer = require('nodemailer');
-const path       = require('path');
-const fs         = require('fs');
+const https      = require('https');
 
 const PLATFORM_NAME = process.env.PLATFORM_NAME || 'IlmForge';
 const FROM_EMAIL    = process.env.FROM_EMAIL || process.env.SMTP_USER || 'noreply@ilmforge.pk';
 const FROM_NAME     = process.env.FROM_NAME  || 'IlmForge School ERP';
+
+/* ── Brevo HTTP API sender (uses HTTPS port 443 — never blocked) ── */
+const sendViaBrevoApi = async ({ to, subject, html, text }) => {
+  const apiKey = process.env.SMTP_PASS || process.env.BREVO_API_KEY || '';
+  if (!apiKey) return { success: false, error: 'No Brevo API key' };
+
+  const toArr = Array.isArray(to) ? to : [to];
+  const body = JSON.stringify({
+    sender:      { name: FROM_NAME, email: FROM_EMAIL },
+    to:          toArr.map(email => ({ email })),
+    subject,
+    htmlContent: html || `<p>${text || subject}</p>`,
+    textContent: text || subject,
+  });
+
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'api.brevo.com',
+      path:     '/v3/smtp/email',
+      method:   'POST',
+      headers: {
+        'api-key':       apiKey,
+        'Content-Type':  'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve({ success: true, messageId: JSON.parse(data || '{}').messageId });
+        } else {
+          const err = JSON.parse(data || '{}');
+          resolve({ success: false, error: err.message || `HTTP ${res.statusCode}` });
+        }
+      });
+    });
+
+    req.on('error', err => resolve({ success: false, error: err.message }));
+    req.setTimeout(15000, () => { req.destroy(); resolve({ success: false, error: 'Brevo API timeout' }); });
+    req.write(body);
+    req.end();
+  });
+};
 
 /* ── Parse email list ───────────────────────────────────── */
 const parseEmailList = (value) =>
@@ -80,16 +124,34 @@ const createTransporter = () => {
 };
 
 /* ── Is email configured? ───────────────────────────────── */
+const isBrevo = () => (process.env.SMTP_HOST || '').includes('brevo') || (process.env.SMTP_HOST || '').includes('sendinblue');
+
 const isEmailConfigured = () => {
-  const pass = process.env.SMTP_PASS;
+  const pass = process.env.SMTP_PASS || process.env.BREVO_API_KEY;
   const user = process.env.SMTP_USER;
   return !!(pass && user && pass !== 'your-app-password' && pass.length > 6);
 };
 
-/* ── Verify SMTP connection ─────────────────────────────── */
+/* ── Verify email connection ───────────────────────────── */
 const verifySmtpConnection = async () => {
   if (!isEmailConfigured()) {
-    return { success: false, error: 'SMTP not configured. Set SMTP_USER and SMTP_PASS in environment.' };
+    return { success: false, error: 'Email not configured. Set SMTP_USER and SMTP_PASS in environment.' };
+  }
+  if (isBrevo()) {
+    // Test Brevo API with a quick account info request
+    return new Promise((resolve) => {
+      const req = https.request({
+        hostname: 'api.brevo.com', path: '/v3/account', method: 'GET',
+        headers: { 'api-key': process.env.SMTP_PASS || process.env.BREVO_API_KEY },
+      }, (res) => {
+        resolve(res.statusCode === 200
+          ? { success: true, host: 'api.brevo.com (HTTP API)', user: process.env.SMTP_USER }
+          : { success: false, error: `Brevo API returned ${res.statusCode} — check SMTP_PASS/API key` });
+      });
+      req.on('error', err => resolve({ success: false, error: err.message }));
+      req.setTimeout(10000, () => { req.destroy(); resolve({ success: false, error: 'Timeout' }); });
+      req.end();
+    });
   }
   try {
     const transporter = createTransporter();
@@ -104,32 +166,38 @@ const verifySmtpConnection = async () => {
    CORE sendEmail — used by all functions below
 ══════════════════════════════════════════════════════════ */
 const sendEmail = async ({ to, cc, bcc, subject, html, text, attachments = [] }) => {
-  // Dev/offline mode — log to console
   if (!isEmailConfigured()) {
-    console.log(`\n📧 [EMAIL DEV MODE — Not sent]`);
-    console.log(`   To:      ${to}`);
-    console.log(`   Subject: ${subject}`);
-    console.log(`   Note:    Set SMTP_USER + SMTP_PASS in .env for real emails\n`);
+    console.log(`📧 [EMAIL DEV MODE] To: ${to} | Subject: ${subject}`);
     return { success: true, dev: true };
   }
 
+  const toStr = Array.isArray(to) ? to.join(', ') : to;
+
+  // Brevo: use HTTP API (HTTPS/443) — avoids SMTP port blocking on Render
+  if (isBrevo()) {
+    const result = await sendViaBrevoApi({ to, subject, html, text });
+    if (result.success) {
+      console.log(`📧 ✅ Brevo API → ${toStr}`);
+    } else {
+      console.error(`📧 ❌ Brevo API FAILED → ${toStr}: ${result.error}`);
+    }
+    return result;
+  }
+
+  // Non-Brevo: fall back to SMTP (Gmail / Office365 / generic)
   try {
     const transporter = createTransporter();
     const info = await transporter.sendMail({
       from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to,
-      cc,
-      bcc,
-      subject,
+      to, cc, bcc, subject,
       html: html || `<p>${text || subject}</p>`,
       text: text || subject,
       attachments,
     });
-    console.log(`📧 ✅ Email sent → ${Array.isArray(to) ? to.join(', ') : to} | msgId: ${info.messageId}`);
+    console.log(`📧 ✅ SMTP → ${toStr} | msgId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (err) {
-    console.error(`📧 ❌ Email FAILED → ${to}: ${err.message}`);
-    // Don't throw — email failure should not break core features
+    console.error(`📧 ❌ SMTP FAILED → ${toStr}: ${err.message}`);
     return { success: false, error: err.message };
   }
 };
