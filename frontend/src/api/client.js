@@ -74,6 +74,12 @@ api.interceptors.response.use(
         err.config.headers.Authorization = `Bearer ${newToken}`;
         return api.request(err.config);
       } catch (refreshErr) {
+        // 503 = server restarting (Render spin-up) — don't logout, just retry after delay
+        if (refreshErr.response?.status === 503) {
+          processQueue(null, localStorage.getItem('accessToken'));
+          isRefreshing = false;
+          return new Promise(resolve => setTimeout(() => resolve(api.request(err.config)), 4000));
+        }
         processQueue(refreshErr, null);
         clearAndRedirect();
         return Promise.reject(refreshErr);

@@ -415,14 +415,30 @@ const login = async ({ email, phone, password }) => {
 
 // Refresh token
 const refreshToken = async ({ refreshToken: token }) => {
+  // Step 1: Verify JWT signature — real token errors
+  let decoded;
   try {
-    const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-    const user = await prisma.user.findUnique({ where: { id: decoded.id }, include: { school: true } });
-    if (!user || !user.isActive) throw { status: 401, message: 'Invalid token' };
-    return generateTokens(user);
+    decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
   } catch {
     throw { status: 401, message: 'Invalid or expired refresh token.' };
   }
+
+  // Step 2: Load user — DB errors are NOT token errors (retry once on connection drop)
+  let user;
+  try {
+    user = await prisma.user.findUnique({ where: { id: decoded.id }, include: { school: true } });
+  } catch (dbErr) {
+    // Neon connection dropped (happens on Render spin-up) — wait and retry once
+    await new Promise(r => setTimeout(r, 2500));
+    try {
+      user = await prisma.user.findUnique({ where: { id: decoded.id }, include: { school: true } });
+    } catch {
+      throw { status: 503, message: 'Server restarting — please try again in a moment.' };
+    }
+  }
+
+  if (!user || !user.isActive) throw { status: 401, message: 'Account not found or deactivated.' };
+  return generateTokens(user);
 };
 
 // Change password
