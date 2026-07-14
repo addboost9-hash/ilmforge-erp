@@ -1,395 +1,308 @@
 
-# IlmForge School Management System - Professional Setup
-# Windows Installer with License Validation
-# Version 3.3 | IlmForge Pakistan
-
+# IlmForge School Management System - Professional Setup v3.3
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $INSTALL_DIR    = "$env:PROGRAMFILES\IlmForge"
 $APP_DIR        = $PSScriptRoot
-$LICENSE_SECRET = "IlmForgeLicense@Secret#2026!OfflineKey"
 $BRAND_NAVY     = [System.Drawing.Color]::FromArgb(27, 47, 110)
 $BRAND_WHITE    = [System.Drawing.Color]::White
 
-# -- License Key Validator --
-function Validate-LicenseKey {
-    param([string]$key)
-    if ($key.Length -lt 15) { return $false }
-    # Basic format check: ILM-XXXX-XXXX-XXXXXXXXXXXX
-    if ($key -notmatch '^ILM-\d{4}-[A-Z0-9]{4}-[A-Z0-9]+$') { return $false }
-    return $true
-}
-
-# -- Helper: create label --
-function New-Lbl($text, $x, $y, $w, $h, $sz, $bold, $col) {
+function Make-Label($text,$x,$y,$w,$h,$sz,$bold,$col) {
     $l = New-Object System.Windows.Forms.Label
-    $l.Text = $text
-    $l.Location = [System.Drawing.Point]::new($x, $y)
-    $l.Size = [System.Drawing.Size]::new($w, $h)
-    $fs = if ($bold) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }
-    $l.Font = New-Object System.Drawing.Font("Segoe UI", $sz, $fs)
-    if ($col) { $l.ForeColor = $col }
-    $l.BackColor = [System.Drawing.Color]::Transparent
+    $l.Text=$text; $l.Location=[System.Drawing.Point]::new($x,$y)
+    $l.Size=[System.Drawing.Size]::new($w,$h)
+    $fs = if($bold){[System.Drawing.FontStyle]::Bold}else{[System.Drawing.FontStyle]::Regular}
+    $l.Font = New-Object System.Drawing.Font("Segoe UI",$sz,$fs)
+    if($col){$l.ForeColor=$col}
+    $l.BackColor=[System.Drawing.Color]::Transparent
     return $l
 }
 
-# ===================================================
-# SCREEN 1 - License Entry
-# ===================================================
-function Show-LicenseScreen {
-
-    $frm = New-Object System.Windows.Forms.Form
-    $frm.Text = "IlmForge Setup v3.3 - License Verification"
-    $frm.Size = [System.Drawing.Size]::new(500, 540)
-    $frm.StartPosition = "CenterScreen"
-    $frm.FormBorderStyle = "FixedSingle"
-    $frm.MaximizeBox = $false
-    $frm.BackColor = [System.Drawing.Color]::White
-
-    # Header panel
-    $hdr = New-Object System.Windows.Forms.Panel
-    $hdr.Size = [System.Drawing.Size]::new(500, 100)
-    $hdr.Location = [System.Drawing.Point]::new(0, 0)
-    $hdr.BackColor = $BRAND_NAVY
-    $frm.Controls.Add($hdr)
-
-    $hdr.Controls.Add((New-Lbl "IlmForge - School Management System" 20 20 450 35 16 $true $BRAND_WHITE))
-    $hdr.Controls.Add((New-Lbl "Professional Edition v3.3  |  Pakistan" 22 60 400 22 9 $false ([System.Drawing.Color]::FromArgb(150, 190, 230))))
-
-    # Welcome text
-    $frm.Controls.Add((New-Lbl "Welcome to IlmForge Setup" 30 118 440 28 13 $true $BRAND_NAVY))
-    $frm.Controls.Add((New-Lbl "Install karne ke liye valid License Key darj karein." 30 150 440 20 9 $false ([System.Drawing.Color]::FromArgb(80,80,80))))
-    $frm.Controls.Add((New-Lbl "License key IlmForge support se milti hai: WhatsApp 0346-5146609" 30 170 440 20 8 $false ([System.Drawing.Color]::FromArgb(120,120,120))))
-
-    # License box
-    $grp = New-Object System.Windows.Forms.GroupBox
-    $grp.Text = " License Key "
-    $grp.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-    $grp.Location = [System.Drawing.Point]::new(30, 205)
-    $grp.Size = [System.Drawing.Size]::new(430, 110)
-    $grp.ForeColor = $BRAND_NAVY
-    $frm.Controls.Add($grp)
-
-    $grp.Controls.Add((New-Lbl "Enter your license key:" 15 22 200 18 9 $true $null))
-
-    $txt = New-Object System.Windows.Forms.TextBox
-    $txt.Location = [System.Drawing.Point]::new(15, 44)
-    $txt.Size = [System.Drawing.Size]::new(400, 28)
-    $txt.Font = New-Object System.Drawing.Font("Consolas", 12)
-    $txt.CharacterCasing = "Upper"
-    $txt.Text = "ILM-"
-    $grp.Controls.Add($txt)
-
-    $lblStatus = New-Lbl "" 15 80 400 22 9 $false ([System.Drawing.Color]::Gray)
-    $grp.Controls.Add($lblStatus)
-
-    # Install folder
-    $frm.Controls.Add((New-Lbl "Installation Folder:" 30 330 200 20 9 $true $BRAND_NAVY))
-
-    $txtDir = New-Object System.Windows.Forms.TextBox
-    $txtDir.Location = [System.Drawing.Point]::new(30, 352)
-    $txtDir.Size = [System.Drawing.Size]::new(320, 26)
-    $txtDir.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-    $txtDir.Text = $INSTALL_DIR
-    $frm.Controls.Add($txtDir)
-
-    $btnBrowse = New-Object System.Windows.Forms.Button
-    $btnBrowse.Location = [System.Drawing.Point]::new(358, 351)
-    $btnBrowse.Size = [System.Drawing.Size]::new(102, 28)
-    $btnBrowse.Text = "Browse..."
-    $btnBrowse.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-    $btnBrowse.Add_Click({
-        $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
-        $dlg.SelectedPath = $txtDir.Text
-        if ($dlg.ShowDialog() -eq "OK") { $txtDir.Text = $dlg.SelectedPath }
-    })
-    $frm.Controls.Add($btnBrowse)
-
-    # Options
-    $chkDesk = New-Object System.Windows.Forms.CheckBox
-    $chkDesk.Text = "Desktop shortcut banayein"
-    $chkDesk.Location = [System.Drawing.Point]::new(30, 393)
-    $chkDesk.Size = [System.Drawing.Size]::new(220, 22)
-    $chkDesk.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-    $chkDesk.Checked = $true
-    $frm.Controls.Add($chkDesk)
-
-    $chkAuto = New-Object System.Windows.Forms.CheckBox
-    $chkAuto.Text = "Windows start pe auto-launch"
-    $chkAuto.Location = [System.Drawing.Point]::new(255, 393)
-    $chkAuto.Size = [System.Drawing.Size]::new(205, 22)
-    $chkAuto.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-    $chkAuto.Checked = $true
-    $frm.Controls.Add($chkAuto)
-
-    # Buttons
-    $btnCancel = New-Object System.Windows.Forms.Button
-    $btnCancel.Text = "Cancel"
-    $btnCancel.Location = [System.Drawing.Point]::new(285, 460)
-    $btnCancel.Size = [System.Drawing.Size]::new(85, 34)
-    $btnCancel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-    $btnCancel.Add_Click({ $frm.DialogResult = "Cancel"; $frm.Close() })
-    $frm.Controls.Add($btnCancel)
-
-    $btnInst = New-Object System.Windows.Forms.Button
-    $btnInst.Text = "Install"
-    $btnInst.Location = [System.Drawing.Point]::new(378, 460)
-    $btnInst.Size = [System.Drawing.Size]::new(92, 34)
-    $btnInst.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-    $btnInst.BackColor = $BRAND_NAVY
-    $btnInst.ForeColor = $BRAND_WHITE
-    $btnInst.FlatStyle = "Flat"
-    $frm.AcceptButton = $btnInst
-
-    $script:result = $null
-
-    $btnInst.Add_Click({
-        $k = $txt.Text.Trim()
-        if ($k.Length -lt 10) {
-            $lblStatus.ForeColor = [System.Drawing.Color]::Red
-            $lblStatus.Text = "License key darj karein."
-            return
-        }
-        if (-not (Validate-LicenseKey $k)) {
-            $lblStatus.ForeColor = [System.Drawing.Color]::Red
-            $lblStatus.Text = "Invalid format. Example: ILM-0010-STAR-XXXXXXXXXXXX"
-            return
-        }
-        $lblStatus.ForeColor = [System.Drawing.Color]::Green
-        $lblStatus.Text = "License OK! Installing..."
-        $frm.Refresh()
-        Start-Sleep -Milliseconds 500
-
-        $script:result = @{
-            key        = $k
-            installDir = $txtDir.Text
-            desktop    = $chkDesk.Checked
-            startup    = $chkAuto.Checked
-        }
-        $frm.DialogResult = "OK"
-        $frm.Close()
-    })
-    $frm.Controls.Add($btnInst)
-
-    $frm.ShowDialog() | Out-Null
-    return $script:result
+function Validate-Key($key) {
+    return ($key -match '^ILM-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{8,}$')
 }
 
 # ===================================================
-# SCREEN 2 - Install Progress
+# LICENSE SCREEN
 # ===================================================
-function Show-Progress {
-    param($cfg)
+function Show-License {
+    $f = New-Object System.Windows.Forms.Form
+    $f.Text="IlmForge Setup - License"; $f.Size=[System.Drawing.Size]::new(490,510)
+    $f.StartPosition="CenterScreen"; $f.FormBorderStyle="FixedSingle"
+    $f.MaximizeBox=$false; $f.BackColor=[System.Drawing.Color]::White
 
-    $frm = New-Object System.Windows.Forms.Form
-    $frm.Text = "IlmForge Setup - Installing..."
-    $frm.Size = [System.Drawing.Size]::new(500, 400)
-    $frm.StartPosition = "CenterScreen"
-    $frm.FormBorderStyle = "FixedSingle"
-    $frm.MaximizeBox = $false
-    $frm.ControlBox = $false
-    $frm.BackColor = [System.Drawing.Color]::White
+    $hdr=New-Object System.Windows.Forms.Panel
+    $hdr.Size=[System.Drawing.Size]::new(490,95); $hdr.BackColor=$BRAND_NAVY
+    $hdr.Controls.Add((Make-Label "IlmForge School Management System" 18 18 440 32 15 $true $BRAND_WHITE))
+    $hdr.Controls.Add((Make-Label "Professional Offline Edition v3.3  |  Pakistan" 20 56 440 22 9 $false ([System.Drawing.Color]::FromArgb(150,195,240))))
+    $f.Controls.Add($hdr)
 
-    $hdr = New-Object System.Windows.Forms.Panel
-    $hdr.Size = [System.Drawing.Size]::new(500, 70)
-    $hdr.BackColor = $BRAND_NAVY
-    $frm.Controls.Add($hdr)
-    $hdr.Controls.Add((New-Lbl "IlmForge - Installing..." 20 12 440 28 14 $true $BRAND_WHITE))
-    $hdr.Controls.Add((New-Lbl "Please wait while IlmForge installs on your computer." 22 42 440 20 9 $false ([System.Drawing.Color]::FromArgb(150,190,230))))
+    $f.Controls.Add((Make-Label "License Verification" 28 112 440 26 13 $true $BRAND_NAVY))
+    $f.Controls.Add((Make-Label "Install karne ke liye valid License Key darj karein." 28 142 440 20 9 $false ([System.Drawing.Color]::Gray)))
+    $f.Controls.Add((Make-Label "License ke liye: WhatsApp 0346-5146609" 28 162 440 18 8 $false ([System.Drawing.Color]::Gray)))
 
-    $prog = New-Object System.Windows.Forms.ProgressBar
-    $prog.Location = [System.Drawing.Point]::new(20, 88)
-    $prog.Size = [System.Drawing.Size]::new(455, 22)
-    $prog.Minimum = 0; $prog.Maximum = 100
-    $frm.Controls.Add($prog)
+    $grp=New-Object System.Windows.Forms.GroupBox
+    $grp.Text=" License Key "; $grp.Font=New-Object System.Drawing.Font("Segoe UI",9)
+    $grp.Location=[System.Drawing.Point]::new(28,195); $grp.Size=[System.Drawing.Size]::new(424,105)
+    $grp.ForeColor=$BRAND_NAVY; $f.Controls.Add($grp)
 
-    $lblStep = New-Lbl "Preparing..." 20 116 455 20 9 $false ([System.Drawing.Color]::FromArgb(60,60,60))
-    $frm.Controls.Add($lblStep)
+    $grp.Controls.Add((Make-Label "License Key:" 14 22 200 18 9 $true $null))
+    $txt=New-Object System.Windows.Forms.TextBox
+    $txt.Location=[System.Drawing.Point]::new(14,44); $txt.Size=[System.Drawing.Size]::new(396,28)
+    $txt.Font=New-Object System.Drawing.Font("Consolas",12); $txt.CharacterCasing="Upper"
+    $txt.Text="ILM-"; $grp.Controls.Add($txt)
+    $lbSt=Make-Label "" 14 78 396 20 9 $false ([System.Drawing.Color]::Gray)
+    $grp.Controls.Add($lbSt)
 
-    $logBox = New-Object System.Windows.Forms.RichTextBox
-    $logBox.Location = [System.Drawing.Point]::new(20, 142)
-    $logBox.Size = [System.Drawing.Size]::new(455, 200)
-    $logBox.Font = New-Object System.Drawing.Font("Consolas", 8)
-    $logBox.BackColor = [System.Drawing.Color]::FromArgb(10, 15, 30)
-    $logBox.ForeColor = [System.Drawing.Color]::FromArgb(80, 220, 80)
-    $logBox.ReadOnly = $true
-    $logBox.BorderStyle = "None"
-    $frm.Controls.Add($logBox)
+    $f.Controls.Add((Make-Label "Installation Folder:" 28 316 200 20 9 $true $BRAND_NAVY))
+    $tDir=New-Object System.Windows.Forms.TextBox
+    $tDir.Location=[System.Drawing.Point]::new(28,338); $tDir.Size=[System.Drawing.Size]::new(310,26)
+    $tDir.Font=New-Object System.Drawing.Font("Segoe UI",9); $tDir.Text=$INSTALL_DIR
+    $f.Controls.Add($tDir)
+    $bBr=New-Object System.Windows.Forms.Button
+    $bBr.Location=[System.Drawing.Point]::new(346,337); $bBr.Size=[System.Drawing.Size]::new(106,28)
+    $bBr.Text="Browse..."; $bBr.Font=New-Object System.Drawing.Font("Segoe UI",9)
+    $bBr.Add_Click({ $dlg=New-Object System.Windows.Forms.FolderBrowserDialog; if($dlg.ShowDialog()-eq"OK"){$tDir.Text=$dlg.SelectedPath} })
+    $f.Controls.Add($bBr)
 
-    $frm.Show()
-    $frm.Refresh()
+    $cDesk=New-Object System.Windows.Forms.CheckBox
+    $cDesk.Text="Desktop shortcut"; $cDesk.Location=[System.Drawing.Point]::new(28,376)
+    $cDesk.Size=[System.Drawing.Size]::new(180,22); $cDesk.Checked=$true
+    $cDesk.Font=New-Object System.Drawing.Font("Segoe UI",9); $f.Controls.Add($cDesk)
 
-    function Log($msg, $clr) {
-        $logBox.SelectionStart = $logBox.TextLength
-        $logBox.SelectionColor = switch ($clr) {
-            "yellow" { [System.Drawing.Color]::FromArgb(255,200,50) }
-            "red"    { [System.Drawing.Color]::FromArgb(255,80,80) }
-            "gray"   { [System.Drawing.Color]::FromArgb(160,160,160) }
-            default  { [System.Drawing.Color]::FromArgb(80,220,80) }
-        }
-        $logBox.AppendText("$msg`n")
-        $logBox.ScrollToCaret()
-        $frm.Refresh()
-    }
+    $cAuto=New-Object System.Windows.Forms.CheckBox
+    $cAuto.Text="Auto-start on Windows login"; $cAuto.Location=[System.Drawing.Point]::new(214,376)
+    $cAuto.Size=[System.Drawing.Size]::new(238,22); $cAuto.Checked=$true
+    $cAuto.Font=New-Object System.Drawing.Font("Segoe UI",9); $f.Controls.Add($cAuto)
 
-    function Step($msg, $pct) {
-        $lblStep.Text = $msg
-        $prog.Value = [Math]::Min($pct, 100)
-        $frm.Refresh()
-    }
+    $bCan=New-Object System.Windows.Forms.Button
+    $bCan.Text="Cancel"; $bCan.Location=[System.Drawing.Point]::new(278,430)
+    $bCan.Size=[System.Drawing.Size]::new(82,34); $bCan.Font=New-Object System.Drawing.Font("Segoe UI",9)
+    $bCan.Add_Click({$f.Tag="cancel";$f.Close()}); $f.Controls.Add($bCan)
 
+    $bIns=New-Object System.Windows.Forms.Button
+    $bIns.Text="Install"; $bIns.Location=[System.Drawing.Point]::new(368,430)
+    $bIns.Size=[System.Drawing.Size]::new(88,34)
+    $bIns.Font=New-Object System.Drawing.Font("Segoe UI",10,[System.Drawing.FontStyle]::Bold)
+    $bIns.BackColor=$BRAND_NAVY; $bIns.ForeColor=$BRAND_WHITE; $bIns.FlatStyle="Flat"
+    $f.AcceptButton=$bIns
+    $bIns.Add_Click({
+        $k=$txt.Text.Trim()
+        if($k.Length -lt 10){$lbSt.ForeColor=[System.Drawing.Color]::Red;$lbSt.Text="License key darj karein.";return}
+        if(-not(Validate-Key $k)){$lbSt.ForeColor=[System.Drawing.Color]::Red;$lbSt.Text="Format: ILM-0010-STAR-XXXXXXXXXXXX";return}
+        $lbSt.ForeColor=[System.Drawing.Color]::Green; $lbSt.Text="License OK!"
+        $f.Refresh(); Start-Sleep -Milliseconds 400
+        $f.Tag=@{key=$k;installDir=$tDir.Text;desktop=$cDesk.Checked;startup=$cAuto.Checked}
+        $f.Close()
+    })
+    $f.Controls.Add($bIns)
+    $f.ShowDialog() | Out-Null
+    return $f.Tag
+}
+
+# ===================================================
+# RUN INSTALL (console + progress window side by side)
+# ===================================================
+function Run-Install($cfg) {
     $dir = $cfg.installDir
 
-    # Step 1: Node.js
-    Step "Checking Node.js..." 5
-    Log ">>> Checking Node.js..." "gray"
-    $nv = & node --version 2>$null
-    if (-not $nv) {
-        Log "Node.js not found. Downloading Node.js 20..." "yellow"
-        Step "Downloading Node.js..." 10
-        $msi = "$env:TEMP\node_setup.msi"
-        try {
-            (New-Object Net.WebClient).DownloadFile("https://nodejs.org/dist/v20.19.0/node-v20.19.0-x64.msi", $msi)
-            Log "Installing Node.js..." "yellow"
+    # Progress window (non-blocking)
+    $pf=New-Object System.Windows.Forms.Form
+    $pf.Text="IlmForge Setup - Installing..."; $pf.Size=[System.Drawing.Size]::new(480,380)
+    $pf.StartPosition="CenterScreen"; $pf.FormBorderStyle="FixedSingle"
+    $pf.MaximizeBox=$false; $pf.ControlBox=$false; $pf.BackColor=[System.Drawing.Color]::White
+
+    $ph=New-Object System.Windows.Forms.Panel
+    $ph.Size=[System.Drawing.Size]::new(480,65); $ph.BackColor=$BRAND_NAVY
+    $ph.Controls.Add((Make-Label "Installing IlmForge..." 18 10 440 28 14 $true $BRAND_WHITE))
+    $ph.Controls.Add((Make-Label "Please wait - this may take 3-5 minutes" 20 42 440 18 9 $false ([System.Drawing.Color]::FromArgb(150,195,240))))
+    $pf.Controls.Add($ph)
+
+    $pb=New-Object System.Windows.Forms.ProgressBar
+    $pb.Location=[System.Drawing.Point]::new(18,80); $pb.Size=[System.Drawing.Size]::new(440,20)
+    $pb.Minimum=0; $pb.Maximum=100; $pf.Controls.Add($pb)
+
+    $lbSt=Make-Label "Starting..." 18 106 440 20 9 $false ([System.Drawing.Color]::FromArgb(50,50,50))
+    $pf.Controls.Add($lbSt)
+
+    $lb=New-Object System.Windows.Forms.RichTextBox
+    $lb.Location=[System.Drawing.Point]::new(18,132); $lb.Size=[System.Drawing.Size]::new(440,190)
+    $lb.Font=New-Object System.Drawing.Font("Consolas",8)
+    $lb.BackColor=[System.Drawing.Color]::FromArgb(8,12,25)
+    $lb.ForeColor=[System.Drawing.Color]::FromArgb(80,220,80)
+    $lb.ReadOnly=$true; $lb.BorderStyle="None"; $pf.Controls.Add($lb)
+
+    $pf.Show(); $pf.Refresh()
+
+    function L($m,$c="g") {
+        $lb.SelectionStart=$lb.TextLength; $lb.SelectionLength=0
+        $lb.SelectionColor=switch($c){"y"{[System.Drawing.Color]::FromArgb(255,200,50)}"r"{[System.Drawing.Color]::FromArgb(255,80,80)}"a"{[System.Drawing.Color]::FromArgb(150,150,150)}default{[System.Drawing.Color]::FromArgb(80,220,80)}}
+        $lb.AppendText("$m`n"); $lb.ScrollToCaret(); $pf.Refresh()
+        [System.Windows.Forms.Application]::DoEvents()
+    }
+    function S($m,$p){$lbSt.Text=$m;$pb.Value=[Math]::Min($p,100);$pf.Refresh();[System.Windows.Forms.Application]::DoEvents()}
+
+    # 1 - Node.js
+    S "Checking Node.js..." 5
+    L ">>> Checking Node.js..." "a"
+    $nv=& node --version 2>$null
+    if(-not $nv){
+        L "Node.js not found. Downloading..." "y"
+        S "Downloading Node.js 20..." 10
+        $msi="$env:TEMP\node_setup.msi"
+        try{
+            (New-Object Net.WebClient).DownloadFile("https://nodejs.org/dist/v20.19.0/node-v20.19.0-x64.msi",$msi)
+            S "Installing Node.js..." 15
+            L "Installing Node.js (please wait ~2 min)..." "y"
             Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /norestart" -Wait
-            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine")
-            Log "Node.js installed!" "green"
-        } catch {
-            Log "Node.js download failed! Check internet." "red"
-            [System.Windows.Forms.MessageBox]::Show("Node.js install nahi hua. Internet check karein.","Error","OK","Error")
-            $frm.Close(); return $false
-        }
-    } else {
-        Log "Node.js found: $nv" "green"
-    }
+            $env:PATH=[System.Environment]::GetEnvironmentVariable("PATH","Machine")+";" + $env:PATH
+            L "Node.js installed OK" "g"
+        }catch{L "Node.js download FAILED: $_" "r";[System.Windows.Forms.MessageBox]::Show("Node.js install nahi hua. Internet check karein.","Error","OK","Error");$pf.Close();return $false}
+    }else{L "Node.js: $nv" "g"}
 
-    # Step 2: Copy files
-    Step "Copying files to $dir ..." 20
-    Log ">>> Copying app files..." "gray"
-    try {
-        if (Test-Path $dir) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
+    # 2 - Copy files
+    S "Copying app files..." 20
+    L ">>> Copying files to: $dir" "a"
+    try{
+        if(Test-Path $dir){Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue}
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        Copy-Item "$APP_DIR\backend"  -Destination "$dir\backend"  -Recurse -Force
-        Copy-Item "$APP_DIR\frontend" -Destination "$dir\frontend" -Recurse -Force
-        Log "Files copied to $dir" "green"
-    } catch {
-        Log "Copy failed: $_" "red"
-        $frm.Close(); return $false
+        Copy-Item "$APP_DIR\backend"  "$dir\backend"  -Recurse -Force
+        Copy-Item "$APP_DIR\frontend" "$dir\frontend" -Recurse -Force
+        L "Files copied OK" "g"
+    }catch{L "Copy FAILED: $_" "r";$pf.Close();return $false}
+
+    # 3 - Switch schema to SQLite
+    S "Switching database to SQLite..." 35
+    L ">>> Patching schema.prisma for SQLite..." "a"
+    $sch="$dir\backend\prisma\schema.prisma"
+    if(Test-Path $sch){
+        $content = Get-Content $sch -Raw
+        $content = $content -replace 'provider\s*=\s*"postgresql"','provider = "sqlite"'
+        [System.IO.File]::WriteAllText($sch, $content, [System.Text.Encoding]::UTF8)
+        L "Schema switched to SQLite" "g"
+        # Verify
+        $check = Get-Content $sch -TotalCount 10 | Out-String
+        if($check -match 'sqlite'){L "Verified: provider = sqlite" "g"}
+        else{L "WARNING: patch may not have worked" "y"}
+    }else{L "schema.prisma not found at $sch" "r"}
+
+    # 4 - npm install backend
+    S "Installing backend packages (npm install)..." 45
+    L ">>> npm install backend..." "a"
+    $p=Start-Process "npm" "install" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
+    L "npm install done (exit: $($p.ExitCode))" "g"
+
+    # 5 - Prisma
+    S "Creating local database..." 60
+    L ">>> prisma generate..." "a"
+    $env:DATABASE_URL="file:./prisma/dev.db"
+    $p2=Start-Process "npx" "prisma generate" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
+    L "prisma generate done (exit: $($p2.ExitCode))" "g"
+    L ">>> prisma db push..." "a"
+    $p3=Start-Process "npx" "prisma db push --accept-data-loss" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
+    L "prisma db push done (exit: $($p3.ExitCode))" "g"
+
+    # 6 - Save license
+    S "Saving license..." 70
+    L ">>> Saving license key..." "a"
+    @{key=$cfg.key;installedAt=(Get-Date -Format "yyyy-MM-dd")} | ConvertTo-Json | Out-File "$dir\license.json" -Encoding UTF8
+    L "License saved" "g"
+
+    # 7 - serve
+    S "Installing frontend server..." 78
+    L ">>> npm install -g serve..." "a"
+    Start-Process "npm" "install -g serve" -Wait -NoNewWindow
+    L "serve installed" "g"
+
+    # 8 - Launcher
+    S "Creating launcher..." 85
+    L ">>> Creating IlmForge.bat..." "a"
+    $bat = "@echo off`r`ncd /d `"$dir\backend`"`r`n"
+    $bat += "set DATABASE_URL=file:./prisma/dev.db`r`n"
+    $bat += "set NODE_ENV=production`r`n"
+    $bat += "set PORT=5000`r`n"
+    $bat += "set JWT_SECRET=IlmForgeLocal@2026#OfflineKey`r`n"
+    $bat += "set JWT_EXPIRES_IN=24h`r`n"
+    $bat += "set PLATFORM_OWNER_KEY=IlmForge@GhulamMujtaba#PlatformOwner2026!Master`r`n"
+    $bat += "set LICENSE_SECRET=IlmForgeLicense@Secret#2026!OfflineKey`r`n"
+    $bat += "set FRONTEND_URL=http://localhost:3000`r`n"
+    $bat += "set APP_URL=http://localhost:5000`r`n"
+    $bat += "start `"IlmForge`" /min node src/server.js`r`n"
+    $bat += "timeout /t 4 /nobreak >nul`r`n"
+    $bat += "start `"`" http://localhost:3000`r`n"
+    $bat += "cd /d `"$dir\frontend`"`r`n"
+    $bat += "npx serve dist -l 3000 -s`r`n"
+    [System.IO.File]::WriteAllText("$dir\IlmForge.bat", $bat, [System.Text.Encoding]::ASCII)
+
+    $vbs = "Set sh = CreateObject(" + [char]34 + "WScript.Shell" + [char]34 + ")" + "`r`n"
+    $vbs += "sh.Run " + [char]34 + "cmd /c " + [char]34 + [char]34 + [char]34 + "$dir\IlmForge.bat" + [char]34 + [char]34 + [char]34 + [char]34 + ", 0, False" + "`r`n"
+    $vbs += "WScript.Sleep 5000" + "`r`n"
+    $vbs += "sh.Run " + [char]34 + "http://localhost:3000" + [char]34 + ", 1, False" + "`r`n"
+    [System.IO.File]::WriteAllText("$dir\IlmForge.vbs", $vbs, [System.Text.Encoding]::ASCII)
+    L "Launchers created" "g"
+
+    # 9 - Desktop shortcut
+    if($cfg.desktop){
+        S "Creating desktop shortcut..." 90
+        try{
+            $sh=New-Object -ComObject WScript.Shell
+            $lnk=$sh.CreateShortcut("$env:USERPROFILE\Desktop\IlmForge.lnk")
+            $lnk.TargetPath="wscript.exe"; $lnk.Arguments="`"$dir\IlmForge.vbs`""
+            $lnk.WorkingDirectory=$dir; $lnk.Description="IlmForge School Management System"
+            $lnk.Save(); L "Desktop shortcut created" "g"
+        }catch{L "Shortcut error: $_" "y"}
     }
 
-    # Step 3: SQLite schema
-    Step "Setting up local database..." 35
-    Log ">>> Switching to SQLite..." "gray"
-    $schema = "$dir\backend\prisma\schema.prisma"
-    if (Test-Path $schema) {
-        (Get-Content $schema) -replace 'provider = "postgresql"','provider = "sqlite"' | Set-Content $schema -Encoding UTF8
-        Log "SQLite schema ready" "green"
-    } else {
-        Log "Warning: schema.prisma not found" "yellow"
+    # 10 - Auto-start
+    if($cfg.startup){
+        S "Setting up auto-start..." 95
+        try{
+            $stDir=[Environment]::GetFolderPath("Startup")
+            $sh=New-Object -ComObject WScript.Shell
+            $lnk=$sh.CreateShortcut("$stDir\IlmForge.lnk")
+            $lnk.TargetPath="wscript.exe"; $lnk.Arguments="`"$dir\IlmForge.vbs`""
+            $lnk.WorkingDirectory=$dir; $lnk.Save()
+            L "Auto-start enabled" "g"
+        }catch{L "Auto-start error: $_" "y"}
     }
 
-    # Step 4: npm install backend
-    Step "Installing backend packages..." 45
-    Log ">>> npm install backend..." "gray"
-    $p = Start-Process "cmd" -ArgumentList "/c npm install --quiet" -WorkingDirectory "$dir\backend" -Wait -PassThru -NoNewWindow
-    Log "Backend packages ready (exit: $($p.ExitCode))" "green"
+    S "Installation Complete!" 100
+    L "" "a"
+    L "=======================================" "g"
+    L "  IlmForge installed successfully!" "g"
+    L "  Open: http://localhost:3000" "g"
+    L "  Use desktop shortcut to launch" "g"
+    L "=======================================" "g"
 
-    # Step 5: Prisma DB
-    Step "Creating local database..." 60
-    Log ">>> prisma db push..." "gray"
-    $env:DATABASE_URL = "file:./prisma/dev.db"
-    Start-Process "cmd" -ArgumentList "/c npx prisma generate" -WorkingDirectory "$dir\backend" -Wait -NoNewWindow
-    Start-Process "cmd" -ArgumentList "/c npx prisma db push --accept-data-loss" -WorkingDirectory "$dir\backend" -Wait -NoNewWindow
-    Log "Database created (SQLite)" "green"
+    $pf.ControlBox=$true; $pf.Text="IlmForge Setup - Done!"
 
-    # Step 6: Save license
-    Step "Saving license..." 70
-    Log ">>> Saving license key..." "gray"
-    @{ key=$cfg.key; installedAt=(Get-Date -Format "yyyy-MM-dd") } | ConvertTo-Json | Out-File "$dir\license.json" -Encoding UTF8
-    Log "License saved" "green"
+    $bFin=New-Object System.Windows.Forms.Button
+    $bFin.Text="Finish and Launch"; $bFin.Location=[System.Drawing.Point]::new(290,335)
+    $bFin.Size=[System.Drawing.Size]::new(168,34)
+    $bFin.Font=New-Object System.Drawing.Font("Segoe UI",10,[System.Drawing.FontStyle]::Bold)
+    $bFin.BackColor=[System.Drawing.Color]::FromArgb(22,163,74)
+    $bFin.ForeColor=$BRAND_WHITE; $bFin.FlatStyle="Flat"
+    $bFin.Add_Click({$pf.Close();Start-Process "wscript.exe" "`"$dir\IlmForge.vbs`""})
+    $pf.Controls.Add($bFin); $pf.Refresh()
 
-    # Step 7: Install serve
-    Step "Installing frontend server..." 78
-    Log ">>> npm install -g serve..." "gray"
-    Start-Process "cmd" -ArgumentList "/c npm install -g serve" -Wait -NoNewWindow
-    Log "Frontend server ready" "green"
-
-    # Step 8: Create launcher
-    Step "Creating launcher..." 85
-    Log ">>> Creating IlmForge.bat..." "gray"
-    $bat = "@echo off`r`ncd /d `"$dir\backend`"`r`nset DATABASE_URL=file:./prisma/dev.db`r`nset NODE_ENV=production`r`nset PORT=5000`r`nset JWT_SECRET=IlmForgeLocal@2026#OfflineKey!XyZ789`r`nset JWT_EXPIRES_IN=24h`r`nset PLATFORM_OWNER_KEY=IlmForge@GhulamMujtaba#PlatformOwner2026!Master`r`nset LICENSE_SECRET=IlmForgeLicense@Secret#2026!OfflineKey`r`nset FRONTEND_URL=http://localhost:3000`r`nset APP_URL=http://localhost:5000`r`nstart `"IlmForge Backend`" /min node src/server.js`r`ntimeout /t 4 /nobreak >nul`r`nstart `"`" http://localhost:3000`r`ncd /d `"$dir\frontend`"`r`nnpx serve dist -l 3000 -s`r`n"
-    $bat | Out-File "$dir\IlmForge.bat" -Encoding ASCII
-
-    $vbs = "Set sh = CreateObject(`"WScript.Shell`")`r`nsh.Run `"cmd /c `"`"`"$dir\IlmForge.bat`"`"`"`", 0, False`r`nWScript.Sleep 5000`r`nsh.Run `"http://localhost:3000`", 1, False`r`n"
-    $vbs | Out-File "$dir\IlmForge.vbs" -Encoding ASCII
-    Log "Launcher created" "green"
-
-    # Step 9: Desktop shortcut
-    if ($cfg.desktop) {
-        Step "Creating desktop shortcut..." 90
-        $sh = New-Object -ComObject WScript.Shell
-        $lnk = $sh.CreateShortcut("$env:USERPROFILE\Desktop\IlmForge.lnk")
-        $lnk.TargetPath = "wscript.exe"
-        $lnk.Arguments = "`"$dir\IlmForge.vbs`""
-        $lnk.WorkingDirectory = $dir
-        $lnk.Description = "IlmForge School Management System"
-        $lnk.Save()
-        Log "Desktop shortcut created" "green"
-    }
-
-    # Step 10: Auto-start
-    if ($cfg.startup) {
-        Step "Setting up auto-start..." 95
-        $startupDir = [Environment]::GetFolderPath("Startup")
-        $sh = New-Object -ComObject WScript.Shell
-        $lnk = $sh.CreateShortcut("$startupDir\IlmForge.lnk")
-        $lnk.TargetPath = "wscript.exe"
-        $lnk.Arguments = "`"$dir\IlmForge.vbs`""
-        $lnk.WorkingDirectory = $dir
-        $lnk.Save()
-        Log "Auto-start enabled" "green"
-    }
-
-    Step "Installation complete!" 100
-    Log "" "gray"
-    Log "=======================================" "green"
-    Log "  IlmForge installed successfully!" "green"
-    Log "  URL: http://localhost:3000" "green"
-    Log "=======================================" "green"
-
-    $frm.ControlBox = $true
-    $frm.Text = "IlmForge Setup - Complete!"
-
-    $btnFinish = New-Object System.Windows.Forms.Button
-    $btnFinish.Text = "Finish and Launch"
-    $btnFinish.Location = [System.Drawing.Point]::new(310, 355)
-    $btnFinish.Size = [System.Drawing.Size]::new(165, 34)
-    $btnFinish.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-    $btnFinish.BackColor = [System.Drawing.Color]::FromArgb(22, 163, 74)
-    $btnFinish.ForeColor = $BRAND_WHITE
-    $btnFinish.FlatStyle = "Flat"
-    $btnFinish.Add_Click({ $frm.Close(); Start-Process "wscript.exe" "`"$dir\IlmForge.vbs`"" })
-    $frm.Controls.Add($btnFinish)
-    $frm.Refresh()
-    $frm.ShowDialog() | Out-Null
+    # Wait for user to close
+    while($pf.Visible){[System.Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 50}
     return $true
 }
 
 # ===================================================
 # MAIN
 # ===================================================
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")
-if (-not $isAdmin) {
-    $r = [System.Windows.Forms.MessageBox]::Show("Administrator rights chahiye.`nAs Administrator restart karein?","Admin Required","YesNo","Warning")
-    if ($r -eq "Yes") {
-        Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    }
+$admin=([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")
+if(-not $admin){
+    $r=[System.Windows.Forms.MessageBox]::Show("Administrator rights chahiye.`nAs Administrator restart karein?","Admin Required","YesNo","Warning")
+    if($r -eq "Yes"){Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs}
     exit
 }
 
-$cfg = Show-LicenseScreen
-if (-not $cfg) { exit }
+$cfg=Show-License
+if(-not $cfg -or $cfg -eq "cancel"){exit}
 
-Show-Progress $cfg | Out-Null
+Run-Install $cfg | Out-Null
