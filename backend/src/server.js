@@ -54,12 +54,11 @@ if (isOffline) {
     }
   }
 
-  // Remote suspend check — ping cloud server if internet available (non-blocking)
+  // Remote suspend check — non-blocking ping to cloud
   if (lic.key) {
-    const checkUrl = 'https://ilmforge-erp.onrender.com/api/v1/platform/check-license';
     const http2 = require('https');
     const body = JSON.stringify({ key: lic.key });
-    const req = http2.request(checkUrl, {
+    const req = http2.request('https://ilmforge-erp.onrender.com/api/v1/platform/check-license', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
     }, (res) => {
@@ -69,26 +68,18 @@ if (isOffline) {
         try {
           const r = JSON.parse(data);
           if (r.suspended) {
-            console.error('\n========================================');
-            console.error('  ACCESS SUSPENDED BY PLATFORM OWNER');
-            console.error(`  Reason: ${r.reason || 'Contact IlmForge support'}`);
-            console.error('  WhatsApp: 0346-5146609');
-            console.error('========================================\n');
+            console.error('ACCESS SUSPENDED BY PLATFORM OWNER — WhatsApp 0346-5146609');
             process.exit(1);
-          }
-          if (r.valid === false) {
-            console.warn('Remote license check: invalid key — running in offline mode');
-          } else {
-            console.log('Remote license verified OK');
           }
         } catch {}
       });
     });
-    req.on('error', () => { /* No internet — skip remote check, local license still valid */ });
+    req.on('error', () => {});
     req.setTimeout(5000, () => { req.destroy(); });
     req.write(body);
     req.end();
   }
+}
 
 /* ── Get local network IPs for LAN access ── */
 function getLocalIPs() {
@@ -96,14 +87,10 @@ function getLocalIPs() {
   const ips = [];
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal) {
-        ips.push(net.address);
-      }
+      if (net.family === 'IPv4' && !net.internal) ips.push(net.address);
     }
   }
   return ips;
-}
-
 }
 
 // SQLite WAL mode — only when using local file-based SQLite
