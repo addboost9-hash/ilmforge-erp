@@ -222,7 +222,7 @@ export default function AdmissionWizardPage() {
     name: '', fatherName: '', motherName: '', gender: 'Male', dob: '',
     bFormNo: '', address: '',
     // Step 2
-    classId: '', sectionId: '',
+    classId: '', sectionId: '', teacherId: '',
     // Step 3
     monthlyFee: '', generateFirstInvoice: true, isFreeStudent: false,
     // Step 4
@@ -303,6 +303,7 @@ export default function AdmissionWizardPage() {
         address:       form.address || null,
         classId:       form.classId || null,
         sectionId:     form.sectionId || null,
+        teacherId:     form.teacherId || null,
         emergencyPhone:form.emergencyPhone,
         parentEmail:   form.parentEmail || null,
         parentCnic:    form.parentCnic || null,
@@ -537,12 +538,27 @@ export default function AdmissionWizardPage() {
               </Field>
             </div>
 
-            {/* LINKED PREVIEW — what this class connects to */}
+            {/* Teacher Assignment */}
+            <Field label="Assign Teacher (Optional)">
+              <select className={inputCls} value={form.teacherId} onChange={e => set('teacherId', e.target.value)}>
+                <option value="">
+                  {classTeacher ? `Auto: ${classTeacher.name} (Class Teacher)` : 'Select teacher…'}
+                </option>
+                {staff.filter(s => s.role === 'teacher' || s.designation?.toLowerCase().includes('teacher')).map(s => (
+                  <option key={s.id} value={s.id}>{s.name}{s.designation ? ` — ${s.designation}` : ''}</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-400 mt-1">Student ke portals mein yeh teacher dikhega — attendance, marks, homework sab is teacher se</p>
+            </Field>
+
+            {/* LINKED PREVIEW */}
             {selectedClass && (
               <div className="bg-teal-50/60 border border-teal-100 rounded-xl p-4 space-y-3">
                 <div className="text-[11px] font-bold text-teal-700 uppercase tracking-wide">🔗 Is class se auto-linked</div>
                 <div className="grid sm:grid-cols-3 gap-3">
-                  <LinkedCard Icon={UserCheck} title="Class Teacher" value={classTeacher?.name || 'Not assigned yet'} sub={classTeacher ? 'Attendance & marks isi teacher se' : 'Staff → assign later'} />
+                  <LinkedCard Icon={UserCheck} title="Class Teacher"
+                    value={form.teacherId ? (staff.find(s => String(s.id) === String(form.teacherId))?.name || 'Selected') : (classTeacher?.name || 'Not assigned')}
+                    sub={form.teacherId ? '✓ Manually selected' : (classTeacher ? 'Auto from class' : 'Select above')} />
                   <LinkedCard Icon={Calendar} title="Timetable" value={timetable.length ? `${timetable.length} periods set` : 'Not created yet'} sub={timetable.length ? 'Student portal pe auto-visible' : 'Timetable → create later'} />
                   <LinkedCard Icon={BookOpen} title="Roll Number" value="Auto-generate" sub="Class prefix ke saath (e.g. C5-001)" />
                 </div>

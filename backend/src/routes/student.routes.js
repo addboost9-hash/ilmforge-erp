@@ -161,7 +161,7 @@ router.post('/', wrap(async (req, res) => {
   const {
     name, fatherName, motherName, gender, dob, classId, sectionId, sessionId,
     rollNo, phone, address, bFormNo, emergencyPhone,
-    parentEmail, parentCnic,
+    parentEmail, parentCnic, teacherId,
     createPortalAccounts = true,       // ← auto-create student + parent portal users
     generateFirstInvoice  = false,     // ← optionally generate this month's fee invoice
     monthlyFee,
@@ -177,10 +177,29 @@ router.post('/', wrap(async (req, res) => {
   // Generate credentials up-front
   const studentPassword = genPassword();
   const parentPassword  = genPassword();
-  const studentEmail    = `${slugify(name)}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}@${slug}.student`;
+
+  // Use rollNo in email — add short unique suffix to prevent collision on same name/rollNo
+  const uniq = Date.now().toString(36).slice(-4); // 4-char base36 timestamp suffix
+  const studentEmail = `${slugify(name)}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}@${slug}.student`;
+
+  // Check if student email already taken — add suffix if needed
+  const existingStudentEmail = await prisma.user.findFirst({ where: { schoolId, email: studentEmail } });
+  const safeStudentEmail = existingStudentEmail
+    ? `${slugify(name)}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}.${uniq}@${slug}.student`
+    : studentEmail;
+
+  // Parent email: use phone as unique identifier (works for siblings — same phone = same email = found & reused)
+  const normalizedPhone = (emergencyPhone || '').replace(/\D/g, '').slice(-10);
   const finalParentEmail = (parentEmail && parentEmail.trim())
     ? parentEmail.trim().toLowerCase()
-    : `${slugify(fatherName || 'parent')}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}@${slug}.parent`;
+    : normalizedPhone
+      ? `${slugify(fatherName || 'parent')}.${normalizedPhone}@${slug}.parent`
+      : `${slugify(fatherName || 'parent')}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}@${slug}.parent`;
+
+  // Check if parent email already taken (same parent, different child — sibling case)
+  const existingParentByEmail = finalParentEmail
+    ? await prisma.user.findFirst({ where: { schoolId, email: finalParentEmail, role: 'parent', deletedAt: null } })
+    : null;
 
   // Resolve campusId — auto-create Main Campus if school has none
   let resolvedCampusId = campusId || (req.body.campusId ? parseInt(req.body.campusId) : null);
@@ -231,27 +250,31 @@ router.post('/', wrap(async (req, res) => {
       studentUser = await tx.user.create({
         data: {
           schoolId, campusId: student.campusId,
-          name, email: studentEmail,
-          phone: emergencyPhone || null,
+          name, email: safeStudentEmail,
+          phone: null, // Don't store parent phone on student — causes confusion
           role: 'student',
-          passwordHash: studentPasswordHash, // pre-computed outside tx
+          passwordHash: studentPasswordHash,
           phoneVerifiedAt: new Date(),
           mustChangePassword: false,
         }
       });
+      await tx.student.update({ where: { id: student.id }, data: { userId: studentUser.id } });
 
-      await tx.student.update({
-        where: { id: student.id },
-        data: { userId: studentUser.id },
-      });
-
-      // 3) Parent portal User — reuse existing parent user if same phone already registered
+      // 3) Parent portal User — reuse existing parent (same phone OR same email)
       const existingParentUser = emergencyPhone
-        ? await tx.user.findFirst({ where: { schoolId, role: 'parent', phone: emergencyPhone, deletedAt: null } })
-        : null;
+        ? await tx.user.findFirst({
+            where: { schoolId, role: 'parent', deletedAt: null,
+              OR: [
+                { phone: emergencyPhone },
+                { phone: (emergencyPhone || '').replace(/\D/g, '') },
+                ...(finalParentEmail ? [{ email: finalParentEmail }] : []),
+              ]
+            }
+          })
+        : existingParentByEmail;
 
       if (existingParentUser) {
-        parentUser = existingParentUser; // sibling case — same parent account
+        parentUser = existingParentUser; // sibling — reuse same parent account
         parentRec = await tx.parent.findFirst({ where: { schoolId, userId: parentUser.id } });
         if (!parentRec) {
           parentRec = await tx.parent.create({
@@ -266,7 +289,7 @@ router.post('/', wrap(async (req, res) => {
             email: finalParentEmail,
             phone: emergencyPhone || null,
             role: 'parent',
-            passwordHash: parentPasswordHash, // pre-computed outside tx
+            passwordHash: parentPasswordHash,
             phoneVerifiedAt: new Date(),
             mustChangePassword: false,
           }
@@ -308,6 +331,14 @@ router.post('/', wrap(async (req, res) => {
       }
     }
 
+    // 4b) Assign teacher to class if provided and class has none
+    if (teacherId && classId) {
+      const cls = await tx.class.findUnique({ where: { id: parseInt(classId) }, select: { classTeacherId: true } });
+      if (cls && !cls.classTeacherId) {
+        await tx.class.update({ where: { id: parseInt(classId) }, data: { classTeacherId: parseInt(teacherId) } }).catch(() => null);
+      }
+    }
+
     // 5) Audit log
     await tx.auditLog.create({
       data: {
@@ -326,7 +357,7 @@ router.post('/', wrap(async (req, res) => {
   const portalLink = `${FRONTEND_URL}/login?slug=${slug}`;
   const credentials = createPortalAccounts ? {
     portalLink,
-    student: { email: studentEmail, password: studentPassword, portal: 'Student Portal' },
+    student: { email: safeStudentEmail, password: studentPassword, portal: 'Student Portal' },
     parent: result.parentIsExisting
       ? { email: result.parentUser.email, password: '(existing account — same as sibling)', portal: 'Parent Portal', existing: true }
       : { email: result.parentUser?.email || finalParentEmail, password: parentPassword, portal: 'Parent Portal' },
