@@ -245,6 +245,10 @@ app.use('/api/v1/lesson-plans',    protect, ACADEMIC,   require('./routes/lesson
 app.use('/api/v1/scheme',          protect, ACADEMIC,   require('./routes/scheme.routes'));
 app.use('/api/v1/calendar',        protect,             require('./routes/calendar.routes'));
 app.use('/api/v1/payroll',         protect, FINANCE,    require('./routes/payroll.routes'));
+/* ═══ v3.8: Behaviour / Tasks / Syllabus ═══ */
+app.use('/api/v1/behaviour',       protect,             require('./routes/behaviour.routes'));
+app.use('/api/v1/tasks',           protect,             require('./routes/tasks.routes'));
+app.use('/api/v1/syllabus',        protect, ACADEMIC,   require('./routes/syllabus.routes'));
 
 /* ═══ LICENSE management (offline mode) ═══ */
 app.use('/api/v1/license', require('./routes/license.routes'));

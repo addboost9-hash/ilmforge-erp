@@ -20,7 +20,7 @@ import {
   Bot, X, Calendar, QrCode, FileText,
   ShieldCheck, BarChart2, Database, ClipboardList,
   Workflow, ShoppingCart, Globe, BookMarked,
-  CalendarDays,
+  CalendarDays, Brain,
 } from 'lucide-react';
 import LicenseBanner from '../components/license/LicenseBanner';
 
@@ -56,11 +56,13 @@ const NAV = [
   {
     group: 'ACADEMICS',
     items: [
-      { to: '/hub/academics',         icon: BookOpen,     label: 'Academics Hub' },
-      { to: '/hub/attendance',        icon: CheckSquare,  label: 'Attendance Hub' },
-      { to: '/academics/lesson-plans', icon: ClipboardList, label: 'Lesson Plans',        roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/academics/scheme',       icon: BookOpen,      label: 'Scheme of Studies',   roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/academics/calendar',     icon: CalendarDays,  label: 'Academic Calendar',   roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/hub/academics',           icon: BookOpen,     label: 'Academics Hub' },
+      { to: '/hub/attendance',          icon: CheckSquare,  label: 'Attendance Hub' },
+      { to: '/academics/lesson-plans',  icon: ClipboardList, label: 'Lesson Plans',        roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/academics/scheme',        icon: BookOpen,      label: 'Scheme of Studies',   roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/academics/calendar',      icon: CalendarDays,  label: 'Academic Calendar',   roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/academics/syllabus',      icon: BookOpenCheck, label: 'Syllabus',             roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/academics/worksheets',    icon: Brain,         label: 'Worksheets AI',        roles: ['super_admin', 'admin', 'teacher'] },
     ],
   },
   {
@@ -68,6 +70,7 @@ const NAV = [
     items: [
       { to: '/hub/exams',              icon: Award,         label: 'Exams & Tests Hub' },
       { to: '/exams/question-papers',  icon: FileText,      label: 'Question Papers',     roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/exams/mcq-generator',    icon: Brain,         label: 'MCQ Generator',        roles: ['super_admin', 'admin', 'teacher'] },
       { to: '/exams/timetable',        icon: Calendar,      label: 'Exam Timetable',      roles: ['super_admin', 'admin', 'teacher'] },
       { to: '/exams/merit-list',       icon: Award,         label: 'Merit List',          roles: ['super_admin', 'admin', 'teacher'] },
       { to: '/exams/gazette',          icon: FileText,      label: 'Gazette Sheet',       roles: ['super_admin', 'admin'] },

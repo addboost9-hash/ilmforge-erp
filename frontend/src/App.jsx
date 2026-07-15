@@ -176,6 +176,10 @@ import SchemeOfStudiesPage      from './pages/academics/SchemeOfStudiesPage';
 import AcademicCalendarNewPage  from './pages/academics/AcademicCalendarPage';
 import AppraisalPage            from './pages/staff/AppraisalPage';
 import PayrollPage              from './pages/staff/PayrollPage';
+// v3.8 new modules
+import WorksheetGeneratorPage   from './pages/academics/WorksheetGeneratorPage';
+import MCQGeneratorPage         from './pages/exams/MCQGeneratorPage';
+import SyllabusPage             from './pages/academics/SyllabusPage';
 
 // MISSING — safe lazy with fallback
 const EmiPlansPage              = safeLazy(() => import('./pages/fees/EmiPlansPage'));
@@ -600,6 +604,10 @@ export default function App() {
             <Route path="/academics/calendar"         element={<AcademicCalendarNewPage />} />
             <Route path="/staff/appraisals-new"       element={<AppraisalPage />} />
             <Route path="/payroll"                    element={<PayrollPage />} />
+            {/* ── v3.8: Worksheets / MCQ Generator / Syllabus ── */}
+            <Route path="/academics/worksheets"       element={<WorksheetGeneratorPage />} />
+            <Route path="/exams/mcq-generator"        element={<MCQGeneratorPage />} />
+            <Route path="/academics/syllabus"         element={<SyllabusPage />} />
           </Route>
 
           {/* 404 */}
