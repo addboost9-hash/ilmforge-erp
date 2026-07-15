@@ -70,7 +70,14 @@ router.get('/', wrap(async (req, res) => {
     take: Math.min(parseInt(limit, 10) || 100, 300),
   });
 
-  res.json({ success: true, data: rows });
+  // Parse criteria from goals field
+  const data = rows.map(r => {
+    let criteria = [];
+    if (r.goals) { try { criteria = JSON.parse(r.goals); } catch { criteria = []; } }
+    return { ...r, criteria: Array.isArray(criteria) ? criteria : [] };
+  });
+
+  res.json({ success: true, data });
 }));
 
 router.get('/summary', wrap(async (req, res) => {
@@ -855,6 +862,7 @@ router.post('/', wrap(async (req, res) => {
     strengths,
     improvements,
     goals,
+    criteria,
     status = 'draft',
     appraisalDate,
   } = req.body;
@@ -869,6 +877,11 @@ router.post('/', wrap(async (req, res) => {
   });
   if (!staff) return res.status(404).json({ success: false, message: 'Staff not found.' });
 
+  // Store criteria as JSON in goals field
+  const goalsValue = criteria && Array.isArray(criteria)
+    ? JSON.stringify(criteria)
+    : (goals || null);
+
   const created = await prisma.staffAppraisal.create({
     data: {
       schoolId,
@@ -879,13 +892,19 @@ router.post('/', wrap(async (req, res) => {
       rating: String(rating),
       strengths: strengths || null,
       improvements: improvements || null,
-      goals: goals || null,
+      goals: goalsValue,
       status: String(status),
       reviewerId,
       appraisalDate: appraisalDate ? new Date(appraisalDate) : new Date(),
     },
     include: { staff: { select: { id: true, name: true, empCode: true, designation: true } } },
   });
+
+  // Parse criteria back for the response
+  let parsedCriteria = criteria || [];
+  if (!parsedCriteria.length && created.goals) {
+    try { parsedCriteria = JSON.parse(created.goals); } catch { parsedCriteria = []; }
+  }
 
   await prisma.auditLog.create({
     data: {
@@ -899,7 +918,7 @@ router.post('/', wrap(async (req, res) => {
     },
   });
 
-  res.status(201).json({ success: true, data: created });
+  res.status(201).json({ success: true, data: { ...created, criteria: parsedCriteria } });
 }));
 
 router.put('/:id', wrap(async (req, res) => {
@@ -954,6 +973,25 @@ router.put('/:id', wrap(async (req, res) => {
   });
 
   res.json({ success: true, data: updated });
+}));
+
+// DELETE /:id - delete appraisal
+router.delete('/:id', wrap(async (req, res) => {
+  if (!isAdminRole(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Only admin can delete appraisals.' });
+  }
+
+  const schoolId = req.schoolId;
+  const id = parseInt(req.params.id, 10);
+
+  const existing = await prisma.staffAppraisal.findFirst({ where: { id, schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Appraisal not found.' });
+
+  // Delete associated payroll adjustment first (if any)
+  await prisma.payrollAdjustment.deleteMany({ where: { appraisalId: id } });
+  await prisma.staffAppraisal.delete({ where: { id } });
+
+  res.json({ success: true, message: 'Appraisal deleted.' });
 }));
 
 module.exports = router;

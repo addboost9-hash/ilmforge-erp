@@ -64,12 +64,12 @@ export default function AppraisalPage() {
   });
 
   const incrementMutation = useMutation({
-    mutationFn: ({ id, incrementPercent }) => api.post(`/appraisals/${id}/apply-increment`, { incrementPercent }),
+    mutationFn: ({ id, incrementPercent }) => api.post(`/appraisals/${id}/payroll/propose`, { incrementPercent }),
     onSuccess: () => {
       qc.invalidateQueries(['appraisals']);
-      toast.success('Increment applied!');
+      toast.success('Increment proposed! Awaiting approval.');
     },
-    onError: () => toast.error('Failed to apply increment'),
+    onError: (e) => toast.error(e?.response?.data?.message || 'Failed to propose increment'),
   });
 
   const deleteMutation = useMutation({

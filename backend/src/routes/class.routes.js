@@ -27,6 +27,17 @@ router.get('/subjects', wrap(async (req, res) => {
   res.json({ success: true, data: subjects });
 }));
 
+// GET /:classId/subjects — subjects for a specific class
+router.get('/:classId/subjects', wrap(async (req, res) => {
+  const classId = parseInt(req.params.classId);
+  if (isNaN(classId)) return res.status(400).json({ success: false, message: 'Invalid classId.' });
+  const subjects = await prisma.subject.findMany({
+    where: { schoolId: req.schoolId, classId },
+    orderBy: { name: 'asc' },
+  });
+  res.json({ success: true, data: subjects });
+}));
+
 router.post('/subjects', wrap(async (req, res) => {
   const { classId, name, code, totalMarks, teacherId } = req.body;
   const subject = await prisma.subject.create({ data: { schoolId: req.schoolId, classId: parseInt(classId), name, code, totalMarks: totalMarks ? parseInt(totalMarks) : 100, teacherId: teacherId ? parseInt(teacherId) : null } });

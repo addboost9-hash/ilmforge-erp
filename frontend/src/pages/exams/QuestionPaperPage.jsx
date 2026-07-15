@@ -168,24 +168,20 @@ export default function QuestionPaperPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {papers.map((p, i) => {
-                        let qs = [];
-                        if (p.testType && p.testType.startsWith('[')) { try { qs = JSON.parse(p.testType); } catch { qs = []; } }
-                        return (
+                      {papers.map((p, i) => (
                           <tr key={p.id} style={{ background: i % 2 === 0 ? '#f9fafb' : '#fff' }}>
                             <td style={{ padding: '10px 12px', fontWeight: 600 }}>{p.title}</td>
                             <td style={{ padding: '10px 12px' }}>{p.className || '-'}</td>
                             <td style={{ padding: '10px 12px' }}>{p.subjectName || '-'}</td>
                             <td style={{ padding: '10px 12px' }}>{p.totalMarks}</td>
-                            <td style={{ padding: '10px 12px' }}>{p.paperType || p.testType || '-'}</td>
+                            <td style={{ padding: '10px 12px' }}>{p.paperType || '-'}</td>
                             <td style={{ padding: '10px 12px' }}>{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '-'}</td>
                             <td style={{ padding: '10px 12px', display: 'flex', gap: 6 }}>
-                              <button style={btnStyle('#059669')} onClick={() => printPaper(p, qs, school?.name)}>Print</button>
+                              <button style={btnStyle('#059669')} onClick={() => printPaper(p, p.questions || [], school?.name)}>Print</button>
                               <button style={btnStyle('#ef4444')} onClick={() => { if (confirm('Delete this paper?')) deleteMutation.mutate(p.id); }}>Delete</button>
                             </td>
                           </tr>
-                        );
-                      })}
+                      ))}
                     </tbody>
                   </table>
                 )
