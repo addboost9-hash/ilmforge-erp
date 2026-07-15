@@ -32,11 +32,11 @@ router.get('/stats', wrap(async (req, res) => {
     // Recent admissions (last 5)
     recentStudents,
   ] = await Promise.all([
-    prisma.student.count({ where: { schoolId, ...(campusId && { campusId }), status: 'active', deletedAt: null } }),
-    prisma.student.count({ where: { schoolId, ...(campusId && { campusId }), status: 'active', gender: { in: ['Male','male','M'] }, deletedAt: null } }),
-    prisma.student.count({ where: { schoolId, ...(campusId && { campusId }), status: 'active', gender: { in: ['Female','female','F'] }, deletedAt: null } }),
-    prisma.student.count({ where: { schoolId, ...(campusId && { campusId }), status: 'passout', deletedAt: null } }),
-    prisma.staff.count({ where: { schoolId, ...(campusId && { campusId }), isActive: true, deletedAt: null } }),
+    prisma.student.count({ where: { schoolId, status: 'active', deletedAt: null } }),
+    prisma.student.count({ where: { schoolId, status: 'active', gender: { in: ['Male','male','M'] }, deletedAt: null } }),
+    prisma.student.count({ where: { schoolId, status: 'active', gender: { in: ['Female','female','F'] }, deletedAt: null } }),
+    prisma.student.count({ where: { schoolId, status: 'passout', deletedAt: null } }),
+    prisma.staff.count({ where: { schoolId, isActive: true, deletedAt: null } }),
     prisma.staffAttendance.count({ where: { schoolId, date: { gte: today, lt: tomorrow }, status: 'present' } }),
     prisma.staffAttendance.count({ where: { schoolId, date: { gte: today, lt: tomorrow }, status: 'absent' } }),
     prisma.feeInvoice.count({ where: { schoolId, status: { in: ['unpaid', 'partial', 'overdue'] } } }),
