@@ -457,14 +457,15 @@ export default function StudentPortalPage() {
 
   const schoolName = localStorage.getItem('registeredSchoolName') || 'IlmForge School';
   const logo       = localStorage.getItem('schoolLogoPreview');
-  const rollNo     = user?.rollNo || user?.username || '';
+  const rollNo = user?.rollNo || user?.username || '';
 
+  // Backend auto-filters by userId for student role — no search param needed
   const { data: studentData, isLoading: studentLoading } = useQuery({
-    queryKey: ['portal-student', rollNo],
+    queryKey: ['portal-student', user?.id],
     queryFn:  () =>
-      api.get('/students', { params: { search: rollNo, limit: 1 } })
+      api.get('/students', { params: { limit: 1 } })
          .then(r => (r.data.data || [])[0] || null),
-    enabled:   !!rollNo,
+    enabled:   !!user?.id,
     staleTime: 120_000,
   });
 

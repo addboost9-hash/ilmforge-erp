@@ -13,8 +13,31 @@ router.get('/', wrap(async (req, res) => {
   let parentStudentIds = null;
 
   if (req.user?.role === 'parent') {
-    // Parents only see explicitly linked children
-    const parent = await prisma.parent.findFirst({ where: { schoolId, userId: req.user.id } });
+    // Primary: look up by userId link
+    let parent = await prisma.parent.findFirst({ where: { schoolId, userId: req.user.id } });
+
+    // Fallback: link Parent record by phone if userId match is missing
+    if (!parent && req.user.phone) {
+      parent = await prisma.parent.findFirst({ where: { schoolId, user: { phone: req.user.phone } } });
+      if (parent) {
+        // Fix the broken link for future requests
+        await prisma.parent.update({ where: { id: parent.id }, data: { userId: req.user.id } }).catch(() => {});
+      }
+    }
+
+    // Second fallback: find by parent email in student emergency contact
+    if (!parent) {
+      const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true, phone: true } });
+      if (user) {
+        parent = await prisma.parent.findFirst({ where: { schoolId, OR: [
+          ...(user.phone ? [{ user: { phone: user.phone } }] : []),
+        ] } });
+        if (parent && !parent.userId) {
+          await prisma.parent.update({ where: { id: parent.id }, data: { userId: req.user.id } }).catch(() => {});
+        }
+      }
+    }
+
     if (!parent) return res.json({ success: true, data: [], total: 0, page: 1, pages: 0 });
     const links = await prisma.parentStudent.findMany({ where: { schoolId, parentId: parent.id }, select: { studentId: true } });
     parentStudentIds = links.map((l) => l.studentId);
