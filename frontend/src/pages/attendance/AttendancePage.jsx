@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { Save, CheckCircle, XCircle, Clock, RefreshCw, Users } from 'lucide-react';
 
 export default function AttendancePage() {
+  const qc    = useQueryClient();
   const today = new Date().toISOString().split('T')[0];
   const [filters, setFilters] = useState({ classId:'', sectionId:'', date:today });
   const [attendance, setAttendance] = useState({});
@@ -32,7 +33,12 @@ export default function AttendancePage() {
       date: filters.date,
       records: Object.entries(attendance).map(([studentId, status]) => ({ studentId: parseInt(studentId), status })),
     }),
-    onSuccess: r => toast.success(r.data.message || 'Attendance saved!'),
+    onSuccess: r => {
+      toast.success(r.data.message || 'Attendance saved!');
+      // Refresh dashboard so attendance stats update immediately
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['attendance'] });
+    },
     onError: err => toast.error(err.response?.data?.message || 'Failed to save'),
   });
 

@@ -43,7 +43,7 @@ router.get('/stats', wrap(async (req, res) => {
     prisma.feePayment.aggregate({ _sum: { amountPaid: true }, where: { schoolId, paymentDate: { gte: today, lt: tomorrow } } }),
     prisma.expense.aggregate({ _sum: { amount: true }, where: { schoolId, date: { gte: today, lt: tomorrow } } }),
     prisma.feePayment.aggregate({ _sum: { amountPaid: true }, where: { schoolId, paymentDate: { gte: monthStart, lt: tomorrow } } }),
-    prisma.attendanceRecord.count({ where: { schoolId, date: { gte: today, lt: tomorrow }, status: 'present' } }).catch(() => 0),
+    prisma.attendance.count({ where: { schoolId, date: { gte: today, lt: tomorrow }, status: 'present' } }).catch(() => 0),
     prisma.student.count({ where: { schoolId, deletedAt: null, createdAt: { gte: monthStart } } }),
     prisma.feePayment.findMany({
       where: { schoolId },
@@ -101,7 +101,7 @@ router.get('/stats', wrap(async (req, res) => {
   const [classes, studentsByClass, attendanceByClass, feeByClass] = await Promise.all([
     prisma.class.findMany({ where: { schoolId, isActive: true }, orderBy: { orderNo: 'asc' }, select: { id: true, name: true } }),
     prisma.student.groupBy({ by: ['classId'], _count: { id: true }, where: { schoolId, status: 'active', deletedAt: null } }),
-    prisma.attendanceRecord.groupBy({ by: ['classId'], _count: { id: true }, where: { schoolId, date: { gte: today, lt: tomorrow }, status: 'present' } }).catch(() => []),
+    prisma.attendance.groupBy({ by: ['classId'], _count: { id: true }, where: { schoolId, date: { gte: today, lt: tomorrow }, status: 'present' } }).catch(() => []),
     prisma.feeInvoice.groupBy({ by: ['classId'], _sum: { totalAmount: true, paidAmount: true, dueAmount: true }, where: { schoolId } }),
   ]);
 

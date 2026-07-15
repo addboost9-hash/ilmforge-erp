@@ -154,8 +154,8 @@ export default function DashboardPage() {
   /* ── Main dashboard stats ── */
   const { data: stats, isLoading, refetch } = useQuery({
     queryKey: ['dashboard'],
-    queryFn: () => api.get('/dashboard').then(r => r.data.data || r.data),
-    staleTime: 60_000,
+    queryFn: () => api.get('/dashboard/stats').then(r => r.data.data || r.data),
+    staleTime: 30_000,
     retry: 1,
   });
 
@@ -178,11 +178,12 @@ export default function DashboardPage() {
   const s = stats || {};
 
   /* ── Stat values ── */
-  const totalStudents = s.totalStudents ?? s.stats?.totalStudents ?? 0;
-  const totalStaff    = s.totalStaff    ?? s.stats?.totalStaff    ?? 0;
-  const feeToday      = s.incomeToday   ?? s.stats?.incomeToday   ?? s.feeCollectedToday ?? 0;
-  const feeDefaulters = s.unpaidInvoices ?? s.stats?.unpaidInvoices ?? s.feeDefaulters    ?? 0;
-  const presentToday  = s.presentToday  ?? s.stats?.presentToday  ?? 0;
+  // API returns nested structure: { students: { total, presentToday }, staff: { total }, finance: { ... } }
+  const totalStudents = s.students?.total     ?? s.totalStudents ?? s.stats?.totalStudents ?? 0;
+  const totalStaff    = s.staff?.total        ?? s.totalStaff    ?? s.stats?.totalStaff    ?? 0;
+  const feeToday      = s.finance?.incomeToday ?? s.incomeToday  ?? s.stats?.incomeToday   ?? s.feeCollectedToday ?? 0;
+  const feeDefaulters = s.finance?.unpaidInvoices ?? s.unpaidInvoices ?? s.stats?.unpaidInvoices ?? s.feeDefaulters ?? 0;
+  const presentToday  = s.students?.presentToday ?? s.presentToday ?? s.stats?.presentToday ?? 0;
   const pendingLeaves = s.pendingLeaves ?? s.stats?.pendingLeaves ?? 0;
 
   const feeChartData = buildFeeChartData(s);

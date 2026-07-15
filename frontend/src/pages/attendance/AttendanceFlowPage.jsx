@@ -69,7 +69,7 @@ export default function AttendanceFlowPage() {
       const records = students
         .filter(s => marks[s.id])
         .map(s => ({ studentId: s.id, status: marks[s.id], date, classId: parseInt(classId) }));
-      const res = await api.post('/attendance/save', { records, date, classId: parseInt(classId) });
+      const res = await api.post('/attendance/save', { records, date, classId: parseInt(classId), ...(sectionId && { sectionId: parseInt(sectionId) }) });
       // LINKED: auto-notify absent parents
       let notified = 0;
       if (notifyAbsent) {
@@ -87,6 +87,7 @@ export default function AttendanceFlowPage() {
       setSaved(data);
       setStep(3);
       qc.invalidateQueries({ queryKey: ['att-existing'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 

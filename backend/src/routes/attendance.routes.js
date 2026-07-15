@@ -620,7 +620,7 @@ router.put('/:id', wrap(async (req, res) => {
 
   const updated = await prisma.attendance.update({
     where: { id: parseInt(id) },
-    data: { status, markedBy: req.user.id, ...(remarks !== undefined && { remarks }) },
+    data: { status, markedBy: req.user.id },
   });
 
   // Log in AuditLog if model exists
