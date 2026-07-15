@@ -467,4 +467,70 @@ router.get('/payments', requireFinanceRole, wrap(async (req, res) => {
   });
 }));
 
+/* ── POST /fees/increment — Apply fee increment to all students in a class ── */
+router.post('/increment', requireFinanceRole, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const { classId, mode, value, reason } = req.body;
+  if (!value || value <= 0) return res.status(400).json({ success: false, message: 'Value required' });
+
+  // Update FeeStructure for this class
+  const structures = await prisma.feeStructure.findMany({ where: { schoolId, ...(classId && { classId: parseInt(classId) }) } });
+  let updatedCount = 0;
+  for (const s of structures) {
+    const newAmt = mode === 'pct'
+      ? Math.round(s.amount * (1 + parseFloat(value) / 100))
+      : Math.round(s.amount + parseFloat(value));
+    await prisma.feeStructure.update({ where: { id: s.id }, data: { amount: newAmt } });
+    updatedCount++;
+  }
+  res.json({ success: true, message: `Fee incremented for ${updatedCount} structure(s)`, updated: updatedCount });
+}));
+
+/* ── POST /fees/decrement — Apply fee decrement ── */
+router.post('/decrement', requireFinanceRole, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const { classId, mode, value, reason } = req.body;
+  if (!value || value <= 0) return res.status(400).json({ success: false, message: 'Value required' });
+
+  const structures = await prisma.feeStructure.findMany({ where: { schoolId, ...(classId && { classId: parseInt(classId) }) } });
+  let updatedCount = 0;
+  for (const s of structures) {
+    const newAmt = mode === 'pct'
+      ? Math.round(s.amount * (1 - parseFloat(value) / 100))
+      : Math.round(s.amount - parseFloat(value));
+    await prisma.feeStructure.update({ where: { id: s.id }, data: { amount: Math.max(0, newAmt) } });
+    updatedCount++;
+  }
+  res.json({ success: true, message: `Fee decremented for ${updatedCount} structure(s)`, updated: updatedCount });
+}));
+
+/* ── GET /fees/discounts — List students with active discounts ── */
+router.get('/discounts', requireFinanceRole, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const discounted = await prisma.feeInvoice.findMany({
+    where: { schoolId, discount: { gt: 0 }, status: { not: 'paid' } },
+    select: { studentId: true, discount: true, student: { select: { id: true, name: true, rollNo: true, class: { select: { name: true } } } } },
+    distinct: ['studentId'],
+  });
+  res.json({ success: true, data: discounted });
+}));
+
+/* ── POST /fees/discounts — Apply discount to student's pending invoices ── */
+router.post('/discounts', requireFinanceRole, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const { studentId, discountType, discountValue, reason } = req.body;
+  if (!studentId || !discountValue) return res.status(400).json({ success: false, message: 'studentId and discountValue required' });
+
+  const invoices = await prisma.feeInvoice.findMany({ where: { schoolId, studentId: parseInt(studentId), status: { not: 'paid' } } });
+  let applied = 0;
+  for (const inv of invoices) {
+    const discAmt = discountType === 'percent'
+      ? Math.round(inv.totalAmount * parseFloat(discountValue) / 100)
+      : Math.round(parseFloat(discountValue));
+    await prisma.feeInvoice.update({ where: { id: inv.id }, data: { discount: discAmt, dueAmount: Math.max(0, inv.totalAmount - discAmt) } });
+    applied++;
+  }
+  res.json({ success: true, message: `Discount applied to ${applied} invoice(s)`, applied });
+}));
+
 module.exports = router;

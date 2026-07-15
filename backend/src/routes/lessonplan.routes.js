@@ -133,7 +133,10 @@ router.post('/generate-ai', wrap(async (req, res) => {
     });
   }
 
-  const prompt = `Create a detailed lesson plan for ${subject} class ${className} on topic: ${topic}. Duration: ${duration || '45 minutes'}. Objectives: ${objectives || 'standard curriculum objectives'}. Return ONLY a JSON object with fields: {topic, duration, objectives, warmUp, mainActivity, practice, assessment, homework, resources}`;
+  const prompt = `Create a detailed lesson plan using Bloom's Taxonomy for ${subject}, class ${className}, topic: ${topic}. Duration: ${duration || 45} minutes. ${objectives ? 'Teacher hints: ' + objectives : ''}
+
+Structure objectives across all 6 Bloom's Taxonomy levels. Return ONLY valid JSON (no markdown):
+{"title":"...","subject":"${subject}","class":"${className}","topic":"${topic}","duration":${duration || 45},"bloomsObjectives":{"remember":["..."],"understand":["..."],"apply":["..."],"analyze":["..."],"evaluate":["..."],"create":["..."]},"warmUp":{"activity":"...","duration":5,"bloomsLevel":"remember"},"mainActivity":{"description":"...","duration":25,"bloomsLevel":"apply"},"practice":{"description":"...","duration":10,"bloomsLevel":"analyze"},"assessment":{"description":"...","duration":5,"bloomsLevel":"evaluate","method":"Q&A"},"homework":"...","resources":["..."],"teacherNotes":"..."}`;
   const body = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] });
 
   const reqOptions = {

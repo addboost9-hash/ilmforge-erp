@@ -1,31 +1,24 @@
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { Tag, UserPlus, Search, Trash2, Plus, X, CheckCircle, DollarSign } from 'lucide-react';
 
-const LS_KEY = 'ilmforge_discounts';
-const SEED = [
-  { id:1, studentCode:'C5A-26-001', studentName:'Ali Hassan', parent:'Tariq Hassan', className:'Class 5', section:'A', discountType:'Percentage', discountValue:20, reason:'Merit scholarship' },
-  { id:2, studentCode:'C6B-26-005', studentName:'Sara Ahmed', parent:'Imran Ahmed', className:'Class 6', section:'B', discountType:'Fixed Amount', discountValue:500, reason:'Need-based assistance' },
-  { id:3, studentCode:'C7A-26-012', studentName:'Bilal Khan', parent:'Adil Khan', className:'Class 7', section:'A', discountType:'Percentage', discountValue:10, reason:'Staff child discount' },
-];
 const money = v => 'Rs. ' + Number(v||0).toLocaleString();
 
 export default function DiscountedStudentsPage() {
-  const [discounts, setDiscounts] = useState([]);
+  const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [filterClass, setFilterClass] = useState('');
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [form, setForm] = useState({ discountType:'Fixed Amount', discountValue:'', reason:'' });
 
-  useEffect(() => {
-    const s = localStorage.getItem(LS_KEY);
-    setDiscounts(s ? JSON.parse(s) : SEED);
-  }, []);
-
-  const persist = list => { setDiscounts(list); localStorage.setItem(LS_KEY, JSON.stringify(list)); };
+  // Load discounts from API
+  const { data: discounts = [], isLoading } = useQuery({
+    queryKey: ['fee-discounts'],
+    queryFn: () => api.get('/fees/discounts').then(r => r.data.data || []),
+  });
 
   const { data: results, isLoading: searching } = useQuery({
     queryKey: ['disc-search', studentSearch],
@@ -35,7 +28,13 @@ export default function DiscountedStudentsPage() {
     enabled: studentSearch.length > 1,
   });
 
-  const uniqueClasses = [...new Set(discounts.map(d => d.className))].sort();
+  const addMut = useMutation({
+    mutationFn: (data) => api.post('/fees/discounts', data),
+    onSuccess: () => { qc.invalidateQueries(['fee-discounts']); toast.success('Discount applied!'); setShowModal(false); setSelectedStudent(null); setForm({ discountType:'Fixed Amount', discountValue:'', reason:'' }); },
+    onError: (e) => toast.error(e.response?.data?.message || 'Failed'),
+  });
+
+  const uniqueClasses = [...new Set((discounts||[]).map(d => d.student?.class?.name))].filter(Boolean).sort();
 
   const handleAdd = () => {
     if (!selectedStudent) return toast.error('Select a student first');
@@ -43,26 +42,14 @@ export default function DiscountedStudentsPage() {
     if (!form.reason.trim()) return toast.error('Please provide a reason');
     if (form.discountType === 'Percentage' && Number(form.discountValue) > 100)
       return toast.error('Percentage cannot exceed 100');
-    const already = discounts.find(d => d.studentId === String(selectedStudent.id));
-    if (already) return toast.error('Student already has a discount. Remove it first.');
-    persist([...discounts, {
-      id: Date.now(),
-      studentId: String(selectedStudent.id),
-      studentCode: selectedStudent.rollNo || `STU-${String(selectedStudent.id).slice(-3)}`,
-      studentName: selectedStudent.name,
-      parent: selectedStudent.fatherName || '—',
-      className: selectedStudent.class?.name || '—',
-      section: selectedStudent.section?.name || selectedStudent.section || '—',
-      discountType: form.discountType,
-      discountValue: parseFloat(form.discountValue),
-      reason: form.reason.trim(),
-    }]);
-    toast.success('Discount applied!');
-    setShowModal(false);
-    setSelectedStudent(null);
-    setStudentSearch('');
-    setForm({ discountType:'Fixed Amount', discountValue:'', reason:'' });
+    addMut.mutate({
+      studentId: selectedStudent.id,
+      discountType: form.discountType === 'Percentage' ? 'percent' : 'flat',
+      discountValue: Number(form.discountValue),
+      reason: form.reason,
+    });
   };
+
 
   const filtered = filterClass
     ? discounts.filter(d => d.className === filterClass)

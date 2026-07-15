@@ -45,6 +45,15 @@ router.patch('/:id/approve', wrap(async (req, res) => {
     where: { id },
     data: { status: 'approved', approvedBy: req.user.id },
   });
+
+  // Auto-deduct leave balance when approved
+  if (existing.staffId && existing.days) {
+    await prisma.leaveBalance.updateMany({
+      where: { schoolId: req.schoolId, staffId: existing.staffId, leaveType: existing.type },
+      data: { used: { increment: existing.days }, remaining: { decrement: existing.days } },
+    }).catch(() => {}); // Don't fail if no balance record exists
+  }
+
   res.json({ success: true, data: leave });
 }));
 

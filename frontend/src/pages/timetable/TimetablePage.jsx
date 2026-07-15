@@ -1,10 +1,10 @@
 /**
  * IlmForge — Timetable Page
- * Tab 1: Add Timetable (form with class/section/subject/day/time dropdowns → localStorage)
+ * Tab 1: Add Timetable (form with class/section/subject/day/time dropdowns → backend)
  * Tab 2: Manage Timetable (filter + table + weekly grid view + print)
  */
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Clock, Plus, Trash2, Edit2, Printer, Calendar, Filter, X, Save } from 'lucide-react';
 import api from '../../api/client';
@@ -13,7 +13,6 @@ import api from '../../api/client';
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
 const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
-const LS_KEY = 'ilmforge_timetable';
 
 const DAY_COLORS = {
   Sunday:    '#7C3AED',
@@ -24,19 +23,6 @@ const DAY_COLORS = {
   Friday:    '#15803D',
   Saturday:  '#B45309',
 };
-
-/* ─── localStorage helpers ───────────────────────── */
-function getTimetable() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return [];
-}
-
-function saveTimetable(data) {
-  localStorage.setItem(LS_KEY, JSON.stringify(data));
-}
 
 function getLocalSubjects() {
   try {
@@ -73,15 +59,14 @@ const emptyForm = {
    MAIN COMPONENT
 ════════════════════════════════════════════════════ */
 export default function TimetablePage() {
+  const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState('add');
-  const [timetable, setTimetable] = useState(() => getTimetable());
   const [form, setForm] = useState(emptyForm);
 
   /* Manage-tab filter state */
   const [filterCampus, setFilterCampus]   = useState('Main Campus');
   const [filterClassId, setFilterClassId] = useState('');
   const [filterSectionId, setFilterSectionId] = useState('');
-  const [filtered, setFiltered]           = useState([]);
   const [hasFiltered, setHasFiltered]     = useState(false);
 
   /* Edit state */
@@ -111,10 +96,54 @@ export default function TimetablePage() {
   const manageSelectedClass = (classes || []).find(c => String(c.id) === String(filterClassId));
   const manageSections      = manageSelectedClass?.sections || [];
 
-  /* Keep timetable in sync with localStorage across tab switches */
-  useEffect(() => {
-    setTimetable(getTimetable());
-  }, [activeTab]);
+  /* ── Timetable data query (filtered by class/section) ── */
+  const { data: timetable = [], isLoading: ttLoading } = useQuery({
+    queryKey: ['timetable', filterClassId, filterSectionId],
+    queryFn: () => {
+      const params = {};
+      if (filterClassId)   params.classId   = filterClassId;
+      if (filterSectionId) params.sectionId = filterSectionId;
+      return api.get('/timetable', { params }).then(r => r.data.data || []);
+    },
+    enabled: hasFiltered && !!filterClassId,
+  });
+
+  /* ── Add mutation ── */
+  const addMutation = useMutation({
+    mutationFn: (entry) => api.post('/timetable', entry),
+    onSuccess: () => {
+      qc.invalidateQueries(['timetable']);
+      toast.success('Timetable entry added!');
+      setForm(emptyForm);
+    },
+    onError: (err) => {
+      toast.error(err?.response?.data?.message || 'Failed to add entry');
+    },
+  });
+
+  /* ── Delete mutation ── */
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/timetable/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries(['timetable']);
+      toast.success('Entry deleted');
+    },
+    onError: () => toast.error('Failed to delete entry'),
+  });
+
+  /* ── Update mutation (delete old + create new) ── */
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }) => {
+      await api.delete(`/timetable/${id}`);
+      return api.post('/timetable', data);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries(['timetable']);
+      setEditId(null);
+      toast.success('Entry updated!');
+    },
+    onError: () => toast.error('Failed to update entry'),
+  });
 
   /* ── Add Timetable ── */
   const handleAdd = () => {
@@ -123,43 +152,26 @@ export default function TimetablePage() {
     if (!form.subjectId) return toast.error('Please select a subject');
     if (!form.day)       return toast.error('Please select a day');
 
-    const entry = {
-      id: Date.now(),
-      classId:     form.classId,
-      className:   form.className,
-      sectionId:   form.sectionId,
-      sectionName: form.sectionName,
-      subjectId:   form.subjectId,
-      subjectName: form.subjectName,
-      day:         form.day,
-      startTime:   fmtTime(form.startHour, form.startMin, form.startAmpm),
-      endTime:     fmtTime(form.endHour,   form.endMin,   form.endAmpm),
-      teacher:     form.teacher || '—',
-      campus:      'Main Campus',
-    };
-
-    const updated = [...timetable, entry];
-    saveTimetable(updated);
-    setTimetable(updated);
-    toast.success('Timetable entry added!');
-    setForm(emptyForm);
+    addMutation.mutate({
+      classId:   parseInt(form.classId),
+      sectionId: parseInt(form.sectionId),
+      subjectId: parseInt(form.subjectId),
+      day:       form.day,
+      periodNo:  1,
+      startTime: fmtTime(form.startHour, form.startMin, form.startAmpm),
+      endTime:   fmtTime(form.endHour,   form.endMin,   form.endAmpm),
+      // teacher stored as teacherId if numeric, else we pass as custom field
+    });
   };
 
   /* ── Delete ── */
   const handleDelete = (id) => {
-    const updated = timetable.filter(e => e.id !== id);
-    saveTimetable(updated);
-    setTimetable(updated);
-    if (hasFiltered) {
-      setFiltered(prev => prev.filter(e => e.id !== id));
-    }
-    toast.success('Entry deleted');
+    deleteMutation.mutate(id);
   };
 
   /* ── Edit ── */
   const startEdit = (entry) => {
     setEditId(entry.id);
-    // Parse startTime / endTime back to components
     const parseTime = (timeStr) => {
       if (!timeStr) return { h: '8', m: '00', ap: 'AM' };
       const parts = timeStr.split(' ');
@@ -170,12 +182,12 @@ export default function TimetablePage() {
     const st = parseTime(entry.startTime);
     const et = parseTime(entry.endTime);
     setEditForm({
-      classId:     entry.classId,
-      className:   entry.className,
-      sectionId:   entry.sectionId,
-      sectionName: entry.sectionName,
-      subjectId:   entry.subjectId,
-      subjectName: entry.subjectName,
+      classId:     String(entry.classId),
+      className:   entry.className || '',
+      sectionId:   String(entry.sectionId || ''),
+      sectionName: entry.sectionName || '',
+      subjectId:   String(entry.subjectId || ''),
+      subjectName: entry.subjectName || '',
       day:         entry.day,
       startHour:   st.h,
       startMin:    st.m,
@@ -183,60 +195,53 @@ export default function TimetablePage() {
       endHour:     et.h,
       endMin:      et.m,
       endAmpm:     et.ap,
-      teacher:     entry.teacher === '—' ? '' : (entry.teacher || ''),
+      teacher:     '',
     });
   };
 
   const saveEdit = () => {
-    const updated = timetable.map(e => {
-      if (e.id !== editId) return e;
-      // Find names
-      const cls = (classes || []).find(c => String(c.id) === String(editForm.classId));
-      const sec = (cls?.sections || []).find(s => String(s.id) === String(editForm.sectionId));
-      const sub = allSubjects.find(s => String(s.id) === String(editForm.subjectId));
-      return {
-        ...e,
-        classId:     editForm.classId,
-        className:   cls?.name   || editForm.className,
-        sectionId:   editForm.sectionId,
-        sectionName: sec?.name   || editForm.sectionName,
-        subjectId:   editForm.subjectId,
-        subjectName: sub?.name   || editForm.subjectName,
-        day:         editForm.day,
-        startTime:   fmtTime(editForm.startHour, editForm.startMin, editForm.startAmpm),
-        endTime:     fmtTime(editForm.endHour,   editForm.endMin,   editForm.endAmpm),
-        teacher:     editForm.teacher || '—',
-      };
+    const cls = (classes || []).find(c => String(c.id) === String(editForm.classId));
+    const sub = allSubjects.find(s => String(s.id) === String(editForm.subjectId));
+    updateMutation.mutate({
+      id: editId,
+      data: {
+        classId:   parseInt(editForm.classId),
+        sectionId: editForm.sectionId ? parseInt(editForm.sectionId) : null,
+        subjectId: editForm.subjectId ? parseInt(editForm.subjectId) : null,
+        day:       editForm.day,
+        periodNo:  1,
+        startTime: fmtTime(editForm.startHour, editForm.startMin, editForm.startAmpm),
+        endTime:   fmtTime(editForm.endHour,   editForm.endMin,   editForm.endAmpm),
+      },
     });
-    saveTimetable(updated);
-    setTimetable(updated);
-    if (hasFiltered) {
-      setFiltered(updated.filter(e =>
-        String(e.classId) === String(filterClassId) &&
-        (!filterSectionId || String(e.sectionId) === String(filterSectionId))
-      ));
-    }
-    setEditId(null);
-    toast.success('Entry updated!');
   };
 
   /* ── Filter (Manage tab) ── */
   const handleFilter = () => {
     if (!filterClassId) return toast.error('Please select a class to filter');
-    const result = timetable.filter(e =>
-      String(e.classId) === String(filterClassId) &&
-      (!filterSectionId || String(e.sectionId) === String(filterSectionId))
-    );
-    setFiltered(result);
     setHasFiltered(true);
+    qc.invalidateQueries(['timetable', filterClassId, filterSectionId]);
   };
+
+  /* ── Enrich timetable entries with names ── */
+  const enrichedTimetable = timetable.map(entry => {
+    const cls = (classes || []).find(c => c.id === entry.classId);
+    const sec = (cls?.sections || []).find(s => s.id === entry.sectionId);
+    const sub = allSubjects.find(s => s.id === entry.subjectId);
+    return {
+      ...entry,
+      className:   cls?.name   || `Class ${entry.classId}`,
+      sectionName: sec?.name   || (entry.sectionId ? `Section ${entry.sectionId}` : '—'),
+      subjectName: sub?.name   || (entry.subjectId ? `Subject ${entry.subjectId}` : '—'),
+      teacher:     entry.teacherId ? `Teacher ${entry.teacherId}` : '—',
+    };
+  });
 
   /* ── Print timetable ── */
   const handlePrint = () => {
-    const rows = (hasFiltered ? filtered : timetable);
+    const rows = enrichedTimetable;
     if (!rows.length) return toast.error('No data to print');
 
-    // Build weekly grid for print
     const byDay = {};
     DAYS.forEach(d => { byDay[d] = rows.filter(e => e.day === d); });
 
@@ -288,9 +293,8 @@ export default function TimetablePage() {
   };
 
   /* ── Derived: weekly grid rows for Manage tab ── */
-  const displayRows = hasFiltered ? filtered : [];
   const byDay = DAYS.reduce((acc, d) => {
-    acc[d] = displayRows.filter(e => e.day === d);
+    acc[d] = enrichedTimetable.filter(e => e.day === d);
     return acc;
   }, {});
 
@@ -487,24 +491,14 @@ export default function TimetablePage() {
             </div>
           </div>
 
-          {/* Teacher (optional) */}
-          <div className="form-group">
-            <label className="form-label">Teacher Name <span style={{ color: '#94A3B8', fontWeight: 400 }}>(optional)</span></label>
-            <input
-              className="form-input"
-              placeholder="e.g. Mr. Ali Hassan"
-              value={form.teacher}
-              onChange={e => setForm({ ...form, teacher: e.target.value })}
-            />
-          </div>
-
           {/* Submit */}
           <button
             className="btn btn-teal"
             style={{ width: '100%', justifyContent: 'center', padding: '11px 0', fontSize: 14, fontWeight: 700, marginTop: 4 }}
             onClick={handleAdd}
+            disabled={addMutation.isPending}
           >
-            <Plus size={16}/> Add Timetable
+            <Plus size={16}/> {addMutation.isPending ? 'Adding...' : 'Add Timetable'}
           </button>
         </div>
       )}
@@ -592,10 +586,14 @@ export default function TimetablePage() {
               <div style={{ textAlign: 'center', padding: '52px 24px', color: '#94A3B8' }}>
                 <Calendar size={48} style={{ opacity: 0.18, marginBottom: 12 }}/>
                 <div style={{ fontSize: 14, fontWeight: 500, color: '#64748B' }}>Select a class and click Filter Data to view the timetable</div>
-                <div style={{ fontSize: 12, marginTop: 6 }}>All {timetable.length} saved entr{timetable.length === 1 ? 'y' : 'ies'} will appear after filtering</div>
+                <div style={{ fontSize: 12, marginTop: 6 }}>Entries will be loaded from the backend after filtering</div>
               </div>
             </div>
-          ) : filtered.length === 0 ? (
+          ) : ttLoading ? (
+            <div className="card">
+              <div style={{ textAlign: 'center', padding: '48px 24px', color: '#94A3B8' }}>Loading timetable...</div>
+            </div>
+          ) : enrichedTimetable.length === 0 ? (
             <div className="card">
               <div style={{ textAlign: 'center', padding: '48px 24px', color: '#94A3B8' }}>
                 <Calendar size={44} style={{ opacity: 0.18, marginBottom: 10 }}/>
@@ -608,7 +606,7 @@ export default function TimetablePage() {
               {/* Action bar */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <div style={{ fontSize: 13, color: '#374151' }}>
-                  <strong style={{ color: '#0D9488' }}>{filtered.length}</strong> entr{filtered.length === 1 ? 'y' : 'ies'} found
+                  <strong style={{ color: '#0D9488' }}>{enrichedTimetable.length}</strong> entr{enrichedTimetable.length === 1 ? 'y' : 'ies'} found
                   {filterClassId && (
                     <span style={{ color: '#6B7280', marginLeft: 8 }}>
                       &middot; {manageSelectedClass?.name}
@@ -631,12 +629,12 @@ export default function TimetablePage() {
                         <th>Subject</th>
                         <th>Start Time</th>
                         <th>End Time</th>
-                        <th>Teacher</th>
+                        <th>Section</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filtered.map(entry => (
+                      {enrichedTimetable.map(entry => (
                         editId === entry.id ? (
                           /* ── Inline edit row ── */
                           <tr key={entry.id} style={{ background: '#F0FDF9' }}>
@@ -692,21 +690,14 @@ export default function TimetablePage() {
                                 </select>
                               </div>
                             </td>
-                            <td>
-                              <input
-                                className="form-input"
-                                style={{ minWidth: 120 }}
-                                value={editForm.teacher}
-                                onChange={e => setEditForm({ ...editForm, teacher: e.target.value })}
-                                placeholder="Teacher name"
-                              />
-                            </td>
+                            <td style={{ color: '#374151' }}>{entry.sectionName}</td>
                             <td>
                               <div style={{ display: 'flex', gap: 6 }}>
                                 <button
                                   className="btn btn-teal"
                                   style={{ padding: '4px 10px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
                                   onClick={saveEdit}
+                                  disabled={updateMutation.isPending}
                                 >
                                   <Save size={12}/> Save
                                 </button>
@@ -739,7 +730,7 @@ export default function TimetablePage() {
                             <td style={{ fontWeight: 600, color: '#1E3A5F' }}>{entry.subjectName}</td>
                             <td style={{ color: '#0D9488', fontWeight: 600 }}>{entry.startTime}</td>
                             <td style={{ color: '#0D9488', fontWeight: 600 }}>{entry.endTime}</td>
-                            <td style={{ color: '#374151' }}>{entry.teacher}</td>
+                            <td style={{ color: '#374151' }}>{entry.sectionName}</td>
                             <td>
                               <div style={{ display: 'flex', gap: 6 }}>
                                 <button
@@ -763,6 +754,7 @@ export default function TimetablePage() {
                                 <button
                                   title="Delete"
                                   onClick={() => handleDelete(entry.id)}
+                                  disabled={deleteMutation.isPending}
                                   style={{
                                     padding: '5px 10px',
                                     borderRadius: 6,
@@ -840,9 +832,6 @@ export default function TimetablePage() {
                           >
                             <div style={{ fontWeight: 700, fontSize: 11, color, lineHeight: 1.3 }}>{p.subjectName}</div>
                             <div style={{ fontSize: 10, color: '#6B7280', marginTop: 2 }}>{p.startTime} – {p.endTime}</div>
-                            {p.teacher && p.teacher !== '—' && (
-                              <div style={{ fontSize: 9.5, color: '#94A3B8', marginTop: 1 }}>{p.teacher}</div>
-                            )}
                           </div>
                         ))}
                       </div>
