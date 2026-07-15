@@ -448,10 +448,7 @@ router.get('/payments', requireFinanceRole, wrap(async (req, res) => {
             student: { select: { id: true, name: true, rollNo: true } },
           },
         },
-        // Include the accountant who recorded the payment (for daily balancesheet)
-        receivedByUser: {
-          select: { id: true, name: true, email: true },
-        },
+        // receivedBy is just an Int field (userId) — no relation in schema
       },
       orderBy: { paymentDate: 'desc' },
     }),

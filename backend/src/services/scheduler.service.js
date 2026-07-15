@@ -90,9 +90,9 @@ async function runFeeReminders() {
           id: true, dueAmount: true, month: true, year: true,
           student: {
             select: {
-              name: true,
+              name: true, emergencyPhone: true,
               class: { select: { name: true } },
-              parent: { select: { name: true, phone: true, email: true } },
+              parents: { take: 1, select: { parent: { select: { user: { select: { name: true, phone: true, email: true } } } } } },
             },
           },
         },
@@ -103,8 +103,8 @@ async function runFeeReminders() {
       const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
       for (const inv of unpaid) {
-        const parent = inv.student?.parent;
-        const phone  = parent?.phone;
+        const parentUser = inv.student?.parents?.[0]?.parent?.user;
+        const phone = parentUser?.phone || inv.student?.emergencyPhone;
         const email  = parent?.email;
         if (!phone && !email) continue;
 
@@ -165,8 +165,8 @@ async function runAbsentAlerts() {
         select: {
           student: {
             select: {
-              name: true,
-              parent: { select: { name: true, phone: true, email: true } },
+              name: true, emergencyPhone: true,
+              parents: { take: 1, select: { parent: { select: { user: { select: { name: true, phone: true, email: true } } } } } },
             },
           },
         },
@@ -233,9 +233,8 @@ async function runBirthdayWishes() {
           dob: { not: null },
         },
         select: {
-          name: true,
-          dob: true,
-          parent: { select: { phone: true, email: true } },
+          name: true, dob: true, emergencyPhone: true,
+          parents: { take: 1, select: { parent: { select: { user: { select: { phone: true, email: true } } } } } },
         },
       });
 
