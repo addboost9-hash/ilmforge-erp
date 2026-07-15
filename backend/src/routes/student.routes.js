@@ -98,7 +98,7 @@ router.get('/', wrap(async (req, res) => {
         class:   { select: { id: true, name: true, classTeacherId: true } },
         section: { select: { id: true, name: true } },
         campus:  { select: { id: true, name: true } },
-        parents: { select: { parent: { select: { id: true, name: true, phone: true, user: { select: { email: true } } } } }, take: 1 },
+        user:    { select: { id: true, email: true } },
       },
       orderBy: { name: 'asc' },
     }),
