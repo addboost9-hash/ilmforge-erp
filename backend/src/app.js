@@ -239,6 +239,12 @@ app.use('/api/v1/alumni',          protect, require('./routes/alumni.routes'));
 app.use('/api/v1/events',          protect, require('./routes/events.routes'));
 /* ═══ v3.6: Notification Automation ═══ */
 app.use('/api/v1/automation',      protect, ADMIN_ONLY, require('./routes/automation.routes'));
+/* ═══ v3.7: Question Papers / Lesson Plans / Scheme / Calendar / Payroll ═══ */
+app.use('/api/v1/question-papers', protect, ACADEMIC,   require('./routes/questionpaper.routes'));
+app.use('/api/v1/lesson-plans',    protect, ACADEMIC,   require('./routes/lessonplan.routes'));
+app.use('/api/v1/scheme',          protect, ACADEMIC,   require('./routes/scheme.routes'));
+app.use('/api/v1/calendar',        protect,             require('./routes/calendar.routes'));
+app.use('/api/v1/payroll',         protect, FINANCE,    require('./routes/payroll.routes'));
 
 /* ═══ LICENSE management (offline mode) ═══ */
 app.use('/api/v1/license', require('./routes/license.routes'));

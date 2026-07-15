@@ -169,6 +169,14 @@ import BulkImportPage          from './pages/students/BulkImportPage';
 import RoboBuddyPage           from './pages/robobuddy/RoboBuddyPage';
 import FeeInvoicesManagePage   from './pages/fees/FeeInvoicesManagePage';
 
+// v3.7 new modules
+import QuestionPaperPage        from './pages/exams/QuestionPaperPage';
+import LessonPlanPage           from './pages/academics/LessonPlanPage';
+import SchemeOfStudiesPage      from './pages/academics/SchemeOfStudiesPage';
+import AcademicCalendarNewPage  from './pages/academics/AcademicCalendarPage';
+import AppraisalPage            from './pages/staff/AppraisalPage';
+import PayrollPage              from './pages/staff/PayrollPage';
+
 // MISSING — safe lazy with fallback
 const EmiPlansPage              = safeLazy(() => import('./pages/fees/EmiPlansPage'));
 const OnlinePaymentPage         = safeLazy(() => import('./pages/fees/OnlinePaymentPage'));
@@ -584,6 +592,14 @@ export default function App() {
                 <SubjectAnalysisPage />
               </React.Suspense>
             } />
+
+            {/* ── v3.7: Question Papers / Lesson Plans / Scheme / Calendar / Appraisal / Payroll ── */}
+            <Route path="/exams/question-papers"      element={<QuestionPaperPage />} />
+            <Route path="/academics/lesson-plans"     element={<LessonPlanPage />} />
+            <Route path="/academics/scheme"           element={<SchemeOfStudiesPage />} />
+            <Route path="/academics/calendar"         element={<AcademicCalendarNewPage />} />
+            <Route path="/staff/appraisals-new"       element={<AppraisalPage />} />
+            <Route path="/payroll"                    element={<PayrollPage />} />
           </Route>
 
           {/* 404 */}
