@@ -49,8 +49,14 @@ router.get('/stats', wrap(async (req, res) => {
       where: { schoolId },
       orderBy: { paymentDate: 'desc' },
       take: 10,
-      select: { id: true, amountPaid: true, paymentDate: true, studentId: true, student: { select: { name: true, rollNo: true } } },
-    }),
+      select: {
+        id: true, amountPaid: true, paymentDate: true, studentId: true, method: true,
+        invoice: { select: { student: { select: { name: true, rollNo: true } } } },
+      },
+    }).then(payments => payments.map(p => ({
+      ...p,
+      student: p.invoice?.student || null,
+    }))),
     prisma.student.findMany({
       where: { schoolId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
