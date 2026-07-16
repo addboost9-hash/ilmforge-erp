@@ -159,12 +159,22 @@ const slugify = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0
 router.post('/', wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const {
-    name, fatherName, motherName, gender, dob, classId, sectionId, sessionId,
+    name, lastName, fatherName, motherName, gender, dob, classId, sectionId, sessionId,
     rollNo, phone, address, bFormNo, emergencyPhone,
     parentEmail, parentCnic, teacherId,
     createPortalAccounts = true,       // ← auto-create student + parent portal users
     generateFirstInvoice  = false,     // ← optionally generate this month's fee invoice
     monthlyFee,
+    // New extended fields
+    familyNo, firstNameUrdu, lastNameUrdu, fatherNameUrdu,
+    fatherCnic, fatherQualification, fatherOccupation,
+    motherCnic, motherQualification, motherOccupation, motherPhone,
+    caste, nationality, religion, province, city, postalAddress, email,
+    admissionTestMarks, bloodGroup, foodDietaryReq, allergies, childCondition,
+    prevSchoolName, prevSchoolFocalPerson, prevSchoolPhone, prevSchoolAddress,
+    prevAdmissionNo, prevGrade, prevTestGrade,
+    // Fee discounts
+    feeDiscounts,
   } = req.body;
   if (!name) return res.status(400).json({ success: false, message: 'Student name is required.' });
 
@@ -232,13 +242,45 @@ router.post('/', wrap(async (req, res) => {
       data: {
         schoolId,
         campusId: resolvedCampusId,
-        name, fatherName, motherName, gender,
+        name, lastName: lastName || null,
+        fatherName, motherName, gender,
         dob: dob ? new Date(dob) : null,
         classId:   classId   ? parseInt(classId)   : null,
         sectionId: sectionId ? parseInt(sectionId) : null,
         sessionId: sessionId ? parseInt(sessionId) : null,
         rollNo: finalRollNo,
         address, bFormNo, emergencyPhone,
+        // Extended fields
+        familyNo:             familyNo             || null,
+        firstNameUrdu:        firstNameUrdu        || null,
+        lastNameUrdu:         lastNameUrdu         || null,
+        fatherNameUrdu:       fatherNameUrdu       || null,
+        fatherCnic:           fatherCnic           || null,
+        fatherQualification:  fatherQualification  || null,
+        fatherOccupation:     fatherOccupation     || null,
+        motherCnic:           motherCnic           || null,
+        motherQualification:  motherQualification  || null,
+        motherOccupation:     motherOccupation     || null,
+        motherPhone:          motherPhone          || null,
+        caste:                caste                || null,
+        nationality:          nationality          || null,
+        religion:             religion             || null,
+        province:             province             || null,
+        city:                 city                 || null,
+        postalAddress:        postalAddress        || null,
+        email:                email                || null,
+        admissionTestMarks:   admissionTestMarks   != null ? parseFloat(admissionTestMarks) : null,
+        bloodGroup:           bloodGroup           || null,
+        foodDietaryReq:       foodDietaryReq       || null,
+        allergies:            allergies            || null,
+        childCondition:       childCondition       || null,
+        prevSchoolName:       prevSchoolName       || null,
+        prevSchoolFocalPerson:prevSchoolFocalPerson|| null,
+        prevSchoolPhone:      prevSchoolPhone      || null,
+        prevSchoolAddress:    prevSchoolAddress    || null,
+        prevAdmissionNo:      prevAdmissionNo      || null,
+        prevGrade:            prevGrade            || null,
+        prevTestGrade:        prevTestGrade        || null,
       },
       include: { class: true, section: true }
     });
@@ -622,7 +664,17 @@ router.get('/:id', wrap(async (req, res) => {
 router.put('/:id', wrap(async (req, res) => {
   const student = await prisma.student.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId, deletedAt: null } });
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
-  const allowed = ['name','fatherName','motherName','gender','dob','classId','sectionId','rollNo','address','bFormNo','emergencyPhone','status','photoUrl'];
+  const allowed = [
+    'name','lastName','fatherName','motherName','gender','dob','classId','sectionId',
+    'rollNo','address','bFormNo','emergencyPhone','status','photoUrl',
+    'familyNo','firstNameUrdu','lastNameUrdu','fatherNameUrdu',
+    'fatherCnic','fatherQualification','fatherOccupation',
+    'motherCnic','motherQualification','motherOccupation','motherPhone',
+    'caste','nationality','religion','province','city','postalAddress','email',
+    'admissionTestMarks','bloodGroup','foodDietaryReq','allergies','childCondition',
+    'prevSchoolName','prevSchoolFocalPerson','prevSchoolPhone','prevSchoolAddress',
+    'prevAdmissionNo','prevGrade','prevTestGrade',
+  ];
   const data = {};
   allowed.forEach(k => { if (req.body[k] !== undefined) data[k] = req.body[k]; });
   if (data.dob) data.dob = new Date(data.dob);

@@ -533,4 +533,120 @@ router.post('/discounts', requireFinanceRole, wrap(async (req, res) => {
   res.json({ success: true, message: `Discount applied to ${applied} invoice(s)`, applied });
 }));
 
+/* ── GET /fees/student-fee-details/:studentId — Fee heads with class structure ── */
+router.get('/student-fee-details/:studentId', wrap(async (req, res) => {
+  const { schoolId } = req;
+  const studentId = parseInt(req.params.studentId);
+
+  const student = await prisma.student.findFirst({
+    where: { id: studentId, schoolId, deletedAt: null },
+    include: { class: true, section: true },
+  });
+  if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+
+  // Get fee structures for the student's class
+  const structures = await prisma.feeStructure.findMany({
+    where: { schoolId, classId: student.classId || 0 },
+  });
+
+  // Build default fee heads from FeeStructure entries; if none exist, use defaults
+  let heads;
+  if (structures.length > 0) {
+    heads = structures.map(s => ({
+      name: s.feeTitle,
+      amount: s.amount,
+      discount: 0,
+      netAmount: s.amount,
+    }));
+  } else {
+    // Fallback: show standard heads with zero amounts
+    heads = [
+      { name: 'Admission Fee', amount: 0, discount: 0, netAmount: 0 },
+      { name: 'Tuition Fee',   amount: 0, discount: 0, netAmount: 0 },
+      { name: 'Stationary',    amount: 0, discount: 0, netAmount: 0 },
+      { name: 'Annual Fund',   amount: 0, discount: 0, netAmount: 0 },
+    ];
+  }
+
+  // Merge saved per-student discounts from the most recent invoice remarks if any
+  const latestInvoice = await prisma.feeInvoice.findFirst({
+    where: { schoolId, studentId },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  let savedDiscounts = {};
+  let savedComments = '';
+  if (latestInvoice?.remarks) {
+    try {
+      const parsed = JSON.parse(latestInvoice.remarks);
+      if (parsed?.feeHeadDiscounts) {
+        savedDiscounts = parsed.feeHeadDiscounts;
+        savedComments  = parsed.comments || '';
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Apply saved discounts
+  heads = heads.map(h => {
+    const disc = savedDiscounts[h.name] || 0;
+    return { ...h, discount: disc, netAmount: Math.max(0, h.amount - disc) };
+  });
+
+  const totalFee      = heads.reduce((s, h) => s + h.amount, 0);
+  const discountTotal = heads.reduce((s, h) => s + h.discount, 0);
+  const netTotal      = heads.reduce((s, h) => s + h.netAmount, 0);
+
+  res.json({ success: true, data: { student, feeStructure: { heads }, totalFee, discountTotal, netTotal, comments: savedComments } });
+}));
+
+/* ── PUT /fees/student-discount/:studentId — Apply per-head discounts to student ── */
+router.put('/student-discount/:studentId', requireFinanceRole, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const studentId = parseInt(req.params.studentId);
+  const { heads = [], comments = '' } = req.body;
+
+  const student = await prisma.student.findFirst({ where: { id: studentId, schoolId, deletedAt: null } });
+  if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+
+  // Build a discount map by head name
+  const feeHeadDiscounts = {};
+  let totalDiscount = 0;
+  for (const h of heads) {
+    feeHeadDiscounts[h.name] = parseInt(h.discount) || 0;
+    totalDiscount += feeHeadDiscounts[h.name];
+  }
+
+  // Store discount info on the latest unpaid invoice or all pending invoices
+  const pendingInvoices = await prisma.feeInvoice.findMany({
+    where: { schoolId, studentId, status: { not: 'paid' } },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  let updated = 0;
+  for (const inv of pendingInvoices) {
+    const newDiscount = Math.min(totalDiscount, inv.totalAmount);
+    const newDue = Math.max(0, inv.totalAmount - inv.paidAmount - newDiscount);
+
+    const updateData = { discount: newDiscount, dueAmount: newDue };
+    // Store discount breakdown in remarks if the field exists (schema v3.3+)
+    try {
+      let existingRemarks = {};
+      if (inv.remarks) { try { existingRemarks = JSON.parse(inv.remarks); } catch { /* ignore */ } }
+      updateData.remarks = JSON.stringify({ ...existingRemarks, feeHeadDiscounts, comments });
+    } catch { /* remarks field may not exist — skip gracefully */ }
+
+    await prisma.feeInvoice.update({ where: { id: inv.id }, data: updateData });
+    updated++;
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      schoolId, userId: req.user.id, action: 'FEE_DISCOUNT_APPLIED', entity: 'student', entityId: studentId,
+      details: JSON.stringify({ totalDiscount, heads: heads.length, invoicesUpdated: updated }),
+    },
+  }).catch(() => null);
+
+  res.json({ success: true, message: `Discounts applied. ${updated} invoice(s) updated.`, updated, totalDiscount });
+}));
+
 module.exports = router;

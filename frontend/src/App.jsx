@@ -180,6 +180,7 @@ import PayrollPage              from './pages/staff/PayrollPage';
 import WorksheetGeneratorPage   from './pages/academics/WorksheetGeneratorPage';
 import MCQGeneratorPage         from './pages/exams/MCQGeneratorPage';
 import SyllabusPage             from './pages/academics/SyllabusPage';
+import ResultConfigPage         from './pages/exams/ResultConfigPage';
 
 // MISSING — safe lazy with fallback
 const EmiPlansPage              = safeLazy(() => import('./pages/fees/EmiPlansPage'));
@@ -608,6 +609,8 @@ export default function App() {
             <Route path="/academics/worksheets"       element={<WorksheetGeneratorPage />} />
             <Route path="/exams/mcq-generator"        element={<MCQGeneratorPage />} />
             <Route path="/academics/syllabus"         element={<SyllabusPage />} />
+            {/* ── Result Config (grade setup + card options) ── */}
+            <Route path="/exams/result-config"        element={<ResultConfigPage />} />
           </Route>
 
           {/* 404 */}

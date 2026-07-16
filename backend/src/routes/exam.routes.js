@@ -196,6 +196,271 @@ router.get('/cumulative', wrap(async (req, res) => {
   res.json({ success: true, data: result });
 }));
 
+// ---------------------------------------------------------------------------
+// DATE SHEET routes  (School Mentor-style: class/section grouped view)
+// ---------------------------------------------------------------------------
+
+// GET /exams/:examId/datesheet — list all date sheet entries for an exam, grouped by class+section
+router.get('/:examId/datesheet', wrap(async (req, res) => {
+  const examId = parseInt(req.params.examId);
+  if (isNaN(examId)) return res.status(400).json({ success: false, message: 'Invalid examId.' });
+
+  // Verify exam belongs to this school
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  // Get all classes with sections for this school
+  const classes = await prisma.class.findMany({
+    where: { schoolId: req.schoolId, isActive: true },
+    include: { sections: true },
+    orderBy: { orderNo: 'asc' },
+  });
+
+  // Get all timetable entries for this exam
+  let entries = [];
+  try {
+    entries = await prisma.examTimetable.findMany({
+      where: { examId, schoolId: req.schoolId },
+      orderBy: { date: 'asc' },
+    });
+  } catch (_) {
+    entries = [];
+  }
+
+  // Group entries by classId+sectionId
+  const entryMap = {};
+  for (const e of entries) {
+    const key = `${e.classId || 0}_${e.sectionId || 0}`;
+    if (!entryMap[key]) entryMap[key] = [];
+    entryMap[key].push({
+      id: e.id,
+      subject: e.subjectName,
+      date: e.date ? e.date.toISOString().slice(0, 10) : '',
+      timeFrom: e.startTime || '',
+      timeTo: e.endTime || '',
+    });
+  }
+
+  // Build result rows: one row per class-section pair
+  const rows = [];
+  for (const cls of classes) {
+    if (cls.sections && cls.sections.length > 0) {
+      for (const sec of cls.sections) {
+        const key = `${cls.id}_${sec.id}`;
+        rows.push({
+          classId: cls.id,
+          className: cls.name,
+          sectionId: sec.id,
+          sectionName: sec.name,
+          entries: entryMap[key] || [],
+        });
+      }
+    } else {
+      // Class with no sections
+      const key = `${cls.id}_0`;
+      rows.push({
+        classId: cls.id,
+        className: cls.name,
+        sectionId: null,
+        sectionName: '-',
+        entries: entryMap[key] || [],
+      });
+    }
+  }
+
+  res.json({ success: true, data: rows });
+}));
+
+// POST /exams/:examId/datesheet — add a single date sheet entry for a class/section
+router.post('/:examId/datesheet', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const examId = parseInt(req.params.examId);
+  if (isNaN(examId)) return res.status(400).json({ success: false, message: 'Invalid examId.' });
+
+  const { classId, sectionId, subject, date, timeFrom, timeTo } = req.body;
+  if (!subject) return res.status(400).json({ success: false, message: 'subject is required.' });
+
+  // Verify exam belongs to this school
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  try {
+    const entry = await prisma.examTimetable.create({
+      data: {
+        examId,
+        schoolId: req.schoolId,
+        classId: classId ? parseInt(classId) : null,
+        sectionId: sectionId ? parseInt(sectionId) : null,
+        subjectName: subject,
+        date: date ? new Date(date) : null,
+        startTime: timeFrom || null,
+        endTime: timeTo || null,
+      },
+    });
+    res.status(201).json({
+      success: true,
+      data: {
+        id: entry.id,
+        subject: entry.subjectName,
+        date: entry.date ? entry.date.toISOString().slice(0, 10) : '',
+        timeFrom: entry.startTime || '',
+        timeTo: entry.endTime || '',
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Failed to create entry.', detail: err.message });
+  }
+}));
+
+// PUT /exams/datesheet/:entryId — update a date sheet entry
+router.put('/datesheet/:entryId', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const entryId = parseInt(req.params.entryId);
+  if (isNaN(entryId)) return res.status(400).json({ success: false, message: 'Invalid entryId.' });
+
+  const existing = await prisma.examTimetable.findFirst({ where: { id: entryId, schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Entry not found.' });
+
+  const { subject, date, timeFrom, timeTo } = req.body;
+  try {
+    const entry = await prisma.examTimetable.update({
+      where: { id: entryId },
+      data: {
+        ...(subject !== undefined && { subjectName: subject }),
+        ...(date !== undefined && { date: date ? new Date(date) : null }),
+        ...(timeFrom !== undefined && { startTime: timeFrom || null }),
+        ...(timeTo !== undefined && { endTime: timeTo || null }),
+      },
+    });
+    res.json({
+      success: true,
+      data: {
+        id: entry.id,
+        subject: entry.subjectName,
+        date: entry.date ? entry.date.toISOString().slice(0, 10) : '',
+        timeFrom: entry.startTime || '',
+        timeTo: entry.endTime || '',
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Failed to update entry.', detail: err.message });
+  }
+}));
+
+// DELETE /exams/datesheet/:entryId — delete a date sheet entry
+router.delete('/datesheet/:entryId', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const entryId = parseInt(req.params.entryId);
+  if (isNaN(entryId)) return res.status(400).json({ success: false, message: 'Invalid entryId.' });
+
+  const existing = await prisma.examTimetable.findFirst({ where: { id: entryId, schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Entry not found.' });
+
+  try {
+    await prisma.examTimetable.delete({ where: { id: entryId } });
+    res.json({ success: true, message: 'Entry deleted.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Failed to delete entry.', detail: err.message });
+  }
+}));
+
+// POST /exams/:examId/datesheet/copy-to-all — copy one class/section date sheet to all other classes/sections
+router.post('/:examId/datesheet/copy-to-all', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const examId = parseInt(req.params.examId);
+  if (isNaN(examId)) return res.status(400).json({ success: false, message: 'Invalid examId.' });
+
+  const { fromClassId, fromSectionId } = req.body;
+  if (!fromClassId) return res.status(400).json({ success: false, message: 'fromClassId is required.' });
+
+  // Verify exam belongs to this school
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  // Get source entries
+  const sourceEntries = await prisma.examTimetable.findMany({
+    where: {
+      examId,
+      schoolId: req.schoolId,
+      classId: parseInt(fromClassId),
+      sectionId: fromSectionId ? parseInt(fromSectionId) : null,
+    },
+  });
+
+  if (sourceEntries.length === 0) {
+    return res.status(400).json({ success: false, message: 'No date sheet entries found for the source class/section.' });
+  }
+
+  // Get all classes with sections
+  const classes = await prisma.class.findMany({
+    where: { schoolId: req.schoolId, isActive: true },
+    include: { sections: true },
+    orderBy: { orderNo: 'asc' },
+  });
+
+  // Build list of all target class+section combos (excluding the source)
+  const targets = [];
+  for (const cls of classes) {
+    if (cls.sections && cls.sections.length > 0) {
+      for (const sec of cls.sections) {
+        // Skip the source
+        if (cls.id === parseInt(fromClassId) && sec.id === (fromSectionId ? parseInt(fromSectionId) : null)) continue;
+        targets.push({ classId: cls.id, sectionId: sec.id });
+      }
+    } else {
+      if (cls.id === parseInt(fromClassId) && !fromSectionId) continue;
+      targets.push({ classId: cls.id, sectionId: null });
+    }
+  }
+
+  // For each target, delete existing entries and copy source entries
+  let created = 0;
+  for (const target of targets) {
+    // Delete existing entries for this target
+    await prisma.examTimetable.deleteMany({
+      where: {
+        examId,
+        schoolId: req.schoolId,
+        classId: target.classId,
+        sectionId: target.sectionId,
+      },
+    });
+
+    // Copy source entries
+    for (const src of sourceEntries) {
+      await prisma.examTimetable.create({
+        data: {
+          examId,
+          schoolId: req.schoolId,
+          classId: target.classId,
+          sectionId: target.sectionId,
+          subjectName: src.subjectName,
+          date: src.date,
+          startTime: src.startTime,
+          endTime: src.endTime,
+          room: src.room,
+        },
+      });
+      created++;
+    }
+  }
+
+  res.json({
+    success: true,
+    message: `Date sheet copied to ${targets.length} class/section(s). ${created} entries created.`,
+    targets: targets.length,
+    entriesCreated: created,
+  });
+}));
+
 // GET /exams/timetable — fetch ExamTimetable entries for an exam
 router.get('/timetable', wrap(async (req, res) => {
   const { examId } = req.query;
@@ -289,6 +554,36 @@ router.delete('/timetable/:id', wrap(async (req, res) => {
   } catch (err) {
     res.status(501).json({ success: false, message: 'ExamTimetable model not available or entry not found.', detail: err.message });
   }
+}));
+
+// GET /exams/result-config — fetch grade config, signatures, card options
+router.get('/result-config', wrap(async (req, res) => {
+  const config = await getResultConfig(req.schoolId);
+  res.json({ success: true, data: config });
+}));
+
+// PUT /exams/result-config — save result config
+router.put('/result-config', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const { grades, signatures, finalRemarks, cardOptions, signatureOptions } = req.body;
+
+  if (grades !== undefined && !Array.isArray(grades)) {
+    return res.status(400).json({ success: false, message: 'grades must be an array.' });
+  }
+
+  const existing = await getResultConfig(req.schoolId);
+  const updated = {
+    grades:           grades           ?? existing.grades,
+    signatures:       signatures       ?? existing.signatures,
+    finalRemarks:     finalRemarks     ?? existing.finalRemarks,
+    cardOptions:      cardOptions      ? { ...existing.cardOptions, ...cardOptions }     : existing.cardOptions,
+    signatureOptions: signatureOptions ? { ...existing.signatureOptions, ...signatureOptions } : existing.signatureOptions,
+  };
+
+  const saved = await setResultConfig(req.schoolId, updated);
+  res.json({ success: true, data: saved, message: 'Result config saved.' });
 }));
 
 // ---------------------------------------------------------------------------
@@ -812,6 +1107,71 @@ router.get('/:id/subject-analysis', wrap(async (req, res) => {
 
   res.json({ success: true, data: analysis });
 }));
+
+// ---------------------------------------------------------------------------
+// Result Config — grade table, signatures, card options  (school-scoped)
+// Stored in School.settingsJson under key 'resultConfig'
+// ---------------------------------------------------------------------------
+
+const DEFAULT_RESULT_CONFIG = {
+  grades: [
+    { grade: 'A+', minPercent: 90, comment: 'Outstanding Performance' },
+    { grade: 'A',  minPercent: 80, comment: 'Remarkable Performance' },
+    { grade: 'B',  minPercent: 70, comment: 'Great Effort. Keep it up!' },
+    { grade: 'C',  minPercent: 60, comment: 'Need more Effort!' },
+    { grade: 'D',  minPercent: 50, comment: 'Kindly Put More Effort!!' },
+    { grade: 'F',  minPercent: 0,  comment: 'Fail' },
+  ],
+  signatures: [
+    { name: 'Principal', designation: 'Principal', signatureUrl: '' },
+  ],
+  finalRemarks: [
+    { minPercent: 90, maxPercent: 100, remark: 'Excellent — Outstanding Student' },
+    { minPercent: 80, maxPercent: 89,  remark: 'Very Good — Remarkable Effort' },
+    { minPercent: 70, maxPercent: 79,  remark: 'Good — Keep it up!' },
+    { minPercent: 60, maxPercent: 69,  remark: 'Satisfactory — Need Improvement' },
+    { minPercent: 50, maxPercent: 59,  remark: 'Below Average — Work Harder' },
+    { minPercent: 0,  maxPercent: 49,  remark: 'Fail — Serious Improvement Needed' },
+  ],
+  cardOptions: {
+    includeComments:        true,
+    includeFinalRemarks:    true,
+    includeOverallGrade:    true,
+    includeOverallPercent:  true,
+    includeSectionRanking:  true,
+  },
+  signatureOptions: {
+    // key: signature name (lowercase, spaces replaced with _), value: bool
+    principal: true,
+  },
+};
+
+const getResultConfig = async (schoolId) => {
+  try {
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { settingsJson: true },
+    });
+    const settings = school?.settingsJson ? JSON.parse(school.settingsJson) : {};
+    return settings.resultConfig || DEFAULT_RESULT_CONFIG;
+  } catch {
+    return DEFAULT_RESULT_CONFIG;
+  }
+};
+
+const setResultConfig = async (schoolId, config) => {
+  const school = await prisma.school.findUnique({
+    where: { id: schoolId },
+    select: { settingsJson: true },
+  });
+  const existing = school?.settingsJson ? JSON.parse(school.settingsJson) : {};
+  const merged = { ...existing, resultConfig: config, updatedAt: new Date().toISOString() };
+  await prisma.school.update({
+    where: { id: schoolId },
+    data: { settingsJson: JSON.stringify(merged) },
+  });
+  return config;
+};
 
 // POST /exams/:id/publish
 router.post('/:id/publish', wrap(async (req, res) => {

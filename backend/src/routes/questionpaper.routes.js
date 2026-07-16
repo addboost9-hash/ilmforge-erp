@@ -4,6 +4,125 @@ const https = require('https');
 const prisma = require('../config/prisma');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
+/* ─────────────────────────────────────────────────────────────────────
+   QUESTION BANK ENDPOINTS
+   ───────────────────────────────────────────────────────────────────── */
+
+// GET /question-papers/bank/:classId/:sectionId — get question bank & customization
+router.get('/bank/:classId/:sectionId', wrap(async (req, res) => {
+  const { schoolId } = req;
+  const { classId, sectionId } = req.params;
+
+  // Fetch saved paper customization (stored as a special Test record)
+  const customRecord = await prisma.test.findFirst({
+    where: { schoolId, classId: parseInt(classId), title: '__BANK_CUSTOMIZE__' },
+  });
+
+  let paperCustomization = { instructions: '', objectiveHeading: 'OBJECTIVE PART', subjectiveHeading: 'SUBJECTIVE PART', objectiveReplacement: '', subjectiveReplacement: '' };
+  if (customRecord?.testType) {
+    try { paperCustomization = { ...paperCustomization, ...JSON.parse(customRecord.testType) }; } catch { /* ignore */ }
+  }
+
+  // Fetch bank papers for this class/section
+  const bankTag = `[BANK][c${classId}][s${sectionId !== 'all' ? sectionId : ''}]`;
+  const papers = await prisma.test.findMany({
+    where: { schoolId, classId: parseInt(classId), title: { contains: '[BANK]' } },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const classes  = await prisma.class.findMany({ where: { schoolId }, select: { id: true, name: true } });
+  const subjects = await prisma.subject.findMany({ where: { schoolId }, select: { id: true, name: true } });
+  const classMap   = Object.fromEntries(classes.map(c => [c.id, c.name]));
+  const subjectMap = Object.fromEntries(subjects.map(s => [s.id, s.name]));
+
+  const result = papers.map(p => {
+    let meta = {};
+    try { if (p.testType && !p.testType.startsWith('[')) meta = JSON.parse(p.testType); } catch {}
+    return { ...p, meta, className: classMap[p.classId] || '', subjectName: p.subjectId ? subjectMap[p.subjectId] : '' };
+  });
+
+  res.json({ success: true, data: { paperCustomization, papers: result } });
+}));
+
+// POST /question-papers/bank-customize — save paper customization settings
+router.post('/bank-customize', wrap(async (req, res) => {
+  const { schoolId } = req;
+  const { classId, instructions, objectiveHeading, subjectiveHeading, objectiveReplacement, subjectiveReplacement } = req.body;
+
+  const payload = JSON.stringify({ instructions, objectiveHeading, subjectiveHeading, objectiveReplacement, subjectiveReplacement });
+
+  const existing = await prisma.test.findFirst({
+    where: { schoolId, classId: parseInt(classId || 0), title: '__BANK_CUSTOMIZE__' },
+  });
+
+  if (existing) {
+    await prisma.test.update({ where: { id: existing.id }, data: { testType: payload, totalMarks: 0 } });
+  } else {
+    await prisma.test.create({
+      data: { schoolId, classId: parseInt(classId || 0), title: '__BANK_CUSTOMIZE__', totalMarks: 0, testType: payload },
+    });
+  }
+
+  res.json({ success: true, message: 'Customization saved.' });
+}));
+
+// POST /question-papers/generate-bank — generate paper from question bank
+router.post('/generate-bank', wrap(async (req, res) => {
+  const { schoolId } = req;
+  const {
+    classId, sectionId, subject, subjectId, units = [], paperType, paperFormat,
+    objectiveTime, objectiveMarks, subjectiveTime, subjectiveMarks,
+    title, questionTypes = [],
+  } = req.body;
+
+  if (!title || !classId) return res.status(400).json({ success: false, message: 'title and classId required.' });
+
+  const totalMarks = (parseInt(objectiveMarks) || 0) + (parseInt(subjectiveMarks) || 0);
+
+  const meta = JSON.stringify({
+    isBankPaper: true,
+    sectionId,
+    subject,
+    units,
+    paperType,
+    paperFormat,
+    objectiveTime,
+    objectiveMarks,
+    subjectiveTime,
+    subjectiveMarks,
+    questionTypes,
+    generatedAt: new Date().toISOString(),
+  });
+
+  // Use a bank tag in title so we can filter later
+  const storedTitle = `[BANK] ${title}`;
+
+  const paper = await prisma.test.create({
+    data: {
+      schoolId,
+      classId: parseInt(classId),
+      subjectId: subjectId ? parseInt(subjectId) : null,
+      title: storedTitle,
+      totalMarks: totalMarks || 100,
+      testType: meta,
+    },
+  });
+
+  const classes = await prisma.class.findMany({ where: { schoolId }, select: { id: true, name: true } });
+  const classMap = Object.fromEntries(classes.map(c => [c.id, c.name]));
+
+  res.status(201).json({
+    success: true,
+    data: {
+      ...paper,
+      displayTitle: title,
+      className: classMap[paper.classId] || '',
+      meta: JSON.parse(paper.testType),
+    },
+    message: 'Paper generated successfully.',
+  });
+}));
+
 // POST /generate-ai — MUST be before /:id routes
 router.post('/generate-ai', wrap(async (req, res) => {
   const { subject, className, topic, numQuestions = 5, difficulty, questionTypes } = req.body;

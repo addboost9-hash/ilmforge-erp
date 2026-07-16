@@ -76,6 +76,7 @@ const NAV = [
       { to: '/exams/gazette',          icon: FileText,      label: 'Gazette Sheet',       roles: ['super_admin', 'admin'] },
       { to: '/exams/annual-report',    icon: ClipboardList, label: 'Annual Report Cards', roles: ['super_admin', 'admin', 'teacher'] },
       { to: '/exams/bise-result-card', icon: FileText,      label: 'BISE Result Card',    roles: ['super_admin', 'admin', 'teacher'] },
+      { to: '/exams/result-config',    icon: Settings,      label: 'Result Settings',      roles: ['super_admin', 'admin'] },
     ],
   },
   {
@@ -367,6 +368,7 @@ export default function AdminLayout() {
     { label: 'Enter Marks', desc: 'Subject-wise marks', path: '/exams', icon: '✏️', group: 'Exams' },
     { label: 'Merit List', desc: 'Rank list', path: '/exams/merit-list', icon: '🏆', group: 'Exams' },
     { label: 'BISE Result Card', desc: 'Pakistani board format', path: '/exams/bise-result-card', icon: '🎓', group: 'Exams' },
+    { label: 'Result Settings', desc: 'Grade config, signatures, card options', path: '/exams/result-config', icon: '⚙️', group: 'Exams' },
     { label: 'Exam Timetable', desc: 'Date sheet', path: '/exams/timetable', icon: '📅', group: 'Exams' },
     // Staff
     { label: 'All Staff', desc: 'Teaching & non-teaching', path: '/staff', icon: '👨‍🏫', group: 'Staff' },

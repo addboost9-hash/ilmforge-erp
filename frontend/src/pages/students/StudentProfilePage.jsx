@@ -1,20 +1,154 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
+import toast from 'react-hot-toast';
 import {
   ArrowLeft, FileText, Printer, User, CreditCard,
-  ClipboardList, Award, GraduationCap, Camera
+  ClipboardList, Award, GraduationCap, Camera, Tag
 } from 'lucide-react';
 
 const money = v => 'Rs. ' + ((v||0)/100).toLocaleString();
+const NAVY = '#1B2F6E';
 
 const TABS = [
-  { id:'info',       label:'📋 Personal Info', icon:User          },
-  { id:'fees',       label:'💰 Fee History',   icon:CreditCard    },
-  { id:'attendance', label:'📅 Attendance',    icon:ClipboardList },
-  { id:'exams',      label:'🏆 Exam Results',  icon:GraduationCap },
+  { id:'info',        label:'📋 Personal Info',  icon:User          },
+  { id:'fees',        label:'💰 Fee History',    icon:CreditCard    },
+  { id:'feedetails',  label:'🏷️ Fee Details',    icon:Tag           },
+  { id:'attendance',  label:'📅 Attendance',     icon:ClipboardList },
+  { id:'exams',       label:'🏆 Exam Results',   icon:GraduationCap },
 ];
+
+/* ── Fee Details Panel ── */
+function FeeDetailsPanel({ studentId }) {
+  const qc = useQueryClient();
+
+  const { data: feeData, isLoading } = useQuery({
+    queryKey: ['student-fee-details', studentId],
+    queryFn: () => api.get(`/fees/student-fee-details/${studentId}`).then(r => r.data.data),
+    staleTime: 30000,
+  });
+
+  const [heads, setHeads] = useState(null);
+  const [comments, setComments] = useState('');
+  const [initiated, setInitiated] = useState(false);
+
+  // Sync local state when data loads
+  if (feeData && !initiated) {
+    setHeads((feeData.feeStructure?.heads || []).map(h => ({ ...h })));
+    setComments(feeData.comments || '');
+    setInitiated(true);
+  }
+
+  const mutation = useMutation({
+    mutationFn: (payload) => api.put(`/fees/student-discount/${studentId}`, payload),
+    onSuccess: (res) => {
+      toast.success(res.data.message || 'Discounts applied!');
+      qc.invalidateQueries(['student-fee-details', studentId]);
+      qc.invalidateQueries(['student', studentId]);
+    },
+    onError: () => toast.error('Failed to apply discounts'),
+  });
+
+  const handleDiscountChange = (idx, val) => {
+    setHeads(prev => prev.map((h, i) => {
+      if (i !== idx) return h;
+      const disc = parseInt(val) || 0;
+      return { ...h, discount: disc, netAmount: Math.max(0, h.amount - disc) };
+    }));
+  };
+
+  const handleApply = () => {
+    if (!heads) return;
+    mutation.mutate({ heads: heads.map(h => ({ name: h.name, discount: h.discount })), comments });
+  };
+
+  const totalFee      = (heads || []).reduce((s, h) => s + h.amount, 0);
+  const discountTotal = (heads || []).reduce((s, h) => s + (h.discount || 0), 0);
+  const netTotal      = (heads || []).reduce((s, h) => s + h.netAmount, 0);
+
+  const inpStyle = { width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 13, boxSizing: 'border-box' };
+  const thStyle  = { padding: '10px 12px', textAlign: 'left', fontWeight: 700, fontSize: 12, background: NAVY, color: '#fff' };
+  const tdStyle  = { padding: '10px 12px', fontSize: 13, borderBottom: '1px solid #f0f0f0' };
+
+  if (isLoading) return <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF' }}>Loading fee details…</div>;
+
+  return (
+    <div>
+      <h3 style={{ color: NAVY, marginBottom: 16, fontWeight: 700, fontSize: 15 }}>Fee Structure &amp; Discounts</h3>
+      <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 16 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr>
+              {['Fee Head', 'Amount (Rs.)', 'Discount (Rs.)', 'Net Amount (Rs.)'].map(h => (
+                <th key={h} style={thStyle}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(heads || []).map((h, i) => (
+              <tr key={h.name} style={{ background: i % 2 === 0 ? '#fafafa' : '#fff' }}>
+                <td style={{ ...tdStyle, fontWeight: 600 }}>{h.name}</td>
+                <td style={tdStyle}>{(h.amount || 0).toLocaleString()}</td>
+                <td style={{ ...tdStyle, width: 140 }}>
+                  <input
+                    type="number"
+                    min="0"
+                    max={h.amount}
+                    style={inpStyle}
+                    value={h.discount || 0}
+                    onChange={e => handleDiscountChange(i, e.target.value)}
+                  />
+                </td>
+                <td style={{ ...tdStyle, fontWeight: 700, color: h.netAmount < h.amount ? '#059669' : '#1F2937' }}>
+                  {(h.netAmount || 0).toLocaleString()}
+                </td>
+              </tr>
+            ))}
+            {(!heads || heads.length === 0) && (
+              <tr><td colSpan={4} style={{ textAlign: 'center', padding: 28, color: '#9CA3AF' }}>No fee structure found for this student's class.</td></tr>
+            )}
+          </tbody>
+          {heads && heads.length > 0 && (
+            <tfoot>
+              <tr style={{ background: '#EEF2FF', fontWeight: 700 }}>
+                <td style={{ ...tdStyle, color: NAVY }}>TOTAL</td>
+                <td style={{ ...tdStyle, color: NAVY }}>{totalFee.toLocaleString()}</td>
+                <td style={{ ...tdStyle, color: '#DC2626' }}>−{discountTotal.toLocaleString()}</td>
+                <td style={{ ...tdStyle, color: '#059669', fontSize: 14 }}>{netTotal.toLocaleString()}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ fontWeight: 600, fontSize: 12, color: '#374151', display: 'block', marginBottom: 4 }}>Comments</label>
+        <textarea
+          rows={3}
+          style={{ ...inpStyle, resize: 'vertical' }}
+          placeholder="Reason for discount or additional notes…"
+          value={comments}
+          onChange={e => setComments(e.target.value)}
+        />
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          onClick={handleApply}
+          disabled={mutation.isPending || !heads || heads.length === 0}
+          style={{
+            background: NAVY, color: '#fff', border: 'none', borderRadius: 6,
+            padding: '9px 22px', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+            opacity: mutation.isPending ? 0.7 : 1,
+          }}
+        >
+          {mutation.isPending ? 'Applying…' : 'Apply Discounts'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /* ── Generate & print certificate HTML ──────────────────── */
 function printCert(type, s, school) {
@@ -328,6 +462,11 @@ export default function StudentProfilePage() {
                 </table>
               </div>
             </>
+          )}
+
+          {/* ── Fee Details ── */}
+          {tab==='feedetails' && (
+            <FeeDetailsPanel studentId={id} />
           )}
 
           {/* ── Attendance ── */}

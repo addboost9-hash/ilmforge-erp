@@ -162,21 +162,51 @@ model Student {
   userId        Int?     @unique
   sessionId     Int?
   rollNo        String?
+  familyNo      String?
   name          String
+  lastName      String?
+  firstNameUrdu String?
+  lastNameUrdu  String?
   fatherName    String?
+  fatherNameUrdu      String?
+  fatherCnic          String?
+  fatherQualification String?
+  fatherOccupation    String?
   motherName    String?
+  motherCnic          String?
+  motherQualification String?
+  motherOccupation    String?
+  motherPhone         String?
   caste         String?
+  nationality   String?
+  religion      String?
   gender        String?
   dob           DateTime?
   photoUrl      String?
+  province      String?
+  city          String?
+  postalAddress String?
+  email         String?
   classId       Int?
   sectionId     Int?
   status        String   @default("active") // active|inactive|passout
   admissionDate DateTime @default(now())
   bFormNo       String?
+  admissionTestMarks  Float?
   isFreeStudent Boolean  @default(false)
   address       String?
   emergencyPhone String?
+  bloodGroup    String?
+  foodDietaryReq      String?
+  allergies     String?
+  childCondition      String?
+  prevSchoolName      String?
+  prevSchoolFocalPerson String?
+  prevSchoolPhone     String?
+  prevSchoolAddress   String?
+  prevAdmissionNo     String?
+  prevGrade     String?
+  prevTestGrade String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   deletedAt     DateTime?
@@ -546,19 +576,21 @@ model AuditLog {
 }
 
 model TimetableEntry {
-  id        Int      @id @default(autoincrement())
-  schoolId  Int
-  campusId  Int?
-  classId   Int
-  sectionId Int?
-  day       String
-  periodNo  Int
-  subjectId Int?
-  teacherId Int?
-  startTime String?
-  endTime   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  schoolId    Int
+  campusId    Int?
+  classId     Int
+  sectionId   Int?
+  day         String
+  periodNo    Int
+  subjectId   Int?
+  teacherId   Int?
+  subject     String?
+  teacherName String?
+  startTime   String?
+  endTime     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // ═══ v2 ENHANCEMENT MODELS ═══════════════════════════════
@@ -963,6 +995,8 @@ model ExamTimetable {
   id          Int       @id @default(autoincrement())
   schoolId    Int
   examId      Int
+  classId     Int?
+  sectionId   Int?
   subjectName String
   date        DateTime?
   startTime   String?
@@ -971,6 +1005,8 @@ model ExamTimetable {
   createdAt   DateTime  @default(now())
   exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
   school      School    @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId, examId, classId, sectionId])
 }
 
 model Test {
