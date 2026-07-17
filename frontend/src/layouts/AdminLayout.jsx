@@ -20,7 +20,7 @@ import {
   Bot, X, Calendar, QrCode, FileText,
   ShieldCheck, BarChart2, Database, ClipboardList,
   Workflow, ShoppingCart, Globe, BookMarked,
-  CalendarDays, Brain,
+  CalendarDays, Brain, Rocket,
 } from 'lucide-react';
 import LicenseBanner from '../components/license/LicenseBanner';
 
@@ -47,6 +47,7 @@ const NAV = [
       { to: '/students/bulk-import',  icon: FileText,      label: 'Bulk Import',          roles: ['super_admin', 'admin'] },
       { to: '/students/info-reports', icon: BarChart2,     label: 'Student Info Reports', roles: ['super_admin', 'admin'] },
       { to: '/hub/staff',             icon: Briefcase,     label: 'Staff & Teachers Hub' },
+      { to: '/human-resource',        icon: Briefcase,     label: 'Human Resource',       roles: ['super_admin', 'admin'] },
       { to: '/staff/appraisals-new',  icon: Award,         label: 'Appraisals',           roles: ['super_admin', 'admin'] },
       { to: '/payroll',               icon: Wallet,        label: 'Payroll',              roles: ['super_admin', 'admin', 'accountant'] },
       { to: '/hub/parents',           icon: Users,         label: 'Parents & Portals Hub' },
@@ -84,6 +85,7 @@ const NAV = [
     group: 'FINANCE',
     items: [
       { to: '/fee-management',        icon: DollarSign,   label: '💳 Fee Module (SM Style)', badge: 'NEW' },
+      { to: '/accounts',              icon: Landmark,     label: 'Accounts',             roles: ['super_admin', 'admin', 'accountant'] },
       { to: '/hub/fees',              icon: Wallet,       label: 'Fees & Accounts Hub' },
       { to: '/fees/invoices',         icon: FileText,     label: 'Fee Invoices',        roles: ['super_admin', 'admin', 'accountant'] },
       { to: '/fees/parent-wallet',    icon: Wallet,       label: 'Parent Wallet',        roles: ['super_admin', 'admin', 'accountant'] },
@@ -104,6 +106,7 @@ const NAV = [
       { to: '/stock/pos',                   icon: ShoppingCart,  label: 'Point of Sale (POS)',     roles: ['super_admin', 'admin', 'accountant'] },
       { to: '/settings/channels',           icon: Settings,      label: '📡 Channel Settings',     roles: ['super_admin', 'admin'], badge: 'SMS·WA·Email' },
       { to: '/hub/settings',                icon: Settings,      label: 'Settings Hub' },
+      { to: '/launch-setup',               icon: Rocket,        label: '🚀 Launch Setup',          roles: ['super_admin', 'admin'], badge: 'BASICS' },
       { to: '/settings/backup',             icon: Database,      label: 'Backup & Restore',        roles: ['super_admin', 'admin'] },
       { to: '/settings/website-management', icon: Globe,         label: 'Website Management',      roles: ['super_admin', 'admin'] },
     ],

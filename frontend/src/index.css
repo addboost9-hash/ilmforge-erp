@@ -946,6 +946,7 @@ input, select, textarea { background: #ffffff; }
 
 .fade-in   { animation: fadeIn  .2s ease; }
 .fade-up   { animation: fadeUp  .25s ease; }
+.page-animate { animation: fadeUp 0.25s ease-out; }
 .fade-up-1 { animation: fadeUp  .5s .08s ease both; }
 .fade-up-2 { animation: fadeUp  .5s .16s ease both; }
 .fade-up-3 { animation: fadeUp  .5s .24s ease both; }

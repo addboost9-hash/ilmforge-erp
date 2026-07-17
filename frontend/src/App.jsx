@@ -184,6 +184,10 @@ import MCQGeneratorPage         from './pages/exams/MCQGeneratorPage';
 import SyllabusPage             from './pages/academics/SyllabusPage';
 import SubjectSyllabusPage      from './pages/academics/SubjectSyllabusPage';
 import ResultConfigPage         from './pages/exams/ResultConfigPage';
+// v3.9: School Mentor parity modules
+import HumanResourcePage        from './pages/hr/HumanResourcePage';
+import AccountsPage             from './pages/accounts/AccountsPage';
+import LaunchSetupPage          from './pages/setup/LaunchSetupPage';
 
 // MISSING — safe lazy with fallback
 const EmiPlansPage              = safeLazy(() => import('./pages/fees/EmiPlansPage'));
@@ -617,6 +621,10 @@ export default function App() {
             <Route path="/academics/subject-syllabus/:classId/:sectionId" element={<SubjectSyllabusPage />} />
             {/* ── Result Config (grade setup + card options) ── */}
             <Route path="/exams/result-config"        element={<ResultConfigPage />} />
+            {/* ── v3.9: School Mentor parity ── */}
+            <Route path="/human-resource"             element={<HumanResourcePage />} />
+            <Route path="/accounts"                   element={<AccountsPage />} />
+            <Route path="/launch-setup"               element={<LaunchSetupPage />} />
           </Route>
 
           {/* 404 */}
