@@ -919,15 +919,275 @@ export default function SOPsPage() {
     (s.category || '').toLowerCase().includes('administrative')
   );
 
-  // Placeholder admin manuals if none from server
-  const adminRows = adminSops.length > 0 ? adminSops : [
+  // Pre-seeded Administrative SOPs
+  const ADMIN_MANUALS = [
     {
-      id: 'admin-placeholder',
-      title: 'Administrative Manual — Coming Soon',
+      id: 'sop-adm-1',
+      title: 'Fee Management and Financial Accountability',
       category: 'Administrative',
-      content: 'Administrative manuals are being developed. Please check back soon.',
+      content: `PURPOSE
+Establish a transparent, consistent, and legally sound system for fee collection, record-keeping, and financial accountability.
+
+SCOPE
+Applicable to all fee-related transactions at the school: tuition, transport, library, activity, and any other levied fees.
+
+FEE STRUCTURE AND NOTIFICATION
+1. Annual fee structure approved by the Board of Governors before the start of each academic year.
+2. Detailed fee schedule circulated to all parents in writing (notice, SMS, and school app) at least 30 days before first due date.
+3. Any mid-year fee revision requires Board approval and minimum 60-day advance notice to parents.
+
+FEE COLLECTION PROCESS
+1. Fee due dates: 1st–10th of each month (or as per term schedule).
+2. All fees collected via official receipts only — no cash without an official receipt.
+3. Preferred payment channels: bank transfer, online payment portal, or school cashier with receipt book.
+4. Cashier balances reconciled daily; submitted to accounts officer by end of day.
+
+DISCOUNTS AND WAIVERS
+- Sibling discount (2nd child: 10%, 3rd+ child: 15%) approved by Principal.
+- Hardship waivers: submitted in writing by parent, evaluated by Principal and Finance Committee.
+- All discounts documented in the student's fee ledger with written approval attached.
+
+LATE PAYMENT AND DEFAULTERS
+- 3-day grace period after due date; reminder SMS/notice issued.
+- After 10 days: written notice to parent with late fee surcharge (as per policy).
+- After 30 days: student may be withheld from exams until arrears cleared (Principal approval required).
+- Accounts officer maintains defaulter list; reviewed weekly by Principal.
+
+FINANCIAL RECORDS
+- All income and expenditure recorded in school accounting software.
+- Monthly accounts summary submitted to Principal by 5th of following month.
+- Annual audit conducted by external auditor; report submitted to Board.
+- Petty cash limit: PKR 5,000 per week; all petty cash disbursements supported by receipts.
+
+DOCUMENTATION
+- Fee collection register (daily)
+- Monthly financial summary report
+- Annual audited accounts
+- Discount/waiver approval files`,
+    },
+    {
+      id: 'sop-adm-2',
+      title: 'HR and Employee Management Standards',
+      category: 'Administrative',
+      content: `PURPOSE
+Establish fair, transparent, and legally compliant standards for recruitment, onboarding, performance management, and separation of school employees.
+
+SCOPE
+All teaching and non-teaching staff employed by the school.
+
+RECRUITMENT PROCESS
+1. Vacancy announced internally first; if not filled in 2 weeks, advertise externally.
+2. Minimum qualifications per position defined in Job Description (approved by Principal/BOG).
+3. Selection committee: Principal + relevant HOD + one Board member (for senior positions).
+4. Interview panel scores candidates using standardized rubric; decision documented.
+5. Background and reference checks completed before offer letter issued.
+6. Probation period: 3 months for all new hires; confirmed in writing by Principal.
+
+ONBOARDING
+- New staff orientation on first day: school policies, timetable, responsibilities, facilities.
+- Staff handbook issued and signed acknowledgment filed.
+- Mentor assigned for first month (experienced colleague).
+- IT access, keys, and resources issued against signed receipt.
+
+LEAVE MANAGEMENT
+- Annual leave entitlement as per EOBI/Labour Laws and school policy.
+- Leave application submitted minimum 3 days in advance (except emergencies).
+- Unauthorized absence: first instance — warning; repeated — deduction from salary.
+- Casual leave: maximum 10 days/year; sick leave: as per law with medical certificate for 3+ consecutive days.
+
+PERFORMANCE APPRAISAL
+- Annual appraisal conducted by HOD/Principal in May–June.
+- Appraisal criteria: punctuality, lesson quality, student progress, professional development, teamwork.
+- Results discussed with employee; signed copy in employee file.
+- Unsatisfactory rating: performance improvement plan (PIP) with 60-day review.
+- Outstanding rating: recommendation for increment, certificate, or award.
+
+DISCIPLINARY PROCEDURE
+1. Minor infraction: verbal warning (documented).
+2. Repeated/moderate infraction: written warning.
+3. Serious infraction: show-cause notice + inquiry committee.
+4. Gross misconduct: suspension pending inquiry; termination if found guilty.
+5. Employee has right to respond at each stage.
+
+SEPARATION
+- Resignation: minimum 1 month notice (senior roles: 2 months).
+- Clearance form completed before final settlement (keys, resources, outstanding dues).
+- Final salary and dues processed within 30 days of last working day.
+- Experience certificate issued on request.
+
+DOCUMENTATION
+- Employee files (personal, contract, appraisals, disciplinary records)
+- Leave register
+- Payroll records (retained for 7 years)`,
+    },
+    {
+      id: 'sop-adm-3',
+      title: 'Student Admission and Registration Process',
+      category: 'Administrative',
+      content: `PURPOSE
+Establish a consistent, fair, and efficient process for student admissions and registrations that ensures proper documentation and smooth enrollment.
+
+SCOPE
+New admissions, re-admissions, and lateral transfers for all classes.
+
+ADMISSION TIMELINE
+- Pre-primary and Class 1: admissions open in February for the upcoming April/August session.
+- Other classes: rolling admissions subject to seat availability.
+- Admission schedule published on school notice board, website, and social media.
+
+ELIGIBILITY CRITERIA
+- Age requirements per class (as per PCA/Federal Board guidelines).
+- Previous academic records in satisfactory condition.
+- No outstanding disciplinary issues from previous school.
+- Medical fitness (basic health declaration by parent).
+
+ADMISSION PROCESS
+1. Inquiry: parent visits or contacts school; receives prospectus and fee schedule.
+2. Application Form: completed and submitted with required documents.
+3. Admission Test (where applicable): conducted by relevant subject teacher(s).
+4. Interview: student and parent meet with Class Teacher/VP (for Class 6 and above).
+5. Merit List: posted within 5 working days of test/interview.
+6. Fee Deposit: seat confirmed only upon fee payment within 5 days of offer.
+7. Registration: student record created in school management system; roll number assigned.
+
+REQUIRED DOCUMENTS
+- Birth certificate (original + photocopy)
+- Previous school's Transfer Certificate (TC) / School Leaving Certificate
+- Last two years' result cards/report cards
+- Parent CNIC (photocopy)
+- 4 recent passport photographs
+- Vaccination record (for pre-primary)
+
+TRANSFER STUDENTS
+- TC from previous school verified (contact school if needed).
+- Student placed in appropriate class based on academic assessment.
+- Previous school records archived in student file.
+
+DOCUMENTATION
+- Admission register (class-wise, serial number)
+- Individual student files with all admission documents
+- Admission test/interview score sheets archived for 1 year`,
+    },
+    {
+      id: 'sop-adm-4',
+      title: 'Communication and Parent Engagement Protocol',
+      category: 'Administrative',
+      content: `PURPOSE
+Establish clear, professional, and effective communication standards between the school, parents, and other stakeholders to build trust and ensure student welfare.
+
+SCOPE
+All communication between school staff and parents/guardians, including formal notices, digital communication, and in-person interactions.
+
+COMMUNICATION CHANNELS
+1. School App / SMS: day-to-day updates, attendance alerts, fee reminders, event notifications.
+2. School Diary: daily communication for primary classes; homework, notices, parent signatures.
+3. Notice Board: general announcements, exam schedules, event notices.
+4. Email: formal correspondence, result cards, official letters.
+5. Parent-Teacher Meetings (PTMs): scheduled 3 times per year (end of each term).
+6. Phone Calls: emergencies, follow-ups on student concerns.
+
+COMMUNICATION STANDARDS
+- All written communication on school letterhead with authorized signature.
+- Response time: phone/email within 24 working hours; complaints within 48 hours.
+- No personal social media contact between staff and parents (use official channels only).
+- Confidentiality: student/family information not shared without consent.
+- Translation: key notices available in Urdu for parents with limited English literacy.
+
+PARENT ENGAGEMENT INITIATIVES
+- Parent Orientation Day: start of each academic year.
+- PTM (Parent-Teacher Meeting): minimum 3 per year.
+- Open House: annual event showcasing student work.
+- Parent Representative Committee: 2 parents per class elected to liaison with management.
+- Parent Workshops: quarterly sessions on parenting, child development, academic support.
+
+COMPLAINT AND FEEDBACK PROCESS
+1. Parent submits complaint in writing (complaint form available at reception or app).
+2. Complaint logged with reference number; parent receives acknowledgment within 24 hours.
+3. Relevant staff/HOD/Principal investigates within 5 working days.
+4. Resolution communicated in writing to parent.
+5. Unresolved complaints escalated to Board of Governors within 10 working days.
+
+EMERGENCY COMMUNICATION
+- In case of student illness/injury: parent called immediately.
+- School closure (weather/emergency): SMS blast + app notification by 6:00 AM.
+- Critical incidents: Principal communicates directly with affected families.
+
+DOCUMENTATION
+- Communication log maintained at reception
+- Complaint register with outcomes
+- PTM attendance and minutes`,
+    },
+    {
+      id: 'sop-adm-5',
+      title: 'Safety, Security and Emergency Procedures',
+      category: 'Administrative',
+      content: `PURPOSE
+Ensure the physical safety and security of all students, staff, and visitors, and establish clear procedures for emergency situations.
+
+SCOPE
+All school premises, school transport, and school-sponsored events and trips.
+
+DAILY SECURITY PROTOCOLS
+1. Gate Management
+   - Main gate locked during school hours; access via intercom/buzzer only.
+   - Visitor register maintained at gate (name, ID, purpose, time in/out).
+   - No unknown visitor to enter without being escorted by staff.
+   - Student pickup: authorized adults only (verified against school records).
+
+2. Arrival and Dismissal
+   - Staff on gate duty from 15 minutes before student arrival.
+   - Students not released unless to authorized adult; written consent required for changes.
+   - Late arrivals logged; parents notified for patterns.
+   - All visitors' national ID photocopied and filed for any person collecting a student.
+
+3. CCTV and Monitoring
+   - CCTV covers all entrances, corridors, and common areas.
+   - Footage retained for minimum 30 days.
+   - Monitoring by designated staff; footage reviewed only by Principal/Security Officer.
+
+EMERGENCY PROCEDURES
+
+Fire Emergency
+1. Fire alarm sounds — all activities stop immediately.
+2. Class teachers lead students to designated assembly points (via evacuation routes posted in each room).
+3. Roll call at assembly point; any missing student reported to Principal immediately.
+4. No re-entry until all-clear given by Principal/Fire Marshal.
+5. Fire drills conducted minimum twice per year; results documented.
+
+Medical Emergency
+1. First aid kit available in every block; trained first-aider on campus at all times.
+2. Student injured/ill: class teacher informs school nurse immediately.
+3. Nurse assesses; if serious, 1122/ambulance called AND parent notified simultaneously.
+4. Incident report completed within 2 hours by class teacher + nurse.
+5. Hospital accompaniment: school staff member accompanies until parent arrives.
+
+Lockdown (Threat/Intruder)
+1. Lockdown signal (specific bell pattern or announcement): all students and staff inside classrooms immediately.
+2. Doors locked; windows covered; silence maintained.
+3. Principal contacts law enforcement (Police: 15); staff not to confront threat.
+4. All-clear announced by Principal only after police confirmation.
+
+ACCIDENT AND INCIDENT REPORTING
+- All incidents (however minor) recorded in Incident Log within 24 hours.
+- Serious incidents: written report to Board within 48 hours.
+- Annual safety audit by external assessor recommended.
+
+HEALTH AND HYGIENE
+- Sick students isolated from peers; parents called to collect within 1 hour.
+- Canteen/tuck shop hygiene inspected monthly by school health representative.
+- Handwashing stations maintained; hygiene education part of weekly assembly.
+
+DOCUMENTATION
+- Visitor register (daily)
+- Fire drill records
+- Incident/accident log
+- First aid kit inventory (monthly check)
+- CCTV maintenance log`,
     },
   ];
+
+  // Placeholder admin manuals if none from server
+  const adminRows = adminSops.length > 0 ? adminSops : ADMIN_MANUALS;
 
   const tabStyle = (id) => ({
     padding: '10px 24px', fontSize: 13.5, fontWeight: activeTab === id ? 700 : 600,

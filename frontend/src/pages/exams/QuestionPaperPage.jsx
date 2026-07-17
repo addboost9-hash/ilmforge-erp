@@ -515,8 +515,11 @@ function BankGeneratorTab({ classes, subjects }) {
   const [showModal, setShowModal] = useState(false);
   const [bankPapers, setBankPapers] = useState([]);
   const [customize, setCustomize] = useState({
-    instructions: '', objectiveHeading: 'OBJECTIVE PART', subjectiveHeading: 'SUBJECTIVE PART',
-    objectiveReplacement: '', subjectiveReplacement: '',
+    instructions: [''],
+    objectiveHeadings: ['OBJECTIVE PART'],
+    subjectiveHeadings: ['SUBJECTIVE PART'],
+    objectiveReplacements: [''],
+    subjectiveReplacements: [''],
   });
   const [customClassId, setCustomClassId] = useState('');
   const [savingCustomize, setSavingCustomize] = useState(false);
@@ -527,7 +530,15 @@ function BankGeneratorTab({ classes, subjects }) {
       const res = await api.get(`/question-papers/bank/${classId}/${sectionId}`);
       setBankPapers(res.data.data?.papers || []);
       const cust = res.data.data?.paperCustomization;
-      if (cust) setCustomize(c => ({ ...c, ...cust }));
+      if (cust) {
+        setCustomize(c => ({
+          instructions: cust.instructions ? (Array.isArray(cust.instructions) ? cust.instructions : [cust.instructions]) : c.instructions,
+          objectiveHeadings: cust.objectiveHeadings || (cust.objectiveHeading ? [cust.objectiveHeading] : c.objectiveHeadings),
+          subjectiveHeadings: cust.subjectiveHeadings || (cust.subjectiveHeading ? [cust.subjectiveHeading] : c.subjectiveHeadings),
+          objectiveReplacements: cust.objectiveReplacements || (cust.objectiveReplacement ? [cust.objectiveReplacement] : c.objectiveReplacements),
+          subjectiveReplacements: cust.subjectiveReplacements || (cust.subjectiveReplacement ? [cust.subjectiveReplacement] : c.subjectiveReplacements),
+        }));
+      }
     } catch { /* ignore */ }
   };
 
@@ -549,7 +560,21 @@ function BankGeneratorTab({ classes, subjects }) {
     if (!customClassId) return toast.error('Select a class first');
     setSavingCustomize(true);
     try {
-      await api.post('/question-papers/bank-customize', { classId: customClassId, ...customize });
+      // Flatten arrays to single values for backward-compat API, also send arrays
+      const payload = {
+        classId: customClassId,
+        instructions: customize.instructions.filter(Boolean).join('\n'),
+        objectiveHeading: customize.objectiveHeadings.filter(Boolean)[0] || 'OBJECTIVE PART',
+        subjectiveHeading: customize.subjectiveHeadings.filter(Boolean)[0] || 'SUBJECTIVE PART',
+        objectiveReplacement: customize.objectiveReplacements.filter(Boolean)[0] || '',
+        subjectiveReplacement: customize.subjectiveReplacements.filter(Boolean)[0] || '',
+        // Arrays for new format
+        objectiveHeadings: customize.objectiveHeadings,
+        subjectiveHeadings: customize.subjectiveHeadings,
+        objectiveReplacements: customize.objectiveReplacements,
+        subjectiveReplacements: customize.subjectiveReplacements,
+      };
+      await api.post('/question-papers/bank-customize', payload);
       toast.success('Customization saved!');
     } catch {
       toast.error('Failed to save customization');
@@ -583,45 +608,57 @@ function BankGeneratorTab({ classes, subjects }) {
 
       {bankSubTab === 'customize' && (
         <div style={cardStyle}>
-          <h3 style={{ color: NAVY, marginTop: 0 }}>Paper Customization Settings</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <div style={{ gridColumn: 'span 2' }}>
-              <label style={labelStyle}>Apply to Class</label>
-              <select style={inputStyle} value={customClassId} onChange={e => setCustomClassId(e.target.value)}>
-                <option value="">-- Select Class --</option>
-                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div style={{ gridColumn: 'span 2' }}>
-              <label style={labelStyle}>Paper Instructions</label>
-              <textarea rows={3} style={{ ...inputStyle, resize: 'vertical' }} value={customize.instructions}
-                onChange={e => setCustomize(c => ({ ...c, instructions: e.target.value }))}
-                placeholder="e.g. All questions are compulsory. Use blue or black ink only." />
-            </div>
-            <div>
-              <label style={labelStyle}>Main Heading — Objective Part</label>
-              <input style={inputStyle} value={customize.objectiveHeading}
-                onChange={e => setCustomize(c => ({ ...c, objectiveHeading: e.target.value }))} />
-            </div>
-            <div>
-              <label style={labelStyle}>Main Heading — Subjective Part</label>
-              <input style={inputStyle} value={customize.subjectiveHeading}
-                onChange={e => setCustomize(c => ({ ...c, subjectiveHeading: e.target.value }))} />
-            </div>
-            <div>
-              <label style={labelStyle}>Objective Part Replacement Text</label>
-              <input style={inputStyle} value={customize.objectiveReplacement}
-                onChange={e => setCustomize(c => ({ ...c, objectiveReplacement: e.target.value }))}
-                placeholder="e.g. Section A" />
-            </div>
-            <div>
-              <label style={labelStyle}>Subjective Part Replacement Text</label>
-              <input style={inputStyle} value={customize.subjectiveReplacement}
-                onChange={e => setCustomize(c => ({ ...c, subjectiveReplacement: e.target.value }))}
-                placeholder="e.g. Section B" />
-            </div>
+          <h3 style={{ color: NAVY, marginTop: 0 }}>Question Paper Customization</h3>
+
+          {/* Apply to Class */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>Apply to Class</label>
+            <select style={{ ...inputStyle, maxWidth: 300 }} value={customClassId} onChange={e => setCustomClassId(e.target.value)}>
+              <option value="">-- Select Class --</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+
+          {/* Multi-add field helper */}
+          {[
+            { label: 'Paper Instructions', key: 'instructions', placeholder: 'e.g. All questions are compulsory.' },
+            { label: 'Main Heading Objective', key: 'objectiveHeadings', placeholder: 'e.g. OBJECTIVE PART' },
+            { label: 'Main Heading Subjective', key: 'subjectiveHeadings', placeholder: 'e.g. SUBJECTIVE PART' },
+            { label: 'Main Heading Objective Replacement', key: 'objectiveReplacements', placeholder: 'e.g. Section A' },
+            { label: 'Main Heading Subjective Replacement', key: 'subjectiveReplacements', placeholder: 'e.g. Section B' },
+          ].map(({ label, key, placeholder }) => (
+            <div key={key} style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>{label}</label>
+              {customize[key].map((val, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                  <input
+                    style={{ ...inputStyle, flex: 1 }}
+                    value={val}
+                    placeholder={i === 0 ? placeholder : `${label} ${i + 1}`}
+                    onChange={e => {
+                      const arr = [...customize[key]];
+                      arr[i] = e.target.value;
+                      setCustomize(c => ({ ...c, [key]: arr }));
+                    }}
+                  />
+                  {customize[key].length > 1 && (
+                    <button
+                      onClick={() => setCustomize(c => ({ ...c, [key]: c[key].filter((_, fi) => fi !== i) }))}
+                      style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, width: 30, height: 30, cursor: 'pointer', fontWeight: 700, fontSize: 16 }}
+                    >×</button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={() => setCustomize(c => ({ ...c, [key]: [...c[key], ''] }))}
+                style={{ ...btnStyle('#0D9488'), fontSize: 12, padding: '5px 12px', marginTop: 2 }}
+              >
+                + Add More
+              </button>
+            </div>
+          ))}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
             <button style={btnStyle()} onClick={handleSaveCustomize} disabled={savingCustomize}>
               {savingCustomize ? 'Saving…' : 'Save Customization'}
             </button>
@@ -705,7 +742,11 @@ function BankGeneratorTab({ classes, subjects }) {
                         <td style={tdStyle}>{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'Just now'}</td>
                         <td style={tdStyle}>
                           <button style={{ ...btnStyle('#059669'), fontSize: 12, padding: '5px 12px' }}
-                            onClick={() => printBankPaper(p, customize, '')}>
+                            onClick={() => printBankPaper(p, {
+                              instructions: customize.instructions.filter(Boolean).join('\n'),
+                              objectiveHeading: customize.objectiveHeadings.filter(Boolean)[0] || 'OBJECTIVE PART',
+                              subjectiveHeading: customize.subjectiveHeadings.filter(Boolean)[0] || 'SUBJECTIVE PART',
+                            }, '')}>
                             Print
                           </button>
                         </td>

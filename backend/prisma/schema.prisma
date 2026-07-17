@@ -431,6 +431,7 @@ model Exam {
   schoolId     Int
   campusId     Int?
   classId      Int?
+  classIds     String?  // JSON array of {classId, className} for multi-class exams
   sessionId    Int?
   title        String
   type         String   @default("test") // test|midterm|final

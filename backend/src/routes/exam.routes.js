@@ -621,19 +621,44 @@ router.post(
   if (!canManageExams(req.user?.role)) {
     return res.status(403).json({ success: false, message: 'Only admin/teacher can create exams.' });
   }
-  const { title, type, classId, sessionId, dateStart, dateEnd } = req.body;
-  const exam = await prisma.exam.create({
-    data: {
-      schoolId: req.schoolId,
-      campusId: req.campusId,
-      title,
-      type: type || 'test',
-      classId: classId ? parseInt(classId) : null,
-      sessionId: sessionId ? parseInt(sessionId) : null,
-      dateStart: dateStart ? new Date(dateStart) : null,
-      dateEnd: dateEnd ? new Date(dateEnd) : null,
-    },
-  });
+  const { title, type, classId, classIds, sessionId, dateStart, dateEnd } = req.body;
+  // Try with classIds first; fall back without it if column doesn't exist yet
+  let exam;
+  try {
+    exam = await prisma.exam.create({
+      data: {
+        schoolId: req.schoolId,
+        campusId: req.campusId,
+        title,
+        type: type || 'test',
+        classId: classId ? parseInt(classId) : null,
+        classIds: classIds || null,
+        sessionId: sessionId ? parseInt(sessionId) : null,
+        dateStart: dateStart ? new Date(dateStart) : null,
+        dateEnd: dateEnd ? new Date(dateEnd) : null,
+      },
+    });
+  } catch (e) {
+    // classIds column may not exist if migration hasn't run yet — retry without it
+    if (e.code === 'P2009' || e.message?.includes('classIds') || e.code === 'P2025') {
+      exam = await prisma.exam.create({
+        data: {
+          schoolId: req.schoolId,
+          campusId: req.campusId,
+          title,
+          type: type || 'test',
+          classId: classId ? parseInt(classId) : null,
+          sessionId: sessionId ? parseInt(sessionId) : null,
+          dateStart: dateStart ? new Date(dateStart) : null,
+          dateEnd: dateEnd ? new Date(dateEnd) : null,
+        },
+      });
+      // Attach classIds to response for frontend to use
+      exam = { ...exam, classIds: classIds || null };
+    } else {
+      throw e;
+    }
+  }
   res.status(201).json({ success: true, data: exam });
 }));
 
@@ -673,17 +698,38 @@ router.put('/:id', wrap(async (req, res) => {
   const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
   if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
 
-  const { title, type, dateStart, dateEnd, classId } = req.body;
-  const updated = await prisma.exam.update({
-    where: { id: examId },
-    data: {
-      ...(title !== undefined && { title }),
-      ...(type !== undefined && { type }),
-      ...(dateStart !== undefined && { dateStart: dateStart ? new Date(dateStart) : null }),
-      ...(dateEnd !== undefined && { dateEnd: dateEnd ? new Date(dateEnd) : null }),
-      ...(classId !== undefined && { classId: classId ? parseInt(classId) : null }),
-    },
-  });
+  const { title, type, dateStart, dateEnd, classId, classIds } = req.body;
+  let updated;
+  try {
+    updated = await prisma.exam.update({
+      where: { id: examId },
+      data: {
+        ...(title !== undefined && { title }),
+        ...(type !== undefined && { type }),
+        ...(dateStart !== undefined && { dateStart: dateStart ? new Date(dateStart) : null }),
+        ...(dateEnd !== undefined && { dateEnd: dateEnd ? new Date(dateEnd) : null }),
+        ...(classId !== undefined && { classId: classId ? parseInt(classId) : null }),
+        ...(classIds !== undefined && { classIds: classIds || null }),
+      },
+    });
+  } catch (e) {
+    // classIds column may not exist if migration hasn't run yet — retry without it
+    if (classIds !== undefined && (e.code === 'P2009' || e.message?.includes('classIds'))) {
+      updated = await prisma.exam.update({
+        where: { id: examId },
+        data: {
+          ...(title !== undefined && { title }),
+          ...(type !== undefined && { type }),
+          ...(dateStart !== undefined && { dateStart: dateStart ? new Date(dateStart) : null }),
+          ...(dateEnd !== undefined && { dateEnd: dateEnd ? new Date(dateEnd) : null }),
+          ...(classId !== undefined && { classId: classId ? parseInt(classId) : null }),
+        },
+      });
+      updated = { ...updated, classIds: classIds || null };
+    } else {
+      throw e;
+    }
+  }
   res.json({ success: true, data: updated });
 }));
 
