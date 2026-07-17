@@ -188,6 +188,8 @@ import ResultConfigPage         from './pages/exams/ResultConfigPage';
 import HumanResourcePage        from './pages/hr/HumanResourcePage';
 import AccountsPage             from './pages/accounts/AccountsPage';
 import LaunchSetupPage          from './pages/setup/LaunchSetupPage';
+// v4.0: Unified Examination Module (School Mentor style)
+import ExaminationPage          from './pages/exams/ExaminationPage';
 
 // MISSING — safe lazy with fallback
 const EmiPlansPage              = safeLazy(() => import('./pages/fees/EmiPlansPage'));
@@ -625,6 +627,8 @@ export default function App() {
             <Route path="/human-resource"             element={<HumanResourcePage />} />
             <Route path="/accounts"                   element={<AccountsPage />} />
             <Route path="/launch-setup"               element={<LaunchSetupPage />} />
+            {/* v4.0: Unified Examination Module */}
+            <Route path="/examination"               element={<ExaminationPage />} />
           </Route>
 
           {/* 404 */}

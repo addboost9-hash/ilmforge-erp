@@ -70,6 +70,7 @@ const NAV = [
   {
     group: 'EXAMS',
     items: [
+      { to: '/examination',            icon: ClipboardList, label: '📋 Examination (SM)',  badge: 'NEW' },
       { to: '/hub/exams',              icon: Award,         label: 'Exams & Tests Hub' },
       { to: '/exams/question-papers',  icon: FileText,      label: 'Question Papers',     roles: ['super_admin', 'admin', 'teacher'] },
       { to: '/exams/mcq-generator',    icon: Brain,         label: 'MCQ Generator',        roles: ['super_admin', 'admin', 'teacher'] },
