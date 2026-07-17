@@ -220,6 +220,149 @@ function ExamModal({ classes = [], initial = null, onClose, onSubmit, isSubmitti
 /* ═══════════════════════════════════════════════════
    TAB 1: EXAM SETUP
 ══════════════════════════════════════════════════ */
+/* ─────────────────────── PRINT: SCHOOL MENTOR PAPER FORMAT ─────────────────────── */
+function printSchoolMentorPaper(paper, schoolName, logoUrl, className, sectionName) {
+  const school = schoolName || localStorage.getItem('registeredSchoolName') || 'School';
+  const logo = logoUrl || localStorage.getItem('schoolLogoPreview') || '';
+  const subject = paper.subject || paper.subjectName || 'Subject';
+  const cls = className || paper.className || 'Class';
+  const sec = sectionName || paper.sectionName || 'A';
+  const time = paper.objectiveTime || paper.totalTime || paper.duration || 60;
+  const totalMarks = paper.totalMarks || paper.objectiveMarks || 100;
+  const title = paper.title || paper.name || 'Question Paper';
+
+  const logoHtml = logo
+    ? `<img src="${logo}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #ccc"/>`
+    : `<div style="width:56px;height:56px;border-radius:50%;border:2px solid #999;display:flex;align-items:center;justify-content:center;font-size:9px;text-align:center;color:#666;font-family:sans-serif">SCHOOL<br>LOGO</div>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>${title}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#000}
+  .header{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
+  .school-name{font-size:15px;font-weight:bold;color:#000}
+  .paper-sub{font-size:11.5px;color:#333;margin-top:3px}
+  hr{border:none;border-top:1.5px solid #000;margin:12px 0}
+  table{width:100%;border-collapse:collapse}
+  td,th{border:1px solid #000;padding:7px 9px;font-size:11.5px}
+  .student-name-row td{height:28px;vertical-align:bottom}
+  .info-row td{padding:5px 9px}
+  .section-title{font-size:13px;font-weight:bold;border-left:4px solid #222;padding-left:8px;margin:18px 0 10px}
+  .footer-row td{text-align:center;padding:14px 9px}
+  .page-num{text-align:center;font-size:10px;color:#888;margin-top:16px}
+  @media print{body{padding:12px}@page{margin:.8cm}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div>${logoHtml}</div>
+  <div>
+    <div class="school-name">${school}</div>
+    <div class="paper-sub">${title} &bull; ${subject} (${sec}) &bull; ${cls}</div>
+  </div>
+</div>
+<hr/>
+<table style="margin-bottom:10px">
+  <thead><tr>
+    <th style="width:40%">Student Name</th>
+    <th style="width:20%">Roll No.</th>
+    <th style="width:20%">Section</th>
+    <th style="width:20%">Date</th>
+  </tr></thead>
+  <tbody><tr class="student-name-row">
+    <td></td><td></td><td></td><td></td>
+  </tr></tbody>
+</table>
+<table style="margin-bottom:16px">
+  <tr>
+    <td><strong>Subject:</strong> ${subject} (${sec})</td>
+    <td><strong>Class:</strong> ${cls}</td>
+    <td><strong>Time:</strong> ${time} Minutes</td>
+    <td><strong>Total Marks:</strong> ${totalMarks}</td>
+    <td><strong>Obtained:</strong>___________ / ${totalMarks}</td>
+  </tr>
+</table>
+<div class="section-title">SECTION A &ndash; OBJECTIVE QUESTIONS</div>
+<div style="min-height:64px;border:1px dashed #ccc;padding:8px;color:#bbb;font-size:11px">Objective questions appear here</div>
+<div class="section-title">SECTION A &ndash; SUBJECTIVE QUESTIONS</div>
+<div style="min-height:64px;border:1px dashed #ccc;padding:8px;color:#bbb;font-size:11px">Subjective questions appear here</div>
+<br/>
+<table><tr class="footer-row">
+  <td style="width:33%"><strong>Examiner:</strong> _____________</td>
+  <td style="width:34%"><strong>Checker:</strong> _____________</td>
+  <td style="width:33%"><strong>Re-Checker:</strong> __________</td>
+</tr></table>
+<div class="page-num">Page 1 of 1</div>
+<script>window.onload=()=>{window.print()}<\/script>
+</body></html>`;
+
+  const w = window.open('','_blank','width=900,height=750');
+  if(w){w.document.write(html);w.document.close();}
+}
+
+function exportExamsPDF(exams, activeTerm, schoolName, logoUrl) {
+  const school = schoolName || localStorage.getItem('registeredSchoolName') || 'School Name';
+  const logo = logoUrl || localStorage.getItem('schoolLogoPreview') || '';
+  const now = new Date();
+  const dateStr = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
+  const timeStr = now.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  const logoHtml = logo
+    ? `<img src="${logo}" style="width:70px;height:70px;object-fit:contain"/>`
+    : `<div style="width:70px;height:70px;border:2px solid #aaa;display:flex;align-items:center;justify-content:center;font-size:9px;color:#666">LOGO</div>`;
+
+  const rows = exams.map((e, i) => {
+    const classes = (() => { try { return JSON.parse(e.classIds || '[]'); } catch { return []; } })();
+    return classes.length > 0
+      ? classes.map((c, ci) => `<tr><td>${ci === 0 ? i+1 : ''}</td><td>${ci === 0 ? (e.name || e.title || 'Exam') : ''}</td><td>${c.className || c}</td><td>${c.sectionName || 'A'}</td><td>${e.startDate ? new Date(e.startDate).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}).replace(/ /g,'-') : (e.dateStart ? new Date(e.dateStart).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}).replace(/ /g,'-') : '—')}</td><td>${e.endDate ? new Date(e.endDate).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}).replace(/ /g,'-') : (e.dateEnd ? new Date(e.dateEnd).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}).replace(/ /g,'-') : '—')}</td></tr>`).join('')
+      : `<tr><td>${i+1}</td><td>${e.name || e.title || 'Exam'}</td><td>—</td><td>—</td><td>${(e.startDate||e.dateStart) ? new Date(e.startDate||e.dateStart).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}) : '—'}</td><td>${(e.endDate||e.dateEnd) ? new Date(e.endDate||e.dateEnd).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}) : '—'}</td></tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Arial,sans-serif;font-size:11px;padding:20px}
+  .top-header{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:4px}
+  .school-name-big{font-size:20px;font-weight:bold;text-align:center;flex:1}
+  .gen-info{display:flex;justify-content:space-between;font-size:10px;color:#333;margin:6px 0 14px}
+  h2{text-align:center;font-size:16px;font-weight:bold;margin-bottom:14px}
+  .term-label{font-size:12px;font-weight:bold;margin-bottom:6px}
+  table{width:100%;border-collapse:collapse;margin-bottom:16px}
+  th{background:#e5e7eb;font-weight:bold;padding:7px 8px;border:1px solid #000;text-align:left}
+  td{padding:6px 8px;border:1px solid #000}
+  .footer{display:flex;justify-content:space-between;margin-top:16px;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:8px}
+  @media print{@page{margin:.8cm}}
+</style>
+</head><body>
+<div class="top-header">
+  <div>${logoHtml}</div>
+  <div class="school-name-big">${school}</div>
+  <div style="width:70px"></div>
+</div>
+<div class="gen-info">
+  <span>Generated Date: ${dateStr}</span>
+  <span>Generated Time: ${timeStr}</span>
+  <span>Generated By: ${school}</span>
+</div>
+<h2>Examination Schedule</h2>
+<div class="term-label">Term : ${activeTerm === '1st' ? '1st Term' : '2nd Term'}</div>
+<table>
+  <thead><tr><th>Sr. No</th><th>Exam Name</th><th>Class</th><th>Section</th><th>Date From</th><th>Date To</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="footer">
+  <span>Contact : 0346-5146609</span>
+  <span>Powered By : IlmForge</span>
+  <span>Page 1 of 1</span>
+</div>
+<script>window.onload=()=>{window.print()}<\/script>
+</body></html>`;
+
+  const w = window.open('','_blank','width=1000,height=700');
+  if(w){w.document.write(html);w.document.close();}
+}
+
 function ExamSetupTab() {
   const qc = useQueryClient();
   const [activeTerm, setActiveTerm] = useState('1st');
@@ -229,6 +372,7 @@ function ExamSetupTab() {
 
   const { data: classes = [] } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes').then(r => r.data.data || []) });
   const { data: allExams = [], isLoading } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams').then(r => r.data.data || []) });
+  const { data: school } = useQuery({ queryKey: ['school-profile'], queryFn: () => api.get('/settings/school').then(r => r.data.data).catch(() => ({})) });
 
   // Filter by term
   const filteredExams = allExams.filter(e => {
@@ -242,13 +386,6 @@ function ExamSetupTab() {
   });
 
   const exams = filteredExams;
-
-  const exportExamsPDF = () => {
-    const w = window.open('', '_blank');
-    const rows = filteredExams.map((e, i) => `<tr><td>${i+1}</td><td>${e.title}</td><td>${e.type||'—'}</td><td>${e.dateStart ? new Date(e.dateStart).toLocaleDateString('en-PK') : '—'}</td><td>${e.dateEnd ? new Date(e.dateEnd).toLocaleDateString('en-PK') : '—'}</td></tr>`).join('');
-    w.document.write(`<!DOCTYPE html><html><head><title>Exams</title><style>body{font-family:Arial;padding:20px}table{width:100%;border-collapse:collapse}th{background:#0D9488;color:white;padding:8px}td{padding:8px;border:1px solid #e5e7eb}</style></head><body><h2>Examination List — ${activeTerm === '1st' ? '1st Term' : '2nd Term'}</h2><table><tr><th>S.No</th><th>Exam Name</th><th>Type</th><th>From</th><th>To</th></tr>${rows}</table></body></html>`);
-    w.document.close(); w.print();
-  };
 
   const add = useMutation({
     mutationFn: d => api.post('/exams', d),
@@ -285,7 +422,7 @@ function ExamSetupTab() {
           <button style={termBtnStyle(activeTerm === '2nd')} onClick={() => setActiveTerm('2nd')}>2nd Term</button>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={exportExamsPDF} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>PDF</button>
+          <button onClick={() => exportExamsPDF(filteredExams, activeTerm, school?.name, school?.logoUrl)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>PDF</button>
           <button style={{ background: '#059669', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Word</button>
         </div>
       </div>
@@ -537,19 +674,26 @@ function DateSheetTab() {
           row={editRow}
           onClose={() => setEditRow(null)}
           queryClient={queryClient}
+          classId={editRow?.classId}
         />
       )}
     </div>
   );
 }
 
-function DateSheetEditModal({ examId, examTitle, row, onClose, queryClient }) {
+function DateSheetEditModal({ examId, examTitle, row, onClose, queryClient, classId }) {
   const [rows, setRows] = useState(row.entries?.length > 0 ? row.entries.map(e => ({ ...e, _key: e.id })) : []);
   const [saving, setSaving] = useState({});
   const [deleting, setDeleting] = useState({});
   const [copyConfirm, setCopyConfirm] = useState(false);
   const [copying, setCopying] = useState(false);
   const keyRef = useRef(-1);
+
+  const { data: subjectsList = [] } = useQuery({
+    queryKey: ['datesheet-subjects', classId],
+    queryFn: () => api.get('/subjects', { params: { classId } }).then(r => r.data.data || []),
+    enabled: !!classId,
+  });
 
   const invalidate = () => queryClient.invalidateQueries(['datesheet', examId]);
 
@@ -640,7 +784,19 @@ function DateSheetEditModal({ examId, examTitle, row, onClose, queryClient }) {
               )}
               {rows.map(r => (
                 <tr key={r._key} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                  <td style={{ padding: '6px 8px' }}><input style={inp} placeholder="Subject" value={r.subject} onChange={e => updateRow(r._key, 'subject', e.target.value)} /></td>
+                  <td style={{ padding: '6px 8px' }}>
+                    {subjectsList.length > 0 ? (
+                      <select value={r.subject || ''} onChange={e => updateRow(r._key, 'subject', e.target.value)}
+                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #D1FAE5', borderRadius: 6, fontSize: 13, background: 'white' }}>
+                        <option value="">Select Subject</option>
+                        {subjectsList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                      </select>
+                    ) : (
+                      <input type="text" placeholder="Subject" value={r.subject || ''}
+                        onChange={e => updateRow(r._key, 'subject', e.target.value)}
+                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #D1FAE5', borderRadius: 6, fontSize: 13 }} />
+                    )}
+                  </td>
                   <td style={{ padding: '6px 8px' }}><input type="date" style={inp} value={r.date} onChange={e => updateRow(r._key, 'date', e.target.value)} /></td>
                   <td style={{ padding: '6px 8px' }}><input type="time" style={inp} value={r.timeFrom} onChange={e => updateRow(r._key, 'timeFrom', e.target.value)} /></td>
                   <td style={{ padding: '6px 8px' }}><input type="time" style={inp} value={r.timeTo} onChange={e => updateRow(r._key, 'timeTo', e.target.value)} /></td>
@@ -831,8 +987,32 @@ function QuestionBankTab() {
 
   const { data: classes = [] } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes').then(r => r.data.data || []) });
   const { data: subjects = [] } = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/classes/subjects').then(r => r.data.data || []).catch(() => []) });
+  const { data: school } = useQuery({ queryKey: ['school-profile'], queryFn: () => api.get('/settings/school').then(r => r.data.data).catch(() => ({})) });
 
   const classesWithSections = classes.map(cls => ({ ...cls, sections: Array.isArray(cls.sections) ? cls.sections : [] }));
+
+  const deletePaper = async (paperId, classId) => {
+    if (!window.confirm('Delete this paper?')) return;
+    try {
+      await api.delete(`/question-papers/${paperId}`);
+      toast.success('Paper deleted!');
+      setBankPapers(prev => prev.filter(p => p.id !== paperId));
+    } catch { toast.error('Failed to delete paper'); }
+  };
+
+  const shufflePaper = (paperId) => {
+    setBankPapers(prev => prev.map(p => {
+      if (p.id !== paperId) return p;
+      const meta = p.meta || {};
+      const qTypes = [...(meta.questionTypes || [])];
+      for (let i = qTypes.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [qTypes[i], qTypes[j]] = [qTypes[j], qTypes[i]];
+      }
+      return { ...p, meta: { ...meta, questionTypes: qTypes } };
+    }));
+    toast.success('Questions shuffled!');
+  };
 
   const fetchBankPapers = async (classId) => {
     try {
@@ -1001,18 +1181,49 @@ function QuestionBankTab() {
                           <td colSpan={6} style={{ padding: '12px 20px' }}>
                             {bankPapers.filter(p => String(p.classId) === String(cls.id)).length === 0
                               ? <div style={{ color: '#94A3B8', fontSize: 13, padding: '8px 0' }}>No papers generated yet.</div>
-                              : bankPapers.filter(p => String(p.classId) === String(cls.id)).map((p, pi) => (
-                                <div key={pi} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#fff', borderRadius: 7, marginBottom: 6, border: '1px solid #E2E8F0' }}>
-                                  <div>
-                                    <div style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>{p.displayTitle || p.title}</div>
-                                    <div style={{ fontSize: 11, color: '#64748B' }}>{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'Just now'}</div>
+                              : bankPapers.filter(p => String(p.classId) === String(cls.id)).map((p, pi) => {
+                                const subject = p.meta?.subject || p.subjectName || p.subject || 'Subject';
+                                const dateStr = p.createdAt ? new Date(p.createdAt).toISOString().slice(0, 10) : '';
+                                const timeStr = p.createdAt ? new Date(p.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Just now';
+                                const paperTitle = p.displayTitle || p.title || 'Question Paper';
+                                return (
+                                  <div key={pi} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#fff', borderRadius: 8, marginBottom: 8, border: '1px solid #E2E8F0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                                    {/* Left: green PDF icon + text */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                      <div style={{ width: 38, height: 44, background: '#16A34A', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <span style={{ color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: 0.5 }}>PDF</span>
+                                        <span style={{ color: '#bbf7d0', fontSize: 8, marginTop: 1 }}>📄</span>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>{subject}{dateStr ? ` - ${dateStr}` : ''}</div>
+                                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{paperTitle}{timeStr ? ` - ${timeStr}` : ''}</div>
+                                      </div>
+                                    </div>
+                                    {/* Right: 5 icon buttons */}
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                      {/* Shuffle */}
+                                      <button title="Shuffle" onClick={() => shufflePaper(p.id)}
+                                        style={{ background: '#64748B', color: '#fff', border: 'none', borderRadius: 5, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🔀</button>
+                                      {/* Edit */}
+                                      <button title="Edit" onClick={() => { setSelectedClass(cls); setShowMakeModal(true); }}
+                                        style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 5, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Pencil size={12} />
+                                      </button>
+                                      {/* View */}
+                                      <button title="View / Print" onClick={() => printSchoolMentorPaper(p, school?.name, school?.logoUrl, cls.name, '')}
+                                        style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 5, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>👁</button>
+                                      {/* Download */}
+                                      <button title="Download / Print" onClick={() => printSchoolMentorPaper(p, school?.name, school?.logoUrl, cls.name, '')}
+                                        style={{ background: '#0D9488', color: '#fff', border: 'none', borderRadius: 5, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>⬇</button>
+                                      {/* Delete */}
+                                      <button title="Delete" onClick={() => deletePaper(p.id, cls.id)}
+                                        style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 5, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
                                   </div>
-                                  <div style={{ display: 'flex', gap: 6 }}>
-                                    <button style={{ background: TEAL, color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Print</button>
-                                    <button style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}><Trash2 size={11} /></button>
-                                  </div>
-                                </div>
-                              ))
+                                );
+                              })
                             }
                           </td>
                         </tr>

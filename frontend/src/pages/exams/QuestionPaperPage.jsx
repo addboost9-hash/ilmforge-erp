@@ -16,78 +16,91 @@ const QUESTION_TYPES = [
   'Q&A', 'Stories', 'Essays', 'Letters', 'Applications',
 ];
 
-function printPaper(paper, questions, schoolName) {
-  const questionsHtml = questions.map((q, i) => {
-    const opts = q.options && q.options.length > 0
-      ? `<div style="margin-top:4px">${q.options.map((o, oi) => `<span style="margin-right:18px">${String.fromCharCode(65+oi)}) ${o}</span>`).join('')}</div>`
-      : '';
-    return `<div style="margin-bottom:14px"><strong>Q${i+1}.</strong> (${q.marks || 2} marks) ${q.text}${opts}</div>`;
-  }).join('');
+function printSchoolMentorPaperQP(paper, schoolName, logoUrl, className, sectionName) {
+  const school = schoolName || localStorage.getItem('registeredSchoolName') || 'School';
+  const logo = logoUrl || localStorage.getItem('schoolLogoPreview') || '';
+  const subject = paper.subject || paper.subjectName || 'Subject';
+  const cls = className || paper.className || 'Class';
+  const sec = sectionName || paper.sectionName || 'A';
+  const time = paper.objectiveTime || paper.totalTime || paper.duration || 60;
+  const totalMarks = paper.totalMarks || paper.objectiveMarks || 100;
+  const title = paper.title || paper.name || 'Question Paper';
 
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${paper.title}</title>
-  <style>body{font-family:Arial,sans-serif;margin:30px;color:#1a1a1a}h1{color:#1B2F6E;text-align:center}h2{text-align:center;color:#374151}
-  .header{border-bottom:2px solid #1B2F6E;padding-bottom:12px;margin-bottom:20px;text-align:center}
-  .info{display:flex;justify-content:space-between;margin-bottom:16px;font-size:13px}
-  @media print{button{display:none}}</style></head>
-  <body>
-    <div class="header"><h1>${schoolName || 'School Name'}</h1><h2>${paper.title}</h2></div>
-    <div class="info">
-      <span>Class: ${paper.className || '-'}</span>
-      <span>Subject: ${paper.subjectName || '-'}</span>
-      <span>Total Marks: ${paper.totalMarks || 100}</span>
-      <span>Time: ${paper.duration || 60} min</span>
-    </div>
-    <hr/>
-    <div style="margin-top:16px">${questionsHtml}</div>
-    <button onclick="window.print()" style="position:fixed;top:16px;right:16px;background:#1B2F6E;color:#fff;padding:8px 18px;border:none;border-radius:6px;cursor:pointer;font-weight:600">Print</button>
-  </body></html>`;
+  const logoHtml = logo
+    ? `<img src="${logo}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #ccc"/>`
+    : `<div style="width:56px;height:56px;border-radius:50%;border:2px solid #999;display:flex;align-items:center;justify-content:center;font-size:9px;text-align:center;color:#666;font-family:sans-serif">SCHOOL<br>LOGO</div>`;
 
-  const win = window.open('', '_blank', 'width=900,height=700');
-  win.document.write(html);
-  win.document.close();
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>${title}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#000}
+  .header{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
+  .school-name{font-size:15px;font-weight:bold;color:#000}
+  .paper-sub{font-size:11.5px;color:#333;margin-top:3px}
+  hr{border:none;border-top:1.5px solid #000;margin:12px 0}
+  table{width:100%;border-collapse:collapse}
+  td,th{border:1px solid #000;padding:7px 9px;font-size:11.5px}
+  .student-name-row td{height:28px;vertical-align:bottom}
+  .section-title{font-size:13px;font-weight:bold;border-left:4px solid #222;padding-left:8px;margin:18px 0 10px}
+  .footer-row td{text-align:center;padding:14px 9px}
+  .page-num{text-align:center;font-size:10px;color:#888;margin-top:16px}
+  @media print{body{padding:12px}@page{margin:.8cm}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div>${logoHtml}</div>
+  <div>
+    <div class="school-name">${school}</div>
+    <div class="paper-sub">${title} &bull; ${subject} (${sec}) &bull; ${cls}</div>
+  </div>
+</div>
+<hr/>
+<table style="margin-bottom:10px">
+  <thead><tr>
+    <th style="width:40%">Student Name</th>
+    <th style="width:20%">Roll No.</th>
+    <th style="width:20%">Section</th>
+    <th style="width:20%">Date</th>
+  </tr></thead>
+  <tbody><tr class="student-name-row">
+    <td></td><td></td><td></td><td></td>
+  </tr></tbody>
+</table>
+<table style="margin-bottom:16px">
+  <tr>
+    <td><strong>Subject:</strong> ${subject} (${sec})</td>
+    <td><strong>Class:</strong> ${cls}</td>
+    <td><strong>Time:</strong> ${time} Minutes</td>
+    <td><strong>Total Marks:</strong> ${totalMarks}</td>
+    <td><strong>Obtained:</strong>___________ / ${totalMarks}</td>
+  </tr>
+</table>
+<div class="section-title">SECTION A &ndash; OBJECTIVE QUESTIONS</div>
+<div style="min-height:64px;border:1px dashed #ccc;padding:8px;color:#bbb;font-size:11px">Objective questions appear here</div>
+<div class="section-title">SECTION A &ndash; SUBJECTIVE QUESTIONS</div>
+<div style="min-height:64px;border:1px dashed #ccc;padding:8px;color:#bbb;font-size:11px">Subjective questions appear here</div>
+<br/>
+<table><tr class="footer-row">
+  <td style="width:33%"><strong>Examiner:</strong> _____________</td>
+  <td style="width:34%"><strong>Checker:</strong> _____________</td>
+  <td style="width:33%"><strong>Re-Checker:</strong> __________</td>
+</tr></table>
+<div class="page-num">Page 1 of 1</div>
+<script>window.onload=()=>{window.print()}<\/script>
+</body></html>`;
+
+  const w = window.open('','_blank','width=900,height=750');
+  if(w){w.document.write(html);w.document.close();}
 }
 
-function printBankPaper(paper, customize, schoolName) {
-  const meta = paper.meta || {};
-  const qTypes = meta.questionTypes || [];
-  let objHtml = '', subjHtml = '';
+function printPaper(paper, questions, schoolName, logoUrl) {
+  printSchoolMentorPaperQP(paper, schoolName, logoUrl);
+}
 
-  qTypes.forEach((qt, i) => {
-    const row = `<div style="margin-bottom:18px">
-      <strong>Q${i+1}. ${qt.type}</strong>
-      ${qt.instruction ? `<em style="margin-left:10px;color:#555">(${qt.instruction})</em>` : ''}
-      <div style="margin-top:8px;padding:12px;border:1px dashed #ccc;border-radius:6px;background:#fafafa;min-height:40px;color:#888;font-size:12px">Answer space</div>
-    </div>`;
-    if (['MCQ','True/False','Fill in Blanks','Match Columns'].includes(qt.type)) {
-      objHtml += row;
-    } else {
-      subjHtml += row;
-    }
-  });
-
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${paper.displayTitle || paper.title}</title>
-  <style>body{font-family:Arial,sans-serif;margin:30px;color:#1a1a1a}
-  h1,h2{color:#1B2F6E;text-align:center}
-  .section-head{background:#1B2F6E;color:#fff;padding:8px 16px;border-radius:6px;margin:20px 0 12px;font-weight:700}
-  .info-bar{display:flex;justify-content:space-between;border:1px solid #ddd;padding:8px 14px;border-radius:6px;font-size:13px;margin-bottom:16px}
-  @media print{button{display:none}}</style></head>
-  <body>
-    <h1>${schoolName || 'School Name'}</h1>
-    <h2>${paper.displayTitle || paper.title}</h2>
-    ${customize?.instructions ? `<p style="text-align:center;color:#555;font-style:italic">${customize.instructions}</p>` : ''}
-    <div class="info-bar">
-      <span>Class: ${paper.className || '-'}</span>
-      <span>Subject: ${meta.subject || '-'}</span>
-      <span>Type: ${meta.paperType || '-'}</span>
-    </div>
-    ${objHtml ? `<div class="section-head">${customize?.objectiveHeading || 'OBJECTIVE PART'} — ${meta.objectiveMarks || 0} Marks | Time: ${meta.objectiveTime || 0} min</div>${objHtml}` : ''}
-    ${subjHtml ? `<div class="section-head">${customize?.subjectiveHeading || 'SUBJECTIVE PART'} — ${meta.subjectiveMarks || 0} Marks | Time: ${meta.subjectiveTime || 0} min</div>${subjHtml}` : ''}
-    <button onclick="window.print()" style="position:fixed;top:16px;right:16px;background:#1B2F6E;color:#fff;padding:8px 18px;border:none;border-radius:6px;cursor:pointer;font-weight:600">Print</button>
-  </body></html>`;
-
-  const win = window.open('', '_blank', 'width=1000,height=800');
-  win.document.write(html);
-  win.document.close();
+function printBankPaper(paper, customize, schoolName, logoUrl) {
+  printSchoolMentorPaperQP(paper, schoolName, logoUrl);
 }
 
 /* ── Make Paper Modal ── */
@@ -746,7 +759,7 @@ function BankGeneratorTab({ classes, subjects }) {
                               instructions: customize.instructions.filter(Boolean).join('\n'),
                               objectiveHeading: customize.objectiveHeadings.filter(Boolean)[0] || 'OBJECTIVE PART',
                               subjectiveHeading: customize.subjectiveHeadings.filter(Boolean)[0] || 'SUBJECTIVE PART',
-                            }, '')}>
+                            }, school?.name, school?.logoUrl)}>
                             Print
                           </button>
                         </td>
@@ -910,7 +923,7 @@ export default function QuestionPaperPage() {
                             <td style={{ padding: '10px 12px' }}>{p.title?.includes('[BANK]') ? 'Bank Paper' : (p.paperType || '-')}</td>
                             <td style={{ padding: '10px 12px' }}>{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '-'}</td>
                             <td style={{ padding: '10px 12px', display: 'flex', gap: 6 }}>
-                              <button style={btnStyle('#059669')} onClick={() => printPaper(p, p.questions || [], school?.name)}>Print</button>
+                              <button style={btnStyle('#059669')} onClick={() => printPaper(p, p.questions || [], school?.name, school?.logoUrl)}>Print</button>
                               <button style={btnStyle('#ef4444')} onClick={() => { if (confirm('Delete this paper?')) deleteMutation.mutate(p.id); }}>Delete</button>
                             </td>
                           </tr>
