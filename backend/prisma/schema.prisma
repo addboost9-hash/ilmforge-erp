@@ -434,7 +434,8 @@ model Exam {
   classIds     String?  // JSON array of {classId, className} for multi-class exams
   sessionId    Int?
   title        String
-  type         String   @default("test") // test|midterm|final
+  type         String   @default("test") // test|midterm|final|first_term|second_term
+  term         String?  // 1st|2nd — term label from frontend
   dateStart    DateTime?
   dateEnd      DateTime?
   createdAt    DateTime @default(now())

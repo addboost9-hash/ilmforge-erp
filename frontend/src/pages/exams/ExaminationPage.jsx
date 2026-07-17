@@ -231,7 +231,7 @@ function ExamSetupTab() {
   const { data: allExams = [], isLoading } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams').then(r => r.data.data || []) });
 
   // Filter by term
-  const exams = allExams.filter(e => {
+  const filteredExams = allExams.filter(e => {
     const term = (e.term || '').toLowerCase();
     const type = (e.type || '').toLowerCase();
     if (activeTerm === '1st') {
@@ -240,6 +240,15 @@ function ExamSetupTab() {
       return term === '2nd' || type.includes('second') || type.includes('final') || type === 'second_term' || type === 'semester3' || type === 'semester4' || type === 'annual';
     }
   });
+
+  const exams = filteredExams;
+
+  const exportExamsPDF = () => {
+    const w = window.open('', '_blank');
+    const rows = filteredExams.map((e, i) => `<tr><td>${i+1}</td><td>${e.title}</td><td>${e.type||'—'}</td><td>${e.dateStart ? new Date(e.dateStart).toLocaleDateString('en-PK') : '—'}</td><td>${e.dateEnd ? new Date(e.dateEnd).toLocaleDateString('en-PK') : '—'}</td></tr>`).join('');
+    w.document.write(`<!DOCTYPE html><html><head><title>Exams</title><style>body{font-family:Arial;padding:20px}table{width:100%;border-collapse:collapse}th{background:#0D9488;color:white;padding:8px}td{padding:8px;border:1px solid #e5e7eb}</style></head><body><h2>Examination List — ${activeTerm === '1st' ? '1st Term' : '2nd Term'}</h2><table><tr><th>S.No</th><th>Exam Name</th><th>Type</th><th>From</th><th>To</th></tr>${rows}</table></body></html>`);
+    w.document.close(); w.print();
+  };
 
   const add = useMutation({
     mutationFn: d => api.post('/exams', d),
@@ -276,7 +285,7 @@ function ExamSetupTab() {
           <button style={termBtnStyle(activeTerm === '2nd')} onClick={() => setActiveTerm('2nd')}>2nd Term</button>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>PDF</button>
+          <button onClick={exportExamsPDF} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>PDF</button>
           <button style={{ background: '#059669', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Word</button>
         </div>
       </div>
@@ -1227,12 +1236,12 @@ const DEFAULT_CONFIG = {
   ],
   signatures: [{ name: 'Principal', designation: 'Principal', signatureUrl: '' }],
   finalRemarks: [
-    { minPercent: 90, maxPercent: 100, remark: 'Excellent — Outstanding Student' },
-    { minPercent: 80, maxPercent: 89,  remark: 'Very Good — Remarkable Effort' },
-    { minPercent: 70, maxPercent: 79,  remark: 'Good — Keep it up!' },
-    { minPercent: 60, maxPercent: 69,  remark: 'Satisfactory — Need Improvement' },
-    { minPercent: 50, maxPercent: 59,  remark: 'Below Average — Work Harder' },
-    { minPercent: 0,  maxPercent: 49,  remark: 'Fail — Serious Improvement Needed' },
+    { minPercent: 90, maxPercent: 100, remark: 'Excellent work! Outstanding performance. Keep it up!' },
+    { minPercent: 80, maxPercent: 89,  remark: 'Very good! Great effort and strong results. Well done!' },
+    { minPercent: 70, maxPercent: 79,  remark: 'Good work! Solid performance. Keep pushing forward!' },
+    { minPercent: 60, maxPercent: 69,  remark: 'Average performance. More effort needed to improve!' },
+    { minPercent: 50, maxPercent: 59,  remark: 'Below average. Please study harder and seek help!' },
+    { minPercent: 0,  maxPercent: 49,  remark: 'Unsatisfactory. Urgent improvement needed. Do not give up!' },
   ],
   cardOptions: { includeComments: true, includeFinalRemarks: true, includeOverallGrade: true, includeOverallPercent: true, includeSectionRanking: true },
   signatureOptions: { principal: true },
@@ -1450,8 +1459,10 @@ function ResultsTab() {
                     {config.finalRemarks.map((r, idx) => (
                       <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', background: idx % 2 === 0 ? '#fff' : '#FAFBFF' }}>
                         <td style={{ padding: '8px 12px', color: '#94A3B8' }}>{idx + 1}</td>
-                        <td style={{ padding: '8px 12px', color: '#374151' }}>{r.minPercent}% – {r.maxPercent}%</td>
-                        <td style={{ padding: '8px 12px', color: '#374151' }}>{r.minPercent}% – {r.maxPercent}%</td>
+                        <td style={{ padding: '8px 12px', color: '#374151', fontWeight: 600 }}>Total Marks</td>
+                        <td style={{ padding: '8px 12px', color: '#374151' }}>
+                          {r.minPercent === 0 ? `< ${r.maxPercent + 1}` : `≥ ${r.minPercent}`}
+                        </td>
                         <td style={{ padding: '8px 12px', color: '#64748B' }}>{r.remark}</td>
                       </tr>
                     ))}

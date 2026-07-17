@@ -57,6 +57,7 @@ const NAV = [
   {
     group: 'ACADEMICS',
     items: [
+      { to: '/academics-hub',           icon: BookOpen,     label: '📚 Academics (SM Style)', badge: 'NEW' },
       { to: '/hub/academics',           icon: BookOpen,     label: 'Academics Hub' },
       { to: '/attendance-hub',           icon: CheckSquare,  label: '📋 Attendance (SM Style)', badge: 'NEW' },
       { to: '/hub/attendance',          icon: CheckSquare,  label: 'Attendance Hub' },

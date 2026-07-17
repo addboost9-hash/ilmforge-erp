@@ -611,7 +611,7 @@ router.post(
       .isLength({ max: 200 }).withMessage('title must be under 200 characters.'),
     body('type')
       .optional()
-      .isIn(['test', 'midterm', 'final']).withMessage('type must be one of: test, midterm, final.'),
+      .isString().withMessage('type must be a string.'),
     body('classId')
       .optional({ nullable: true })
       .isInt().withMessage('classId must be an integer.'),
@@ -621,7 +621,7 @@ router.post(
   if (!canManageExams(req.user?.role)) {
     return res.status(403).json({ success: false, message: 'Only admin/teacher can create exams.' });
   }
-  const { title, type, classId, classIds, sessionId, dateStart, dateEnd } = req.body;
+  const { title, type, classId, classIds, sessionId, dateStart, dateEnd, term } = req.body;
   // Try with classIds first; fall back without it if column doesn't exist yet
   let exam;
   try {
@@ -631,6 +631,7 @@ router.post(
         campusId: req.campusId,
         title,
         type: type || 'test',
+        term: term || null,
         classId: classId ? parseInt(classId) : null,
         classIds: classIds || null,
         sessionId: sessionId ? parseInt(sessionId) : null,
@@ -639,8 +640,8 @@ router.post(
       },
     });
   } catch (e) {
-    // classIds column may not exist if migration hasn't run yet — retry without it
-    if (e.code === 'P2009' || e.message?.includes('classIds') || e.code === 'P2025') {
+    // classIds or term column may not exist if migration hasn't run yet — retry without it
+    if (e.code === 'P2009' || e.message?.includes('classIds') || e.message?.includes('term') || e.code === 'P2025') {
       exam = await prisma.exam.create({
         data: {
           schoolId: req.schoolId,
@@ -653,8 +654,8 @@ router.post(
           dateEnd: dateEnd ? new Date(dateEnd) : null,
         },
       });
-      // Attach classIds to response for frontend to use
-      exam = { ...exam, classIds: classIds || null };
+      // Attach classIds and term to response for frontend to use
+      exam = { ...exam, classIds: classIds || null, term: term || null };
     } else {
       throw e;
     }
@@ -698,7 +699,7 @@ router.put('/:id', wrap(async (req, res) => {
   const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
   if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
 
-  const { title, type, dateStart, dateEnd, classId, classIds } = req.body;
+  const { title, type, dateStart, dateEnd, classId, classIds, term } = req.body;
   let updated;
   try {
     updated = await prisma.exam.update({
@@ -706,6 +707,7 @@ router.put('/:id', wrap(async (req, res) => {
       data: {
         ...(title !== undefined && { title }),
         ...(type !== undefined && { type }),
+        ...(term !== undefined && { term: term || undefined }),
         ...(dateStart !== undefined && { dateStart: dateStart ? new Date(dateStart) : null }),
         ...(dateEnd !== undefined && { dateEnd: dateEnd ? new Date(dateEnd) : null }),
         ...(classId !== undefined && { classId: classId ? parseInt(classId) : null }),
@@ -713,8 +715,8 @@ router.put('/:id', wrap(async (req, res) => {
       },
     });
   } catch (e) {
-    // classIds column may not exist if migration hasn't run yet — retry without it
-    if (classIds !== undefined && (e.code === 'P2009' || e.message?.includes('classIds'))) {
+    // classIds or term column may not exist if migration hasn't run yet — retry without it
+    if (e.code === 'P2009' || e.message?.includes('classIds') || e.message?.includes('term')) {
       updated = await prisma.exam.update({
         where: { id: examId },
         data: {
@@ -725,7 +727,7 @@ router.put('/:id', wrap(async (req, res) => {
           ...(classId !== undefined && { classId: classId ? parseInt(classId) : null }),
         },
       });
-      updated = { ...updated, classIds: classIds || null };
+      updated = { ...updated, classIds: classIds || null, term: term || null };
     } else {
       throw e;
     }
