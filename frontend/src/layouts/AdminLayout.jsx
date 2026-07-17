@@ -57,6 +57,7 @@ const NAV = [
     group: 'ACADEMICS',
     items: [
       { to: '/hub/academics',           icon: BookOpen,     label: 'Academics Hub' },
+      { to: '/attendance-hub',           icon: CheckSquare,  label: '📋 Attendance (SM Style)', badge: 'NEW' },
       { to: '/hub/attendance',          icon: CheckSquare,  label: 'Attendance Hub' },
       { to: '/academics/lesson-plans',  icon: ClipboardList, label: 'Lesson Plans',        roles: ['super_admin', 'admin', 'teacher'] },
       { to: '/academics/scheme',        icon: BookOpen,      label: 'Scheme of Studies',   roles: ['super_admin', 'admin', 'teacher'] },
@@ -82,6 +83,7 @@ const NAV = [
   {
     group: 'FINANCE',
     items: [
+      { to: '/fee-management',        icon: DollarSign,   label: '💳 Fee Module (SM Style)', badge: 'NEW' },
       { to: '/hub/fees',              icon: Wallet,       label: 'Fees & Accounts Hub' },
       { to: '/fees/invoices',         icon: FileText,     label: 'Fee Invoices',        roles: ['super_admin', 'admin', 'accountant'] },
       { to: '/fees/parent-wallet',    icon: Wallet,       label: 'Parent Wallet',        roles: ['super_admin', 'admin', 'accountant'] },
