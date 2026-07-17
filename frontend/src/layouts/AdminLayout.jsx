@@ -31,7 +31,7 @@ const NAV = [
   {
     group: 'MAIN NAVIGATION',
     items: [
-      { to: '/school-mentor',      icon: Globe,           label: '🎓 School Mentor Hub',  badge: 'SM' },
+      // School Mentor Hub hidden — copyright risk
       { to: '/dashboard',          icon: LayoutDashboard, label: 'Dashboard' },
       { to: '/workflow',           icon: Workflow,        label: '🔄 Smart Workflow Hub', badge: 'NEW' },
       { to: '/mentor-ai',          icon: Bot,             label: 'Mentor AI Tools' },
@@ -58,10 +58,10 @@ const NAV = [
   {
     group: 'ACADEMICS',
     items: [
-      { to: '/academics',                icon: BookOpen,     label: '📚 Academics (SM)',       badge: 'NEW' },
-      { to: '/academics-hub',           icon: BookOpen,     label: '📚 Academics (SM Style)', badge: 'NEW' },
+      { to: '/academics',                icon: BookOpen,     label: '📚 Academics Hub' },
+      { to: '/academics-hub',           icon: BookOpen,     label: '📚 Academics (Alt)' },
       { to: '/hub/academics',           icon: BookOpen,     label: 'Academics Hub' },
-      { to: '/attendance-hub',           icon: CheckSquare,  label: '📋 Attendance (SM Style)', badge: 'NEW' },
+      { to: '/attendance-hub',           icon: CheckSquare,  label: '📋 Class Attendance' },
       { to: '/hub/attendance',          icon: CheckSquare,  label: 'Attendance Hub' },
       { to: '/academics/lesson-plans',  icon: ClipboardList, label: 'Lesson Plans',        roles: ['super_admin', 'admin', 'teacher'] },
       { to: '/academics/scheme',        icon: BookOpen,      label: 'Scheme of Studies',   roles: ['super_admin', 'admin', 'teacher'] },
@@ -73,7 +73,7 @@ const NAV = [
   {
     group: 'EXAMS',
     items: [
-      { to: '/examination',            icon: ClipboardList, label: '📋 Examination (SM)',  badge: 'NEW' },
+      { to: '/examination',            icon: ClipboardList, label: '📋 Examination' },
       { to: '/hub/exams',              icon: Award,         label: 'Exams & Tests Hub' },
       { to: '/exams/question-papers',  icon: FileText,      label: 'Question Papers',     roles: ['super_admin', 'admin', 'teacher'] },
       { to: '/exams/mcq-generator',    icon: Brain,         label: 'MCQ Generator',        roles: ['super_admin', 'admin', 'teacher'] },
@@ -88,7 +88,7 @@ const NAV = [
   {
     group: 'FINANCE',
     items: [
-      { to: '/fee-management',        icon: DollarSign,   label: '💳 Fee Module (SM Style)', badge: 'NEW' },
+      { to: '/fee-management',        icon: DollarSign,   label: '💳 Fee Management' },
       { to: '/accounts',              icon: Landmark,     label: 'Accounts',             roles: ['super_admin', 'admin', 'accountant'] },
       { to: '/hub/fees',              icon: Wallet,       label: 'Fees & Accounts Hub' },
       { to: '/fees/invoices',         icon: FileText,     label: 'Fee Invoices',        roles: ['super_admin', 'admin', 'accountant'] },

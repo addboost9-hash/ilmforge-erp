@@ -1,5 +1,5 @@
-/**
- * IlmForge — Unified Examination Page (School Mentor Style)
+﻿/**
+ * IlmForge — Unified Examination Page
  * 5 tabs: Exam Setup | Date Sheet | Syllabus | Question Bank | Results
  * URL: /examination
  */
@@ -14,20 +14,23 @@ import {
   ToggleLeft, ToggleRight,
 } from 'lucide-react';
 
-const TEAL = '#0D9488';
 const NAVY = '#1B2F6E';
+const BLUE = '#0073b7';
+// Legacy alias — all teal references now use navy
+const TEAL = NAVY;
 
 /* ─────────────────────── SHARED STYLES ─────────────────────── */
+// IlmForge underline tab style (professional, unique)
 const tabBtnStyle = (active) => ({
-  padding: '9px 20px',
-  fontWeight: 700,
-  fontSize: 13,
-  borderRadius: 7,
-  border: `1.5px solid ${TEAL}`,
-  background: active ? TEAL : 'transparent',
-  color: active ? '#fff' : TEAL,
+  padding: '10px 20px',
+  border: 'none',
+  borderBottom: active ? `3px solid ${NAVY}` : '3px solid transparent',
+  background: 'none',
+  color: active ? NAVY : '#64748b',
+  fontWeight: active ? 700 : 500,
+  fontSize: 14,
   cursor: 'pointer',
-  transition: 'all .15s',
+  transition: 'all 0.15s',
 });
 
 const termBtnStyle = (active) => ({
@@ -35,9 +38,9 @@ const termBtnStyle = (active) => ({
   fontWeight: 700,
   fontSize: 13,
   borderRadius: 6,
-  border: `1.5px solid ${TEAL}`,
-  background: active ? TEAL : 'transparent',
-  color: active ? '#fff' : TEAL,
+  border: `1.5px solid ${NAVY}`,
+  background: active ? NAVY : 'transparent',
+  color: active ? '#fff' : NAVY,
   cursor: 'pointer',
   transition: 'all .15s',
   marginRight: 6,
@@ -77,14 +80,14 @@ function ClassMultiSelect({ classes = [], selectedClasses, onChange }) {
         )}
         {selectedClasses.map(sc => (
           <span key={sc.classId} style={{
-            background: '#CCFBF1', color: '#0F766E', borderRadius: 99,
+            background: '#dbeafe', color: '#0073b7', borderRadius: 99,
             padding: '2px 8px', fontSize: 12, fontWeight: 600,
             display: 'inline-flex', alignItems: 'center', gap: 4,
           }}>
             {sc.className}
             <button
               onMouseDown={e => { e.stopPropagation(); removeClass(sc.classId); }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0F766E', padding: 0, fontSize: 13, lineHeight: 1 }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0073b7', padding: 0, fontSize: 13, lineHeight: 1 }}
             >×</button>
           </span>
         ))}
@@ -118,7 +121,7 @@ function ClassMultiSelect({ classes = [], selectedClasses, onChange }) {
                 key={c.id}
                 onClick={() => addClass(c)}
                 style={{ padding: '9px 14px', cursor: 'pointer', fontSize: 13, color: '#111827', borderBottom: '1px solid #F9FAFB' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#F0FDF9'}
+                onMouseEnter={e => e.currentTarget.style.background = '#eff6ff'}
                 onMouseLeave={e => e.currentTarget.style.background = '#fff'}
               >
                 {c.name}
@@ -460,7 +463,7 @@ function ExamSetupTab() {
                   const examClasses = getClasses(e);
                   return (
                     <>
-                      <tr key={e.id} style={{ background: isExpanded ? '#F0FDF9' : undefined }}>
+                      <tr key={e.id} style={{ background: isExpanded ? '#eff6ff' : undefined }}>
                         <td style={{ color: '#94a3b8', fontSize: 12 }}>{idx + 1}</td>
                         <td style={{ fontWeight: 700, color: '#1E3A5F' }}>{e.title}</td>
                         <td></td>
@@ -497,16 +500,16 @@ function ExamSetupTab() {
                         </td>
                       </tr>
                       {isExpanded && (
-                        <tr key={`${e.id}-detail`} style={{ background: '#F0FDF9' }}>
+                        <tr key={`${e.id}-detail`} style={{ background: '#eff6ff' }}>
                           <td colSpan={8} style={{ padding: '14px 20px' }}>
-                            <div style={{ border: '1px solid #CCFBF1', borderRadius: 8, padding: '14px 18px', background: '#fff' }}>
+                            <div style={{ border: '1px solid #dbeafe', borderRadius: 8, padding: '14px 18px', background: '#fff' }}>
                               <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', color: '#374151', fontSize: 13 }}>
                                 <span><strong>Exam Name:</strong> {e.title}</span>
                                 <span>
                                   <strong>Classes:</strong>{' '}
                                   {examClasses.length > 0
                                     ? examClasses.map(sc => (
-                                      <span key={sc.classId} style={{ background: '#CCFBF1', color: '#0F766E', borderRadius: 99, padding: '1px 8px', fontSize: 11, fontWeight: 600, marginRight: 4 }}>{sc.className}</span>
+                                      <span key={sc.classId} style={{ background: '#dbeafe', color: '#0073b7', borderRadius: 99, padding: '1px 8px', fontSize: 11, fontWeight: 600, marginRight: 4 }}>{sc.className}</span>
                                     ))
                                     : <span style={{ color: '#9CA3AF' }}>All Classes</span>
                                   }
@@ -787,14 +790,14 @@ function DateSheetEditModal({ examId, examTitle, row, onClose, queryClient, clas
                   <td style={{ padding: '6px 8px' }}>
                     {subjectsList.length > 0 ? (
                       <select value={r.subject || ''} onChange={e => updateRow(r._key, 'subject', e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #D1FAE5', borderRadius: 6, fontSize: 13, background: 'white' }}>
+                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #dbeafe', borderRadius: 6, fontSize: 13, background: 'white' }}>
                         <option value="">Select Subject</option>
                         {subjectsList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                       </select>
                     ) : (
                       <input type="text" placeholder="Subject" value={r.subject || ''}
                         onChange={e => updateRow(r._key, 'subject', e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #D1FAE5', borderRadius: 6, fontSize: 13 }} />
+                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #dbeafe', borderRadius: 6, fontSize: 13 }} />
                     )}
                   </td>
                   <td style={{ padding: '6px 8px' }}><input type="date" style={inp} value={r.date} onChange={e => updateRow(r._key, 'date', e.target.value)} /></td>
@@ -1160,7 +1163,7 @@ function QuestionBankTab() {
                           }
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          <span style={{ background: '#CCFBF1', color: TEAL, borderRadius: 12, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>{bankPapers.filter(p => p.classId === cls.id).length}</span>
+                          <span style={{ background: '#dbeafe', color: TEAL, borderRadius: 12, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>{bankPapers.filter(p => p.classId === cls.id).length}</span>
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <button
@@ -1214,7 +1217,7 @@ function QuestionBankTab() {
                                         style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 5, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>👁</button>
                                       {/* Download */}
                                       <button title="Download / Print" onClick={() => printSchoolMentorPaper(p, school?.name, school?.logoUrl, cls.name, '')}
-                                        style={{ background: '#0D9488', color: '#fff', border: 'none', borderRadius: 5, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>⬇</button>
+                                        style={{ background: '#1B2F6E', color: '#fff', border: 'none', borderRadius: 5, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>⬇</button>
                                       {/* Delete */}
                                       <button title="Delete" onClick={() => deletePaper(p.id, cls.id)}
                                         style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 5, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1492,7 +1495,7 @@ function ResultsTab() {
   });
 
   const gradeColor = (g) => {
-    const map = { 'A+': '#15803D', A: '#0D9488', B: '#2563EB', C: '#D97706', D: '#EA580C', F: '#DC2626' };
+    const map = { 'A+': '#15803D', A: '#1B2F6E', B: '#2563EB', C: '#D97706', D: '#EA580C', F: '#DC2626' };
     return map[g] || '#6366F1';
   };
 
@@ -1701,7 +1704,7 @@ function ResultsTab() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid #F1F5F9', marginBottom: 20 }}>
                   {GENERAL_OPTIONS.map((opt, i) => (
                     <div key={opt.key} onClick={() => handleChange({ cardOptions: { ...config.cardOptions, [opt.key]: !config.cardOptions[opt.key] } })}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: i < GENERAL_OPTIONS.length - 1 ? '1px solid #F1F5F9' : 'none', cursor: 'pointer', background: config.cardOptions[opt.key] ? '#F0FDF9' : '#FAFBFF', transition: 'background 0.15s' }}>
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: i < GENERAL_OPTIONS.length - 1 ? '1px solid #F1F5F9' : 'none', cursor: 'pointer', background: config.cardOptions[opt.key] ? '#eff6ff' : '#FAFBFF', transition: 'background 0.15s' }}>
                       <span style={{ fontSize: 13.5, fontWeight: 600, color: '#1E293B' }}>{opt.label}</span>
                       <Toggle checked={!!config.cardOptions[opt.key]} onChange={() => handleChange({ cardOptions: { ...config.cardOptions, [opt.key]: !config.cardOptions[opt.key] } })} />
                     </div>
@@ -1715,7 +1718,7 @@ function ResultsTab() {
                     const checked = config.signatureOptions[sigKey] !== false;
                     return (
                       <div key={sigKey} onClick={() => handleChange({ signatureOptions: { ...config.signatureOptions, [sigKey]: !checked } })}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: i < config.signatures.length - 1 ? '1px solid #F1F5F9' : 'none', cursor: 'pointer', background: checked ? '#F0FDF9' : '#FAFBFF' }}>
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: i < config.signatures.length - 1 ? '1px solid #F1F5F9' : 'none', cursor: 'pointer', background: checked ? '#eff6ff' : '#FAFBFF' }}>
                         <div>
                           <div style={{ fontSize: 13.5, fontWeight: 600, color: '#1E293B' }}>Signature — {sig.name || 'Unnamed'}</div>
                           <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{sig.designation || '—'}</div>
@@ -1785,26 +1788,23 @@ export default function ExaminationPage() {
 
   return (
     <div className="page-content fade-in">
-      {/* Page Header with 5 tabs + Tutorial button */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {MAIN_TABS.map(tab => (
-            <button
-              key={tab.id}
-              style={tabBtnStyle(activeTab === tab.id)}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <button style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          border: `1.5px solid ${TEAL}`, background: 'transparent', color: TEAL,
-          borderRadius: 7, padding: '8px 16px', cursor: 'pointer', fontWeight: 700, fontSize: 13,
-        }}>
-          ▶ Tutorial
-        </button>
+      {/* IlmForge Page Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: NAVY }}>Examination</h1>
+        <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>ilmفورج</span>
+      </div>
+
+      {/* IlmForge underline tab bar */}
+      <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', borderBottom: '2px solid #e2e8f0', marginBottom: 20 }}>
+        {MAIN_TABS.map(tab => (
+          <button
+            key={tab.id}
+            style={tabBtnStyle(activeTab === tab.id)}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Tab content */}

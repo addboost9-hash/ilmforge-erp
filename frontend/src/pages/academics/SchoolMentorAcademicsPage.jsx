@@ -1,4 +1,4 @@
-/**
+﻿/**
  * IlmForge — School Mentor Academics Module (Complete Rewrite)
  * URL: /academics
  * Matches School Mentor UI exactly per screenshots:
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 /* ── Constants ── */
-const TEAL  = '#0D9488';
+const TEAL  = '#1B2F6E';
 const NAVY  = '#1B2F6E';
 const RED   = '#DC2626';
 
@@ -48,11 +48,12 @@ const inp = {
 };
 
 const mainTabBtn = (active) => ({
-  padding: '9px 22px', fontWeight: 700, fontSize: 13,
-  borderRadius: 7, border: `1.5px solid ${TEAL}`,
-  background: active ? TEAL : 'transparent',
-  color: active ? '#fff' : TEAL,
-  cursor: 'pointer', transition: 'all .15s', whiteSpace: 'nowrap',
+  padding: '10px 22px', fontWeight: active ? 700 : 500, fontSize: 14,
+  border: 'none',
+  borderBottom: active ? `3px solid ${NAVY}` : '3px solid transparent',
+  background: 'none',
+  color: active ? NAVY : '#64748b',
+  cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
 });
 
 const subTabBtn = (active) => ({
@@ -138,7 +139,7 @@ function GreenBadge({ n }) {
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: 28, height: 28, borderRadius: '50%',
-      background: '#D1FAE5', color: '#065F46',
+      background: '#dbeafe', color: '#065F46',
       fontSize: 12, fontWeight: 700,
     }}>
       #{n}
@@ -447,7 +448,7 @@ function TextbooksExpanded({ classId, className }) {
         <span style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>Textbooks — {className}</span>
         <button
           onClick={() => setShowAdd(s => !s)}
-          style={{ background: '#F0FDF9', color: TEAL, border: `1px solid ${TEAL}40`, borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
+          style={{ background: '#eff6ff', color: TEAL, border: `1px solid ${TEAL}40`, borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
         >
           <Plus size={13} /> Add Textbook
         </button>
@@ -575,7 +576,7 @@ function TextbooksTab() {
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         width: 26, height: 26, borderRadius: '50%',
-                        background: '#D1FAE5', color: '#065F46',
+                        background: '#dbeafe', color: '#065F46',
                         fontSize: 11, fontWeight: 700, marginRight: 8,
                       }}>#</span>
                       {i + 1}
@@ -599,11 +600,11 @@ function TextbooksTab() {
                   </tr>
                   {expanded[cls.id] && (
                     <tr key={`${cls.id}-exp`}>
-                      <td colSpan={3} style={{ padding: 0, background: '#f0fdfa' }}>
+                      <td colSpan={3} style={{ padding: 0, background: '#eff6ff' }}>
                         <div style={{ padding: '12px 24px' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                             <thead>
-                              <tr style={{ background: '#ccfbf1' }}>
+                              <tr style={{ background: '#dbeafe' }}>
                                 <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>S. No.</th>
                                 <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>Subject</th>
                                 <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>Textbook</th>
@@ -612,7 +613,7 @@ function TextbooksTab() {
                             </thead>
                             <tbody>
                               {subjects.map((subj, si) => (
-                                <tr key={si} style={{ borderTop: '1px solid #d1fae5' }}>
+                                <tr key={si} style={{ borderTop: '1px solid #dbeafe' }}>
                                   <td style={{ padding: '8px 12px' }}>{si + 1}</td>
                                   <td style={{ padding: '8px 12px', color: TEAL, fontWeight: 600 }}>{subj}</td>
                                   <td style={{ padding: '8px 12px' }}>{subj} Textbook – {cls.name}</td>
@@ -728,7 +729,7 @@ function LessonPlanViewModal({ plan, onClose }) {
               { icon: '📖', label: plan.subject, sub: 'Subject' },
               { icon: '📦', label: plan.unitNo, sub: 'Unit no.' },
             ].map(c => (
-              <div key={c.sub} style={{ background: '#F0FDF9', border: `1px solid ${TEAL}30`, borderRadius: 8, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div key={c.sub} style={{ background: '#eff6ff', border: `1px solid ${TEAL}30`, borderRadius: 8, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 16 }}>{c.icon}</span>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13, color: TEAL }}>{c.label}</div>
@@ -743,7 +744,7 @@ function LessonPlanViewModal({ plan, onClose }) {
               { icon: '📄', label: plan.unitName, sub: 'Unit name' },
               { icon: '⏰', label: plan.timeRequired, sub: 'Time required' },
             ].map(c => (
-              <div key={c.sub} style={{ background: '#F0FDF9', border: `1px solid ${TEAL}30`, borderRadius: 8, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div key={c.sub} style={{ background: '#eff6ff', border: `1px solid ${TEAL}30`, borderRadius: 8, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 16 }}>{c.icon}</span>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13, color: TEAL }}>{c.label}</div>
@@ -1089,7 +1090,7 @@ function CreateLessonPlanTab() {
             <div style={{ fontWeight: 700, fontSize: 14, color: NAVY }}>Topics</div>
             <button
               onClick={addTopic}
-              style={{ background: '#F0FDF9', color: TEAL, border: `1px solid ${TEAL}40`, borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
+              style={{ background: '#eff6ff', color: TEAL, border: `1px solid ${TEAL}40`, borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
             >
               <Plus size={13} /> Add Topic
             </button>
@@ -1317,7 +1318,7 @@ function ViewLessonPlanTab() {
                           <span style={{
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                             width: 28, height: 28, borderRadius: '50%',
-                            background: '#D1FAE5', color: '#065F46',
+                            background: '#dbeafe', color: '#065F46',
                             fontSize: 12, fontWeight: 700,
                           }}>
                             #{idx + 1}
@@ -1406,7 +1407,7 @@ function ViewLessonPlanTab() {
                                         <span style={{
                                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                           width: 24, height: 24, borderRadius: '50%',
-                                          background: '#D1FAE5', color: '#065F46',
+                                          background: '#dbeafe', color: '#065F46',
                                           fontSize: 11, fontWeight: 700,
                                         }}>
                                           #{dIdx + 1}
@@ -1504,26 +1505,16 @@ export default function SchoolMentorAcademicsPage() {
 
   return (
     <div className="page-content fade-in">
-      {/* Page Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#9CA3AF', letterSpacing: '-0.5px' }}>
-          Academics
+      {/* IlmForge Page Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: NAVY }}>
+          Academics Hub
         </h1>
-        <button
-          onClick={() => toast('Tutorial coming soon!')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: TEAL, color: '#fff', border: 'none',
-            borderRadius: 7, padding: '8px 18px', cursor: 'pointer',
-            fontWeight: 700, fontSize: 13,
-          }}
-        >
-          &#9654; Tutorial
-        </button>
+        <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>ilmفورج</span>
       </div>
 
-      {/* Main Tabs */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
+      {/* Main Tabs — IlmForge underline style */}
+      <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', borderBottom: '2px solid #e2e8f0', marginBottom: 24 }}>
         <button style={mainTabBtn(mainTab === 'scheme')} onClick={() => setMainTab('scheme')}>
           Scheme of Studies
         </button>

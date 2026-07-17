@@ -1,4 +1,4 @@
-/**
+﻿/**
  * IlmForge — Fee Management Page
  * 5-tab unified fee page matching School Mentor layout
  * Tabs: Fee Structure | Fee Challans | Fee Receiving | Fee History | Reports
@@ -13,8 +13,8 @@ import {
 } from 'lucide-react';
 
 /* ─── Shared helpers ─────────────────────────────── */
-const TEAL = '#0D9488';
-const TEAL_LIGHT = '#CCFBF1';
+const TEAL = '#1B2F6E';
+const TEAL_LIGHT = '#dbeafe';
 const MONTHS = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
@@ -796,13 +796,12 @@ export default function FeeManagementPage() {
   const [activeTab, setActiveTab] = useState('structure');
 
   const tabStyle = (id) => ({
-    padding: '10px 20px', fontSize: 13.5, fontWeight: activeTab === id ? 700 : 600,
+    padding: '10px 20px', fontSize: 14, fontWeight: activeTab === id ? 700 : 500,
     cursor: 'pointer', border: 'none', fontFamily: 'inherit',
-    background: activeTab === id ? TEAL : 'transparent',
-    color: activeTab === id ? '#fff' : '#374151',
+    background: 'none',
+    color: activeTab === id ? TEAL : '#64748b',
     borderBottom: activeTab === id ? `3px solid ${TEAL}` : '3px solid transparent',
     transition: 'all .15s',
-    borderRadius: activeTab === id ? '6px 6px 0 0' : 0,
   });
 
   const tabContent = {
@@ -815,20 +814,23 @@ export default function FeeManagementPage() {
 
   return (
     <div style={{ padding: '20px 24px', minHeight: '100vh', background: '#f0f4f8' }}>
-      {/* Page header */}
-      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{
-          width: 38, height: 38, borderRadius: 8,
-          background: TEAL, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <DollarSign size={20} color="#fff" />
-        </div>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#111827' }}>Fee Management</h2>
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
-            Structure · Challans · Receiving · History · Reports
+      {/* IlmForge Page header */}
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 8,
+            background: TEAL, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <DollarSign size={20} color="#fff" />
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1B2F6E' }}>Fee Management</h2>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+              Structure · Challans · Receiving · History · Reports
+            </div>
           </div>
         </div>
+        <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>ilmفورج</span>
       </div>
 
       {/* Tab container */}

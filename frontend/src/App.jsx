@@ -344,8 +344,8 @@ export default function App() {
           <Route path="/accountant-portal" element={<RoleRoute allow={['accountant']}><AccountantPortalPage /></RoleRoute>}/>
           <Route path="/gatekeeper-portal" element={<RoleRoute allow={['gatekeeper']}><GatekeeperPortalPage /></RoleRoute>}/>
 
-          {/* ── School Mentor Hub — full-page, own layout, no IlmForge sidebar ── */}
-          <Route path="/school-mentor" element={<Protected><SchoolMentorHub /></Protected>} />
+          {/* ── School Mentor Hub — hidden (copyright risk) ── */}
+          {/* <Route path="/school-mentor" element={<Protected><SchoolMentorHub /></Protected>} /> */}
 
           {/* ── Protected — wrapped in AdminLayout ─ */}
           {/* NOTE: No path on the wrapper — avoids duplicate "/" */}

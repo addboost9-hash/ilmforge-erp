@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { X, ChevronDown, ChevronUp, Download } from 'lucide-react';
 
 /* ─── design tokens ─────────────────────────────────────────── */
-const TEAL = '#0D9488';
-const TEAL_LIGHT = '#F0FDFA';
+const TEAL = '#1B2F6E';
+const TEAL_LIGHT = '#eff6ff';
 
 const btnTeal = {
   background: TEAL,
@@ -343,7 +343,7 @@ function ExpandedDetailRow({ students, loading }) {
         ) : (
           <>
             {/* Stats row */}
-            <div style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: '1px solid #D1FAE5', flexWrap: 'wrap', fontSize: 13, color: '#374151' }}>
+            <div style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: '1px solid #dbeafe', flexWrap: 'wrap', fontSize: 13, color: '#374151' }}>
               <span>Total Students: <strong>{totalExp}</strong></span>
               <span style={{ color: '#15803D' }}>Present Students: <strong>{presentExp}</strong></span>
               <span style={{ color: '#B91C1C' }}>Absent Students: <strong>{absentExp}</strong></span>
@@ -354,11 +354,11 @@ function ExpandedDetailRow({ students, loading }) {
             {/* Student list */}
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
-                <tr style={{ background: '#CCFBF1' }}>
-                  <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>#</th>
-                  <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>Reg No</th>
-                  <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>Name</th>
-                  <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>Status</th>
+                <tr style={{ background: '#dbeafe' }}>
+                  <th style={{ padding: '7px 14px', color: '#0073b7', fontWeight: 700, textAlign: 'left' }}>#</th>
+                  <th style={{ padding: '7px 14px', color: '#0073b7', fontWeight: 700, textAlign: 'left' }}>Reg No</th>
+                  <th style={{ padding: '7px 14px', color: '#0073b7', fontWeight: 700, textAlign: 'left' }}>Name</th>
+                  <th style={{ padding: '7px 14px', color: '#0073b7', fontWeight: 700, textAlign: 'left' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -366,7 +366,7 @@ function ExpandedDetailRow({ students, loading }) {
                   const st = s.attendance?.status;
                   const label = st ? st.charAt(0).toUpperCase() + st.slice(1) : 'Not Marked';
                   return (
-                    <tr key={s.id} style={{ borderBottom: '1px solid #D1FAE5' }}>
+                    <tr key={s.id} style={{ borderBottom: '1px solid #dbeafe' }}>
                       <td style={{ padding: '7px 14px', color: '#9CA3AF' }}>{i + 1}</td>
                       <td style={{ padding: '7px 14px', fontFamily: 'monospace', color: TEAL, fontWeight: 700 }}>{s.rollNo || '—'}</td>
                       <td style={{ padding: '7px 14px', fontWeight: 600 }}>{s.name}</td>
@@ -985,7 +985,7 @@ export default function AttendanceHubPage() {
 
   return (
     <div style={{ padding: 20, background: '#F9FAFB', minHeight: '100vh' }}>
-      {/* Page header */}
+      {/* IlmForge Page header */}
       <div
         style={{
           background: '#fff',
@@ -998,14 +998,8 @@ export default function AttendanceHubPage() {
           justifyContent: 'space-between',
         }}
       >
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827' }}>Attendance</h1>
-        <button style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          border: `1.5px solid ${TEAL}`, background: 'transparent', color: TEAL,
-          borderRadius: 7, padding: '8px 16px', cursor: 'pointer', fontWeight: 700, fontSize: 13,
-        }}>
-          ▶ Tutorial
-        </button>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1B2F6E' }}>Class Attendance</h1>
+        <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>ilmفورج</span>
       </div>
 
       {/* Main tab panel */}
