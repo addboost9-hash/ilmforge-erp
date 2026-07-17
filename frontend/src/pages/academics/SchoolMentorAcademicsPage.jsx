@@ -1,17 +1,16 @@
 /**
- * IlmForge — School Mentor Academics Module
+ * IlmForge — School Mentor Academics Module (Complete Rewrite)
  * URL: /academics
- * Matches School Mentor UI exactly:
+ * Matches School Mentor UI exactly per screenshots:
  *   Tab 1: Scheme of Studies → Textbooks | Calendar → Academic Calendar | Activity Calendar
  *   Tab 2: Lesson Plans → Session & Term Setting | Term Breakup | Create Lesson Plan | View Lesson Plan
  */
 import { useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import {
-  BookOpen, Trash2, X, Eye, Bell, ChevronDown, ChevronUp,
-  FileText, Plus, Edit2, Save,
+  Trash2, X, Eye, Bell, FileText, Plus, Edit2, Save,
 } from 'lucide-react';
 
 /* ── Constants ── */
@@ -128,7 +127,23 @@ function exportKeyDatesWord(keyDates, schoolName = 'School Mentor Demo') {
 }
 
 function exportKeyDatesPDF(keyDates) {
-  exportKeyDatesWord(keyDates); // reuse print dialog
+  exportKeyDatesWord(keyDates);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GREEN CIRCLE S.NO BADGE
+═══════════════════════════════════════════════════════════════ */
+function GreenBadge({ n }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: 28, height: 28, borderRadius: '50%',
+      background: '#D1FAE5', color: '#065F46',
+      fontSize: 12, fontWeight: 700,
+    }}>
+      #{n}
+    </span>
+  );
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -381,8 +396,8 @@ function CalendarTab() {
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        <button style={subTabBtn(calSub === 'academic')}  onClick={() => setCalSub('academic')}>Academic Calendar</button>
-        <button style={subTabBtn(calSub === 'activity')}  onClick={() => setCalSub('activity')}>Activity Calendar</button>
+        <button style={subTabBtn(calSub === 'academic')} onClick={() => setCalSub('academic')}>Academic Calendar</button>
+        <button style={subTabBtn(calSub === 'activity')} onClick={() => setCalSub('activity')}>Activity Calendar</button>
       </div>
       {calSub === 'academic' && <AcademicCalendarTab />}
       {calSub === 'activity' && <ActivityCalendarTab />}
@@ -391,45 +406,195 @@ function CalendarTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TEXTBOOKS TAB (Scheme of Studies → Textbooks sub-tab)
+   TEXTBOOKS EXPANDED — shows textbooks for a class
+   Reads/writes from localStorage (no backend API for textbooks)
 ═══════════════════════════════════════════════════════════════ */
-function TextbooksTab() {
-  const [books] = useState([
-    { id: 1, class: 'Grade I', subject: 'English', title: 'Oxford English Book 1', publisher: 'Oxford University Press', edition: '2024' },
-    { id: 2, class: 'Grade I', subject: 'Mathematics', title: 'New Math Book 1', publisher: 'National Book Foundation', edition: '2023' },
-    { id: 3, class: 'Grade II', subject: 'Science', title: 'Basics Science 2', publisher: 'Punjab Curriculum Authority', edition: '2024' },
-    { id: 4, class: 'Grade III', subject: 'Urdu', title: 'Urdu Ki Dunya 3', publisher: 'National Book Foundation', edition: '2024' },
-    { id: 5, class: 'Grade IV', subject: 'Islamiyat', title: 'Islamiyat for Class IV', publisher: 'Punjab Curriculum Authority', edition: '2023' },
-  ]);
+function TextbooksExpanded({ classId, className }) {
+  const storageKey = `sm_textbooks_${classId}`;
+
+  const [books, setBooks] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ subject: '', title: '', publisher: '', edition: '' });
+
+  const saveBooks = (updated) => {
+    setBooks(updated);
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+  };
+
+  const addBook = () => {
+    if (!form.title.trim()) { toast.error('Title is required'); return; }
+    const newBook = { id: Date.now(), subject: form.subject, title: form.title, publisher: form.publisher, edition: form.edition };
+    saveBooks([...books, newBook]);
+    setForm({ subject: '', title: '', publisher: '', edition: '' });
+    setShowAdd(false);
+    toast.success('Textbook added!');
+  };
+
+  const removeBook = (id) => {
+    saveBooks(books.filter(b => b.id !== id));
+    toast.success('Removed');
+  };
 
   return (
-    <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-      <div style={{ background: TEAL, padding: '14px 20px' }}>
-        <span style={{ fontWeight: 800, fontSize: 16, color: '#fff' }}>Textbooks</span>
+    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: 16, margin: '4px 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>Textbooks — {className}</span>
+        <button
+          onClick={() => setShowAdd(s => !s)}
+          style={{ background: '#F0FDF9', color: TEAL, border: `1px solid ${TEAL}40`, borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
+        >
+          <Plus size={13} /> Add Textbook
+        </button>
       </div>
-      <div style={{ padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+
+      {/* Add form */}
+      {showAdd && (
+        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: 14, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 3 }}>Subject</label>
+              <input style={inp} placeholder="e.g. Mathematics" value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 3 }}>Title *</label>
+              <input style={inp} placeholder="e.g. Oxford English Book 1" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 3 }}>Publisher</label>
+              <input style={inp} placeholder="e.g. OUP" value={form.publisher} onChange={e => setForm(f => ({ ...f, publisher: e.target.value }))} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 3 }}>Edition</label>
+              <input style={inp} placeholder="e.g. 2024" value={form.edition} onChange={e => setForm(f => ({ ...f, edition: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={() => setShowAdd(false)} style={{ padding: '6px 14px', borderRadius: 6, border: '1.5px solid #D1D5DB', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Cancel</button>
+            <button onClick={addBook} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: TEAL, color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Save size={12} /> Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {books.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '20px 0', color: '#94A3B8', fontSize: 13, fontStyle: 'italic' }}>
+          No textbooks added yet. Click "Add Textbook" to add.
+        </div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
-            <tr style={{ background: '#F8FAFC' }}>
-              {['Sr.', 'Class', 'Subject', 'Title', 'Publisher', 'Edition'].map(h => (
-                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
+            <tr style={{ background: '#EFF6FF' }}>
+              {['Sr.', 'Subject', 'Title', 'Publisher', 'Edition', ''].map(h => (
+                <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {books.map((b, i) => (
               <tr key={b.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                <td style={{ padding: '10px 14px', fontSize: 13, color: '#94A3B8' }}>{i + 1}</td>
-                <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: NAVY }}>{b.class}</td>
-                <td style={{ padding: '10px 14px', fontSize: 13, color: '#374151' }}>{b.subject}</td>
-                <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 500, color: '#1E40AF' }}>{b.title}</td>
-                <td style={{ padding: '10px 14px', fontSize: 13, color: '#64748B' }}>{b.publisher}</td>
-                <td style={{ padding: '10px 14px', fontSize: 12, color: '#64748B' }}>{b.edition}</td>
+                <td style={{ padding: '8px 10px', color: '#94A3B8' }}>{i + 1}</td>
+                <td style={{ padding: '8px 10px', color: '#374151' }}>{b.subject}</td>
+                <td style={{ padding: '8px 10px', fontWeight: 600, color: NAVY }}>{b.title}</td>
+                <td style={{ padding: '8px 10px', color: '#64748B' }}>{b.publisher}</td>
+                <td style={{ padding: '8px 10px', color: '#64748B' }}>{b.edition}</td>
+                <td style={{ padding: '8px 10px' }}>
+                  <button
+                    onClick={() => removeBook(b.id)}
+                    style={{ background: '#FEE2E2', color: RED, border: 'none', borderRadius: 5, padding: '3px 7px', cursor: 'pointer', fontSize: 11 }}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TEXTBOOKS TAB — shows classes list with expand ▼
+   Fetches classes from API: GET /classes
+═══════════════════════════════════════════════════════════════ */
+function TextbooksTab() {
+  const { data: classes = [], isLoading } = useQuery({
+    queryKey: ['classes'],
+    queryFn: () => api.get('/classes').then(r => r.data.data || []).catch(() => []),
+  });
+
+  const [expanded, setExpanded] = useState({});
+
+  const toggleExpand = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
+
+  // Fallback demo classes if API returns empty
+  const displayClasses = classes.length > 0 ? classes : [
+    { id: 'g1', name: 'Grade 1' },
+    { id: 'g2', name: 'Grade 2' },
+    { id: 'g3', name: 'Grade 3' },
+    { id: 'g4', name: 'Grade 4' },
+    { id: 'g5', name: 'Grade 5' },
+  ];
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ background: '#F8FAFC' }}>
+            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0', width: 80 }}>S. No.</th>
+            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>Class</th>
+            <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0', width: 100 }}>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {isLoading ? (
+            <tr>
+              <td colSpan={3} style={{ padding: 32, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Loading classes…</td>
+            </tr>
+          ) : (
+            displayClasses.map((cls, i) => (
+              <>
+                <tr key={cls.id} style={{ borderBottom: expanded[cls.id] ? 'none' : '1px solid #F1F5F9' }}>
+                  <td style={{ padding: '12px 16px' }}>
+                    <GreenBadge n={i + 1} />
+                  </td>
+                  <td style={{ padding: '12px 16px', fontSize: 13 }}>
+                    <span style={{ color: TEAL, fontWeight: 600, marginRight: 6 }}>&lt;/&gt;</span>
+                    <span style={{ fontWeight: 600, color: NAVY }}>{cls.name}</span>
+                  </td>
+                  <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                    <button
+                      onClick={() => toggleExpand(cls.id)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#3B82F6', fontSize: 18, lineHeight: 1,
+                      }}
+                      title={expanded[cls.id] ? 'Collapse' : 'Expand'}
+                    >
+                      {expanded[cls.id] ? '▲' : '▼'}
+                    </button>
+                  </td>
+                </tr>
+                {expanded[cls.id] && (
+                  <tr key={`${cls.id}_exp`} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                    <td colSpan={3} style={{ padding: '0 16px 16px' }}>
+                      <TextbooksExpanded classId={cls.id} className={cls.name} />
+                    </td>
+                  </tr>
+                )}
+              </>
+            ))
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -467,11 +632,11 @@ const SAMPLE_LESSON_PLAN = {
       mainQuestion: 'match the word opposite',
       type: 'table',
       rows: [
-        { word: 'Day',     opposite: 'Night'   },
+        { word: 'day',     opposite: 'Night'   },
         { word: 'Morning', opposite: 'Evening' },
         { word: 'Long',    opposite: 'Short'   },
-        { word: 'Small',   opposite: 'High'    },
-        { word: 'Up',      opposite: 'Down'    },
+        { word: 'small',   opposite: 'High'    },
+        { word: 'up',      opposite: 'down'    },
       ],
     },
     {
@@ -480,7 +645,7 @@ const SAMPLE_LESSON_PLAN = {
       mainQuestion: 'write an application for sick leave',
       type: 'application',
       subject: 'Sick leave',
-      body: 'Respected Sir/Madam,\n\nI beg to state that I am suffering from fever and cannot attend school today. I request you to grant me leave for one day i.e. 2nd March, 2026.\n\nYours obediently,\n[Student Name]',
+      body: 'Respected sir, i beg to say that I am suffering from fever and cannot attend school today. I request you to grant me leave for one day i.e. 2nd March, 2026.\n\nYours obediently,\n[Student Name]',
     },
   ],
 };
@@ -495,8 +660,9 @@ function LessonPlanViewModal({ plan, onClose }) {
   };
 
   const toggleSelectAll = () => {
-    setSelectAll(v => !v);
-    setSelected({});
+    const next = !selectAll;
+    setSelectAll(next);
+    if (!next) setSelected({});
   };
 
   return (
@@ -504,7 +670,7 @@ function LessonPlanViewModal({ plan, onClose }) {
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20, overflowY: 'auto' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 700, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', margin: 'auto' }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 700, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', margin: '20px auto' }}>
         {/* Modal Header */}
         <div style={{ padding: '16px 24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontWeight: 800, fontSize: 17, color: TEAL }}>Lesson Plan</span>
@@ -515,47 +681,58 @@ function LessonPlanViewModal({ plan, onClose }) {
           {/* Info Chips Row 1 */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
             {[
-              { label: plan.class, sub: 'Class' },
-              { label: plan.subject, sub: 'Subject' },
-              { label: plan.unitNo, sub: 'Unit no.' },
+              { icon: '📦', label: plan.class, sub: 'Class' },
+              { icon: '📖', label: plan.subject, sub: 'Subject' },
+              { icon: '📦', label: plan.unitNo, sub: 'Unit no.' },
             ].map(c => (
-              <div key={c.sub} style={{ background: '#F0FDF9', border: `1px solid ${TEAL}30`, borderRadius: 8, padding: '6px 14px', textAlign: 'center' }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: TEAL }}>{c.label}</div>
-                <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{c.sub}</div>
+              <div key={c.sub} style={{ background: '#F0FDF9', border: `1px solid ${TEAL}30`, borderRadius: 8, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>{c.icon}</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: TEAL }}>{c.label}</div>
+                  <div style={{ fontSize: 11, color: '#64748B' }}>/ {c.sub}</div>
+                </div>
               </div>
             ))}
           </div>
           {/* Info Chips Row 2 */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
             {[
-              { label: plan.unitName, sub: 'Unit name' },
-              { label: plan.timeRequired, sub: 'Time required' },
+              { icon: '📄', label: plan.unitName, sub: 'Unit name' },
+              { icon: '⏰', label: plan.timeRequired, sub: 'Time required' },
             ].map(c => (
-              <div key={c.sub} style={{ background: '#F0FDF9', border: `1px solid ${TEAL}30`, borderRadius: 8, padding: '6px 14px', textAlign: 'center' }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: TEAL }}>{c.label}</div>
-                <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{c.sub}</div>
+              <div key={c.sub} style={{ background: '#F0FDF9', border: `1px solid ${TEAL}30`, borderRadius: 8, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>{c.icon}</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: TEAL }}>{c.label}</div>
+                  <div style={{ fontSize: 11, color: '#64748B' }}>/ {c.sub}</div>
+                </div>
               </div>
             ))}
           </div>
 
           {/* Select All */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#2563EB', cursor: 'pointer' }}>
               <input type="checkbox" checked={selectAll} onChange={toggleSelectAll} />
-              Select All Questions
+              — Select All Questions
             </label>
           </div>
 
           {/* Topics */}
           {plan.topics.map(topic => (
             <div key={topic.id} style={{ marginBottom: 24 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, textAlign: 'center', color: NAVY, marginBottom: 10, padding: '6px', background: '#F8FAFC', borderRadius: 6 }}>
+              {/* Topic heading */}
+              <div style={{ fontWeight: 700, fontSize: 14, textAlign: 'center', color: NAVY, marginBottom: 10, padding: '8px', background: '#F8FAFC', borderRadius: 6, border: '1px solid #E2E8F0' }}>
                 Topic: {topic.name}
               </div>
+
+              {/* Main Question row */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontWeight: 700, fontSize: 13, color: '#374151' }}>Main Question 1: {topic.mainQuestion}</span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#64748B', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={selectAll} readOnly />
+                <span style={{ fontWeight: 700, fontSize: 13, color: '#374151' }}>
+                  Main Question 1: {topic.mainQuestion}
+                </span>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#64748B', cursor: 'pointer', whiteSpace: 'nowrap', marginLeft: 12 }}>
+                  <input type="checkbox" checked={selectAll} onChange={toggleSelectAll} />
                   Select All {topic.name}
                 </label>
               </div>
@@ -579,7 +756,11 @@ function LessonPlanViewModal({ plan, onClose }) {
                           <td style={{ padding: '8px 10px', border: '1px solid #E2E8F0', fontWeight: 500 }}>{row.word}</td>
                           <td style={{ padding: '8px 10px', border: '1px solid #E2E8F0' }}>{row.opposite}</td>
                           <td style={{ padding: '8px 10px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
-                            <input type="checkbox" checked={selectAll || !!selected[key]} onChange={() => toggleSelect(topic.id, idx)} />
+                            <input
+                              type="checkbox"
+                              checked={selectAll || !!selected[key]}
+                              onChange={() => toggleSelect(topic.id, idx)}
+                            />
                           </td>
                         </tr>
                       );
@@ -602,7 +783,7 @@ function LessonPlanViewModal({ plan, onClose }) {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={selectAll} readOnly /> Select
+                      <input type="checkbox" checked={selectAll} onChange={toggleSelectAll} /> Select
                     </label>
                   </div>
                 </div>
@@ -619,10 +800,21 @@ function LessonPlanViewModal({ plan, onClose }) {
    SESSION & TERM SETTING TAB
 ═══════════════════════════════════════════════════════════════ */
 function SessionTermSettingTab() {
-  const [form, setForm] = useState({
-    sessionName: '2025-2026', sessionStart: '2025-09-01', sessionEnd: '2026-06-30',
-    term1Start: '2026-03-01', term1End: '2026-06-30',
-    term2Start: '2026-09-01', term2End: '2026-11-30',
+  const [form, setForm] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sm_session_settings');
+      return saved ? JSON.parse(saved) : {
+        sessionName: '2025-2026', sessionStart: '2025-09-01', sessionEnd: '2026-06-30',
+        term1Start: '2026-03-01', term1End: '2026-06-30',
+        term2Start: '2026-09-01', term2End: '2026-11-30',
+      };
+    } catch {
+      return {
+        sessionName: '2025-2026', sessionStart: '2025-09-01', sessionEnd: '2026-06-30',
+        term1Start: '2026-03-01', term1End: '2026-06-30',
+        term2Start: '2026-09-01', term2End: '2026-11-30',
+      };
+    }
   });
   const [saved, setSaved] = useState(false);
 
@@ -639,7 +831,8 @@ function SessionTermSettingTab() {
         <span style={{ fontWeight: 800, fontSize: 16, color: '#fff' }}>Session & Term Setting</span>
       </div>
       <div style={{ padding: 28 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, marginBottom: 20 }}>
+        {/* Session */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18, marginBottom: 20 }}>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Session Name</label>
             <input style={inp} value={form.sessionName} onChange={e => setForm(f => ({ ...f, sessionName: e.target.value }))} placeholder="e.g. 2025-2026" />
@@ -653,9 +846,11 @@ function SessionTermSettingTab() {
             <input type="date" style={inp} value={form.sessionEnd} onChange={e => setForm(f => ({ ...f, sessionEnd: e.target.value }))} />
           </div>
         </div>
+
+        {/* 1st Term */}
         <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 20, marginBottom: 20 }}>
           <div style={{ fontWeight: 700, fontSize: 13, color: NAVY, marginBottom: 14 }}>1st Term</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Start Date</label>
               <input type="date" style={inp} value={form.term1Start} onChange={e => setForm(f => ({ ...f, term1Start: e.target.value }))} />
@@ -666,9 +861,11 @@ function SessionTermSettingTab() {
             </div>
           </div>
         </div>
+
+        {/* 2nd Term */}
         <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 20, marginBottom: 28 }}>
           <div style={{ fontWeight: 700, fontSize: 13, color: NAVY, marginBottom: 14 }}>2nd Term</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Start Date</label>
               <input type="date" style={inp} value={form.term2Start} onChange={e => setForm(f => ({ ...f, term2Start: e.target.value }))} />
@@ -679,6 +876,7 @@ function SessionTermSettingTab() {
             </div>
           </div>
         </div>
+
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button
             onClick={handleSave}
@@ -696,9 +894,33 @@ function SessionTermSettingTab() {
    TERM BREAKUP TAB
 ═══════════════════════════════════════════════════════════════ */
 function TermBreakupTab() {
+  const sessionSettings = (() => {
+    try {
+      const saved = localStorage.getItem('sm_session_settings');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  })();
+
+  const calcWeeks = (start, end) => {
+    if (!start || !end) return '—';
+    const diff = (new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24 * 7);
+    return Math.max(0, Math.round(diff));
+  };
+
+  const calcDays = (start, end) => {
+    if (!start || !end) return '—';
+    const diff = (new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24);
+    return Math.max(0, Math.round(diff));
+  };
+
+  const term1Start = sessionSettings?.term1Start || '2026-03-02';
+  const term1End   = sessionSettings?.term1End   || '2026-06-30';
+  const term2Start = sessionSettings?.term2Start || '2026-09-01';
+  const term2End   = sessionSettings?.term2End   || '2026-11-30';
+
   const termData = [
-    { term: '1st Term', start: '2026-03-02', end: '2026-06-30', weeks: 17, totalDays: 85, workingDays: 85 },
-    { term: '2nd Term', start: '2026-09-01', end: '2026-11-30', weeks: 13, totalDays: 65, workingDays: 65 },
+    { term: '1st Term', start: term1Start, end: term1End, weeks: calcWeeks(term1Start, term1End), workingDays: calcDays(term1Start, term1End) },
+    { term: '2nd Term', start: term2Start, end: term2End, weeks: calcWeeks(term2Start, term2End), workingDays: calcDays(term2Start, term2End) },
   ];
 
   return (
@@ -710,7 +932,7 @@ function TermBreakupTab() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#F8FAFC' }}>
-              {['Term', 'Start Date', 'End Date', 'Weeks', 'Total Days', 'Working Days'].map(h => (
+              {['Term', 'Start Date', 'End Date', 'Total Weeks', 'Total Working Days'].map(h => (
                 <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
               ))}
             </tr>
@@ -722,7 +944,6 @@ function TermBreakupTab() {
                 <td style={{ padding: '12px 16px', fontSize: 13, color: '#374151' }}>{formatDate(td.start)}</td>
                 <td style={{ padding: '12px 16px', fontSize: 13, color: '#374151' }}>{formatDate(td.end)}</td>
                 <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: NAVY }}>{td.weeks}</td>
-                <td style={{ padding: '12px 16px', fontSize: 13, color: '#374151' }}>{td.totalDays}</td>
                 <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#16A34A' }}>{td.workingDays}</td>
               </tr>
             ))}
@@ -745,14 +966,20 @@ function CreateLessonPlanTab() {
   const [form, setForm] = useState({
     classId: '', subjectId: '', unitNo: '', unitName: '', timeRequired: '45',
   });
-  const [topics, setTopics] = useState([{ id: 1, topicName: '', mainQuestion: '', details: '' }]);
+  const [topics, setTopics] = useState([
+    { id: 1, topicName: '', mainQuestion: '', questionType: 'table', details: '' },
+  ]);
   const [saving, setSaving] = useState(false);
 
   const subjectsForClass = classes.find(c => String(c.id) === String(form.classId))?.subjects || [];
 
-  const addTopic = () => setTopics(t => [...t, { id: Date.now(), topicName: '', mainQuestion: '', details: '' }]);
+  const addTopic = () => setTopics(t => [...t, {
+    id: Date.now(), topicName: '', mainQuestion: '', questionType: 'table', details: '',
+  }]);
   const removeTopic = id => setTopics(t => t.filter(tp => tp.id !== id));
-  const updateTopic = (id, field, value) => setTopics(t => t.map(tp => tp.id === id ? { ...tp, [field]: value } : tp));
+  const updateTopic = (id, field, value) => setTopics(t =>
+    t.map(tp => tp.id === id ? { ...tp, [field]: value } : tp)
+  );
 
   const handleSave = async () => {
     if (!form.classId) return toast.error('Please select a class');
@@ -769,11 +996,13 @@ function CreateLessonPlanTab() {
       }).catch(() => null);
       toast.success('Lesson plan created!');
       setForm({ classId: '', subjectId: '', unitNo: '', unitName: '', timeRequired: '45' });
-      setTopics([{ id: 1, topicName: '', mainQuestion: '', details: '' }]);
+      setTopics([{ id: 1, topicName: '', mainQuestion: '', questionType: 'table', details: '' }]);
     } finally {
       setSaving(false);
     }
   };
+
+  const QUESTION_TYPES = ['Word Opposite', 'MCQ', 'Application', 'Fill in the Blanks', 'Short Answer', 'Long Answer'];
 
   return (
     <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
@@ -781,7 +1010,8 @@ function CreateLessonPlanTab() {
         <span style={{ fontWeight: 800, fontSize: 16, color: '#fff' }}>Create Lesson Plan</span>
       </div>
       <div style={{ padding: 28 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
+        {/* Main form fields */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Select Class *</label>
             <select style={inp} value={form.classId} onChange={e => setForm(f => ({ ...f, classId: e.target.value, subjectId: '' }))}>
@@ -805,7 +1035,7 @@ function CreateLessonPlanTab() {
             <input style={inp} placeholder="e.g. Introduction" value={form.unitName} onChange={e => setForm(f => ({ ...f, unitName: e.target.value }))} />
           </div>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Time Required (min)</label>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Time Required (minutes)</label>
             <input type="number" style={inp} value={form.timeRequired} onChange={e => setForm(f => ({ ...f, timeRequired: e.target.value }))} />
           </div>
         </div>
@@ -813,22 +1043,29 @@ function CreateLessonPlanTab() {
         {/* Topics */}
         <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 20, marginBottom: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>Topics</div>
-            <button onClick={addTopic} style={{ background: '#F0FDF9', color: TEAL, border: `1px solid ${TEAL}40`, borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: NAVY }}>Topics</div>
+            <button
+              onClick={addTopic}
+              style={{ background: '#F0FDF9', color: TEAL, border: `1px solid ${TEAL}40`, borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
+            >
               <Plus size={13} /> Add Topic
             </button>
           </div>
+
           {topics.map((tp, idx) => (
             <div key={tp.id} style={{ background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0', padding: 16, marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span style={{ fontWeight: 700, fontSize: 12, color: '#374151' }}>Topic {idx + 1}</span>
+                <span style={{ fontWeight: 700, fontSize: 13, color: TEAL }}>Topic {idx + 1}</span>
                 {topics.length > 1 && (
-                  <button onClick={() => removeTopic(tp.id)} style={{ background: '#FEE2E2', color: RED, border: 'none', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}>
-                    <Trash2 size={12} />
+                  <button
+                    onClick={() => removeTopic(tp.id)}
+                    style={{ background: '#FEE2E2', color: RED, border: 'none', borderRadius: 5, padding: '4px 9px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <Trash2 size={12} /> Remove
                   </button>
                 )}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 10 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>Topic Name</label>
                   <input style={inp} placeholder="e.g. Word Opposites" value={tp.topicName} onChange={e => updateTopic(tp.id, 'topicName', e.target.value)} />
@@ -836,6 +1073,12 @@ function CreateLessonPlanTab() {
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>Main Question</label>
                   <input style={inp} placeholder="e.g. match the word opposite" value={tp.mainQuestion} onChange={e => updateTopic(tp.id, 'mainQuestion', e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>Question Type</label>
+                  <select style={inp} value={tp.questionType} onChange={e => updateTopic(tp.id, 'questionType', e.target.value)}>
+                    {QUESTION_TYPES.map(qt => <option key={qt} value={qt}>{qt}</option>)}
+                  </select>
                 </div>
               </div>
               <div>
@@ -869,10 +1112,10 @@ function CreateLessonPlanTab() {
    VIEW LESSON PLAN TAB
 ═══════════════════════════════════════════════════════════════ */
 function ViewLessonPlanTab() {
-  const [classId, setClassId] = useState('');
+  const [classId, setClassId]     = useState('');
   const [subjectId, setSubjectId] = useState('');
-  const [fetched, setFetched] = useState(false);
-  const [planView, setPlanView] = useState('lesson'); // 'lesson' | 'notebook'
+  const [fetched, setFetched]     = useState(false);
+  const [planView, setPlanView]   = useState('lesson'); // 'lesson' | 'notebook'
   const [expandedRows, setExpandedRows] = useState({});
   const [viewModal, setViewModal] = useState(null);
   const [loadingFetch, setLoadingFetch] = useState(false);
@@ -886,53 +1129,39 @@ function ViewLessonPlanTab() {
 
   const [units, setUnits] = useState([]);
 
-  const demoUnits = [
+  const makeDemoUnits = (cId, sId) => [
     {
-      id: 1,
-      unitNo: 'U01',
-      unitName: 'Basics Science',
-      classId,
-      subjectId,
-      details: [
-        { id: 1, unitNo: 'U01', unitName: 'Basics Science', status: 'Not Submitted' },
-      ],
+      id: 1, unitNo: 'U01', unitName: 'Basics Science', classId: cId, subjectId: sId,
+      details: [{ id: 1, unitNo: 'U01', unitName: 'Basics Science', status: 'Not Submitted' }],
     },
     {
-      id: 2,
-      unitNo: 'U02',
-      unitName: 'Living Things',
-      classId,
-      subjectId,
-      details: [
-        { id: 2, unitNo: 'U02', unitName: 'Living Things', status: 'Submitted' },
-      ],
+      id: 2, unitNo: 'U02', unitName: 'Living Things', classId: cId, subjectId: sId,
+      details: [{ id: 2, unitNo: 'U02', unitName: 'Living Things', status: 'Submitted' }],
     },
     {
-      id: 3,
-      unitNo: 'U03',
-      unitName: 'Plants & Animals',
-      classId,
-      subjectId,
-      details: [
-        { id: 3, unitNo: 'U03', unitName: 'Plants & Animals', status: 'Not Submitted' },
-      ],
+      id: 3, unitNo: 'U03', unitName: 'Plants & Animals', classId: cId, subjectId: sId,
+      details: [{ id: 3, unitNo: 'U03', unitName: 'Plants & Animals', status: 'Not Submitted' }],
     },
   ];
 
   const handleFetch = async () => {
     if (!classId) return toast.error('Please select a class');
     setLoadingFetch(true);
+    setExpandedRows({});
     try {
-      const res = await api.get('/lesson-plans', { params: { classId, subjectId: subjectId || undefined } }).catch(() => null);
+      const res = await api.get('/lesson-plans', {
+        params: { classId, subjectId: subjectId || undefined },
+      }).catch(() => null);
       const data = res?.data?.data || [];
-      setUnits(data.length ? data : demoUnits);
+      setUnits(data.length ? data : makeDemoUnits(classId, subjectId));
       setFetched(true);
+      setPlanView('lesson');
     } finally {
       setLoadingFetch(false);
     }
   };
 
-  const toggleRow = id => setExpandedRows(r => ({ ...r, [id]: !r[id] }));
+  const toggleRow  = (id) => setExpandedRows(r => ({ ...r, [id]: !r[id] }));
 
   const handleDelete = (id) => {
     if (!window.confirm('Delete this lesson plan?')) return;
@@ -940,19 +1169,50 @@ function ViewLessonPlanTab() {
     toast.success('Deleted');
   };
 
+  const openModal = (unit, det) => {
+    const className   = classes.find(c => String(c.id) === String(classId))?.name || classId;
+    const subjectName = subjectsForClass.find(s => String(s.id) === String(subjectId))?.name || 'Science';
+    setViewModal({
+      ...SAMPLE_LESSON_PLAN,
+      class: className,
+      subject: subjectName,
+      unitNo: det.unitNo,
+      unitName: det.unitName,
+    });
+  };
+
+  /* Shared table header cell style */
+  const thStyle = (centered = false) => ({
+    padding: '12px 14px',
+    textAlign: centered ? 'center' : 'left',
+    fontSize: 12, fontWeight: 700, color: '#374151',
+    borderBottom: '1px solid #E2E8F0',
+    background: '#F8FAFC',
+  });
+
   return (
     <div>
-      {/* Filters */}
+      {/* Class selector */}
       <div style={{ marginBottom: 12 }}>
         <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Select class</label>
-        <select style={{ ...inp }} value={classId} onChange={e => { setClassId(e.target.value); setSubjectId(''); setFetched(false); }}>
+        <select
+          style={{ ...inp }}
+          value={classId}
+          onChange={e => { setClassId(e.target.value); setSubjectId(''); setFetched(false); setUnits([]); }}
+        >
           <option value="">— Select Class —</option>
           {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
-      <div style={{ marginBottom: 12 }}>
+
+      {/* Subject selector */}
+      <div style={{ marginBottom: 14 }}>
         <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Select subject</label>
-        <select style={{ ...inp }} value={subjectId} onChange={e => { setSubjectId(e.target.value); setFetched(false); }}>
+        <select
+          style={{ ...inp }}
+          value={subjectId}
+          onChange={e => { setSubjectId(e.target.value); setFetched(false); setUnits([]); }}
+        >
           <option value="">— Select Subject —</option>
           {subjectsForClass.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
@@ -964,160 +1224,198 @@ function ViewLessonPlanTab() {
         disabled={loadingFetch}
         style={{
           width: '100%', padding: '13px', background: TEAL, color: '#fff',
-          border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 800,
-          fontSize: 15, marginBottom: 20, opacity: loadingFetch ? 0.7 : 1,
+          border: 'none', borderRadius: 8, cursor: loadingFetch ? 'not-allowed' : 'pointer',
+          fontWeight: 800, fontSize: 15, marginBottom: 20, opacity: loadingFetch ? 0.7 : 1,
           letterSpacing: '0.5px',
         }}
       >
         {loadingFetch ? 'Fetching…' : 'Fetch'}
       </button>
 
-      {/* Toggle */}
+      {/* Toggle + Table */}
       {fetched && (
         <>
+          {/* Toggle Lesson Plans / Notebook Lesson Plans */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             <button style={subTabBtn(planView === 'lesson')}   onClick={() => setPlanView('lesson')}>Lesson Plans</button>
             <button style={subTabBtn(planView === 'notebook')} onClick={() => setPlanView('notebook')}>Notebook Lesson Plans</button>
           </div>
 
-          {/* Table */}
+          {/* Units Table */}
           <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ background: '#F8FAFC' }}>
-                  <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>Sr.NO.</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>Unit No.</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>Unit Name</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>PDF</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>Delete</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>Bell</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>Details</th>
+                <tr>
+                  <th style={thStyle()}>Sr. NO.</th>
+                  <th style={thStyle()}>Unit No.</th>
+                  <th style={thStyle()}>Unit Name</th>
+                  <th style={thStyle(true)}>PDF</th>
+                  <th style={thStyle(true)}>Delete</th>
+                  <th style={thStyle(true)}>Bell</th>
+                  <th style={thStyle(true)}>Details</th>
                 </tr>
               </thead>
               <tbody>
-                {units.map((unit, idx) => (
-                  <>
-                    <tr key={unit.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                      <td style={{ padding: '11px 14px' }}>
-                        <div style={{
-                          width: 26, height: 26, borderRadius: '50%',
-                          background: '#16A34A', color: '#fff',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontWeight: 700, fontSize: 12,
-                        }}>{idx + 1}</div>
-                      </td>
-                      <td style={{ padding: '11px 14px' }}>
-                        <div style={{
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          background: TEAL, color: '#fff', borderRadius: 6,
-                          padding: '3px 10px', fontSize: 12, fontWeight: 700,
-                        }}>#{unit.unitNo}</div>
-                      </td>
-                      <td style={{ padding: '11px 14px', fontWeight: 600, color: NAVY, fontSize: 13 }}>
-                        <span style={{ marginRight: 6, fontSize: 14 }}>{'</>'}</span>
-                        {unit.unitName}
-                      </td>
-                      <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => window.print()}
-                          style={{ background: RED, color: '#fff', border: 'none', borderRadius: 5, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                        >
-                          PDF
-                        </button>
-                      </td>
-                      <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => handleDelete(unit.id)}
-                          style={{ background: 'transparent', color: TEAL, border: `1.5px solid ${TEAL}`, borderRadius: 5, padding: '5px 9px', fontSize: 12, cursor: 'pointer' }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </td>
-                      <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => toast('Notification bell clicked!')}
-                          style={{ background: 'transparent', color: TEAL, border: `1.5px solid ${TEAL}`, borderRadius: 5, padding: '5px 9px', fontSize: 12, cursor: 'pointer' }}
-                        >
-                          <Bell size={13} />
-                        </button>
-                      </td>
-                      <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => toggleRow(unit.id)}
-                          style={{ background: 'transparent', color: TEAL, border: `1.5px solid ${TEAL}`, borderRadius: 5, padding: '5px 9px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
-                        >
-                          {expandedRows[unit.id] ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                        </button>
-                      </td>
-                    </tr>
-
-                    {/* Expanded inner rows */}
-                    {expandedRows[unit.id] && (
-                      <tr key={`${unit.id}_exp`}>
-                        <td colSpan={7} style={{ padding: '0 14px 16px' }}>
-                          <div style={{ background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                              <thead>
-                                <tr style={{ background: '#EFF6FF' }}>
-                                  {['S.No.', 'Unit Number', 'Unit Name', 'Submission Status', 'Details'].map(h => (
-                                    <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(unit.details || []).map((det, dIdx) => (
-                                  <tr key={det.id}>
-                                    <td style={{ padding: '9px 12px', fontSize: 12, color: '#94A3B8' }}>{dIdx + 1}</td>
-                                    <td style={{ padding: '9px 12px', fontSize: 12, fontWeight: 600, color: TEAL }}>#{det.unitNo}</td>
-                                    <td style={{ padding: '9px 12px', fontSize: 12, fontWeight: 500, color: NAVY }}>{det.unitName}</td>
-                                    <td style={{ padding: '9px 12px' }}>
-                                      <span style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                                        padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                                        background: det.status === 'Submitted' ? '#DCFCE7' : '#FEE2E2',
-                                        color: det.status === 'Submitted' ? '#16A34A' : RED,
-                                      }}>
-                                        {det.status === 'Submitted' ? '✓' : '⊗'} {det.status}
-                                      </span>
-                                    </td>
-                                    <td style={{ padding: '9px 12px' }}>
-                                      <button
-                                        onClick={() => setViewModal({
-                                          ...SAMPLE_LESSON_PLAN,
-                                          class: classes.find(c => String(c.id) === String(unit.classId))?.name || 'IV',
-                                          subject: subjectsForClass.find(s => String(s.id) === String(unit.subjectId))?.name || 'Science',
-                                          unitNo: det.unitNo,
-                                          unitName: det.unitName,
-                                        })}
-                                        style={{
-                                          background: 'transparent', color: TEAL, border: `1.5px solid ${TEAL}`,
-                                          borderRadius: 5, padding: '4px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                                          display: 'flex', alignItems: 'center', gap: 4,
-                                        }}
-                                      >
-                                        <Eye size={12} /> View
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                ))}
-                {units.length === 0 && (
+                {units.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
-                      <div style={{ padding: 40, textAlign: 'center' }}>
-                        <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
-                        <div style={{ fontWeight: 700, color: NAVY, fontSize: 15, marginBottom: 4 }}>No lesson plans found</div>
-                        <div style={{ color: '#94A3B8', fontSize: 13 }}>Create a lesson plan first using the "Create Lesson Plan" tab</div>
-                      </div>
+                    <td colSpan={7} style={{ padding: 40, textAlign: 'center' }}>
+                      <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+                      <div style={{ fontWeight: 700, color: NAVY, fontSize: 15, marginBottom: 4 }}>No lesson plans found</div>
+                      <div style={{ color: '#94A3B8', fontSize: 13 }}>Create a lesson plan first using the "Create Lesson Plan" tab</div>
                     </td>
                   </tr>
+                ) : (
+                  units.map((unit, idx) => (
+                    <>
+                      {/* Unit row */}
+                      <tr key={unit.id} style={{ borderBottom: expandedRows[unit.id] ? 'none' : '1px solid #F1F5F9' }}>
+                        {/* Sr. No — green circle */}
+                        <td style={{ padding: '11px 14px' }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 28, height: 28, borderRadius: '50%',
+                            background: '#D1FAE5', color: '#065F46',
+                            fontSize: 12, fontWeight: 700,
+                          }}>
+                            #{idx + 1}
+                          </span>
+                        </td>
+
+                        {/* Unit No — teal badge */}
+                        <td style={{ padding: '11px 14px' }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            background: TEAL, color: '#fff', borderRadius: 6,
+                            padding: '3px 10px', fontSize: 12, fontWeight: 700,
+                          }}>
+                            #{unit.unitNo}
+                          </span>
+                        </td>
+
+                        {/* Unit Name — yellow code icon */}
+                        <td style={{ padding: '11px 14px', fontSize: 13, color: NAVY, fontWeight: 600 }}>
+                          <span style={{ color: '#D97706', fontWeight: 700, marginRight: 6, fontSize: 13 }}>&lt;/&gt;</span>
+                          {unit.unitName}
+                        </td>
+
+                        {/* PDF */}
+                        <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                          <button
+                            onClick={() => window.print()}
+                            style={{ background: RED, color: '#fff', border: 'none', borderRadius: 5, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            PDF
+                          </button>
+                        </td>
+
+                        {/* Delete */}
+                        <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                          <button
+                            onClick={() => handleDelete(unit.id)}
+                            style={{ background: 'transparent', color: TEAL, border: `1.5px solid ${TEAL}`, borderRadius: 5, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+
+                        {/* Bell */}
+                        <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                          <button
+                            onClick={() => toast('Notification sent!')}
+                            style={{ background: 'transparent', color: TEAL, border: `1.5px solid ${TEAL}`, borderRadius: 5, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}
+                          >
+                            <Bell size={13} />
+                          </button>
+                        </td>
+
+                        {/* Details expand ▼▲ */}
+                        <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                          <button
+                            onClick={() => toggleRow(unit.id)}
+                            style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              color: TEAL, fontSize: 16, lineHeight: 1,
+                            }}
+                          >
+                            {expandedRows[unit.id] ? '▲' : '▼'}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Expanded inner sub-table */}
+                      {expandedRows[unit.id] && (
+                        <tr key={`${unit.id}_exp`}>
+                          <td colSpan={7} style={{ padding: '0 14px 16px', background: '#FAFAFA' }}>
+                            <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #E2E8F0', overflow: 'hidden', marginTop: 4 }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                  <tr style={{ background: '#EFF6FF' }}>
+                                    {['S. No.', 'Unit Number', 'Unit Name', 'Submission Status', 'Details'].map(h => (
+                                      <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(unit.details || []).map((det, dIdx) => (
+                                    <tr key={det.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                      {/* S.No — green circle */}
+                                      <td style={{ padding: '9px 12px' }}>
+                                        <span style={{
+                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                          width: 24, height: 24, borderRadius: '50%',
+                                          background: '#D1FAE5', color: '#065F46',
+                                          fontSize: 11, fontWeight: 700,
+                                        }}>
+                                          #{dIdx + 1}
+                                        </span>
+                                      </td>
+
+                                      {/* Unit Number — teal text */}
+                                      <td style={{ padding: '9px 12px', fontSize: 12, fontWeight: 700, color: TEAL }}>
+                                        #{det.unitNo}
+                                      </td>
+
+                                      {/* Unit Name — yellow code icon */}
+                                      <td style={{ padding: '9px 12px', fontSize: 12, fontWeight: 500, color: NAVY }}>
+                                        <span style={{ color: '#D97706', fontWeight: 700, marginRight: 5, fontSize: 12 }}>&lt;/&gt;</span>
+                                        {det.unitName}
+                                      </td>
+
+                                      {/* Submission Status */}
+                                      <td style={{ padding: '9px 12px' }}>
+                                        <span style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                                          padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                          background: det.status === 'Submitted' ? '#DCFCE7' : '#FEE2E2',
+                                          color: det.status === 'Submitted' ? '#16A34A' : RED,
+                                        }}>
+                                          {det.status === 'Submitted' ? '✓' : '⊗'} {det.status}
+                                        </span>
+                                      </td>
+
+                                      {/* View button */}
+                                      <td style={{ padding: '9px 12px' }}>
+                                        <button
+                                          onClick={() => openModal(unit, det)}
+                                          style={{
+                                            background: 'transparent', color: TEAL, border: `1.5px solid ${TEAL}`,
+                                            borderRadius: 5, padding: '4px 12px', fontSize: 11, fontWeight: 600,
+                                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+                                          }}
+                                        >
+                                          <Eye size={12} /> View
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ))
                 )}
               </tbody>
             </table>
@@ -1125,6 +1423,7 @@ function ViewLessonPlanTab() {
         </>
       )}
 
+      {/* Lesson Plan View Modal */}
       {viewModal && (
         <LessonPlanViewModal plan={viewModal} onClose={() => setViewModal(null)} />
       )}
@@ -1141,15 +1440,15 @@ function LessonPlansTab() {
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        <button style={subTabBtn(lpSub === 'session')}  onClick={() => setLpSub('session')}>Session &amp; Term Setting</button>
-        <button style={subTabBtn(lpSub === 'breakup')}  onClick={() => setLpSub('breakup')}>Term Breakup</button>
-        <button style={subTabBtn(lpSub === 'create')}   onClick={() => setLpSub('create')}>Create Lesson Plan</button>
-        <button style={subTabBtn(lpSub === 'view')}     onClick={() => setLpSub('view')}>View Lesson Plan</button>
+        <button style={subTabBtn(lpSub === 'session')} onClick={() => setLpSub('session')}>Session &amp; Term Setting</button>
+        <button style={subTabBtn(lpSub === 'breakup')} onClick={() => setLpSub('breakup')}>Term Breakup</button>
+        <button style={subTabBtn(lpSub === 'create')}  onClick={() => setLpSub('create')}>Create Lesson Plan</button>
+        <button style={subTabBtn(lpSub === 'view')}    onClick={() => setLpSub('view')}>View Lesson Plan</button>
       </div>
-      {lpSub === 'session'  && <SessionTermSettingTab />}
-      {lpSub === 'breakup'  && <TermBreakupTab />}
-      {lpSub === 'create'   && <CreateLessonPlanTab />}
-      {lpSub === 'view'     && <ViewLessonPlanTab />}
+      {lpSub === 'session' && <SessionTermSettingTab />}
+      {lpSub === 'breakup' && <TermBreakupTab />}
+      {lpSub === 'create'  && <CreateLessonPlanTab />}
+      {lpSub === 'view'    && <ViewLessonPlanTab />}
     </div>
   );
 }
@@ -1164,7 +1463,9 @@ export default function SchoolMentorAcademicsPage() {
     <div className="page-content fade-in">
       {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: NAVY }}>Academics</h1>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#9CA3AF', letterSpacing: '-0.5px' }}>
+          Academics
+        </h1>
         <button
           onClick={() => toast('Tutorial coming soon!')}
           style={{
@@ -1174,18 +1475,16 @@ export default function SchoolMentorAcademicsPage() {
             fontWeight: 700, fontSize: 13,
           }}
         >
-          ▶ Tutorial
+          &#9654; Tutorial
         </button>
       </div>
 
       {/* Main Tabs */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
-        <button style={mainTabBtn(mainTab === 'scheme')}  onClick={() => setMainTab('scheme')}>
-          <BookOpen size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+        <button style={mainTabBtn(mainTab === 'scheme')} onClick={() => setMainTab('scheme')}>
           Scheme of Studies
         </button>
-        <button style={mainTabBtn(mainTab === 'lesson')}  onClick={() => setMainTab('lesson')}>
-          <FileText size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+        <button style={mainTabBtn(mainTab === 'lesson')} onClick={() => setMainTab('lesson')}>
           Lesson Plans
         </button>
       </div>
