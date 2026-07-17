@@ -1,4 +1,4 @@
-/**
+﻿/**
  * IlmForge — Dark Navy Sidebar Layout
  * Matches reference screenshot: #1B2F6E sidebar, white header, #ecf0f5 content
  */
@@ -13,14 +13,13 @@ import {
   DollarSign, UserCheck,
   Bell, MessageSquare, Settings, LogOut,
   Menu, ChevronRight, Search,
-  AlertCircle, Award, Briefcase,
+  Briefcase,
   BookOpen, CheckSquare,
-  Wallet, BookOpenCheck,
-  Package, Receipt, Landmark,
-  Bot, X, Calendar, QrCode, FileText,
+  Wallet, Landmark,
+  Bot, X, Calendar,
   ShieldCheck, BarChart2, Database, ClipboardList,
-  Workflow, ShoppingCart, Globe, BookMarked,
-  CalendarDays, Brain, Rocket,
+  ShoppingCart,
+  CalendarDays, Rocket, Truck,
 } from 'lucide-react';
 import LicenseBanner from '../components/license/LicenseBanner';
 
@@ -31,90 +30,52 @@ const NAV = [
   {
     group: 'MAIN',
     items: [
-      // School Mentor Hub hidden — copyright risk
-      { to: '/dashboard',          icon: LayoutDashboard, label: 'Dashboard' },
-      { to: '/workflow',           icon: Workflow,        label: 'Smart Workflow', badge: 'NEW' },
-      { to: '/mentor-ai',          icon: Bot,             label: 'AI Tools' },
-      { to: '/robobuddy',          icon: Bot,             label: 'RoboBuddy AI',         roles: ['super_admin', 'admin'] },
-      { to: '/reports-hub',        icon: BarChart2,       label: 'Reports Hub',          roles: ['super_admin', 'admin'], badge: 'NEW' },
-      { to: '/academic-calendar',  icon: Calendar,        label: 'Academic Calendar',    roles: ['super_admin', 'admin'] },
+      { to: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/mentor-ai',   icon: Bot,             label: 'AI Tools' },
+      { to: '/reports-hub', icon: BarChart2,        label: 'Reports',  roles: ['super_admin', 'admin'] },
     ],
   },
   {
     group: 'ACADEMICS',
     items: [
-      { to: '/academics',               icon: BookOpen,      label: 'Academics' },            // Scheme of Studies + Lesson Plans (unified)
-      { to: '/examination',             icon: ClipboardList, label: 'Examination' },           // 5-tab unified exam module
-      { to: '/attendance-hub',          icon: CheckSquare,   label: 'Attendance' },            // 3-tab: Student/Staff/Reports
-      { to: '/timetable',               icon: CalendarDays,  label: 'Timetable' },
-      { to: '/homework/diary',          icon: BookMarked,    label: 'Homework Diary',          roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/academics/lesson-plans',  icon: ClipboardList, label: 'Lesson Plans',            roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/academics/scheme',        icon: BookOpen,      label: 'Scheme of Studies',       roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/academics/syllabus',      icon: BookOpenCheck, label: 'Syllabus',                roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/academics/worksheets',    icon: Brain,         label: 'Worksheets AI',           roles: ['super_admin', 'admin', 'teacher'] },
-    ],
-  },
-  {
-    group: 'EXAMS',
-    items: [
-      { to: '/exams/question-papers',  icon: FileText,      label: 'Question Papers',     roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/exams/mcq-generator',    icon: Brain,         label: 'MCQ Generator',        roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/exams/timetable',        icon: Calendar,      label: 'Exam Timetable',      roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/exams/merit-list',       icon: Award,         label: 'Merit List',          roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/exams/gazette',          icon: FileText,      label: 'Gazette Sheet',       roles: ['super_admin', 'admin'] },
-      { to: '/exams/annual-report',    icon: ClipboardList, label: 'Annual Report Cards', roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/exams/bise-result-card', icon: FileText,      label: 'BISE Result Card',    roles: ['super_admin', 'admin', 'teacher'] },
-      { to: '/exams/result-config',    icon: Settings,      label: 'Result Settings',      roles: ['super_admin', 'admin'] },
+      { to: '/academics',      icon: BookOpen,      label: 'Academics' },
+      { to: '/examination',    icon: ClipboardList, label: 'Examination' },
+      { to: '/attendance-hub', icon: CheckSquare,   label: 'Attendance' },
+      { to: '/timetable',      icon: CalendarDays,  label: 'Timetable' },
     ],
   },
   {
     group: 'STUDENTS & STAFF',
     items: [
-      { to: '/hub/students',          icon: GraduationCap, label: 'Students' },
-      { to: '/admissions/wizard',     icon: GraduationCap, label: 'New Admission',         roles: ['super_admin', 'admin'] },
-      { to: '/students/bulk-import',  icon: FileText,      label: 'Bulk Import',          roles: ['super_admin', 'admin'] },
-      { to: '/students/info-reports', icon: BarChart2,     label: 'Student Info Reports', roles: ['super_admin', 'admin'] },
-      { to: '/analytics/students',    icon: BarChart2,     label: 'Student Analytics',    roles: ['super_admin', 'admin'] },
-      { to: '/hub/staff',             icon: Briefcase,     label: 'Staff' },
-      { to: '/human-resource',        icon: Briefcase,     label: 'Human Resource',       roles: ['super_admin', 'admin'] },
-      { to: '/staff/appraisals-new',  icon: Award,         label: 'Appraisals',           roles: ['super_admin', 'admin'] },
-      { to: '/payroll',               icon: Wallet,        label: 'Payroll',              roles: ['super_admin', 'admin', 'accountant'] },
-      { to: '/hub/parents',           icon: Users,         label: 'Parents' },
-      { to: '/gate-passes',           icon: QrCode,        label: 'Gate Passes',          roles: ['super_admin', 'admin', 'gatekeeper'] },
+      { to: '/hub/students',   icon: GraduationCap, label: 'Students' },
+      { to: '/hub/staff',      icon: Briefcase,     label: 'Staff' },
+      { to: '/human-resource', icon: UserCheck,     label: 'HR',      roles: ['super_admin', 'admin'] },
+      { to: '/hub/parents',    icon: Users,         label: 'Parents' },
     ],
   },
   {
     group: 'FINANCE',
     items: [
-      { to: '/fee-management',        icon: DollarSign,    label: 'Fee Management' },      // 5-tab unified fee module
-      { to: '/accounts',              icon: Landmark,      label: 'Accounts',             roles: ['super_admin', 'admin', 'accountant'] },
-      { to: '/fees/invoices',         icon: FileText,      label: 'Fee Invoices',         roles: ['super_admin', 'admin', 'accountant'] },
-      { to: '/fees/parent-wallet',    icon: Wallet,        label: 'Parent Wallet',        roles: ['super_admin', 'admin', 'accountant'] },
-      { to: '/payments/transactions', icon: Receipt,       label: 'Payment Transactions', roles: ['super_admin', 'admin', 'accountant'] },
-      { to: '/admissions/crm',        icon: Users,         label: 'Admissions CRM',       roles: ['super_admin', 'admin', 'accountant'] },
+      { to: '/fee-management', icon: DollarSign, label: 'Fee Management' },
+      { to: '/accounts',       icon: Landmark,   label: 'Accounts',       roles: ['super_admin', 'admin', 'accountant'] },
+      { to: '/payroll',        icon: Wallet,     label: 'Salary',          roles: ['super_admin', 'admin', 'accountant'] },
     ],
   },
   {
     group: 'OPERATIONS',
     items: [
-      { to: '/hub/communication',           icon: MessageSquare, label: 'Communication' },
-      { to: '/hub/operations',              icon: Package,       label: 'Operations Hub' },
-      { to: '/push',                        icon: Bell,          label: 'Push Notifications',   roles: ['super_admin', 'admin', 'accountant'] },
-      { to: '/sops',                        icon: ShieldCheck,   label: 'SOPs & Manuals',       roles: ['super_admin', 'admin'] },
-      { to: '/stock/pos',                   icon: ShoppingCart,  label: 'Point of Sale (POS)',  roles: ['super_admin', 'admin', 'accountant'] },
-      { to: '/library',                     icon: BookOpenCheck, label: 'Library Management',   roles: ['super_admin', 'admin', 'accountant', 'teacher'] },
-      { to: '/settings/channels',           icon: Settings,      label: 'Channel Settings',     roles: ['super_admin', 'admin'], badge: 'SMS·WA·Email' },
-      { to: '/settings/website-management', icon: Globe,         label: 'Website Management',   roles: ['super_admin', 'admin'] },
+      { to: '/sops',              icon: ShieldCheck,   label: 'SOPs',          roles: ['super_admin', 'admin'] },
+      { to: '/stock/pos',         icon: ShoppingCart,  label: 'POS',           roles: ['super_admin', 'admin', 'accountant'] },
+      { to: '/transport',         icon: Truck,         label: 'Transport',     roles: ['super_admin', 'admin'] },
+      { to: '/hub/communication', icon: MessageSquare, label: 'Communication' },
     ],
   },
   {
     group: 'SETTINGS',
     items: [
-      { to: '/settings',         icon: Settings,    label: 'School Settings' },
-      { to: '/settings/classes', icon: GraduationCap, label: 'Classes' },
-      { to: '/launch-setup',     icon: Rocket,      label: 'Setup Wizard',    roles: ['super_admin', 'admin'], badge: 'BASICS' },
-      { to: '/settings/backup',  icon: Database,    label: 'Backup & Restore', roles: ['super_admin', 'admin'] },
-      { to: '/hub/settings',     icon: Settings,    label: 'Settings Hub' },
+      { to: '/settings',        icon: Settings, label: 'School Settings' },
+      { to: '/launch-setup',    icon: Rocket,   label: 'Setup',          roles: ['super_admin', 'admin'] },
+      { to: '/settings/backup', icon: Database, label: 'Backup',         roles: ['super_admin', 'admin'] },
     ],
   },
 ];
