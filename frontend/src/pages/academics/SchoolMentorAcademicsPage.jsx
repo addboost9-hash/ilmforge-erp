@@ -524,16 +524,20 @@ function TextbooksExpanded({ classId, className }) {
 /* ═══════════════════════════════════════════════════════════════
    TEXTBOOKS TAB — shows classes list with expand ▼
    Fetches classes from API: GET /classes
+   Default textbook subjects shown per class on expand
 ═══════════════════════════════════════════════════════════════ */
+const DEFAULT_SUBJECTS_FULL  = ['English', 'Urdu', 'Mathematics', 'Science', 'Islamiyat'];
+const DEFAULT_SUBJECTS_SHORT = ['English', 'Urdu', 'Mathematics'];
+
 function TextbooksTab() {
+  const [expanded, setExpanded] = useState({});
+
   const { data: classes = [], isLoading } = useQuery({
-    queryKey: ['classes'],
+    queryKey: ['classes-tb'],
     queryFn: () => api.get('/classes').then(r => r.data.data || []).catch(() => []),
   });
 
-  const [expanded, setExpanded] = useState({});
-
-  const toggleExpand = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
+  const toggle = (id) => setExpanded(p => ({ ...p, [id]: !p[id] }));
 
   // Fallback demo classes if API returns empty
   const displayClasses = classes.length > 0 ? classes : [
@@ -545,13 +549,13 @@ function TextbooksTab() {
   ];
 
   return (
-    <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+    <div style={{ background: 'white', borderRadius: 8, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
-          <tr style={{ background: '#F8FAFC' }}>
-            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0', width: 80 }}>S. No.</th>
-            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>Class</th>
-            <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0', width: 100 }}>Details</th>
+          <tr style={{ background: '#f9fafb' }}>
+            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 13, fontWeight: 700, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>S. No.</th>
+            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 13, fontWeight: 700, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Class</th>
+            <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 13, fontWeight: 700, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Details</th>
           </tr>
         </thead>
         <tbody>
@@ -560,38 +564,77 @@ function TextbooksTab() {
               <td colSpan={3} style={{ padding: 32, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Loading classes…</td>
             </tr>
           ) : (
-            displayClasses.map((cls, i) => (
-              <>
-                <tr key={cls.id} style={{ borderBottom: expanded[cls.id] ? 'none' : '1px solid #F1F5F9' }}>
-                  <td style={{ padding: '12px 16px' }}>
-                    <GreenBadge n={i + 1} />
-                  </td>
-                  <td style={{ padding: '12px 16px', fontSize: 13 }}>
-                    <span style={{ color: TEAL, fontWeight: 600, marginRight: 6 }}>&lt;/&gt;</span>
-                    <span style={{ fontWeight: 600, color: NAVY }}>{cls.name}</span>
-                  </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => toggleExpand(cls.id)}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: '#3B82F6', fontSize: 18, lineHeight: 1,
-                      }}
-                      title={expanded[cls.id] ? 'Collapse' : 'Expand'}
-                    >
-                      {expanded[cls.id] ? '▲' : '▼'}
-                    </button>
-                  </td>
-                </tr>
-                {expanded[cls.id] && (
-                  <tr key={`${cls.id}_exp`} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                    <td colSpan={3} style={{ padding: '0 16px 16px' }}>
-                      <TextbooksExpanded classId={cls.id} className={cls.name} />
+            displayClasses.map((cls, i) => {
+              const subjects = (cls.sections && cls.sections.length > 0)
+                ? DEFAULT_SUBJECTS_FULL
+                : DEFAULT_SUBJECTS_SHORT;
+              return (
+                <>
+                  <tr key={cls.id} style={{ borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 26, height: 26, borderRadius: '50%',
+                        background: '#D1FAE5', color: '#065F46',
+                        fontSize: 11, fontWeight: 700, marginRight: 8,
+                      }}>#</span>
+                      {i + 1}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{ color: TEAL, fontWeight: 600, marginRight: 6 }}>&lt;&gt;</span>
+                      <span style={{ color: '#1f2937', fontSize: 14 }}>{cls.name}</span>
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                      <button
+                        onClick={() => toggle(cls.id)}
+                        style={{
+                          background: 'none', border: '1px solid #e5e7eb',
+                          borderRadius: 6, padding: '4px 10px',
+                          cursor: 'pointer', color: '#3B82F6', fontSize: 16,
+                        }}
+                      >
+                        {expanded[cls.id] ? '▲' : '▼'}
+                      </button>
                     </td>
                   </tr>
-                )}
-              </>
-            ))
+                  {expanded[cls.id] && (
+                    <tr key={`${cls.id}-exp`}>
+                      <td colSpan={3} style={{ padding: 0, background: '#f0fdfa' }}>
+                        <div style={{ padding: '12px 24px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                            <thead>
+                              <tr style={{ background: '#ccfbf1' }}>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>S. No.</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>Subject</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>Textbook</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>Publisher</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {subjects.map((subj, si) => (
+                                <tr key={si} style={{ borderTop: '1px solid #d1fae5' }}>
+                                  <td style={{ padding: '8px 12px' }}>{si + 1}</td>
+                                  <td style={{ padding: '8px 12px', color: TEAL, fontWeight: 600 }}>{subj}</td>
+                                  <td style={{ padding: '8px 12px' }}>{subj} Textbook – {cls.name}</td>
+                                  <td style={{ padding: '8px 12px', color: '#6b7280' }}>PTBB</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })
+          )}
+          {!isLoading && displayClasses.length === 0 && (
+            <tr>
+              <td colSpan={3} style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>
+                No classes found. Add classes in Settings → Classes.
+              </td>
+            </tr>
           )}
         </tbody>
       </table>

@@ -229,18 +229,9 @@ export default function SchoolMentorHub() {
           </div>
         </div>
 
-        {/* Module icons grouped by section */}
-        {SECTIONS.map(section => (
-          <div key={section} style={{ width: '100%', marginBottom: 2 }}>
-            {/* Section label */}
-            <div style={{
-              fontSize: 7, color: '#9ca3af', textAlign: 'center',
-              padding: '6px 2px 2px', letterSpacing: 0.5,
-              fontWeight: 700, textTransform: 'uppercase',
-            }}>
-              {section === 'ADMINISTRATION' ? 'ADMIN' : section}
-            </div>
-
+        {/* Module icons grouped by section — clean icon sidebar, no text labels */}
+        {SECTIONS.map((section, sectionIdx) => (
+          <div key={section} style={{ width: '100%' }}>
             {/* Icons in this section */}
             {SM_MODULES.filter(m => m.section === section).map(mod => {
               const Icon = mod.Icon;
@@ -255,10 +246,11 @@ export default function SchoolMentorHub() {
                     border: 'none',
                     background: active ? '#f0fdfa' : 'transparent',
                     cursor: 'pointer',
-                    padding: '9px 0',
+                    padding: '11px 0',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
+                    justifyContent: 'center',
                     gap: 3,
                     borderLeft: active ? '3px solid #0D9488' : '3px solid transparent',
                     transition: 'background 0.12s, border-color 0.12s',
@@ -270,7 +262,7 @@ export default function SchoolMentorHub() {
                     if (!active) e.currentTarget.style.background = 'transparent';
                   }}
                 >
-                  <Icon size={19} color={active ? '#0D9488' : '#6b7280'} />
+                  <Icon size={20} color={active ? '#0D9488' : '#6b7280'} />
                   <span style={{
                     fontSize: 8,
                     color: active ? '#0D9488' : '#9ca3af',
@@ -286,8 +278,10 @@ export default function SchoolMentorHub() {
               );
             })}
 
-            {/* Section divider */}
-            <div style={{ height: 1, background: '#f3f4f6', margin: '4px 8px' }} />
+            {/* Thin separator between groups (not after last group) */}
+            {sectionIdx < SECTIONS.length - 1 && (
+              <div style={{ height: 1, background: '#e5e7eb', margin: '4px 10px' }} />
+            )}
           </div>
         ))}
       </div>
