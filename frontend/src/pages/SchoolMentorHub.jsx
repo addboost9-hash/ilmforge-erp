@@ -5,12 +5,14 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, GraduationCap, ClipboardList, CheckSquare,
   Calendar, Wallet, BarChart2, Users, Briefcase, Settings,
   TrendingUp, DollarSign, AlertTriangle, UserCheck,
 } from 'lucide-react';
 import useAuthStore from '../store/auth.store';
+import api from '../api/client';
 
 // Import existing pages as module components
 import ExaminationPage from './exams/ExaminationPage';
@@ -39,26 +41,50 @@ const SM_MODULES = [
 
 const SECTIONS = ['ACADEMICS', 'ACCOUNTS', 'ADMINISTRATION', 'BASICS'];
 
-/* ── Dashboard stats component ── */
+/* ── Module wrapper — ensures scrollable, full-height content area ── */
+function ModuleWrapper({ children }) {
+  return (
+    <div style={{ minHeight: 'calc(100vh - 52px)', background: '#f8fafc' }}>
+      {children}
+    </div>
+  );
+}
+
+/* ── Dashboard stats component — fetches real data ── */
 function DashboardContent() {
   const { school } = useAuthStore();
 
-  const stats = [
-    { label: 'Total Students',       value: '1,248', Icon: Users,          color: '#0D9488', sub: '+12 this month' },
-    { label: 'Total Staff',          value: '87',    Icon: Briefcase,      color: '#0891b2', sub: '5 on leave' },
-    { label: 'Fee Collected Today',  value: 'Rs. 45,200', Icon: DollarSign, color: '#059669', sub: '18 vouchers' },
-    { label: 'Pending Fees',         value: 'Rs. 1.2L',   Icon: AlertTriangle, color: '#d97706', sub: '34 defaulters' },
-    { label: "Today's Attendance",   value: '94.2%', Icon: UserCheck,      color: '#7c3aed', sub: '1,174 present' },
-    { label: 'Active Classes',       value: '42',    Icon: GraduationCap,  color: '#be185d', sub: 'Across 6 grades' },
+  const { data: stats } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: () => api.get('/dashboard/stats').then(r => r.data.data || {}),
+    staleTime: 30000,
+    // Don't throw on error — fall back to zeros
+    onError: () => {},
+  });
+
+  const s = stats || {};
+  const totalStudents = s.students?.total ?? 0;
+  const totalStaff    = s.staff?.total ?? 0;
+  const feeToday      = s.finance?.incomeToday ?? 0;
+  const unpaidFees    = s.finance?.unpaidInvoices ?? 0;
+  const presentToday  = s.students?.presentToday ?? 0;
+  const activeClasses = s.classes?.total ?? 0;
+
+  const CARDS = [
+    { label: 'Total Students',      value: totalStudents,                              Icon: Users,         color: '#0D9488', sub: 'Enrolled' },
+    { label: 'Total Staff',         value: totalStaff,                                 Icon: Briefcase,     color: '#0891b2', sub: 'Active employees' },
+    { label: 'Present Today',       value: presentToday,                               Icon: UserCheck,     color: '#059669', sub: 'Student attendance' },
+    { label: 'Fee Collected Today', value: `Rs. ${Number(feeToday).toLocaleString()}`, Icon: DollarSign,    color: '#7c3aed', sub: 'Today\'s collection' },
+    { label: 'Unpaid Invoices',     value: unpaidFees,                                 Icon: AlertTriangle, color: '#d97706', sub: 'Pending dues' },
+    { label: 'Active Classes',      value: activeClasses,                              Icon: GraduationCap, color: '#be185d', sub: 'Across all grades' },
   ];
 
   const quickActions = [
-    { label: 'Mark Attendance', color: '#0D9488', icon: '✓' },
-    { label: 'Collect Fee',     color: '#0891b2', icon: '₨' },
-    { label: 'Add Student',     color: '#059669', icon: '+' },
-    { label: 'Generate Report', color: '#7c3aed', icon: '📊' },
-    { label: 'Send SMS',        color: '#d97706', icon: '✉' },
-    { label: 'View Timetable',  color: '#be185d', icon: '📅' },
+    { label: 'Mark Attendance', color: '#0D9488', icon: '✓', path: '/attendance-hub' },
+    { label: 'Collect Fee',     color: '#0891b2', icon: '₨', path: '/fee-management' },
+    { label: 'Add Student',     color: '#059669', icon: '+', path: '/admissions/wizard' },
+    { label: 'Generate Report', color: '#7c3aed', icon: '📊', path: '/reports-hub' },
+    { label: 'View Timetable',  color: '#be185d', icon: '📅', path: '/timetable' },
   ];
 
   return (
@@ -93,7 +119,7 @@ function DashboardContent() {
         gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
         gap: 16, marginBottom: 24,
       }}>
-        {stats.map(({ label, value, Icon, color, sub }) => (
+        {CARDS.map(({ label, value, Icon, color, sub }) => (
           <div key={label} style={{
             background: '#fff', borderRadius: 10,
             boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
@@ -110,7 +136,7 @@ function DashboardContent() {
                 <Icon size={22} color="#fff" />
               </div>
               <div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: '#fff', lineHeight: 1 }}>{value}</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: '#fff', lineHeight: 1 }}>{value ?? 0}</div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2 }}>{label}</div>
               </div>
             </div>
@@ -130,16 +156,17 @@ function DashboardContent() {
           Quick Actions
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          {quickActions.map(({ label, color, icon }) => (
-            <button key={label} style={{
+          {quickActions.map(({ label, color, icon, path }) => (
+            <a key={label} href={path} style={{
               background: color, color: '#fff', border: 'none',
               borderRadius: 8, padding: '10px 18px',
               fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 6,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
               boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+              textDecoration: 'none',
             }}>
               <span>{icon}</span> {label}
-            </button>
+            </a>
           ))}
         </div>
       </div>
@@ -152,32 +179,9 @@ function DashboardContent() {
         <div style={{ fontSize: 14, fontWeight: 700, color: '#1f2937', marginBottom: 14 }}>
           Recent Activity
         </div>
-        {[
-          { action: 'Fee collected from Ahmed Ali (Class 8-A)', time: '5 min ago', type: 'fee' },
-          { action: 'Attendance marked for Class 10-B — 28/30 present', time: '18 min ago', type: 'attendance' },
-          { action: 'New student admission: Fatima Khalid (Class 5)', time: '1 hr ago', type: 'student' },
-          { action: 'Monthly salary processed for 87 staff members', time: '2 hrs ago', type: 'salary' },
-          { action: 'Result cards generated for Grade 9 Mid-Term', time: 'Yesterday', type: 'exam' },
-        ].map(({ action, time, type }, i) => {
-          const colors = { fee: '#059669', attendance: '#0D9488', student: '#0891b2', salary: '#7c3aed', exam: '#d97706' };
-          return (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'flex-start', gap: 12,
-              padding: '10px 0',
-              borderBottom: i < 4 ? '1px solid #f3f4f6' : 'none',
-            }}>
-              <div style={{
-                width: 8, height: 8, borderRadius: '50%',
-                background: colors[type] || '#0D9488',
-                marginTop: 6, flexShrink: 0,
-              }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, color: '#374151' }}>{action}</div>
-                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{time}</div>
-              </div>
-            </div>
-          );
-        })}
+        <p style={{ color: '#9ca3af', fontSize: 13, margin: 0 }}>
+          No recent activity to show. Start by marking attendance or collecting fees.
+        </p>
       </div>
     </div>
   );
@@ -349,16 +353,16 @@ export default function SchoolMentorHub() {
 
         {/* Module content */}
         <div style={{ flex: 1 }}>
-          {activeModule === 'dashboard'   && <DashboardContent />}
-          {activeModule === 'academics'   && <SchoolMentorAcademicsPage />}
-          {activeModule === 'examination' && <ExaminationPage />}
-          {activeModule === 'attendance'  && <AttendanceHubPage />}
-          {activeModule === 'timetable'   && <TimetablePage />}
-          {activeModule === 'fee'         && <FeeManagementPage />}
-          {activeModule === 'accounts'    && <AccountsPage />}
-          {activeModule === 'students'    && <StudentsPage />}
-          {activeModule === 'hr'          && <HumanResourcePage />}
-          {activeModule === 'setup'       && <LaunchSetupPage />}
+          {activeModule === 'dashboard'   && <ModuleWrapper><DashboardContent /></ModuleWrapper>}
+          {activeModule === 'academics'   && <ModuleWrapper><SchoolMentorAcademicsPage /></ModuleWrapper>}
+          {activeModule === 'examination' && <ModuleWrapper><ExaminationPage /></ModuleWrapper>}
+          {activeModule === 'attendance'  && <ModuleWrapper><AttendanceHubPage /></ModuleWrapper>}
+          {activeModule === 'timetable'   && <ModuleWrapper><TimetablePage /></ModuleWrapper>}
+          {activeModule === 'fee'         && <ModuleWrapper><FeeManagementPage /></ModuleWrapper>}
+          {activeModule === 'accounts'    && <ModuleWrapper><AccountsPage /></ModuleWrapper>}
+          {activeModule === 'students'    && <ModuleWrapper><StudentsPage /></ModuleWrapper>}
+          {activeModule === 'hr'          && <ModuleWrapper><HumanResourcePage /></ModuleWrapper>}
+          {activeModule === 'setup'       && <ModuleWrapper><LaunchSetupPage /></ModuleWrapper>}
         </div>
       </div>
     </div>
