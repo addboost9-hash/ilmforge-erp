@@ -35,7 +35,7 @@ const btnOutline = {
   gap: 6,
 };
 
-const STATUS_CYCLE = ['Not Marked', 'Present', 'Absent', 'Leave'];
+const STATUS_CYCLE = ['Present', 'Absent', 'Leave', 'Not Marked'];
 const STATUS_COLORS = {
   Present:    { bg: '#DCFCE7', color: '#15803D', border: '#BBF7D0' },
   Absent:     { bg: '#FEE2E2', color: '#B91C1C', border: '#FECACA' },
@@ -95,6 +95,20 @@ function MarkAttendanceModal({ row, date, onClose, onSaved }) {
     staleTime: 0,
   });
 
+  // When students load, default all to Present (School Mentor behavior)
+  useEffect(() => {
+    if (students.length > 0) {
+      setStatuses((prev) => {
+        const m = { ...prev };
+        students.forEach((s) => {
+          if (!(s.id in m)) m[s.id] = 'Present';
+        });
+        return m;
+      });
+    }
+  }, [students]);
+
+  // Pre-fill existing attendance records if available
   useEffect(() => {
     if (existing.length) {
       const m = {};
@@ -103,7 +117,7 @@ function MarkAttendanceModal({ row, date, onClose, onSaved }) {
           const st = s.attendance.status;
           m[s.id] = st.charAt(0).toUpperCase() + st.slice(1);
         } else {
-          m[s.id] = 'Not Marked';
+          m[s.id] = 'Present';
         }
       });
       setStatuses(m);
@@ -312,6 +326,68 @@ function MarkAttendanceModal({ row, date, onClose, onSaved }) {
   );
 }
 
+/* ─── Expanded Detail Row ────────────────────────────────────────
+   Renders as a <tr> wrapping stats + student list for the expanded class row
+────────────────────────────────────────────────────────────────── */
+function ExpandedDetailRow({ students, loading }) {
+  const totalExp   = students.length;
+  const presentExp = students.filter(s => s.attendance?.status === 'present').length;
+  const absentExp  = students.filter(s => s.attendance?.status === 'absent').length;
+  const leaveExp   = students.filter(s => s.attendance?.status === 'leave').length;
+
+  return (
+    <tr>
+      <td colSpan={5} style={{ padding: 0, background: TEAL_LIGHT }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 16, color: '#9CA3AF' }}>Loading…</div>
+        ) : (
+          <>
+            {/* Stats row */}
+            <div style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: '1px solid #D1FAE5', flexWrap: 'wrap', fontSize: 13, color: '#374151' }}>
+              <span>Total Students: <strong>{totalExp}</strong></span>
+              <span style={{ color: '#15803D' }}>Present Students: <strong>{presentExp}</strong></span>
+              <span style={{ color: '#B91C1C' }}>Absent Students: <strong>{absentExp}</strong></span>
+              <span style={{ color: '#B45309' }}>On Leave Students: <strong>{leaveExp}</strong></span>
+              <span style={{ color: '#6B7280' }}>Platform: —</span>
+              <span style={{ color: '#6B7280' }}>Created By/On: —</span>
+            </div>
+            {/* Student list */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#CCFBF1' }}>
+                  <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>#</th>
+                  <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>Reg No</th>
+                  <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>Name</th>
+                  <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((s, i) => {
+                  const st = s.attendance?.status;
+                  const label = st ? st.charAt(0).toUpperCase() + st.slice(1) : 'Not Marked';
+                  return (
+                    <tr key={s.id} style={{ borderBottom: '1px solid #D1FAE5' }}>
+                      <td style={{ padding: '7px 14px', color: '#9CA3AF' }}>{i + 1}</td>
+                      <td style={{ padding: '7px 14px', fontFamily: 'monospace', color: TEAL, fontWeight: 700 }}>{s.rollNo || '—'}</td>
+                      <td style={{ padding: '7px 14px', fontWeight: 600 }}>{s.name}</td>
+                      <td style={{ padding: '7px 14px' }}><StatusBadge status={label} /></td>
+                    </tr>
+                  );
+                })}
+                {students.length === 0 && (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: 20, color: '#9CA3AF' }}>No records</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 /* ─── Student Attendance Tab ──────────────────────────────────── */
 function StudentAttendanceTab() {
   const [date, setDate] = useState(today());
@@ -449,11 +525,24 @@ function StudentAttendanceTab() {
                     <td style={{ padding: '10px 14px', color: '#374151' }}>{row.sectionName || '—'}</td>
                     <td style={{ padding: '10px 14px' }}>
                       <button
-                        style={{
-                          ...btnTeal,
-                          background: isMarked ? '#059669' : TEAL,
-                          fontSize: 12,
+                        style={isMarked ? {
+                          background: TEAL,
+                          color: '#fff',
+                          border: `1px solid ${TEAL}`,
+                          borderRadius: 6,
                           padding: '5px 14px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: 12,
+                        } : {
+                          background: '#fff',
+                          color: '#6B7280',
+                          border: '1px solid #D1D5DB',
+                          borderRadius: 6,
+                          padding: '5px 14px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: 12,
                         }}
                         onClick={() => setMarkModal(row)}
                       >
@@ -480,53 +569,7 @@ function StudentAttendanceTab() {
                       </button>
                     </td>
                   </tr>
-                  {isExpanded && (
-                    <tr key={`${rowKey}-detail`}>
-                      <td colSpan={5} style={{ padding: 0, background: TEAL_LIGHT }}>
-                        {loadingExpanded ? (
-                          <div style={{ textAlign: 'center', padding: 16, color: '#9CA3AF' }}>Loading…</div>
-                        ) : (
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                            <thead>
-                              <tr style={{ background: '#CCFBF1' }}>
-                                <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>#</th>
-                                <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>Reg No</th>
-                                <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>Name</th>
-                                <th style={{ padding: '7px 14px', color: '#0F766E', fontWeight: 700, textAlign: 'left' }}>Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {expandedStudents.map((s, i) => {
-                                const st = s.attendance?.status;
-                                const label = st
-                                  ? st.charAt(0).toUpperCase() + st.slice(1)
-                                  : 'Not Marked';
-                                return (
-                                  <tr key={s.id} style={{ borderBottom: '1px solid #D1FAE5' }}>
-                                    <td style={{ padding: '7px 14px', color: '#9CA3AF' }}>{i + 1}</td>
-                                    <td style={{ padding: '7px 14px', fontFamily: 'monospace', color: TEAL, fontWeight: 700 }}>
-                                      {s.rollNo || '—'}
-                                    </td>
-                                    <td style={{ padding: '7px 14px', fontWeight: 600 }}>{s.name}</td>
-                                    <td style={{ padding: '7px 14px' }}>
-                                      <StatusBadge status={label} />
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                              {expandedStudents.length === 0 && (
-                                <tr>
-                                  <td colSpan={4} style={{ textAlign: 'center', padding: 20, color: '#9CA3AF' }}>
-                                    No records
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
-                        )}
-                      </td>
-                    </tr>
-                  )}
+                  {isExpanded && <ExpandedDetailRow students={expandedStudents} loading={loadingExpanded} />}
                 </>
               );
             })}
@@ -950,12 +993,19 @@ export default function AttendanceHubPage() {
           padding: '14px 20px',
           marginBottom: 16,
           boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
         }}
       >
         <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827' }}>Attendance</h1>
-        <p style={{ margin: '2px 0 0', fontSize: 13, color: '#6B7280' }}>
-          Manage student and staff attendance
-        </p>
+        <button style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          border: `1.5px solid ${TEAL}`, background: 'transparent', color: TEAL,
+          borderRadius: 7, padding: '8px 16px', cursor: 'pointer', fontWeight: 700, fontSize: 13,
+        }}>
+          ▶ Tutorial
+        </button>
       </div>
 
       {/* Main tab panel */}
