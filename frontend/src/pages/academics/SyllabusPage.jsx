@@ -4,8 +4,9 @@
  */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { BookOpen, Plus, Trash2, Edit2, Printer, ChevronRight, Check, Clock, X } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, Printer, ChevronRight, Check, Clock, X, Smartphone, Edit } from 'lucide-react';
 import api from '../../api/client';
 
 const ACADEMIC_YEARS = ['2024-2025', '2025-2026', '2026-2027'];
@@ -28,6 +29,7 @@ const emptyForm = () => ({
 
 export default function SyllabusPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [view, setView] = useState('list'); // 'list' | 'create' | 'detail'
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(emptyForm());
@@ -202,6 +204,13 @@ export default function SyllabusPage() {
           <ChevronRight size={14} color="#9CA3AF" />
           <h2 style={{ fontSize: 17, fontWeight: 800, color: '#1B2F6E', margin: 0 }}>{selected.title?.replace(/\s*\[.*?\]/g, '')}</h2>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => toast.success('Feature available in mobile app')}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}
+            >
+              <Smartphone size={12} /> Export to Mobile App
+            </button>
             <button className="btn btn-outline btn-sm" onClick={() => printSyllabus(selected)}>
               <Printer size={13} /> Print
             </button>
@@ -412,12 +421,20 @@ export default function SyllabusPage() {
             <p className="page-subtitle">Manage and track curriculum coverage by class and subject</p>
           </div>
         </div>
-        <button
-          onClick={() => { setForm(emptyForm()); setView('create'); }}
-          style={{ background: '#1B2F6E', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-        >
-          <Plus size={14} /> Add Syllabus
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => toast.success('Feature available in mobile app')}
+            style={{ background: '#0D9488', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <Smartphone size={14} /> Export to Mobile App
+          </button>
+          <button
+            onClick={() => { setForm(emptyForm()); setView('create'); }}
+            style={{ background: '#1B2F6E', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <Plus size={14} /> Add Syllabus
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -476,6 +493,13 @@ export default function SyllabusPage() {
                     {units.filter(u => u.completed).length}/{units.length} units done
                   </span>
                   <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
+                    <button
+                      style={{ background: '#e0f2fe', border: 'none', borderRadius: 6, padding: '4px 9px', cursor: 'pointer', color: '#0369a1', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}
+                      onClick={() => navigate(`/academics/subject-syllabus/${syl.classId || syl.class_id || ''}/all`)}
+                      title="Open Syllabus Editor"
+                    >
+                      <Edit size={11} /> Edit
+                    </button>
                     <button
                       style={{ background: '#eff6ff', border: 'none', borderRadius: 6, padding: '4px 9px', cursor: 'pointer', color: '#1B2F6E', fontSize: 11.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}
                       onClick={() => printSyllabus(syl)}

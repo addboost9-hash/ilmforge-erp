@@ -44,6 +44,7 @@ import FeeGeneratePage from './pages/fees/FeeGeneratePage';
 import FeeDefaultersPage from './pages/fees/FeeDefaultersPage';
 import FeeStructurePage from './pages/fees/FeeStructurePage';
 import AttendancePage from './pages/attendance/AttendancePage';
+import AttendanceHubPage from './pages/attendance/AttendanceHubPage';
 import BarcodeScanPage from './pages/attendance/BarcodeScanPage';
 import AttendanceReportPage from './pages/attendance/AttendanceReportPage';
 import StaffAttendancePage from './pages/attendance/StaffAttendancePage';
@@ -168,6 +169,7 @@ import SOPsPage                from './pages/sops/SOPsPage';
 import BulkImportPage          from './pages/students/BulkImportPage';
 import RoboBuddyPage           from './pages/robobuddy/RoboBuddyPage';
 import FeeInvoicesManagePage   from './pages/fees/FeeInvoicesManagePage';
+import FeeManagementPage        from './pages/fees/FeeManagementPage';
 
 // v3.7 new modules
 import QuestionPaperPage        from './pages/exams/QuestionPaperPage';
@@ -180,6 +182,7 @@ import PayrollPage              from './pages/staff/PayrollPage';
 import WorksheetGeneratorPage   from './pages/academics/WorksheetGeneratorPage';
 import MCQGeneratorPage         from './pages/exams/MCQGeneratorPage';
 import SyllabusPage             from './pages/academics/SyllabusPage';
+import SubjectSyllabusPage      from './pages/academics/SubjectSyllabusPage';
 import ResultConfigPage         from './pages/exams/ResultConfigPage';
 
 // MISSING — safe lazy with fallback
@@ -380,6 +383,7 @@ export default function App() {
 
             {/* Attendance */}
             <Route path="/attendance"                 element={<AttendancePage />} />
+            <Route path="/attendance-hub"             element={<AttendanceHubPage />} />
             <Route path="/attendance/barcode"         element={<BarcodeScanPage />} />
             <Route path="/attendance/report"          element={<AttendanceReportPage />} />
             <Route path="/attendance/staff"           element={<StaffAttendancePage />} />
@@ -537,6 +541,7 @@ export default function App() {
             <Route path="/students/bulk-import"       element={<BulkImportPage />} />
             <Route path="/robobuddy"                  element={<RoboBuddyPage />} />
             <Route path="/fees/invoices"              element={<FeeInvoicesManagePage />} />
+            <Route path="/fee-management"             element={<FeeManagementPage />} />
             <Route path="/settings/notifications-config" element={
               <React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}>
                 <NotificationConfigPage />
@@ -609,6 +614,7 @@ export default function App() {
             <Route path="/academics/worksheets"       element={<WorksheetGeneratorPage />} />
             <Route path="/exams/mcq-generator"        element={<MCQGeneratorPage />} />
             <Route path="/academics/syllabus"         element={<SyllabusPage />} />
+            <Route path="/academics/subject-syllabus/:classId/:sectionId" element={<SubjectSyllabusPage />} />
             {/* ── Result Config (grade setup + card options) ── */}
             <Route path="/exams/result-config"        element={<ResultConfigPage />} />
           </Route>

@@ -95,16 +95,95 @@ function MakePaperModal({ classItem, sectionItem, allSubjects, onClose, onGenera
   // Filter subjects for this class, or show all if no class-specific subjects
   const subjects = allSubjects.filter(s => !s.classId || String(s.classId) === String(classItem?.id));
   const displaySubjects = subjects.length > 0 ? subjects : allSubjects;
+
   const [form, setForm] = useState({
-    subjectId: '', units: '', paperType: 'Both', paperFormat: 'Only Question Paper',
+    subjectId: '', paperType: 'Both', paperFormat: 'Only Question Paper',
     objectiveTime: 30, objectiveMarks: 20, subjectiveTime: 90, subjectiveMarks: 80,
     title: `${classItem?.name || 'Class'} Question Paper`,
   });
   const [fetched, setFetched] = useState(false);
   const [qTypes, setQTypes] = useState(
-    QUESTION_TYPES.map(t => ({ type: t, noOfItems: 0, marksPerItem: 1, noOfChoices: 0, instruction: '', enabled: false }))
+    QUESTION_TYPES.map(t => ({
+      type: t, noOfItems: 0, marksPerItem: 1, noOfChoices: 0,
+      totalItems: 0, mainQuestion: '', instruction: '', enabled: false, saved: false,
+    }))
   );
   const [generating, setGenerating] = useState(false);
+
+  /* ── Units multi-select state ── */
+  const [selectedUnits, setSelectedUnits] = useState([]);
+  const [unitInput, setUnitInput] = useState('');
+  const [unitDropdownOpen, setUnitDropdownOpen] = useState(false);
+
+  /* ── Fetch syllabus units when subject changes ── */
+  const { data: syllabusUnits = [] } = useQuery({
+    queryKey: ['syllabus-units', classItem?.id, form.subjectId],
+    queryFn: async () => {
+      if (!form.subjectId) return [];
+      try {
+        const r = await api.get(`/schemes?classId=${classItem?.id}&subjectId=${form.subjectId}`);
+        const schemes = r.data.data || [];
+        // Collect all units from all matching schemes
+        const units = [];
+        schemes.forEach(s => {
+          if (Array.isArray(s.units)) {
+            s.units.forEach(u => { if (u.title) units.push(u.title); });
+          }
+          // Also try syllabi
+          if (Array.isArray(s.months)) {
+            s.months.forEach(m => { if (m && typeof m === 'string') units.push(m); });
+          }
+        });
+        return [...new Set(units)];
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!(classItem?.id && form.subjectId),
+  });
+
+  /* Also try to fetch from /syllabus endpoint */
+  const { data: syllabusData = [] } = useQuery({
+    queryKey: ['syllabus-for-paper', classItem?.id, form.subjectId],
+    queryFn: async () => {
+      if (!form.subjectId) return [];
+      try {
+        const r = await api.get(`/syllabus?classId=${classItem?.id}&subjectId=${form.subjectId}`);
+        const items = r.data.data || [];
+        const units = [];
+        items.forEach(syl => {
+          if (Array.isArray(syl.units)) {
+            syl.units.forEach(u => { if (u.title) units.push(u.title); });
+          }
+        });
+        return [...new Set(units)];
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!(classItem?.id && form.subjectId),
+  });
+
+  const allFetchedUnits = [...new Set([...syllabusUnits, ...syllabusData])];
+  const showFallbackInput = allFetchedUnits.length === 0;
+
+  const toggleUnit = (unit) => {
+    setSelectedUnits(prev =>
+      prev.includes(unit) ? prev.filter(u => u !== unit) : [...prev, unit]
+    );
+  };
+
+  const removeUnit = (unit) => {
+    setSelectedUnits(prev => prev.filter(u => u !== unit));
+  };
+
+  const addManualUnit = () => {
+    const trimmed = unitInput.trim();
+    if (trimmed && !selectedUnits.includes(trimmed)) {
+      setSelectedUnits(prev => [...prev, trimmed]);
+    }
+    setUnitInput('');
+  };
 
   const handleFetch = () => {
     if (!form.subjectId) return toast.error('Select a subject first');
@@ -113,7 +192,12 @@ function MakePaperModal({ classItem, sectionItem, allSubjects, onClose, onGenera
   };
 
   const handleQTypeChange = (idx, field, val) => {
-    setQTypes(prev => prev.map((qt, i) => i === idx ? { ...qt, [field]: val } : qt));
+    setQTypes(prev => prev.map((qt, i) => i === idx ? { ...qt, [field]: val, saved: false } : qt));
+  };
+
+  const handleSaveQType = (idx) => {
+    setQTypes(prev => prev.map((qt, i) => i === idx ? { ...qt, saved: true } : qt));
+    toast.success(`${qTypes[idx].type} config saved`);
   };
 
   const handleGenerate = async () => {
@@ -125,7 +209,7 @@ function MakePaperModal({ classItem, sectionItem, allSubjects, onClose, onGenera
         sectionId: sectionItem?.id,
         subjectId: form.subjectId,
         subject: displaySubjects.find(s => String(s.id) === String(form.subjectId))?.name || '',
-        units: form.units.split(',').map(u => u.trim()).filter(Boolean),
+        units: selectedUnits,
         paperType: form.paperType,
         paperFormat: form.paperFormat,
         objectiveTime: form.objectiveTime,
@@ -145,7 +229,7 @@ function MakePaperModal({ classItem, sectionItem, allSubjects, onClose, onGenera
   };
 
   const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '24px 0' };
-  const modal  = { background: '#fff', borderRadius: 12, padding: 28, width: '100%', maxWidth: 760, margin: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' };
+  const modal  = { background: '#fff', borderRadius: 12, padding: 28, width: '100%', maxWidth: 780, margin: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' };
   const rowStyle = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 };
   const inpSm = { ...inputStyle, padding: '6px 10px' };
 
@@ -160,14 +244,108 @@ function MakePaperModal({ classItem, sectionItem, allSubjects, onClose, onGenera
         <div style={rowStyle}>
           <div>
             <label style={labelStyle}>Select Subject *</label>
-            <select style={inputStyle} value={form.subjectId} onChange={e => setForm(f => ({ ...f, subjectId: e.target.value }))}>
+            <select style={inputStyle} value={form.subjectId} onChange={e => {
+              setForm(f => ({ ...f, subjectId: e.target.value }));
+              setSelectedUnits([]);
+            }}>
               <option value="">-- Select Subject --</option>
               {displaySubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
           <div>
-            <label style={labelStyle}>Select Units (comma-separated)</label>
-            <input style={inputStyle} value={form.units} onChange={e => setForm(f => ({ ...f, units: e.target.value }))} placeholder="Unit 1, Unit 2, Unit 3" />
+            {/* ── Units multi-select ── */}
+            <label style={labelStyle}>Select Units</label>
+            {!showFallbackInput ? (
+              <div style={{ position: 'relative' }}>
+                {/* Tag display */}
+                <div
+                  onClick={() => setUnitDropdownOpen(o => !o)}
+                  style={{
+                    ...inputStyle, cursor: 'pointer', minHeight: 38,
+                    display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center',
+                    padding: '5px 10px',
+                  }}
+                >
+                  {selectedUnits.length === 0 && (
+                    <span style={{ color: '#9CA3AF', fontSize: 12 }}>Click to select units...</span>
+                  )}
+                  {selectedUnits.map(u => (
+                    <span key={u} style={{
+                      background: '#dbeafe', color: '#1e40af', padding: '2px 8px',
+                      borderRadius: 99, fontSize: 11, fontWeight: 600,
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                      {u}
+                      <button
+                        onMouseDown={e => { e.stopPropagation(); removeUnit(u); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e40af', padding: 0, fontSize: 11, lineHeight: 1 }}
+                      >×</button>
+                    </span>
+                  ))}
+                </div>
+                {/* Dropdown */}
+                {unitDropdownOpen && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                    background: '#fff', border: '1px solid #d1d5db', borderRadius: 8,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4,
+                    maxHeight: 200, overflowY: 'auto',
+                  }}>
+                    {allFetchedUnits.map(u => (
+                      <div
+                        key={u}
+                        onClick={() => { toggleUnit(u); }}
+                        style={{
+                          padding: '9px 14px', cursor: 'pointer', fontSize: 13,
+                          background: selectedUnits.includes(u) ? '#EEF2FF' : '#fff',
+                          color: selectedUnits.includes(u) ? NAVY : '#374151',
+                          fontWeight: selectedUnits.includes(u) ? 700 : 400,
+                          display: 'flex', alignItems: 'center', gap: 8,
+                        }}
+                      >
+                        <span style={{ fontSize: 11 }}>{selectedUnits.includes(u) ? '✓' : '○'}</span>
+                        {u}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Fallback: manual text input with tags */
+              <div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                  <input
+                    style={{ ...inputStyle, flex: 1 }}
+                    value={unitInput}
+                    onChange={e => setUnitInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManualUnit(); } }}
+                    placeholder="Type unit name and press Enter"
+                  />
+                  <button
+                    type="button"
+                    onClick={addManualUnit}
+                    style={{ ...btnStyle('#0D9488'), fontSize: 12, padding: '6px 12px' }}
+                  >Add</button>
+                </div>
+                {selectedUnits.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {selectedUnits.map(u => (
+                      <span key={u} style={{
+                        background: '#dbeafe', color: '#1e40af', padding: '3px 10px',
+                        borderRadius: 99, fontSize: 11, fontWeight: 600,
+                        display: 'flex', alignItems: 'center', gap: 4,
+                      }}>
+                        {u}
+                        <button
+                          onClick={() => removeUnit(u)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e40af', padding: 0, fontSize: 12, lineHeight: 1 }}
+                        >×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div>
             <label style={labelStyle}>Question Paper Type</label>
@@ -228,31 +406,90 @@ function MakePaperModal({ classItem, sectionItem, allSubjects, onClose, onGenera
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 700, color: NAVY, marginBottom: 10, fontSize: 13 }}>Question Types</div>
             {qTypes.map((qt, idx) => (
-              <div key={qt.type} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', marginBottom: 6, background: qt.enabled ? '#EEF2FF' : '#fafafa' }}>
+              <div key={qt.type} style={{
+                border: `1px solid ${qt.saved ? '#86efac' : '#e5e7eb'}`,
+                borderRadius: 8, padding: '10px 14px', marginBottom: 6,
+                background: qt.saved ? '#f0fdf4' : qt.enabled ? '#EEF2FF' : '#fafafa',
+                transition: 'all 0.15s',
+              }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <input type="checkbox" checked={qt.enabled} onChange={e => handleQTypeChange(idx, 'enabled', e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-                  <span style={{ fontWeight: 600, fontSize: 13, color: qt.enabled ? NAVY : '#6b7280', minWidth: 150 }}>{qt.type}</span>
-                  {qt.enabled && (
-                    <div style={{ display: 'flex', gap: 8, flex: 1, alignItems: 'center' }}>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ ...labelStyle, marginBottom: 2 }}>No. of Items</label>
-                        <input type="number" min="0" style={{ ...inpSm }} value={qt.noOfItems} onChange={e => handleQTypeChange(idx, 'noOfItems', parseInt(e.target.value) || 0)} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ ...labelStyle, marginBottom: 2 }}>Marks/Item</label>
-                        <input type="number" min="0" style={{ ...inpSm }} value={qt.marksPerItem} onChange={e => handleQTypeChange(idx, 'marksPerItem', parseInt(e.target.value) || 1)} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ ...labelStyle, marginBottom: 2 }}>No. of Choices</label>
-                        <input type="number" min="0" style={{ ...inpSm }} value={qt.noOfChoices} onChange={e => handleQTypeChange(idx, 'noOfChoices', parseInt(e.target.value) || 0)} />
-                      </div>
-                      <div style={{ flex: 2 }}>
-                        <label style={{ ...labelStyle, marginBottom: 2 }}>Instruction (e.g. "Attempt any FIVE")</label>
-                        <input style={{ ...inpSm }} value={qt.instruction} onChange={e => handleQTypeChange(idx, 'instruction', e.target.value)} placeholder="Optional instruction" />
-                      </div>
+                  <input
+                    type="checkbox"
+                    checked={qt.enabled}
+                    onChange={e => handleQTypeChange(idx, 'enabled', e.target.checked)}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                  <span style={{ fontWeight: 700, fontSize: 13, color: qt.enabled ? NAVY : '#6b7280', minWidth: 140 }}>
+                    {qt.type}
+                    {qt.saved && <span style={{ marginLeft: 6, fontSize: 10, color: '#059669', fontWeight: 700 }}>✓ Saved</span>}
+                  </span>
+
+                  {/* Unit chip display */}
+                  {qt.enabled && selectedUnits.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flex: 1 }}>
+                      {selectedUnits.slice(0, 3).map(u => (
+                        <span key={u} style={{
+                          background: '#dbeafe', color: '#1e40af', padding: '1px 8px',
+                          borderRadius: 99, fontSize: 10, fontWeight: 600,
+                        }}>{u}</span>
+                      ))}
+                      {selectedUnits.length > 3 && (
+                        <span style={{ fontSize: 10, color: '#6b7280' }}>+{selectedUnits.length - 3} more</span>
+                      )}
                     </div>
                   )}
                 </div>
+
+                {qt.enabled && (
+                  <div style={{ marginTop: 10, paddingLeft: 26 }}>
+                    {/* Main question input */}
+                    <div style={{ marginBottom: 10 }}>
+                      <label style={{ ...labelStyle, marginBottom: 4 }}>Enter Main Question in paper</label>
+                      <input
+                        style={inpSm}
+                        value={qt.mainQuestion}
+                        onChange={e => handleQTypeChange(idx, 'mainQuestion', e.target.value)}
+                        placeholder="e.g. Attempt any FIVE"
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                      <div style={{ flex: 1, minWidth: 80 }}>
+                        <label style={{ ...labelStyle, marginBottom: 2 }}>Total Items</label>
+                        <input type="number" min="0" style={inpSm} value={qt.totalItems}
+                          onChange={e => handleQTypeChange(idx, 'totalItems', parseInt(e.target.value) || 0)} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 80 }}>
+                        <label style={{ ...labelStyle, marginBottom: 2 }}>No. of Items</label>
+                        <input type="number" min="0" style={inpSm} value={qt.noOfItems}
+                          onChange={e => handleQTypeChange(idx, 'noOfItems', parseInt(e.target.value) || 0)} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 80 }}>
+                        <label style={{ ...labelStyle, marginBottom: 2 }}>No. of Choices</label>
+                        <input type="number" min="0" style={inpSm} value={qt.noOfChoices}
+                          onChange={e => handleQTypeChange(idx, 'noOfChoices', parseInt(e.target.value) || 0)} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 80 }}>
+                        <label style={{ ...labelStyle, marginBottom: 2 }}>Marks/Item</label>
+                        <input type="number" min="0" style={inpSm} value={qt.marksPerItem}
+                          onChange={e => handleQTypeChange(idx, 'marksPerItem', parseInt(e.target.value) || 1)} />
+                      </div>
+                      {/* Green Save button per question type */}
+                      <div>
+                        <button
+                          onClick={() => handleSaveQType(idx)}
+                          style={{
+                            ...btnStyle('#059669'),
+                            fontSize: 12, padding: '6px 14px',
+                            display: 'flex', alignItems: 'center', gap: 5,
+                          }}
+                        >
+                          ✓ Save
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

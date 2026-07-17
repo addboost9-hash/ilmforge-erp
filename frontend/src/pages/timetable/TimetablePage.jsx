@@ -7,7 +7,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Printer, Download, Clock, Plus, Trash2, X, Copy } from 'lucide-react';
+import { Printer, Download, Clock, Plus, Trash2, X, Copy, RefreshCw } from 'lucide-react';
 import api from '../../api/client';
 
 /* ─── Constants ─────────────────────────────────── */
@@ -194,26 +194,36 @@ export default function TimetablePage() {
     setPeriods(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
   };
 
-  /* ── Copy from Monday ── */
-  const copyFromMonday = () => {
-    const monEntries = (modalAllEntries || []).filter(e =>
-      e.day === 'Monday' &&
+  /* ── Determine previous day ── */
+  const getPreviousDay = useCallback((dayKey) => {
+    const idx = DAYS.findIndex(d => d.key === dayKey);
+    if (idx <= 0) return null;
+    return DAYS[idx - 1];
+  }, []);
+
+  /* ── Copy from previous day ── */
+  const copyFromPreviousDay = useCallback(() => {
+    const prevDay = getPreviousDay(activeDay);
+    if (!prevDay) return;
+
+    const prevEntries = (modalAllEntries || []).filter(e =>
+      e.day === prevDay.key &&
       e.classId === modal?.classId &&
       (modal?.sectionId == null ? !e.sectionId : e.sectionId === modal?.sectionId)
     );
-    if (!monEntries.length) {
-      toast.error('No Monday entries to copy');
+    if (!prevEntries.length) {
+      toast.error(`No ${prevDay.key} entries to copy`);
       return;
     }
-    setPeriods(monEntries.map(e => ({
+    setPeriods(prevEntries.map(e => ({
       _tempId: Math.random().toString(36).slice(2),
       startTime: e.startTime || '',
       endTime:   e.endTime   || '',
       subject:   e.subject   || '',
       teacherName: e.teacherName || '',
     })));
-    toast.success('Copied from Monday');
-  };
+    toast.success(`Copied from ${prevDay.key}`);
+  }, [activeDay, modal, modalAllEntries, getPreviousDay]);
 
   /* ── Print all classes ── */
   const printAll = () => {
@@ -348,18 +358,37 @@ export default function TimetablePage() {
           </h1>
           <p className="page-subtitle">Manage class schedules — day-wise</p>
         </div>
-        <button
-          onClick={printAll}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '9px 20px',
-            background: NAVY, color: '#fff',
-            border: 'none', borderRadius: 8,
-            cursor: 'pointer', fontWeight: 700, fontSize: 13,
-          }}
-        >
-          <Printer size={15} /> Print All Classes
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => {
+              qc.invalidateQueries({ queryKey: ['timetable'] });
+              toast.success('Timetable refreshed');
+            }}
+            title="Refresh timetable"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '9px 14px',
+              background: '#fff', color: NAVY,
+              border: `1.5px solid ${NAVY}`,
+              borderRadius: 8, cursor: 'pointer',
+              fontWeight: 700, fontSize: 13,
+            }}
+          >
+            <RefreshCw size={15} />
+          </button>
+          <button
+            onClick={printAll}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '9px 20px',
+              background: NAVY, color: '#fff',
+              border: 'none', borderRadius: 8,
+              cursor: 'pointer', fontWeight: 700, fontSize: 13,
+            }}
+          >
+            <Printer size={15} /> Print All Classes
+          </button>
+        </div>
       </div>
 
       {/* ── Day Tabs ── */}
@@ -379,9 +408,13 @@ export default function TimetablePage() {
               background: activeDay === d.key ? NAVY : 'transparent',
               color:      activeDay === d.key ? '#fff' : '#64748B',
               transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', gap: 2,
             }}
           >
             {d.short}
+            {d.key === 'Friday' && (
+              <span style={{ color: '#EF4444', fontSize: 15, lineHeight: 1, fontWeight: 900, marginLeft: 1 }}>*</span>
+            )}
           </button>
         ))}
       </div>
@@ -677,9 +710,9 @@ export default function TimetablePage() {
                   <Plus size={14} /> Add Period
                 </button>
 
-                {activeDay !== 'Monday' && (
+                {getPreviousDay(activeDay) && (
                   <button
-                    onClick={copyFromMonday}
+                    onClick={copyFromPreviousDay}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6,
                       padding: '8px 18px', borderRadius: 7,
@@ -688,7 +721,7 @@ export default function TimetablePage() {
                       cursor: 'pointer', fontWeight: 700, fontSize: 13,
                     }}
                   >
-                    <Copy size={14} /> Copy from Mon
+                    <Copy size={14} /> Copy from {getPreviousDay(activeDay)?.short}
                   </button>
                 )}
 

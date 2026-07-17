@@ -420,6 +420,49 @@ router.get('/preview-roll', wrap(async (req, res) => {
   res.json({ success: true, data: { rollNo } });
 }));
 
+// GET /api/v1/students/class-sections
+// Returns [{classId, className, sectionId, sectionName, studentCount}]
+// for all active students grouped by class+section — used by Students page
+router.get('/class-sections', wrap(async (req, res) => {
+  const { schoolId } = req;
+
+  // Get all active students with class+section
+  const students = await prisma.student.findMany({
+    where: { schoolId, status: 'active', deletedAt: null },
+    select: {
+      classId: true, sectionId: true,
+      class:   { select: { id: true, name: true } },
+      section: { select: { id: true, name: true } },
+    },
+  });
+
+  // Group by classId + sectionId
+  const map = new Map();
+  for (const s of students) {
+    if (!s.classId) continue;
+    const key = `${s.classId}-${s.sectionId || 0}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        classId:     s.classId,
+        className:   s.class?.name   || '',
+        sectionId:   s.sectionId     || null,
+        sectionName: s.section?.name || '',
+        studentCount: 0,
+      });
+    }
+    map.get(key).studentCount++;
+  }
+
+  const data = Array.from(map.values()).sort((a, b) => {
+    if (a.className < b.className) return -1;
+    if (a.className > b.className) return  1;
+    if (a.sectionName < b.sectionName) return -1;
+    return 1;
+  });
+
+  res.json({ success: true, data });
+}));
+
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/v1/students/promote  — Bulk End-of-Year Promotion
 // Body: { records: [{studentId, action, toClassId, toSectionId, newSessionId}], fromSessionId?, newSessionId? }
