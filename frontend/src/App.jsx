@@ -194,6 +194,8 @@ import ExaminationPage          from './pages/exams/ExaminationPage';
 import AcademicsPage            from './pages/academics/AcademicsPage';
 // v4.2: School Mentor Academics Module (exact SM parity)
 import SchoolMentorAcademicsPage from './pages/academics/SchoolMentorAcademicsPage';
+// v4.3: School Mentor Hub — all SM modules in one page
+import SchoolMentorHub from './pages/SchoolMentorHub';
 
 // MISSING — safe lazy with fallback
 const EmiPlansPage              = safeLazy(() => import('./pages/fees/EmiPlansPage'));
@@ -341,6 +343,9 @@ export default function App() {
           <Route path="/student-portal"    element={<RoleRoute allow={['student']}><StudentPortalPage /></RoleRoute>}/>
           <Route path="/accountant-portal" element={<RoleRoute allow={['accountant']}><AccountantPortalPage /></RoleRoute>}/>
           <Route path="/gatekeeper-portal" element={<RoleRoute allow={['gatekeeper']}><GatekeeperPortalPage /></RoleRoute>}/>
+
+          {/* ── School Mentor Hub — full-page, own layout, no IlmForge sidebar ── */}
+          <Route path="/school-mentor" element={<Protected><SchoolMentorHub /></Protected>} />
 
           {/* ── Protected — wrapped in AdminLayout ─ */}
           {/* NOTE: No path on the wrapper — avoids duplicate "/" */}

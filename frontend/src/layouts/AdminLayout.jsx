@@ -31,6 +31,7 @@ const NAV = [
   {
     group: 'MAIN NAVIGATION',
     items: [
+      { to: '/school-mentor',      icon: Globe,           label: '🎓 School Mentor Hub',  badge: 'SM' },
       { to: '/dashboard',          icon: LayoutDashboard, label: 'Dashboard' },
       { to: '/workflow',           icon: Workflow,        label: '🔄 Smart Workflow Hub', badge: 'NEW' },
       { to: '/mentor-ai',          icon: Bot,             label: 'Mentor AI Tools' },
