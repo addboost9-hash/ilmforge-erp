@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -36,6 +37,31 @@ app.use(cors({
   },
   credentials: true,
 }));
+
+// ─── Compression ──────────────────────────────────────────────────────────────
+app.use(compression({
+  level: 6, // good balance of speed vs size
+  threshold: 1024, // only compress responses > 1KB
+  filter: (req, res) => {
+    // Don't compress if client doesn't support it
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  },
+}));
+
+// ─── Cache-Control headers for static-ish API responses ──────────────────────
+app.use('/api/v1/classes', (req, res, next) => {
+  if (req.method === 'GET') res.setHeader('Cache-Control', 'private, max-age=300');
+  next();
+});
+app.use('/api/v1/subjects', (req, res, next) => {
+  if (req.method === 'GET') res.setHeader('Cache-Control', 'private, max-age=300');
+  next();
+});
+app.use('/api/v1/settings', (req, res, next) => {
+  if (req.method === 'GET') res.setHeader('Cache-Control', 'private, max-age=120');
+  next();
+});
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 });
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { success: false, message: 'Too many auth attempts.' } });

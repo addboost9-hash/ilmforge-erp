@@ -2,7 +2,7 @@
  * IlmForge — Dashboard (Rebuilt)
  * Colorful stat cards + Recharts + Quick Actions + Recent Activity
  */
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -25,7 +25,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-PK', { day: '2-digit
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /* ── Stat Card ── */
-function StatCard({ value, label, Icon, color, href }) {
+const StatCard = React.memo(function StatCard({ value, label, Icon, color, href }) {
   return (
     <div style={{
       background: color,
@@ -89,10 +89,10 @@ function StatCard({ value, label, Icon, color, href }) {
       </div>
     </div>
   );
-}
+});
 
 /* ── Quick Action Tile ── */
-function ActionTile({ label, to, Icon, bg, color }) {
+const ActionTile = React.memo(function ActionTile({ label, to, Icon, bg, color }) {
   return (
     <Link to={to} style={{ textDecoration: 'none' }}>
       <div style={{
@@ -114,7 +114,7 @@ function ActionTile({ label, to, Icon, bg, color }) {
       </div>
     </Link>
   );
-}
+});
 
 /* ── build placeholder monthly chart data ── */
 function buildFeeChartData(stats) {
@@ -196,8 +196,8 @@ export default function DashboardPage() {
   const presentToday  = s.students?.presentToday ?? s.presentToday ?? s.stats?.presentToday ?? 0;
   const pendingLeaves = s.pendingLeaves ?? s.stats?.pendingLeaves ?? 0;
 
-  const feeChartData = buildFeeChartData(s);
-  const attChartData = buildAttChartData(s);
+  const feeChartData = useMemo(() => buildFeeChartData(s), [s.monthlyChart]);
+  const attChartData = useMemo(() => buildAttChartData(s), [s.attendanceTrend]);
 
   const admissions = Array.isArray(recentStudents) ? recentStudents
     : (Array.isArray(s.recentStudents) ? s.recentStudents : []);

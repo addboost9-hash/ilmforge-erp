@@ -2,7 +2,7 @@
  * IlmForge — Dark Navy Sidebar Layout
  * Matches reference screenshot: #1B2F6E sidebar, white header, #ecf0f5 content
  */
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import useAuthStore from '../store/auth.store';
 import useLanguageStore from '../store/language.store';

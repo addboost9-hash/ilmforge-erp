@@ -6,11 +6,12 @@ function buildDatabaseUrl() {
   if (!url || url.startsWith('file:')) return url;
   try {
     const parsed = new URL(url);
-    // Neon free tier needs pgbouncer=true and connection_limit=1
+    // Optimal settings for Neon serverless PostgreSQL
     if (!parsed.searchParams.has('pgbouncer')) parsed.searchParams.set('pgbouncer', 'true');
-    if (!parsed.searchParams.has('connection_limit')) parsed.searchParams.set('connection_limit', '5');
+    if (!parsed.searchParams.has('connection_limit')) parsed.searchParams.set('connection_limit', '10');
     if (!parsed.searchParams.has('pool_timeout')) parsed.searchParams.set('pool_timeout', '20');
-    if (!parsed.searchParams.has('connect_timeout')) parsed.searchParams.set('connect_timeout', '15');
+    if (!parsed.searchParams.has('connect_timeout')) parsed.searchParams.set('connect_timeout', '10');
+    if (!parsed.searchParams.has('statement_cache_size')) parsed.searchParams.set('statement_cache_size', '0'); // required for pgbouncer
     return parsed.toString();
   } catch {
     return url;
@@ -34,7 +35,7 @@ const connectWithRetry = async (retries = 3) => {
       return;
     } catch (err) {
       if (i === retries - 1) throw err;
-      await new Promise(r => setTimeout(r, 2000 * (i + 1)));
+      await new Promise(r => setTimeout(r, 1000)); // short fixed delay; connect_timeout handles per-attempt timeout
     }
   }
 };

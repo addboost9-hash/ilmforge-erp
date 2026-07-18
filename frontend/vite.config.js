@@ -4,7 +4,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   plugins: [
-    react(),
+    react({
+      // Fast refresh in dev
+      fastRefresh: true,
+    }),
 
     /* ─── Progressive Web App (PWA) ─────────────────────────
        Install prompt on mobile/desktop + offline caching
@@ -14,8 +17,31 @@ export default defineConfig({
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icons/*.png'],
       injectRegister: 'auto',
       workbox: {
+        // Pre-cache the app shell
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Skip waiting & claim clients immediately
+        skipWaiting: true,
+        clientsClaim: true,
         // Cache strategies
         runtimeCaching: [
+          {
+            // Granular cache for classes API — stale-while-revalidate, 5 min TTL
+            urlPattern: /^\/api\/v1\/classes/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'classes-cache',
+              expiration: { maxAgeSeconds: 300 },
+            },
+          },
+          {
+            // Granular cache for dashboard API — stale-while-revalidate, 1 min TTL
+            urlPattern: /^\/api\/v1\/dashboard/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'dashboard-cache',
+              expiration: { maxAgeSeconds: 60 },
+            },
+          },
           {
             // Cache API responses for offline use
             urlPattern: /^https:\/\/ilmforge-erp\.onrender\.com\/api\/v1\/.*/,
@@ -51,11 +77,6 @@ export default defineConfig({
             },
           },
         ],
-        // Pre-cache the app shell
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Skip waiting & claim clients immediately
-        skipWaiting: true,
-        clientsClaim: true,
       },
 
       /* ─── Web App Manifest ─── */
@@ -190,6 +211,10 @@ export default defineConfig({
 
   build: {
     outDir: 'dist',
+    target: 'esnext',               // emit modern JS, smaller output
+    minify: 'esbuild',              // faster than terser
+    sourcemap: false,               // no sourcemaps in prod = smaller files
+    chunkSizeWarningLimit: 1000,    // raise warning threshold to 1 MB
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -201,11 +226,15 @@ export default defineConfig({
           if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) return 'vendor-react';
           if (id.includes('@tanstack/react-query')) return 'vendor-query';
           if (id.includes('recharts')) return 'vendor-charts';
-          if (id.includes('lucide-react')) return 'vendor-icons';
+          if (id.includes('lucide-react') || id.includes('react-hot-toast')) return 'vendor-ui';
           if (id.includes('axios') || id.includes('date-fns')) return 'vendor-utils';
           return;
         },
       },
     },
+  },
+
+  optimizeDeps: {
+    include: ['react', 'react-dom', '@tanstack/react-query', 'axios'],
   },
 });

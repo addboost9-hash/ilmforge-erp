@@ -44,7 +44,7 @@ import FeeGeneratePage from './pages/fees/FeeGeneratePage';
 import FeeDefaultersPage from './pages/fees/FeeDefaultersPage';
 import FeeStructurePage from './pages/fees/FeeStructurePage';
 import AttendancePage from './pages/attendance/AttendancePage';
-import AttendanceHubPage from './pages/attendance/AttendanceHubPage';
+const AttendanceHubPage = React.lazy(() => import('./pages/attendance/AttendanceHubPage'));
 import BarcodeScanPage from './pages/attendance/BarcodeScanPage';
 import AttendanceReportPage from './pages/attendance/AttendanceReportPage';
 import StaffAttendancePage from './pages/attendance/StaffAttendancePage';
@@ -146,7 +146,7 @@ import SuspendedPage from './pages/public/SuspendedPage';
 import StudentAttendanceCalendarPage from './pages/reports/StudentAttendanceCalendarPage';
 import AdmissionFormPrintPage from './pages/admission/AdmissionFormPrintPage';
 import AcademicCalendarPage from './pages/calendar/AcademicCalendarPage';
-import ReportsHubPage from './pages/reports/ReportsHubPage';
+const ReportsHubPage = React.lazy(() => import('./pages/reports/ReportsHubPage'));
 import BISEResultCardPage from './pages/exams/BISEResultCardPage';
 import StudentInfoReportsPage from './pages/students/StudentInfoReportsPage';
 import HomeworkDiaryPage from './pages/homework/HomeworkDiaryPage';
@@ -169,7 +169,7 @@ import SOPsPage                from './pages/sops/SOPsPage';
 import BulkImportPage          from './pages/students/BulkImportPage';
 import RoboBuddyPage           from './pages/robobuddy/RoboBuddyPage';
 import FeeInvoicesManagePage   from './pages/fees/FeeInvoicesManagePage';
-import FeeManagementPage        from './pages/fees/FeeManagementPage';
+const FeeManagementPage = React.lazy(() => import('./pages/fees/FeeManagementPage'));
 
 // v3.7 new modules
 import QuestionPaperPage        from './pages/exams/QuestionPaperPage';
@@ -185,15 +185,15 @@ import SyllabusPage             from './pages/academics/SyllabusPage';
 import SubjectSyllabusPage      from './pages/academics/SubjectSyllabusPage';
 import ResultConfigPage         from './pages/exams/ResultConfigPage';
 // v3.9: School Mentor parity modules
-import HumanResourcePage        from './pages/hr/HumanResourcePage';
-import AccountsPage             from './pages/accounts/AccountsPage';
-import LaunchSetupPage          from './pages/setup/LaunchSetupPage';
+const HumanResourcePage = React.lazy(() => import('./pages/hr/HumanResourcePage'));
+const AccountsPage = React.lazy(() => import('./pages/accounts/AccountsPage'));
+const LaunchSetupPage = React.lazy(() => import('./pages/setup/LaunchSetupPage'));
 // v4.0: Unified Examination Module (School Mentor style)
-import ExaminationPage          from './pages/exams/ExaminationPage';
+const ExaminationPage = React.lazy(() => import('./pages/exams/ExaminationPage'));
 // v4.1: Unified Academics Hub (School Mentor style)
 import AcademicsPage            from './pages/academics/AcademicsPage';
 // v4.2: School Mentor Academics Module (exact SM parity)
-import SchoolMentorAcademicsPage from './pages/academics/SchoolMentorAcademicsPage';
+const SchoolMentorAcademicsPage = React.lazy(() => import('./pages/academics/SchoolMentorAcademicsPage'));
 // v4.3: School Mentor Hub — all SM modules in one page
 import SchoolMentorHub from './pages/SchoolMentorHub';
 
@@ -221,17 +221,15 @@ const NotificationConfigPage    = safeLazy(() => import('./pages/settings/Notifi
 const qc = new QueryClient({
   defaultOptions: {
     queries: {
-      retry:                1,
-      staleTime:            5 * 60_000,   // 5 min cache
-      gcTime:               20 * 60_000,  // 20 min memory
-      refetchOnWindowFocus: false,
-      refetchOnReconnect:   false,
-      refetchInterval:      false,
-      networkMode:          'offlineFirst', // use cache when offline
+      staleTime:            5 * 60 * 1000,      // 5 min - data stays fresh longer
+      gcTime:               30 * 60 * 1000,      // 30 min - keep in cache longer
+      retry:                1,                   // only retry once on fail
+      refetchOnWindowFocus: false,               // don't refetch on tab switch
+      refetchOnMount:       false,               // don't refetch if data is fresh
+      networkMode:          'offlineFirst',      // use cache while offline
     },
     mutations: {
-      retry:       0,
-      networkMode: 'always',
+      retry: 1,
     },
   },
 });
@@ -357,7 +355,7 @@ export default function App() {
             <Route path="/reports/attendance-calendar"  element={<StudentAttendanceCalendarPage />} />
             <Route path="/admissions/form-print"        element={<AdmissionFormPrintPage />} />
             <Route path="/academic-calendar"            element={<AcademicCalendarPage />} />
-            <Route path="/reports-hub"                  element={<ReportsHubPage />} />
+            <Route path="/reports-hub"                  element={<React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}><ReportsHubPage /></React.Suspense>} />
             <Route path="/exams/bise-result-card"         element={<BISEResultCardPage />} />
             <Route path="/students/info-reports"          element={<StudentInfoReportsPage />} />
             <Route path="/homework/diary"                 element={<HomeworkDiaryPage />} />
@@ -398,7 +396,7 @@ export default function App() {
 
             {/* Attendance */}
             <Route path="/attendance"                 element={<AttendancePage />} />
-            <Route path="/attendance-hub"             element={<AttendanceHubPage />} />
+            <Route path="/attendance-hub"             element={<React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}><AttendanceHubPage /></React.Suspense>} />
             <Route path="/attendance/barcode"         element={<BarcodeScanPage />} />
             <Route path="/attendance/report"          element={<AttendanceReportPage />} />
             <Route path="/attendance/staff"           element={<StaffAttendancePage />} />
@@ -556,7 +554,7 @@ export default function App() {
             <Route path="/students/bulk-import"       element={<BulkImportPage />} />
             <Route path="/robobuddy"                  element={<RoboBuddyPage />} />
             <Route path="/fees/invoices"              element={<FeeInvoicesManagePage />} />
-            <Route path="/fee-management"             element={<FeeManagementPage />} />
+            <Route path="/fee-management"             element={<React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}><FeeManagementPage /></React.Suspense>} />
             <Route path="/settings/notifications-config" element={
               <React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}>
                 <NotificationConfigPage />
@@ -633,15 +631,15 @@ export default function App() {
             {/* ── Result Config (grade setup + card options) ── */}
             <Route path="/exams/result-config"        element={<ResultConfigPage />} />
             {/* ── v3.9: School Mentor parity ── */}
-            <Route path="/human-resource"             element={<HumanResourcePage />} />
-            <Route path="/accounts"                   element={<AccountsPage />} />
-            <Route path="/launch-setup"               element={<LaunchSetupPage />} />
+            <Route path="/human-resource"             element={<React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}><HumanResourcePage /></React.Suspense>} />
+            <Route path="/accounts"                   element={<React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}><AccountsPage /></React.Suspense>} />
+            <Route path="/launch-setup"               element={<React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}><LaunchSetupPage /></React.Suspense>} />
             {/* v4.0: Unified Examination Module */}
-            <Route path="/examination"               element={<ExaminationPage />} />
+            <Route path="/examination"               element={<React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}><ExaminationPage /></React.Suspense>} />
             {/* v4.1: Unified Academics Hub */}
             <Route path="/academics-hub"             element={<AcademicsPage />} />
             {/* v4.2: School Mentor Academics Module */}
-            <Route path="/academics"                 element={<SchoolMentorAcademicsPage />} />
+            <Route path="/academics"                 element={<React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}><SchoolMentorAcademicsPage /></React.Suspense>} />
           </Route>
 
           {/* 404 */}

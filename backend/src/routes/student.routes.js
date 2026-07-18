@@ -93,7 +93,7 @@ router.get('/', wrap(async (req, res) => {
       select: {
         id: true, name: true, rollNo: true, gender: true, status: true,
         photoUrl: true, dob: true, fatherName: true, emergencyPhone: true,
-        admissionDate: true, address: true, bFormNo: true,
+        admissionDate: true,
         classId: true, sectionId: true, campusId: true, userId: true,
         class:   { select: { id: true, name: true, classTeacherId: true } },
         section: { select: { id: true, name: true } },
@@ -105,7 +105,7 @@ router.get('/', wrap(async (req, res) => {
     prisma.student.count({ where }),
   ]);
   // Short cache for list queries (browser-level)
-  res.setHeader('Cache-Control', 'private, max-age=60');
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
   res.json({ success: true, data: students, total, page: parseInt(page), pages: Math.ceil(total / takeNum) });
 }));
 

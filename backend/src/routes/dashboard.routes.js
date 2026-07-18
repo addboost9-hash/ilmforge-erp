@@ -125,6 +125,7 @@ router.get('/stats', wrap(async (req, res) => {
     balanceFee:   feeMap[c.id]?.dueAmount   || 0,
   }));
 
+  res.setHeader('Cache-Control', 'private, max-age=30'); // 30 sec dashboard cache
   res.json({
     success: true,
     data: {

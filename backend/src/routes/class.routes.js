@@ -4,7 +4,15 @@ const prisma = require('../config/prisma');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 router.get('/', wrap(async (req, res) => {
-  const classes = await prisma.class.findMany({ where: { schoolId: req.schoolId, isActive: true }, include: { sections: true }, orderBy: { orderNo: 'asc' } });
+  const classes = await prisma.class.findMany({
+    where: { schoolId: req.schoolId, isActive: true },
+    select: {
+      id: true, name: true, orderNo: true, isActive: true,
+      sections: { select: { id: true, name: true } },
+    },
+    orderBy: { orderNo: 'asc' },
+  });
+  res.setHeader('Cache-Control', 'private, max-age=300'); // 5 min cache
   res.json({ success: true, data: classes });
 }));
 

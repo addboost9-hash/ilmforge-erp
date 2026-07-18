@@ -1,9 +1,10 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { ChevronDown, ChevronUp, X, FileText, Search } from 'lucide-react';
+import { useDebounce } from '../../hooks/useDebounce';
 
 /* ─── helpers ─────────────────────────────────────────────────── */
 const TEAL = '#0D9488';
@@ -384,15 +385,12 @@ export default function StudentsPage() {
   const [expandedRow, setExpandedRow] = useState(null);
   const [promoteRow, setPromoteRow] = useState(null);
   const [searchInput, setSearchInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const debounceRef = useRef(null);
+  const searchQuery = useDebounce(searchInput.trim(), 400);
 
   const qc = useQueryClient();
 
   const handleSearchChange = useCallback((val) => {
     setSearchInput(val);
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setSearchQuery(val.trim()), 350);
   }, []);
 
   const { data: classSections = [], isLoading } = useQuery({

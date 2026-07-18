@@ -4,12 +4,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { Search, DollarSign, Printer, X, CheckCircle, Receipt, CreditCard } from 'lucide-react';
+import { useDebounce } from '../../hooks/useDebounce';
 
 const money = v => 'Rs. ' + ((v || 0) / 100).toLocaleString();
 
 export default function FeeCollectionPage() {
   const qc = useQueryClient();
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const search = useDebounce(searchInput, 400);
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [activeInv, setActiveInv] = useState(null);
@@ -105,12 +107,12 @@ export default function FeeCollectionPage() {
               className="form-control"
               style={{ paddingLeft: 34 }}
               placeholder="Type student name, roll no, or father name..."
-              value={search}
-              onChange={e => { setSearch(e.target.value); setSelected(null); }}
+              value={searchInput}
+              onChange={e => { setSearchInput(e.target.value); setSelected(null); }}
             />
             {selected && (
               <button
-                onClick={() => { setSelected(null); setSearch(''); }}
+                onClick={() => { setSelected(null); setSearchInput(''); }}
                 style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
                 <X size={15} />
               </button>
@@ -129,7 +131,7 @@ export default function FeeCollectionPage() {
               {(searchResults || []).map(s => (
                 <div
                   key={s.id}
-                  onClick={() => { setSelected(s); setSearch(s.name); }}
+                  onClick={() => { setSelected(s); setSearchInput(s.name); }}
                   style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, transition: 'background .12s' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-light)'}
                   onMouseLeave={e => e.currentTarget.style.background = '#fff'}
@@ -180,7 +182,7 @@ export default function FeeCollectionPage() {
                   <div style={{ fontSize: 16, fontWeight: 800, color: '#721c24' }}>{money(totalDue)}</div>
                 </div>
               )}
-              <button className="btn btn-outline btn-sm" onClick={() => { setSelected(null); setSearch(''); }}>
+              <button className="btn btn-outline btn-sm" onClick={() => { setSelected(null); setSearchInput(''); }}>
                 <X size={13} /> Clear
               </button>
             </div>
