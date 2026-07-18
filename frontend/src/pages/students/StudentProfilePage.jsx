@@ -5,7 +5,7 @@ import api from '../../api/client';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, FileText, Printer, User, CreditCard,
-  ClipboardList, Award, GraduationCap, Camera, Tag
+  ClipboardList, Award, GraduationCap, Camera, Tag, Edit2, Save, X
 } from 'lucide-react';
 
 const money = v => 'Rs. ' + ((v||0)/100).toLocaleString();
@@ -150,6 +150,92 @@ function FeeDetailsPanel({ studentId }) {
   );
 }
 
+/* ── Edit Student Modal ──────────────────────────────────── */
+function EditStudentModal({ student, onClose }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    name:           student.name           || '',
+    fatherName:     student.fatherName     || '',
+    motherName:     student.motherName     || '',
+    gender:         student.gender         || '',
+    dob:            student.dob ? student.dob.split('T')[0] : '',
+    address:        student.address        || '',
+    emergencyPhone: student.emergencyPhone || '',
+    bFormNo:        student.bFormNo        || '',
+    status:         student.status         || 'active',
+  });
+
+  const mutation = useMutation({
+    mutationFn: (data) => api.put(`/students/${student.id}`, data),
+    onSuccess: () => {
+      toast.success('Student updated successfully!');
+      qc.invalidateQueries(['student', String(student.id)]);
+      onClose();
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Update failed'),
+  });
+
+  const inp = (label, key, type='text', opts=null) => (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#374151', marginBottom:4 }}>{label}</label>
+      {opts ? (
+        <select
+          value={form[key]}
+          onChange={e => setForm(p => ({...p, [key]: e.target.value}))}
+          style={{ width:'100%', padding:'8px 10px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13 }}
+        >
+          {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+        </select>
+      ) : (
+        <input
+          type={type}
+          value={form[key]}
+          onChange={e => setForm(p => ({...p, [key]: e.target.value}))}
+          style={{ width:'100%', padding:'8px 10px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13, boxSizing:'border-box' }}
+        />
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={onClose}>
+      <div style={{ background:'#fff', borderRadius:10, width:'100%', maxWidth:560, maxHeight:'90vh', display:'flex', flexDirection:'column', overflow:'hidden' }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ background:NAVY, color:'#fff', padding:'14px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <span style={{ fontWeight:700, fontSize:15 }}>Edit Student — {student.name}</span>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', cursor:'pointer' }}><X size={18}/></button>
+        </div>
+        <div style={{ flex:1, overflowY:'auto', padding:20 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 16px' }}>
+            <div>{inp('Full Name', 'name')}</div>
+            <div>{inp('Father Name', 'fatherName')}</div>
+            <div>{inp('Mother Name', 'motherName')}</div>
+            <div>{inp('Date of Birth', 'dob', 'date')}</div>
+            <div>{inp('Gender', 'gender', 'text', [{v:'male',l:'Male'},{v:'female',l:'Female'},{v:'',l:'Not specified'}])}</div>
+            <div>{inp('Status', 'status', 'text', [{v:'active',l:'Active'},{v:'inactive',l:'Inactive'},{v:'passout',l:'Passout'}])}</div>
+            <div>{inp('Emergency Phone', 'emergencyPhone', 'tel')}</div>
+            <div>{inp('B-Form / CNIC', 'bFormNo')}</div>
+          </div>
+          <div>{inp('Address', 'address')}</div>
+        </div>
+        <div style={{ padding:'12px 20px', borderTop:'1px solid #E5E7EB', display:'flex', gap:10, justifyContent:'flex-end' }}>
+          <button onClick={onClose} style={{ background:'#fff', color:'#374151', border:'1px solid #D1D5DB', borderRadius:6, padding:'9px 20px', fontWeight:600, fontSize:13, cursor:'pointer' }}>
+            Cancel
+          </button>
+          <button
+            onClick={() => mutation.mutate(form)}
+            disabled={mutation.isPending}
+            style={{ background:NAVY, color:'#fff', border:'none', borderRadius:6, padding:'9px 22px', fontWeight:700, fontSize:13, cursor:'pointer', opacity:mutation.isPending?0.7:1 }}
+          >
+            {mutation.isPending ? 'Saving…' : <><Save size={13} style={{display:'inline',marginRight:5}}/> Save Changes</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Generate & print certificate HTML ──────────────────── */
 function printCert(type, s, school) {
   const sName = school?.name || 'IlmForge School';
@@ -266,6 +352,7 @@ function printCert(type, s, school) {
 export default function StudentProfilePage() {
   const { id } = useParams();
   const [tab, setTab] = useState('info');
+  const [editing, setEditing] = useState(false);
 
   const { data:s, isLoading } = useQuery({
     queryKey: ['student', id],
@@ -288,6 +375,8 @@ export default function StudentProfilePage() {
   const present    = (s.attendance||[]).filter(a=>a.status==='present').length;
   const attPct     = attCount ? ((present/attCount)*100).toFixed(0) : 0;
   const totalDue   = (s.feeInvoices||[]).reduce((sum,inv)=>sum+(inv.dueAmount||0),0);
+  const totalPaid  = (s.feeInvoices||[]).reduce((sum,inv)=>sum+(inv.paidAmount||0),0);
+  const totalFee   = (s.feeInvoices||[]).reduce((sum,inv)=>sum+(inv.totalAmount||0),0);
 
   const certTypes = [
     { type:'slc',       label:'School Leaving Certificate', color:'#0F766E', bg:'#F0FDFA' },
@@ -303,6 +392,7 @@ export default function StudentProfilePage() {
         <h1 className="page-title">{s.name}</h1>
         <span className={`badge ${s.status==='active'?'badge-teal':s.status==='passout'?'badge-gray':'badge-red'}`}>{s.status}</span>
         <div style={{marginLeft:'auto', display:'flex', gap:8}}>
+          <button onClick={() => setEditing(true)} className="btn btn-outline btn-sm"><Edit2 size={14}/> Edit</button>
           <Link to="/fees/collect" className="btn btn-teal btn-sm"><CreditCard size={14}/> Collect Fee</Link>
           <Link to="/id-cards" className="btn btn-outline btn-sm"><Award size={14}/> ID Card</Link>
         </div>
@@ -340,14 +430,16 @@ export default function StudentProfilePage() {
             )}
           </div>
 
-          <div style={{display:'flex', gap:12}}>
+          <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
             {[
-              {label:'Attendance', val:attPct+'%',    color:attPct>=75?'#DCFCE7':'#FEE2E2', tc:attPct>=75?'#15803D':'#B91C1C'},
-              {label:'Total Due',  val:money(totalDue), color:totalDue>0?'#FEF3C7':'#DCFCE7', tc:totalDue>0?'#B45309':'#15803D'},
+              {label:'Attendance', val:attCount>0?attPct+'%':'—', sub:`${present}/${attCount} days`, color:attPct>=75?'#DCFCE7':'#FEE2E2', tc:attPct>=75?'#15803D':'#B91C1C'},
+              {label:'Fee Paid',   val:money(totalPaid), sub:'total collected', color:'#DCFCE7', tc:'#15803D'},
+              {label:'Pending',    val:money(totalDue),  sub:totalDue>0?'outstanding':'all clear', color:totalDue>0?'#FEE2E2':'#DCFCE7', tc:totalDue>0?'#B91C1C':'#15803D'},
             ].map(m => (
-              <div key={m.label} style={{background:'rgba(255,255,255,0.12)',borderRadius:10,padding:'10px 16px',textAlign:'center'}}>
-                <div style={{fontSize:16,fontWeight:800}}>{m.val}</div>
-                <div style={{fontSize:11,opacity:0.7}}>{m.label}</div>
+              <div key={m.label} style={{background:'rgba(255,255,255,0.12)',borderRadius:10,padding:'9px 14px',textAlign:'center',minWidth:90}}>
+                <div style={{fontSize:15,fontWeight:800}}>{m.val}</div>
+                <div style={{fontSize:10,opacity:0.65,marginTop:1}}>{m.sub}</div>
+                <div style={{fontSize:11,opacity:0.7,marginTop:2}}>{m.label}</div>
               </div>
             ))}
           </div>
@@ -507,13 +599,69 @@ export default function StudentProfilePage() {
 
           {/* ── Exams ── */}
           {tab==='exams' && (
-            <div style={{textAlign:'center',padding:32,color:'#9CA3AF'}}>
-              <div style={{fontSize:40,marginBottom:8}}>🏆</div>
-              <div style={{fontSize:14,fontWeight:600,color:'#374151'}}>Exam results will appear here once marks are entered</div>
-              <Link to="/exams" className="btn btn-teal btn-sm" style={{marginTop:14}}>Go to Exams →</Link>
-            </div>
+            <ExamResultsPanel studentId={id} />
           )}
         </div>
+      </div>
+
+      {/* Edit Modal */}
+      {editing && <EditStudentModal student={s} onClose={() => setEditing(false)} />}
+    </div>
+  );
+}
+
+/* ── Exam Results Panel ── */
+function ExamResultsPanel({ studentId }) {
+  const { data: results, isLoading } = useQuery({
+    queryKey: ['student-exam-results', studentId],
+    queryFn: () => api.get(`/students/${studentId}/exam-results`).then(r => r.data.data || []).catch(() => []),
+    staleTime: 60_000,
+  });
+
+  if (isLoading) return <div style={{padding:32,textAlign:'center',color:'#9CA3AF'}}>Loading results…</div>;
+
+  if (!results || results.length === 0) {
+    return (
+      <div style={{textAlign:'center',padding:32,color:'#9CA3AF'}}>
+        <div style={{fontSize:40,marginBottom:8}}>🏆</div>
+        <div style={{fontSize:14,fontWeight:600,color:'#374151'}}>No exam results recorded yet</div>
+        <div style={{fontSize:12,color:'#9CA3AF',marginTop:6}}>Results will appear here once marks are entered in the Exams module.</div>
+        <Link to="/exams" className="btn btn-teal btn-sm" style={{marginTop:14}}>Go to Exams →</Link>
+      </div>
+    );
+  }
+
+  const thS = {padding:'9px 12px',textAlign:'left',fontWeight:700,fontSize:12,background:NAVY,color:'#fff'};
+  const tdS = {padding:'9px 12px',fontSize:13,borderBottom:'1px solid #f0f0f0'};
+
+  return (
+    <div>
+      <h3 style={{color:NAVY,marginBottom:14,fontWeight:700,fontSize:15}}>Exam Results</h3>
+      <div style={{overflowX:'auto',borderRadius:8,border:'1px solid #e5e7eb'}}>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead>
+            <tr>
+              {['Exam','Subject','Total Marks','Obtained','%','Grade'].map(h=><th key={h} style={thS}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((r,i) => {
+              const pct = r.totalMarks ? ((r.obtainedMarks/r.totalMarks)*100).toFixed(0) : '—';
+              const grade = pct>=90?'A+':pct>=80?'A':pct>=70?'B':pct>=60?'C':pct>=50?'D':'F';
+              const gradeColor = pct>=70?'#15803D':pct>=50?'#B45309':'#DC2626';
+              return (
+                <tr key={i} style={{background:i%2===0?'#fafafa':'#fff'}}>
+                  <td style={{...tdS,fontWeight:600}}>{r.exam?.name||r.examName||'—'}</td>
+                  <td style={tdS}>{r.subject?.name||r.subjectName||'—'}</td>
+                  <td style={tdS}>{r.totalMarks||'—'}</td>
+                  <td style={{...tdS,fontWeight:700}}>{r.obtainedMarks??'—'}</td>
+                  <td style={{...tdS,color:gradeColor,fontWeight:700}}>{pct!=='—'?pct+'%':'—'}</td>
+                  <td style={tdS}><span style={{background:gradeColor+'15',color:gradeColor,padding:'2px 10px',borderRadius:6,fontWeight:700,fontSize:12}}>{pct!=='—'?grade:'—'}</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

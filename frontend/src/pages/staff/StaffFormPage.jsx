@@ -50,10 +50,10 @@ export default function StaffFormPage() {
       if (photoPreview && staffId) {
         try { localStorage.setItem(`photo_staff_${staffId}`, photoPreview); } catch {}
       }
-      toast.success('Staff member added successfully! 🎉');
+      toast.success('Staff member saved successfully!');
       nav('/staff');
     },
-    onError: err => toast.error(err.response?.data?.message || 'Failed to add staff'),
+    onError: err => toast.error('Failed to save staff: ' + (err.response?.data?.message || err.message || 'Unknown error')),
   });
 
   const handleSubmit = () => {

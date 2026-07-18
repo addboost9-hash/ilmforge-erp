@@ -766,6 +766,32 @@ router.post(
   const thresholds = await loadThresholds(req.schoolId);
   const results = [];
 
+  // Pre-validate all marks before saving any
+  const validationErrors = [];
+  for (let i = 0; i < marks.length; i++) {
+    const m = marks[i];
+    const obtained = parseFloat(m.obtainedMarks);
+    const total    = parseFloat(m.totalMarks) || 100;
+    const isAbsent = m.isAbsent === true || m.isAbsent === 'true';
+    if (!isAbsent && !isNaN(obtained) && obtained > total) {
+      validationErrors.push(
+        `Student ${m.studentId}: obtained marks (${obtained}) exceed total marks (${total}).`
+      );
+    }
+    if (!isAbsent && !isNaN(obtained) && obtained < 0) {
+      validationErrors.push(
+        `Student ${m.studentId}: obtained marks cannot be negative.`
+      );
+    }
+  }
+  if (validationErrors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Marks validation failed.',
+      errors: validationErrors,
+    });
+  }
+
   for (const m of marks) {
     const studentId = parseInt(m.studentId);
     const subjectId = m.subjectId ? parseInt(m.subjectId) : null;
@@ -803,7 +829,7 @@ router.post(
     results.push(record);
   }
 
-  res.json({ success: true, data: results, message: `${results.length} marks saved.` });
+  res.json({ success: true, data: results, message: `Marks saved for ${results.length} students.` });
 }));
 
 // POST /exams/:id/marks/excel-import — parse Excel and bulk upsert marks

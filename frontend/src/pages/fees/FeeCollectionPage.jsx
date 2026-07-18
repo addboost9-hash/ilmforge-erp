@@ -3,7 +3,7 @@ import { printFeeVoucher } from '../../utils/printDesigns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { Search, DollarSign, Printer, X, CheckCircle, Receipt } from 'lucide-react';
+import { Search, DollarSign, Printer, X, CheckCircle, Receipt, CreditCard } from 'lucide-react';
 
 const money = v => 'Rs. ' + ((v || 0) / 100).toLocaleString();
 
@@ -14,6 +14,7 @@ export default function FeeCollectionPage() {
   const [showModal, setShowModal] = useState(false);
   const [activeInv, setActiveInv] = useState(null);
   const [payForm, setPayForm] = useState({ amountPaid: '', discount: 0, method: 'cash', notifyVia: 'whatsapp_sms' });
+  const [receiptData, setReceiptData] = useState(null); // holds last payment receipt for display
 
   const { data: searchResults, isFetching: sLoading } = useQuery({
     queryKey: ['fee-search', search],
@@ -29,11 +30,27 @@ export default function FeeCollectionPage() {
 
   const pay = useMutation({
     mutationFn: d => api.post('/fees/payments', d),
-    onSuccess: r => {
-      const receipt = r.data.data?.receiptNo || r.data.data?.id;
-      toast.success(`Payment recorded! Receipt: ${receipt}`);
+    onSuccess: (r, variables) => {
+      const receiptNo = r.data.data?.receiptNo || r.data.data?.payment?.id || 'N/A';
+      const studentName = selected?.name || feeData?.student?.name || 'Student';
+      const paidAmount = money(variables.amountPaid);
+      toast.success(`Payment of ${paidAmount} collected from ${studentName}. Receipt: ${receiptNo}`);
       qc.invalidateQueries(['student-fee', selected?.id]);
       qc.invalidateQueries(['dashboard']);
+      // Store receipt data for the success/print modal
+      setReceiptData({
+        receiptNo,
+        studentName,
+        studentRollNo: feeData?.student?.rollNo || selected?.rollNo || '',
+        className: feeData?.student?.class?.name || selected?.class?.name || '',
+        feeTitle: activeInv?.feeTitle || '',
+        month: activeInv ? `${activeInv.month} ${activeInv.year}` : '',
+        amountPaid: variables.amountPaid,
+        method: variables.method,
+        newStatus: r.data.data?.newStatus,
+        newDue: r.data.data?.newDue,
+        date: new Date().toLocaleString('en-PK'),
+      });
       setShowModal(false);
     },
     onError: err => toast.error(err.response?.data?.message || 'Payment failed'),
@@ -319,7 +336,9 @@ export default function FeeCollectionPage() {
                 <select className="form-select" value={payForm.method} onChange={e => setPayForm({ ...payForm, method: e.target.value })}>
                   <option value="cash">Cash</option>
                   <option value="card">Card</option>
-                  <option value="online">Online (EasyPaisa / JazzCash)</option>
+                  <option value="online">Online Transfer</option>
+                  <option value="easypaisa">EasyPaisa</option>
+                  <option value="jazzcash">JazzCash</option>
                   <option value="wallet">Parent Wallet</option>
                 </select>
               </div>
@@ -337,6 +356,88 @@ export default function FeeCollectionPage() {
               <button className="btn btn-outline" onClick={() => setShowModal(false)}>Cancel</button>
               <button className="btn btn-success" onClick={confirmPayment} disabled={pay.isPending}>
                 {pay.isPending ? 'Processing...' : <><CheckCircle size={15} /> Confirm Payment</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Success Modal — shown after successful payment */}
+      {receiptData && (
+        <div className="modal-overlay" onClick={() => setReceiptData(null)}>
+          <div className="modal modal-sm" onClick={e => e.stopPropagation()} style={{ padding: 0 }}>
+            <div className="card-header" style={{ borderRadius: '8px 8px 0 0', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: '#fff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <CheckCircle size={20} color="#fff" />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>Payment Successful</div>
+                  <div style={{ fontSize: 12, opacity: 0.85 }}>Receipt generated</div>
+                </div>
+              </div>
+              <button onClick={() => setReceiptData(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center' }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="card-body">
+              {/* Receipt details */}
+              <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, color: '#15803d', fontWeight: 600 }}>PAYMENT RECEIPT</div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{receiptData.date}</div>
+                </div>
+                {[
+                  ['Receipt No', receiptData.receiptNo],
+                  ['Student', receiptData.studentName],
+                  ['Roll No', receiptData.studentRollNo || '—'],
+                  ['Class', receiptData.className || '—'],
+                  ['Fee Title', receiptData.feeTitle || '—'],
+                  ['Period', receiptData.month || '—'],
+                  ['Amount Paid', money(receiptData.amountPaid)],
+                  ['Method', receiptData.method?.toUpperCase() || '—'],
+                  ['Balance Due', receiptData.newDue != null ? money(receiptData.newDue) : '—'],
+                  ['Status', receiptData.newStatus?.toUpperCase() || '—'],
+                ].map(([label, val]) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', borderBottom: '1px dashed #d1fae5' }}>
+                    <span style={{ color: '#374151' }}>{label}</span>
+                    <strong style={{ color: '#111827' }}>{val}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="modal-footer" style={{ gap: 8 }}>
+              <button className="btn btn-outline" onClick={() => setReceiptData(null)}>Close</button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  const printHtml = `<!DOCTYPE html><html><head><title>Receipt ${receiptData.receiptNo}</title>
+                  <style>body{font-family:Arial,sans-serif;font-size:12px;margin:0;padding:20px}
+                  h2{text-align:center;margin:4px 0;font-size:15px}
+                  .row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #ccc}
+                  .label{color:#555}.val{font-weight:700}
+                  @media print{body{-webkit-print-color-adjust:exact}}</style></head><body>
+                  <h2>PAYMENT RECEIPT</h2>
+                  <p style="text-align:center;color:#888;font-size:11px;margin:2px 0">${receiptData.date}</p>
+                  <div style="margin-top:14px">
+                  ${[
+                    ['Receipt No', receiptData.receiptNo],
+                    ['Student', receiptData.studentName],
+                    ['Roll No', receiptData.studentRollNo || '—'],
+                    ['Class', receiptData.className || '—'],
+                    ['Fee Title', receiptData.feeTitle || '—'],
+                    ['Period', receiptData.month || '—'],
+                    ['Amount Paid', 'Rs. ' + (receiptData.amountPaid / 100).toLocaleString()],
+                    ['Method', receiptData.method?.toUpperCase() || '—'],
+                    ['Balance Due', receiptData.newDue != null ? 'Rs. ' + (receiptData.newDue / 100).toLocaleString() : '—'],
+                    ['Status', receiptData.newStatus?.toUpperCase() || '—'],
+                  ].map(([l, v]) => `<div class="row"><span class="label">${l}</span><span class="val">${v}</span></div>`).join('')}
+                  </div>
+                  <p style="text-align:center;font-size:10px;color:#999;margin-top:18px">Powered by IlmForge School Management</p>
+                  <script>window.onload=()=>window.print()<\/script></body></html>`;
+                  const w = window.open('', '_blank', 'width=480,height=640');
+                  if (w) { w.document.write(printHtml); w.document.close(); }
+                }}
+              >
+                <Printer size={14} /> Print Receipt
               </button>
             </div>
           </div>

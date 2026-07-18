@@ -659,6 +659,50 @@ router.delete('/promotion-history/:id', wrap(async (req, res) => {
   res.json({ success: true, message: 'Promotion undone successfully.' });
 }));
 
+// GET /api/v1/students/birthdays/upcoming?days=7
+// Returns students with birthdays in the next N days (default 7)
+router.get('/birthdays/upcoming', wrap(async (req, res) => {
+  const { schoolId } = req;
+  const days = Math.min(parseInt(req.query.days) || 7, 30);
+  const now = new Date();
+
+  // Collect (month, day) pairs for the next `days` days
+  const pairs = [];
+  for (let d = 0; d <= days; d++) {
+    const dt = new Date(now);
+    dt.setDate(now.getDate() + d);
+    pairs.push({ month: dt.getMonth() + 1, day: dt.getDate(), daysUntil: d });
+  }
+
+  // Use raw query for SQLite date comparison
+  // We fetch candidates from all active students and filter in JS for simplicity
+  const students = await prisma.student.findMany({
+    where: { schoolId, status: 'active', deletedAt: null, dob: { not: null } },
+    select: {
+      id: true, name: true, rollNo: true, dob: true, emergencyPhone: true, photoUrl: true,
+      class: { select: { id: true, name: true } },
+      section: { select: { id: true, name: true } },
+    },
+  });
+
+  const results = [];
+  for (const s of students) {
+    if (!s.dob) continue;
+    try {
+      const dob = new Date(s.dob);
+      for (const p of pairs) {
+        if (dob.getMonth() + 1 === p.month && dob.getDate() === p.day) {
+          results.push({ ...s, _daysUntil: p.daysUntil });
+          break;
+        }
+      }
+    } catch { /* ignore invalid dob */ }
+  }
+
+  results.sort((a, b) => a._daysUntil - b._daysUntil);
+  res.json({ success: true, data: results });
+}));
+
 // GET /api/v1/students/birthdays/today
 router.get('/birthdays/today', wrap(async (req, res) => {
   const today = new Date();
@@ -675,6 +719,48 @@ router.get('/birthdays/today', wrap(async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Dynamic /:id routes — declared AFTER all static routes above
 // ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/v1/students/:id/exam-results — fetch exam results for a specific student
+router.get('/:id/exam-results', wrap(async (req, res) => {
+  const studentId = parseInt(req.params.id);
+  const { schoolId } = req;
+
+  // Verify student belongs to this school
+  const student = await prisma.student.findFirst({
+    where: { id: studentId, schoolId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+
+  // Fetch marks for this student across all exams
+  const marks = await prisma.examMark.findMany({
+    where: { studentId, exam: { schoolId } },
+    include: {
+      exam: { select: { id: true, name: true, date: true } },
+    },
+    orderBy: [{ exam: { date: 'desc' } }],
+    take: 50,
+  });
+
+  // Fetch subject names separately for any subjectIds found
+  const subjectIds = [...new Set(marks.map(m => m.subjectId).filter(Boolean))];
+  const subjects = subjectIds.length
+    ? await prisma.subject.findMany({ where: { id: { in: subjectIds } }, select: { id: true, name: true } })
+    : [];
+  const subjectMap = Object.fromEntries(subjects.map(s => [s.id, s.name]));
+
+  const data = marks.map(m => ({
+    id:            m.id,
+    examName:      m.exam?.name || '—',
+    subjectName:   m.subjectId ? (subjectMap[m.subjectId] || `Subject ${m.subjectId}`) : '—',
+    totalMarks:    m.totalMarks,
+    obtainedMarks: m.obtainedMarks,
+    grade:         m.grade,
+    date:          m.exam?.date,
+  }));
+
+  res.json({ success: true, data });
+}));
 
 // GET /api/v1/students/:id
 router.get('/:id', wrap(async (req, res) => {

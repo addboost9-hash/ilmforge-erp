@@ -11,7 +11,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { validatePhone, validateCNIC, formatCNIC } from '../../utils/validation';
 
 /* ═══════════════════════════════════════════════════════
    LIVE PHOTO CAPTURE COMPONENT
@@ -270,13 +272,27 @@ export default function AdmissionWizardPage() {
     if (s === 1) {
       if (!form.name.trim()) e.name = 'First Name is required';
       if (!form.fatherName.trim()) e.fatherName = "Father's Name is required";
-      if (!form.emergencyPhone.trim()) e.emergencyPhone = 'Mobile No is required';
+      if (!form.emergencyPhone.trim()) {
+        e.emergencyPhone = 'Mobile No is required';
+      } else if (!validatePhone(form.emergencyPhone)) {
+        e.emergencyPhone = 'Enter a valid Pakistan mobile number (e.g. 0312-3456789 or +923123456789)';
+      }
+      if (form.fatherCnic && !validateCNIC(form.fatherCnic)) {
+        e.fatherCnic = 'Father CNIC must be 13 digits (XXXXX-XXXXXXX-X)';
+      }
+      if (form.motherCnic && !validateCNIC(form.motherCnic)) {
+        e.motherCnic = 'Mother CNIC must be 13 digits (XXXXX-XXXXXXX-X)';
+      }
     }
     if (s === 2) {
       if (!form.classId) e.classId = 'Class selection is required';
     }
     if (s === 4) {
-      if (!form.emergencyPhone.trim()) e.emergencyPhone = 'Parent phone required';
+      if (!form.emergencyPhone.trim()) {
+        e.emergencyPhone = 'Parent phone required';
+      } else if (!validatePhone(form.emergencyPhone)) {
+        e.emergencyPhone = 'Enter a valid Pakistan mobile number';
+      }
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -288,6 +304,7 @@ export default function AdmissionWizardPage() {
   const submit = async () => {
     if (!validate(4)) { setStep(4); return; }
     setSubmitting(true);
+    const loadingToast = toast.loading('Submitting admission...');
     try {
       const payload = {
         // Basic
@@ -348,9 +365,13 @@ export default function AdmissionWizardPage() {
         feeDiscounts: form.feeDiscounts,
       };
       const res = await api.post('/students', payload);
+      toast.dismiss(loadingToast);
+      toast.success('Student admitted successfully! Credentials have been sent.');
       setResult(res.data);
     } catch (err) {
-      alert(err.response?.data?.message || 'Admission failed. Try again.');
+      toast.dismiss(loadingToast);
+      const errorMessage = err.response?.data?.message || 'Try again.';
+      toast.error('Admission failed: ' + errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -581,15 +602,23 @@ export default function AdmissionWizardPage() {
               <Field label="Father Name In Urdu">
                 <input className={inputCls} dir="rtl" value={form.fatherNameUrdu} onChange={e => set('fatherNameUrdu', e.target.value)} placeholder="محمد علی خان" style={{ fontFamily:'serif' }} />
               </Field>
-              <Field label="Father CNIC">
-                <input className={inputCls} value={form.fatherCnic}
+              <Field label="Father CNIC" error={errors.fatherCnic}>
+                <input
+                  className={inputCls}
+                  value={form.fatherCnic}
                   onChange={e => {
-                    let v = e.target.value.replace(/[^0-9]/g, '');
-                    if (v.length > 5 && v.length <= 12) v = v.slice(0,5) + '-' + v.slice(5);
-                    else if (v.length > 12) v = v.slice(0,5) + '-' + v.slice(5,12) + '-' + v.slice(12,13);
-                    set('fatherCnic', v);
+                    const formatted = formatCNIC(e.target.value);
+                    set('fatherCnic', formatted);
                   }}
-                  placeholder="XXXXX-XXXXXXX-X" maxLength={15} />
+                  onBlur={e => {
+                    const val = e.target.value.trim();
+                    if (val && !validateCNIC(val)) {
+                      setErrors(er => ({ ...er, fatherCnic: 'Father CNIC must be 13 digits (XXXXX-XXXXXXX-X)' }));
+                    }
+                  }}
+                  placeholder="XXXXX-XXXXXXX-X"
+                  maxLength={15}
+                />
               </Field>
               <Field label="Father's Qualification">
                 <select className={inputCls} value={form.fatherQualification} onChange={e => set('fatherQualification', e.target.value)}>
@@ -607,15 +636,23 @@ export default function AdmissionWizardPage() {
               <Field label="Mother Name">
                 <input className={inputCls} value={form.motherName} onChange={e => set('motherName', e.target.value)} placeholder="e.g. Fatima Bibi" />
               </Field>
-              <Field label="Mother CNIC">
-                <input className={inputCls} value={form.motherCnic}
+              <Field label="Mother CNIC" error={errors.motherCnic}>
+                <input
+                  className={inputCls}
+                  value={form.motherCnic}
                   onChange={e => {
-                    let v = e.target.value.replace(/[^0-9]/g, '');
-                    if (v.length > 5 && v.length <= 12) v = v.slice(0,5) + '-' + v.slice(5);
-                    else if (v.length > 12) v = v.slice(0,5) + '-' + v.slice(5,12) + '-' + v.slice(12,13);
-                    set('motherCnic', v);
+                    const formatted = formatCNIC(e.target.value);
+                    set('motherCnic', formatted);
                   }}
-                  placeholder="XXXXX-XXXXXXX-X" maxLength={15} />
+                  onBlur={e => {
+                    const val = e.target.value.trim();
+                    if (val && !validateCNIC(val)) {
+                      setErrors(er => ({ ...er, motherCnic: 'Mother CNIC must be 13 digits (XXXXX-XXXXXXX-X)' }));
+                    }
+                  }}
+                  placeholder="XXXXX-XXXXXXX-X"
+                  maxLength={15}
+                />
               </Field>
               <Field label="Mother's Qualification">
                 <select className={inputCls} value={form.motherQualification} onChange={e => set('motherQualification', e.target.value)}>
@@ -682,7 +719,23 @@ export default function AdmissionWizardPage() {
             {/* Contact */}
             <div className="grid sm:grid-cols-2 gap-3 mb-3">
               <Field label="Mobile No *" error={errors.emergencyPhone}>
-                <input className={inputCls} value={form.emergencyPhone} onChange={e => set('emergencyPhone', e.target.value)} placeholder="+92 348 120000" />
+                <input
+                  className={inputCls}
+                  value={form.emergencyPhone}
+                  onChange={e => {
+                    // Allow digits, +, spaces, and dashes; strip everything else
+                    const raw = e.target.value.replace(/[^0-9+\s\-]/g, '');
+                    set('emergencyPhone', raw);
+                  }}
+                  onBlur={e => {
+                    const raw = e.target.value.trim();
+                    if (raw && !validatePhone(raw)) {
+                      setErrors(er => ({ ...er, emergencyPhone: 'Enter a valid Pakistan mobile number (e.g. 0312-3456789 or +923123456789)' }));
+                    }
+                  }}
+                  placeholder="+92 348 120000"
+                  maxLength={15}
+                />
               </Field>
               <Field label="Mother Mobile No">
                 <input className={inputCls} value={form.motherPhone} onChange={e => set('motherPhone', e.target.value)} placeholder="+92 3XX XXXXXXX" />
@@ -906,24 +959,46 @@ export default function AdmissionWizardPage() {
           <div className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Parent Phone (WhatsApp) *" error={errors.emergencyPhone}>
-                <input className={inputCls} value={form.emergencyPhone}
-                  onChange={e => set('emergencyPhone', e.target.value.replace(/[^0-9+\-\s]/g, ''))}
-                  placeholder="03XX-XXXXXXX" />
+                <input
+                  className={inputCls}
+                  value={form.emergencyPhone}
+                  onChange={e => {
+                    const raw = e.target.value.replace(/[^0-9+\s\-]/g, '');
+                    set('emergencyPhone', raw);
+                  }}
+                  onBlur={e => {
+                    const raw = e.target.value.trim();
+                    if (raw && !validatePhone(raw)) {
+                      setErrors(er => ({ ...er, emergencyPhone: 'Enter a valid Pakistan mobile number (e.g. 0312-3456789 or +923123456789)' }));
+                    }
+                  }}
+                  placeholder="03XX-XXXXXXX"
+                  maxLength={15}
+                />
                 <p className="text-[11px] text-slate-400 mt-1">Sibling detection uses this number — same parent = same account</p>
               </Field>
               <Field label="Parent Email (optional)">
                 <input className={inputCls} type="email" value={form.parentEmail} onChange={e => set('parentEmail', e.target.value)} placeholder="parent@email.com" />
               </Field>
               <Field label="Parent CNIC" error={errors.parentCnic}>
-                <input className={inputCls} value={form.parentCnic}
+                <input
+                  className={inputCls}
+                  value={form.parentCnic}
                   onChange={e => {
-                    const v = e.target.value.replace(/[^0-9-]/g, '');
-                    set('parentCnic', v);
-                    if (v && v.length >= 15 && !/^\d{5}-\d{7}-\d$/.test(v)) {
-                      setErrors(er => ({ ...er, parentCnic: 'Format: XXXXX-XXXXXXX-X' }));
-                    } else { setErrors(er => ({ ...er, parentCnic: null })); }
+                    const formatted = formatCNIC(e.target.value);
+                    set('parentCnic', formatted);
                   }}
-                  placeholder="XXXXX-XXXXXXX-X" maxLength={15} />
+                  onBlur={e => {
+                    const val = e.target.value.trim();
+                    if (val && !validateCNIC(val)) {
+                      setErrors(er => ({ ...er, parentCnic: 'CNIC must be 13 digits (XXXXX-XXXXXXX-X)' }));
+                    } else {
+                      setErrors(er => ({ ...er, parentCnic: null }));
+                    }
+                  }}
+                  placeholder="XXXXX-XXXXXXX-X"
+                  maxLength={15}
+                />
               </Field>
             </div>
             <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-teal-300 bg-teal-50 cursor-pointer">

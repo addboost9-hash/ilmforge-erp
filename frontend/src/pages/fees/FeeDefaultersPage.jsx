@@ -84,13 +84,39 @@ export default function FeeDefaultersPage() {
     queryFn: () => api.get('/fees/defaulters').then(r => r.data),
   });
 
+  // Derive invoices early so mutations can close over the ref
+  const invoices = data?.data || [];
+
+  // Bulk reminder: collect all unique parent phones from defaulter invoices, then POST /notifications/sms
   const sendSMS = useMutation({
-    mutationFn: () => api.post('/fees/defaulters/sms'),
-    onSuccess: r => toast.success(r.data.message || 'SMS sent to all defaulters!'),
-    onError: err => toast.error(err.response?.data?.message || 'Failed to send SMS'),
+    mutationFn: () => {
+      const phones = [...new Set(
+        invoices
+          .map(inv => inv.student?.emergencyPhone || inv.student?.parent?.phone)
+          .filter(Boolean)
+      )];
+      if (!phones.length) return Promise.reject(new Error('No phone numbers available for defaulters.'));
+      const message = `Dear Parent, your child has an outstanding fee balance. Please clear dues at the earliest. — IlmForge School`;
+      return api.post('/notifications/sms', { phones, message });
+    },
+    onSuccess: (r) => {
+      const sentCount = r.data?.data?.sent ?? r.data?.data?.total ?? invoices.length;
+      toast.success(`Reminder sent to ${sentCount} parent${sentCount !== 1 ? 's' : ''}.`);
+    },
+    onError: err => toast.error(err.response?.data?.message || err.message || 'Failed to send SMS reminder'),
   });
 
-  const invoices = data?.data || [];
+  // Per-student reminder
+  const sendSingleSMS = useMutation({
+    mutationFn: (inv) => {
+      const phone = inv.student?.emergencyPhone || inv.student?.parent?.phone;
+      if (!phone) return Promise.reject(new Error('No phone number for this student.'));
+      const message = `Dear Parent, ${inv.student?.name || 'your child'} has an outstanding fee of Rs. ${((inv.dueAmount || 0) / 100).toLocaleString()}. Please clear dues at the earliest. — IlmForge School`;
+      return api.post('/notifications/sms', { phones: [phone], message });
+    },
+    onSuccess: () => toast.success('Reminder sent to parent.'),
+    onError: err => toast.error(err.response?.data?.message || err.message || 'Failed to send reminder'),
+  });
   const filtered = filter ? invoices.filter(i => i.student?.name?.toLowerCase().includes(filter.toLowerCase())) : invoices;
   const totalDue = invoices.reduce((s, i) => s + (i.dueAmount||0), 0);
   const uniqueStudents = new Set(invoices.map(i => i.studentId)).size;
@@ -173,7 +199,17 @@ export default function FeeDefaultersPage() {
                     <td><span style={{color:'#DC2626',fontWeight:800}}>{money(inv.dueAmount)}</span></td>
                     <td><span className={`badge ${inv.status==='partial'?'badge-amber':'badge-red'}`}>{inv.status}</span></td>
                     <td>
-                      <Link to="/fees/collect" className="btn btn-sm btn-teal"><DollarSign size={12}/> Collect</Link>
+                      <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
+                        <Link to="/fees/collect" className="btn btn-sm btn-teal"><DollarSign size={12}/> Collect</Link>
+                        <button
+                          className="btn btn-sm btn-amber"
+                          title="Send SMS reminder to parent"
+                          disabled={sendSingleSMS.isPending}
+                          onClick={() => sendSingleSMS.mutate(inv)}
+                        >
+                          <MessageSquare size={12}/> Remind
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

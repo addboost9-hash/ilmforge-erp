@@ -747,7 +747,7 @@ function DateSheetEditModal({ examId, examTitle, row, onClose, queryClient, clas
     setCopying(true);
     try {
       await api.post(`/exams/${examId}/datesheet/copy-to-all`, { fromClassId: row.classId, fromSectionId: row.sectionId });
-      toast.success('Copied to all classes.');
+      toast.success('Date sheet copied to all classes!');
       invalidate();
       setCopyConfirm(false);
     } catch (err) {

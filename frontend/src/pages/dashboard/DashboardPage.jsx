@@ -15,7 +15,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import {
   Users, Briefcase, DollarSign, AlertTriangle, CheckCircle, Calendar,
   ChevronRight, RefreshCw, ClipboardList, CreditCard, UserPlus,
-  FileText, MessageSquare, BarChart2
+  FileText, MessageSquare, BarChart2, Cake, Phone
 } from 'lucide-react';
 
 /* ── helpers ── */
@@ -150,6 +150,16 @@ export default function DashboardPage() {
   const nav = useNavigate();
   const { user, school: authSchool } = useAuthStore();
   const { t } = useTranslation();
+
+  /* ── Upcoming birthdays (next 7 days) ── */
+  const { data: upcomingBirthdays = [] } = useQuery({
+    queryKey: ['upcoming-birthdays-dashboard'],
+    queryFn: () =>
+      api.get('/students/birthdays/upcoming', { params: { days: 7 } })
+        .then(r => r.data.data || [])
+        .catch(() => []),
+    staleTime: 10 * 60_000,
+  });
 
   /* ── Main dashboard stats ── */
   const { data: stats, isLoading, refetch } = useQuery({
@@ -369,6 +379,74 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ══ UPCOMING BIRTHDAYS (next 7 days) ══ */}
+      {upcomingBirthdays.length > 0 && (
+        <div className="card" style={{ marginBottom: 20, border: '1px solid #fce7f3', background: 'linear-gradient(135deg,#fdf4ff 0%,#fce7f3 100%)' }}>
+          <div className="card-header" style={{ background: 'linear-gradient(90deg,#7e22ce,#db2777)', borderRadius: '6px 6px 0 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Cake size={15} color="#f0abfc" />
+              <h3 style={{ color: '#fff', margin: 0 }}>Upcoming Birthdays</h3>
+              <span style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 99 }}>
+                Next 7 Days — {upcomingBirthdays.length}
+              </span>
+            </div>
+            <Link to="/hub/students?tab=birthdays" style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', fontWeight: 600 }}>
+              View All →
+            </Link>
+          </div>
+          <div className="card-body" style={{ padding: '8px 0' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0 }}>
+              {upcomingBirthdays.slice(0, 8).map((s, i) => {
+                const dob = s.dob ? new Date(s.dob).toLocaleDateString('en-PK', { day: '2-digit', month: 'short' }) : '—';
+                const isToday = (s._daysUntil || 0) === 0;
+                const daysLabel = isToday ? 'Today!' : `In ${s._daysUntil} day${s._daysUntil === 1 ? '' : 's'}`;
+                const phone = s.emergencyPhone || s.phone || '';
+                const COLORS = ['#F472B6','#818CF8','#34D399','#60A5FA','#FBBF24','#F87171','#A78BFA','#38BDF8'];
+                const color = COLORS[i % COLORS.length];
+                return (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: i < upcomingBirthdays.slice(0,8).length - 1 ? '1px solid #fce7f3' : 'none', width: '50%', boxSizing: 'border-box', minWidth: 280 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: color + '22', border: `2px solid ${color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color, flexShrink: 0 }}>
+                      {(s.name || '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
+                      <div style={{ fontSize: 11, color: '#64748b', display: 'flex', gap: 6 }}>
+                        <span>{s.class?.name || s.className || '—'}</span>
+                        <span style={{ color: '#cbd5e1' }}>·</span>
+                        <span style={{ fontFamily: 'monospace' }}>{s.rollNo || '—'}</span>
+                        <span style={{ color: '#cbd5e1' }}>·</span>
+                        <span>{dob}</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                      <div style={{ fontSize: isToday ? 18 : 14 }}>{isToday ? '🎂' : '🎁'}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: isToday ? '#db2777' : '#7e22ce', whiteSpace: 'nowrap' }}>{daysLabel}</div>
+                    </div>
+                    {phone && (
+                      <a
+                        href={`https://wa.me/92${String(phone).replace(/^0/, '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Happy Birthday ${s.name}! 🎂 Wishing you a wonderful day from our school!`)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Wish via WhatsApp"
+                        style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 7, background: '#f0fdf4', border: '1px solid #86efac', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
+                      >
+                        <Phone size={12} color="#15803d" />
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {upcomingBirthdays.length > 8 && (
+              <div style={{ textAlign: 'center', padding: '8px 0 4px', fontSize: 12, color: '#7e22ce', fontWeight: 600 }}>
+                +{upcomingBirthdays.length - 8} more birthdays this week →{' '}
+                <Link to="/hub/students?tab=birthdays" style={{ color: '#db2777', textDecoration: 'none' }}>View All</Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ══ RECENT ACTIVITY TABLE ══ */}
       <div className="card" style={{ marginBottom: 0 }}>

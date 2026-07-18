@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { ChevronDown, ChevronUp, X, FileText } from 'lucide-react';
+import { ChevronDown, ChevronUp, X, FileText, Search } from 'lucide-react';
 
 /* ─── helpers ─────────────────────────────────────────────────── */
 const TEAL = '#0D9488';
@@ -42,6 +42,7 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
   const [moveHeads, setMoveHeads] = useState(false);
   const [selectAll, setSelectAll] = useState(false);
   const [selected, setSelected] = useState({});
+  const [confirming, setConfirming] = useState(false);
 
   // Load students in this class-section for bulk promote
   const { data: students = [], isLoading } = useQuery({
@@ -62,6 +63,10 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
 
   const toClass = (classes || []).find((c) => c.id === parseInt(toClassId));
   const toSections = toClass?.sections || [];
+  const toSection = toSections.find((s) => s.id === parseInt(toSectionId));
+
+  const selectedIds = students.filter((s) => selected[s.id]).map((s) => s.id);
+  const selectedCount = selectedIds.length;
 
   const toggleAll = (v) => {
     setSelectAll(v);
@@ -71,15 +76,30 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
   };
 
   const toggleOne = (id) => {
-    setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
+    setSelected((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      // Sync selectAll state
+      const allChecked = students.length > 0 && students.every((s) => next[s.id]);
+      setSelectAll(allChecked);
+      return next;
+    });
+  };
+
+  const handlePromoteClick = () => {
+    if (!toClassId) {
+      toast.error('Please select a target class');
+      return;
+    }
+    if (selectedCount === 0) {
+      toast.error('Please select at least one student');
+      return;
+    }
+    setConfirming(true);
   };
 
   const promote = useMutation({
     mutationFn: () => {
-      const ids = students.filter((s) => selected[s.id]).map((s) => s.id);
-      if (!ids.length) throw new Error('Select at least one student');
-      if (!toClassId) throw new Error('Select target class');
-      const records = ids.map((studentId) => ({
+      const records = selectedIds.map((studentId) => ({
         studentId,
         action: 'promote',
         toClassId: parseInt(toClassId),
@@ -88,12 +108,16 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
       return api.post('/students/promote', { records });
     },
     onSuccess: () => {
-      toast.success('Students promoted successfully!');
+      const className = toClass?.name || `Class ${toClassId}`;
+      const sectionLabel = toSection ? ` - ${toSection.name}` : '';
+      toast.success(`${selectedCount} student${selectedCount !== 1 ? 's' : ''} promoted to ${className}${sectionLabel}!`);
       qc.invalidateQueries({ queryKey: ['class-sections'] });
+      qc.invalidateQueries({ queryKey: ['students-expanded'] });
+      qc.invalidateQueries({ queryKey: ['students-for-promote'] });
       onPromoted && onPromoted();
       onClose();
     },
-    onError: (err) => toast.error(err.message || err.response?.data?.message || 'Promote failed'),
+    onError: (err) => toast.error(err.response?.data?.message || err.message || 'Promote failed'),
   });
 
   return (
@@ -262,20 +286,79 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
             display: 'flex',
             gap: 10,
             justifyContent: 'flex-end',
+            alignItems: 'center',
           }}
         >
+          {selectedCount > 0 && (
+            <span style={{ fontSize: 12, color: '#6B7280', marginRight: 'auto' }}>
+              {selectedCount} student{selectedCount !== 1 ? 's' : ''} selected
+            </span>
+          )}
           <button style={btnOutline} onClick={onClose}>
             Cancel
           </button>
           <button
             style={{ ...btnTeal, opacity: promote.isPending ? 0.7 : 1 }}
             disabled={promote.isPending}
-            onClick={() => promote.mutate()}
+            onClick={handlePromoteClick}
           >
             {promote.isPending ? 'Promoting…' : 'Promote'}
           </button>
         </div>
       </div>
+
+      {/* Confirm Dialog */}
+      {confirming && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.55)',
+            zIndex: 1100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 10,
+              width: '100%',
+              maxWidth: 420,
+              padding: 28,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+            }}
+          >
+            <h3 style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 700, color: '#111827' }}>
+              Confirm Promotion
+            </h3>
+            <p style={{ margin: '0 0 20px', fontSize: 14, color: '#374151', lineHeight: 1.6 }}>
+              Promote <strong>{selectedCount}</strong> student{selectedCount !== 1 ? 's' : ''} to{' '}
+              <strong>{toClass?.name}</strong>
+              {toSection ? <> &ndash; <strong>{toSection.name}</strong></> : ''}?
+              {moveHeads && (
+                <span style={{ display: 'block', marginTop: 6, color: '#0F766E', fontWeight: 600 }}>
+                  Heads &amp; Discounts will also be moved.
+                </span>
+              )}
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button style={btnOutline} onClick={() => setConfirming(false)}>
+                Cancel
+              </button>
+              <button
+                style={{ ...btnTeal, opacity: promote.isPending ? 0.7 : 1 }}
+                disabled={promote.isPending}
+                onClick={() => { setConfirming(false); promote.mutate(); }}
+              >
+                {promote.isPending ? 'Promoting…' : 'Yes, Promote'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -300,8 +383,17 @@ export default function StudentsPage() {
   const [activeTab, setActiveTab] = useState('active');
   const [expandedRow, setExpandedRow] = useState(null);
   const [promoteRow, setPromoteRow] = useState(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const debounceRef = useRef(null);
 
   const qc = useQueryClient();
+
+  const handleSearchChange = useCallback((val) => {
+    setSearchInput(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setSearchQuery(val.trim()), 350);
+  }, []);
 
   const { data: classSections = [], isLoading } = useQuery({
     queryKey: ['class-sections', activeTab],
@@ -312,6 +404,17 @@ export default function StudentsPage() {
   const { data: classes = [] } = useQuery({
     queryKey: ['classes'],
     queryFn: () => api.get('/classes').then((r) => r.data.data || []),
+  });
+
+  // Search results query (only fires when searchQuery is non-empty)
+  const { data: searchResults = [], isFetching: searchLoading } = useQuery({
+    queryKey: ['students-search', searchQuery, activeTab],
+    enabled: searchQuery.length > 0,
+    queryFn: () =>
+      api.get('/students', {
+        params: { search: searchQuery, status: activeTab, limit: 50 },
+      }).then((r) => r.data.data || []),
+    staleTime: 30_000,
   });
 
   // Expanded row students
@@ -364,13 +467,31 @@ export default function StudentsPage() {
             Total Active: <strong>{total}</strong>
           </p>
         </div>
-        <button
-          style={{ ...btnTeal, gap: 7 }}
-          onClick={() => window.open('/api/v1/reports/admission-form', '_blank')}
-        >
-          <FileText size={14} />
-          Get Admission Form In Word
-        </button>
+        <div style={{ display:'flex', gap:8 }}>
+          <div style={{ position:'relative' }}>
+            <Search size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'#9CA3AF', pointerEvents:'none' }}/>
+            <input
+              style={{ paddingLeft:30, paddingRight: searchInput ? 28 : 10, padding:'8px 10px 8px 30px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13, width:240 }}
+              placeholder="Search by name, roll, father..."
+              value={searchInput}
+              onChange={e => handleSearchChange(e.target.value)}
+            />
+            {searchInput && (
+              <button
+                onClick={() => { setSearchInput(''); setSearchQuery(''); }}
+                style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', color:'#9CA3AF', padding:0, lineHeight:1 }}>
+                <X size={13}/>
+              </button>
+            )}
+          </div>
+          <button
+            style={{ ...btnTeal, gap: 7 }}
+            onClick={() => window.open('/api/v1/reports/admission-form', '_blank')}
+          >
+            <FileText size={14} />
+            Admission Form
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -390,6 +511,54 @@ export default function StudentsPage() {
             Inactive
           </button>
         </div>
+
+        {/* ── Search Results Panel ── */}
+        {searchQuery && (
+          <div style={{ padding:'12px 16px', background:'#FFFBEB', borderBottom:'2px solid #FDE68A' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:'#92400E' }}>
+                Search: "{searchQuery}" — {searchLoading ? 'Searching…' : `${searchResults.length} result(s)`}
+              </span>
+              <button onClick={() => { setSearchInput(''); setSearchQuery(''); }}
+                style={{ ...btnOutline, padding:'4px 12px', fontSize:12 }}>
+                Clear Search
+              </button>
+            </div>
+            {!searchLoading && searchResults.length === 0 && (
+              <div style={{ textAlign:'center', padding:'16px 0', color:'#9CA3AF', fontSize:13 }}>No students found matching "{searchQuery}"</div>
+            )}
+            {searchResults.length > 0 && (
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, background:'#fff', borderRadius:6, overflow:'hidden' }}>
+                <thead>
+                  <tr style={{ background: TEAL }}>
+                    {['#','Roll No','Name','Father Name','Class','Section','Gender','Actions'].map(h => (
+                      <th key={h} style={{ padding:'8px 12px', color:'#fff', fontWeight:700, textAlign:'left' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {searchResults.map((s, i) => (
+                    <tr key={s.id} style={{ borderBottom:'1px solid #F3F4F6', background: i%2===0?'#fff':'#FAFAFA' }}>
+                      <td style={{ padding:'8px 12px', color:'#9CA3AF' }}>{i+1}</td>
+                      <td style={{ padding:'8px 12px', fontFamily:'monospace', color:TEAL, fontWeight:700 }}>{s.rollNo||'—'}</td>
+                      <td style={{ padding:'8px 12px', fontWeight:600, color:'#111827' }}>{s.name}</td>
+                      <td style={{ padding:'8px 12px', color:'#6B7280' }}>{s.fatherName||'—'}</td>
+                      <td style={{ padding:'8px 12px' }}>{s.class?.name||'—'}</td>
+                      <td style={{ padding:'8px 12px', color:'#6B7280' }}>{s.section?.name||'—'}</td>
+                      <td style={{ padding:'8px 12px', color:'#6B7280', textTransform:'capitalize' }}>{s.gender||'—'}</td>
+                      <td style={{ padding:'8px 12px' }}>
+                        <Link to={`/students/${s.id}`}
+                          style={{ ...btnTeal, padding:'4px 12px', fontSize:12, textDecoration:'none' }}>
+                          View
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
 
         {/* Table */}
         {isLoading ? (

@@ -33,13 +33,14 @@ export default function AttendancePage() {
       date: filters.date,
       records: Object.entries(attendance).map(([studentId, status]) => ({ studentId: parseInt(studentId), status })),
     }),
-    onSuccess: r => {
-      toast.success(r.data.message || 'Attendance saved!');
+    onSuccess: (r, _variables, _context) => {
+      const count = Object.keys(attendance).length;
+      toast.success(`Attendance saved for ${count} student${count !== 1 ? 's' : ''}!`);
       // Refresh dashboard so attendance stats update immediately
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['attendance'] });
     },
-    onError: err => toast.error(err.response?.data?.message || 'Failed to save'),
+    onError: err => toast.error(err.response?.data?.message || 'Failed to save attendance'),
   });
 
   const cls = (classes||[]).find(c => c.id === parseInt(filters.classId));

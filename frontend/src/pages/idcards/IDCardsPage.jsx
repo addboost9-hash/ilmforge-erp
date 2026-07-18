@@ -75,6 +75,7 @@ const buildCard = (p, opts) => {
   const classInfo= p.class?.name ? `${p.class.name}${p.section?.name?' - '+p.section.name:''}` : '—';
   const photo    = photoMap?.[p.id] || p.photoUrl || null;
   const dob      = p.dob ? new Date(p.dob).toLocaleDateString('en-PK') : '—';
+  const cnic     = p.bFormNo || p.cnic || '';
   const logoHtml = logoSrc
     ? `<img src="${logoSrc}" style="width:100%;height:100%;object-fit:contain;border-radius:4px;"/>`
     : `<span style="font-size:20px;">🎓</span>`;
@@ -122,14 +123,17 @@ const buildCard = (p, opts) => {
       <!-- Fields -->
       <div style="flex:1;padding:1.5mm 4mm;font-size:6pt;">
         ${[
-          ['ID No',  id],
-          type==='student'?['Class', classInfo]:['Dept.', p.department?.name||'—'],
-          ['Phone', phone||p.emergencyPhone||'—'],
-          ['DOB',   dob],
-        ].map(([l,v])=>`<div style="display:flex;margin-bottom:1.2mm;"><span style="color:#888;width:10mm;flex-shrink:0;">${l}</span><span style="color:#333;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"> : ${v}</span></div>`).join('')}
+          ['ID No',    id],
+          type==='student'?['Father', p.fatherName||'—']:['Dept.', p.department?.name||'—'],
+          type==='student'?['Class',  classInfo]:['Post', p.designation||'—'],
+          ['DOB',      dob],
+          ...(cnic ? [['CNIC/B-Form', cnic]] : []),
+          ['Phone',    phone||p.emergencyPhone||'—'],
+        ].map(([l,v])=>`<div style="display:flex;margin-bottom:1.2mm;"><span style="color:#888;width:12mm;flex-shrink:0;">${l}</span><span style="color:#333;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"> : ${v}</span></div>`).join('')}
       </div>
       <!-- Barcode + footer -->
       <div style="background:${primary}0A;border-top:1px solid ${primary}20;padding:2mm 3mm;text-align:center;">
+        <div style="font-size:5pt;color:#777;margin-bottom:1mm;">${address||''}${phone?' · '+phone:''}</div>
         <div style="font-family:'Courier New',monospace;font-size:12pt;letter-spacing:3px;color:#111;line-height:1;">▐▌▌▐▐▌▐▌▌▐▌▐▌</div>
         <div style="font-size:5.5pt;color:#555;margin-top:1mm;letter-spacing:1px;">${id}</div>
       </div>
@@ -172,6 +176,7 @@ const buildCard = (p, opts) => {
               ['Class',  classInfo],
               ['DOB',    dob],
               ['Roll',   id],
+              ...(cnic ? [['CNIC', cnic]] : []),
             ].map(([l,v])=>`<tr><td style="color:#888;padding:1mm 0;width:11mm;">${l}</td><td style="color:#555;padding-right:1mm;">:</td><td style="color:#222;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:28mm;">${v}</td></tr>`).join('')}
           </table>
         </div>
@@ -310,10 +315,14 @@ const buildCard = (p, opts) => {
     <div style="flex:1;padding:1mm 4mm;font-size:6pt;">
       ${[
         ['Student ID',  id],
-        [type==='student'?'Class':'Department', type==='student'?classInfo:p.department?.name||'—'],
+        type==='student'?['Father', p.fatherName||'—']:['Dept.', p.department?.name||'—'],
+        [type==='student'?'Class':'Designation', type==='student'?classInfo:p.designation||'—'],
         ['Date of Birth', dob],
-      ].map(([l,v])=>`<div style="display:flex;margin-bottom:2mm;border-bottom:1px dashed #E5E7EB;padding-bottom:1.5mm;"><span style="color:#888;width:18mm;flex-shrink:0;">${l}</span><span style="color:#333;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"> : ${v}</span></div>`).join('')}
+        ...(cnic ? [['CNIC/B-Form', cnic]] : []),
+      ].map(([l,v])=>`<div style="display:flex;margin-bottom:1.8mm;border-bottom:1px dashed #E5E7EB;padding-bottom:1.2mm;"><span style="color:#888;width:18mm;flex-shrink:0;">${l}</span><span style="color:#333;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"> : ${v}</span></div>`).join('')}
     </div>
+    <!-- Address footer before barcode -->
+    <div style="padding:1mm 4mm;font-size:5pt;color:#777;text-align:center;">${address||''}${phone?' · '+phone:''}</div>
     <!-- QR + barcode footer -->
     <div style="background:${primary};padding:2.5mm 3mm;display:flex;align-items:center;gap:2mm;">
       <div style="flex:1;">
@@ -337,7 +346,12 @@ const buildPrintHTML = (people, opts) => {
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:#f0f0f0;font-family:Arial,sans-serif;padding:10mm;}
   .wrap{display:flex;flex-wrap:wrap;gap:6mm;}
-  @media print{body{background:#fff;padding:8mm;} .no-print{display:none!important;} .wrap{gap:5mm;}}
+  @media print{
+    body{background:#fff;padding:4mm;}
+    .no-print{display:none!important;}
+    .wrap{gap:4mm;}
+    @page{margin:6mm;}
+  }
 </style></head><body>
   <div class="no-print" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
     <div>

@@ -224,18 +224,21 @@ function MonthlyFeeTab({ classes }) {
 
   const mutation = useMutation({
     mutationFn: body => api.post('/fees/generate', body),
-    onSuccess: res => {
-      const msg = res.data?.message || 'Monthly fee generated successfully!';
+    onSuccess: (res, variables) => {
+      const d = res.data?.data;
+      const generated = d?.generated ?? '?';
+      const skipped   = d?.skipped   ?? 0;
+      const cls = (classes || []).find(c => String(c.id) === String(variables.classId));
+      const className = cls?.name || `Class ${variables.classId}`;
+      const msg = `${generated} fee invoice${generated !== 1 ? 's' : ''} generated for ${className} — ${month} ${year}` +
+        (skipped > 0 ? `. ${skipped} already existed (skipped).` : '.');
       setSuccessMsg(msg);
       toast.success(msg);
     },
     onError: err => {
       const msg = err.response?.data?.message;
       if (msg) toast.error(msg);
-      else {
-        setSuccessMsg('Monthly fee generated successfully!');
-        toast.success('Monthly fee generated successfully!');
-      }
+      else toast.error('Failed to generate fee. Please try again.');
     },
   });
 

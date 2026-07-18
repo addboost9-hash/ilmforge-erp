@@ -29,10 +29,12 @@ const gradeFor = (obtained, total, absent) => {
 const gradeBadgeClass = g => {
   if (!g || g === '—') return 'badge-secondary';
   if (g === 'ABS') return 'badge-warning';
-  if (g === 'A+' || g === 'A') return 'badge-success';
-  if (g === 'B') return 'badge-primary';
-  if (g === 'C' || g === 'D') return 'badge-warning';
-  return 'badge-danger';
+  if (g === 'A+') return 'badge-success';   // green
+  if (g === 'A')  return 'badge-primary';   // blue
+  if (g === 'B')  return 'badge-info';      // teal
+  if (g === 'C')  return 'badge-warning';   // orange
+  if (g === 'D')  return 'badge-secondary'; // grey
+  return 'badge-danger';                    // red  (F)
 };
 
 const pctFor = (obtained, total, absent) => {
@@ -211,10 +213,25 @@ export default function ExamMarksPage() {
     });
   }
 
+  /* ── Validation helper ────────────────────────────────────────────── */
+  const hasInvalidMarks = () => {
+    if (!selectedSubjectId || !students?.length) return false;
+    return students.some(s => {
+      const m = subjMarks[s.id];
+      if (!m || m.absent) return false;
+      const obt = m.obtained !== '' ? parseFloat(m.obtained) : null;
+      const tot = parseFloat(m.total || totalMarksDefault) || 0;
+      return obt !== null && tot > 0 && obt > tot;
+    });
+  };
+
   /* ── Save mutation ────────────────────────────────────────────────── */
   const save = useMutation({
     mutationFn: () => {
       if (!selectedSubjectId) throw new Error('No subject selected');
+      if (hasInvalidMarks()) {
+        throw new Error('Some students have obtained marks exceeding maximum marks. Please fix the highlighted rows first.');
+      }
       const payload = (students || []).map(s => {
         const m = subjMarks[s.id] || { obtained: '', total: String(totalMarksDefault), theory: '', practical: '', absent: false };
         return {
@@ -229,8 +246,9 @@ export default function ExamMarksPage() {
       });
       return api.post(`/exams/${id}/marks`, { marks: payload });
     },
-    onSuccess: () => {
-      toast.success('Marks saved successfully!');
+    onSuccess: (res) => {
+      const count = res?.data?.data?.length ?? (students?.length ?? 0);
+      toast.success(`Marks saved for ${count} students!`);
       qc.invalidateQueries(['exam-marks-existing', id, selectedSubjectId]);
       qc.invalidateQueries(['exam-subject-progress', id]);
     },
@@ -323,9 +341,10 @@ export default function ExamMarksPage() {
             <button
               className="btn btn-primary"
               onClick={() => save.mutate()}
-              disabled={save.isPending || total === 0 || !selectedSubjectId}
+              disabled={save.isPending || total === 0 || !selectedSubjectId || hasInvalidMarks()}
+              title={hasInvalidMarks() ? 'Fix invalid marks (red rows) before saving' : undefined}
             >
-              <Save size={14} /> {save.isPending ? 'Saving...' : 'Save Marks'}
+              <Save size={14} /> {save.isPending ? 'Saving...' : 'Save All Marks'}
             </button>
           </div>
         </div>
@@ -565,9 +584,12 @@ export default function ExamMarksPage() {
                           };
                           const grade = gradeFor(m.obtained, m.total, m.absent);
                           const pct = pctFor(m.obtained, m.total, m.absent);
+                          const maxAllowed = parseFloat(m.total || totalMarksDefault) || 0;
+                          const obtVal     = m.obtained !== '' ? parseFloat(m.obtained) : null;
+                          const rowInvalid = !m.absent && obtVal !== null && maxAllowed > 0 && obtVal > maxAllowed;
 
                           return (
-                            <tr key={s.id} style={{ background: m.absent ? '#fff3cd' : undefined }}>
+                            <tr key={s.id} style={{ background: rowInvalid ? '#f8d7da' : m.absent ? '#fff3cd' : undefined }}>
                               <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{idx + 1}</td>
 
                               <td>
@@ -648,23 +670,34 @@ export default function ExamMarksPage() {
 
                               {/* Obtained marks */}
                               <td>
-                                <input
-                                  type="number"
-                                  className="form-control"
-                                  style={{
-                                    width: 100, height: 32, padding: '4px 8px', fontSize: 12,
-                                    borderColor: m.obtained !== '' && pct !== null && pct < 50 ? 'var(--stat-red)' : undefined,
-                                    background:
-                                      m.obtained !== '' && pct !== null && pct >= 50 ? '#d4edda'
-                                        : m.obtained !== '' ? '#f8d7da' : undefined,
-                                  }}
-                                  value={m.obtained}
-                                  disabled={m.absent}
-                                  placeholder="0"
-                                  min="0"
-                                  max={m.total || totalMarksDefault}
-                                  onChange={e => setStudentMark(s.id, 'obtained', e.target.value)}
-                                />
+                                {(() => {
+                                  const maxAllowed = parseFloat(m.total || totalMarksDefault) || 0;
+                                  const obtVal    = m.obtained !== '' ? parseFloat(m.obtained) : null;
+                                  const isInvalid = obtVal !== null && maxAllowed > 0 && obtVal > maxAllowed;
+                                  const isGood    = obtVal !== null && !isInvalid;
+                                  return (
+                                    <input
+                                      type="number"
+                                      className="form-control"
+                                      style={{
+                                        width: 100, height: 32, padding: '4px 8px', fontSize: 12,
+                                        borderColor: isInvalid ? 'var(--stat-red)' : undefined,
+                                        outline:     isInvalid ? '2px solid var(--stat-red)' : undefined,
+                                        background:
+                                          isInvalid ? '#f8d7da'
+                                          : isGood   ? '#d4edda'
+                                          : undefined,
+                                      }}
+                                      title={isInvalid ? `Cannot exceed max marks (${maxAllowed})` : undefined}
+                                      value={m.obtained}
+                                      disabled={m.absent}
+                                      placeholder="0"
+                                      min="0"
+                                      max={m.total || totalMarksDefault}
+                                      onChange={e => setStudentMark(s.id, 'obtained', e.target.value)}
+                                    />
+                                  );
+                                })()}
                               </td>
 
                               {/* Absent checkbox */}
@@ -761,9 +794,10 @@ export default function ExamMarksPage() {
               className="btn btn-success"
               style={{ padding: '9px 28px', fontSize: 14, fontWeight: 700, boxShadow: '0 4px 12px rgba(0,166,90,0.35)' }}
               onClick={() => save.mutate()}
-              disabled={save.isPending}
+              disabled={save.isPending || hasInvalidMarks()}
+              title={hasInvalidMarks() ? 'Fix invalid marks (red rows) before saving' : undefined}
             >
-              <Save size={15} /> {save.isPending ? 'Saving...' : `Save ${filled} / ${total} marks`}
+              <Save size={15} /> {save.isPending ? 'Saving...' : 'Save All Marks'}
             </button>
           </div>
         </div>
