@@ -1632,3 +1632,5 @@ body.lang-ur .metric-value { font-family: 'Noto Nastaliq Urdu', serif; }
   [dir="rtl"] .sidebar.mobile-open { transform: translateX(0); }
   [dir="rtl"] .main-wrapper { margin-right: 0 !important; }
 }
+
+@import url('./styles/ilmforge-design.css');

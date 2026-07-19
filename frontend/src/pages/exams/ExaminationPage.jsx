@@ -1788,20 +1788,26 @@ export default function ExaminationPage() {
 
   return (
     <div className="page-content fade-in">
-      {/* IlmForge Page Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: NAVY }}>Examination</h1>
-        <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>ilmفورج</span>
+      {/* IlmForge Gradient Page Header */}
+      <div className="ilm-page-header">
+        <div>
+          <h1 className="ilm-page-title">Examination</h1>
+          <p className="ilm-page-subtitle">Manage exams, question banks and results</p>
+        </div>
       </div>
 
-      {/* IlmForge underline tab bar */}
-      <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', borderBottom: '2px solid #e2e8f0', marginBottom: 20 }}>
-        {MAIN_TABS.map(tab => (
-          <button
-            key={tab.id}
-            style={tabBtnStyle(activeTab === tab.id)}
-            onClick={() => setActiveTab(tab.id)}
-          >
+      {/* IlmForge Pill Navigation */}
+      <div className="ilm-pill-nav">
+        {[
+          {id:'exam-setup', label:'Exam Setup'},
+          {id:'date-sheet', label:'Date Sheet'},
+          {id:'syllabus', label:'Syllabus'},
+          {id:'question-bank', label:'Question Bank'},
+          {id:'results', label:'Results'},
+        ].map(tab => (
+          <button key={tab.id}
+            className={`ilm-pill-nav-item ${activeTab===tab.id?'active':''}`}
+            onClick={() => setActiveTab(tab.id)}>
             {tab.label}
           </button>
         ))}

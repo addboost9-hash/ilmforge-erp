@@ -25,69 +25,19 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-PK', { day: '2-digit
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /* ── Stat Card ── */
-const StatCard = React.memo(function StatCard({ value, label, Icon, color, href }) {
+const StatCard = React.memo(function StatCard({ value, label, icon, gradient, href }) {
   return (
-    <div style={{
-      background: color,
-      borderRadius: 6,
-      overflow: 'hidden',
-      cursor: 'pointer',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
-      marginBottom: 0,
-    }}>
-      {/* Top body */}
-      <div style={{
-        padding: '16px 20px',
-        display: 'flex',
-        alignItems: 'center',
-        position: 'relative',
-        overflow: 'hidden',
-        minHeight: 90,
-      }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: 'white', lineHeight: 1 }}>
-            {value ?? 0}
+    <a href={href || '#'} style={{textDecoration:'none'}}>
+      <div className="ilm-stat-card ilm-animate" style={{background: gradient}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
+          <div>
+            <div className="ilm-stat-value">{value ?? 0}</div>
+            <div className="ilm-stat-label">{label}</div>
           </div>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 4 }}>
-            {label}
-          </div>
-        </div>
-        <div style={{
-          position: 'absolute',
-          right: -8,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          fontSize: 72,
-          opacity: 0.2,
-          color: 'white',
-        }}>
-          <Icon size={72} />
+          <div style={{fontSize:40, opacity:0.25, lineHeight:1}}>{icon}</div>
         </div>
       </div>
-
-      {/* Footer strip */}
-      <div style={{
-        padding: '8px 20px',
-        background: 'rgba(0,0,0,0.1)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <a
-          href={href}
-          style={{
-            fontSize: 12,
-            color: 'rgba(255,255,255,0.85)',
-            textDecoration: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-          }}
-        >
-          More info <span>&#8250;</span>
-        </a>
-      </div>
-    </div>
+    </a>
   );
 });
 
@@ -207,31 +157,28 @@ export default function DashboardPage() {
 
   const activity = payments.length ? payments : admissions;
 
+  const STAT_CARDS = [
+    { label:'TOTAL STUDENTS', value:totalStudents, icon:'👥', gradient:'var(--ilm-gradient-primary)', href:'/students' },
+    { label:'PRESENT TODAY', value:presentToday, icon:'✅', gradient:'var(--ilm-gradient-success)', href:'/attendance-hub' },
+    { label:'TOTAL STAFF', value:totalStaff, icon:'👨‍🏫', gradient:'linear-gradient(135deg,#6366f1,#8b5cf6)', href:'/staff' },
+    { label:'FEE TODAY', value:`Rs.${Number(feeToday).toLocaleString()}`, icon:'💰', gradient:'var(--ilm-gradient-gold)', href:'/fee-management' },
+    { label:'PENDING FEES', value:feeDefaulters, icon:'📋', gradient:'var(--ilm-gradient-danger)', href:'/fees/defaulters' },
+  ];
+
   return (
     <div className="page-content fade-in" style={{ padding: '20px 22px 40px' }}>
 
-      {/* ══ HEADER BAR ══ */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20,
-        background: '#fff', borderRadius: 6, padding: '12px 18px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.12)', border: '1px solid rgba(0,0,0,0.06)',
-      }}>
+      {/* ══ GRADIENT PAGE HEADER ══ */}
+      <div className="ilm-page-header ilm-animate">
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#333' }}>
-            Dashboard
-          </div>
-          <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
-            {authSchool?.name || localStorage.getItem('registeredSchoolName') || 'IlmForge School'} &nbsp;·&nbsp;
-            {new Date().toLocaleDateString('en-PK', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-          </div>
+          <h1 className="ilm-page-title">Dashboard</h1>
+          <p className="ilm-page-subtitle">School overview and quick statistics</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-primary btn-sm" onClick={() => refetch()} disabled={isLoading}
-            style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <RefreshCw size={13} style={{ animation: isLoading ? 'spin .8s linear infinite' : undefined }} />
-            Refresh
-          </button>
-        </div>
+        <button className="ilm-btn ilm-btn-sm"
+          style={{background:'rgba(255,255,255,0.15)',color:'white',border:'1px solid rgba(255,255,255,0.3)'}}
+          onClick={() => refetch()}>
+          🔄 Refresh
+        </button>
       </div>
 
       {/* ══ SMART WORKFLOW HUB BANNER ══ */}
@@ -267,50 +214,9 @@ export default function DashboardPage() {
         </div>
       </Link>
 
-      {/* ══ 6 STAT CARDS (3-column grid) ══ */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 20 }}>
-        <StatCard
-          value={isLoading ? '…' : totalStudents}
-          label={t('dashboard','totalStudents')}
-          Icon={Users}
-          color="#00a65a"
-          href="/hub/students"
-        />
-        <StatCard
-          value={isLoading ? '…' : totalStaff}
-          label={t('dashboard','totalStaff')}
-          Icon={Briefcase}
-          color="#0073b7"
-          href="/hub/staff"
-        />
-        <StatCard
-          value={isLoading ? '…' : Rs(feeToday)}
-          label={t('dashboard','feeToday')}
-          Icon={DollarSign}
-          color="#00c0ef"
-          href="/fees"
-        />
-        <StatCard
-          value={isLoading ? '…' : feeDefaulters}
-          label={t('dashboard','defaulters')}
-          Icon={AlertTriangle}
-          color="#dd4b39"
-          href="/fees/defaulters"
-        />
-        <StatCard
-          value={isLoading ? '…' : presentToday}
-          label={t('dashboard','presentToday')}
-          Icon={CheckCircle}
-          color="#605ca8"
-          href="/hub/attendance"
-        />
-        <StatCard
-          value={isLoading ? '…' : pendingLeaves}
-          label={t('dashboard','pendingLeaves')}
-          Icon={Calendar}
-          color="#f39c12"
-          href="/leaves"
-        />
+      {/* ══ GRADIENT STAT CARDS ══ */}
+      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:14, marginBottom:20}}>
+        {STAT_CARDS.map(c => <StatCard key={c.label} {...c} />)}
       </div>
 
       {/* ══ TWO CHARTS SIDE BY SIDE ══ */}
