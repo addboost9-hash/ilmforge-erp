@@ -12,7 +12,8 @@ import {
   LayoutDashboard, Users, UserCheck, GraduationCap, BookMarked,
   FolderOpen, Calendar, Bell, Key, Video, LogOut, ChevronRight,
   Save, Plus, Search, MessageSquare, Trash2, Printer, Download,
-  CheckCircle2, XCircle, Clock, BarChart2,
+  CheckCircle2, XCircle, Clock, BarChart2, FileText, TrendingUp,
+  Send, Eye, RefreshCw,
 } from 'lucide-react';
 import { printAttendanceSheet, printMarksSheet, exportToCSV } from '../../components/PortalUtils';
 
@@ -33,18 +34,20 @@ const NAVY   = '#1B2F6E';
 const CYAN   = '#00c0ef';
 
 const NAV = [
-  { id: 'dashboard',   label: 'Dashboard',        Icon: LayoutDashboard },
-  { id: 'students',    label: 'My Students',       Icon: Users           },
-  { id: 'attendance',  label: 'Mark Attendance',   Icon: UserCheck       },
-  { id: 'marks',       label: 'Exam Marks',        Icon: GraduationCap   },
-  { id: 'results',     label: 'Publish Results 📢',Icon: GraduationCap   },
-  { id: 'homework',    label: 'Homework',          Icon: BookMarked      },
-  { id: 'materials',   label: 'Study Materials',   Icon: FolderOpen      },
-  { id: 'leave',       label: 'Leave Application', Icon: Calendar        },
-  { id: 'noticeboard', label: 'Noticeboard',       Icon: Bell            },
-  { id: 'password',    label: 'Change Password',   Icon: Key             },
-  { id: 'tutorials',   label: 'Video Tutorials',   Icon: Video           },
-  { id: 'messenger',   label: 'Messages 💬',       Icon: MessageSquare   },
+  { id: 'dashboard',    label: 'Dashboard',          Icon: LayoutDashboard },
+  { id: 'students',     label: 'My Students',         Icon: Users           },
+  { id: 'attendance',   label: 'Mark Attendance',     Icon: UserCheck       },
+  { id: 'marks',        label: 'Exam Marks',          Icon: GraduationCap   },
+  { id: 'results',      label: 'Publish Results 📢',  Icon: GraduationCap   },
+  { id: 'homework',     label: 'Homework',            Icon: BookMarked      },
+  { id: 'lessonplans',  label: 'Lesson Plans',        Icon: FileText        },
+  { id: 'classreport',  label: 'Class Performance',   Icon: TrendingUp      },
+  { id: 'materials',    label: 'Study Materials',     Icon: FolderOpen      },
+  { id: 'leave',        label: 'Leave Application',   Icon: Calendar        },
+  { id: 'noticeboard',  label: 'Noticeboard',         Icon: Bell            },
+  { id: 'password',     label: 'Change Password',     Icon: Key             },
+  { id: 'tutorials',    label: 'Video Tutorials',     Icon: Video           },
+  { id: 'messenger',    label: 'Messages 💬',         Icon: MessageSquare   },
 ];
 
 /* ── Stat card presets ───────────────────────────────────── */
@@ -178,18 +181,20 @@ export default function TeacherPortalPage() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard':   return <DashboardTab   classes={classes} exams={exams} homeworkApi={homeworkApi} setActiveTab={setActiveTab} user={user} />;
-      case 'students':    return <StudentsTab     classes={classes} />;
-      case 'attendance':  return <AttendanceTab   classes={classes} />;
-      case 'marks':       return <MarksTab        classes={classes} exams={exams} />;
-      case 'homework':    return <HomeworkTab      classes={classes} homeworkApi={homeworkApi} />;
-      case 'materials':   return <MaterialsTab    classes={classes} />;
-      case 'results':     return <ResultPublishTab classes={classes} exams={exams} />;
-      case 'leave':       return <LeaveTab />;
-      case 'noticeboard': return <NoticeboardTab  notices={notices} />;
-      case 'password':    return <PasswordTab />;
-      case 'tutorials':   return <TutorialsTab />;
-      default:            return null;
+      case 'dashboard':    return <DashboardTab    classes={classes} exams={exams} homeworkApi={homeworkApi} setActiveTab={setActiveTab} user={user} />;
+      case 'students':     return <StudentsTab      classes={classes} />;
+      case 'attendance':   return <AttendanceTab    classes={classes} />;
+      case 'marks':        return <MarksTab         classes={classes} exams={exams} />;
+      case 'homework':     return <HomeworkTab       classes={classes} homeworkApi={homeworkApi} user={user} />;
+      case 'lessonplans':  return <LessonPlansTab    classes={classes} user={user} />;
+      case 'classreport':  return <ClassReportTab    classes={classes} exams={exams} user={user} />;
+      case 'materials':    return <MaterialsTab     classes={classes} />;
+      case 'results':      return <ResultPublishTab  classes={classes} exams={exams} />;
+      case 'leave':        return <LeaveTab />;
+      case 'noticeboard':  return <NoticeboardTab   notices={notices} />;
+      case 'password':     return <PasswordTab />;
+      case 'tutorials':    return <TutorialsTab />;
+      default:             return null;
     }
   };
 
@@ -716,12 +721,14 @@ function MarksTab({ classes, exams }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   TAB: HOMEWORK
+   TAB: HOMEWORK  (Enhanced)
 ═══════════════════════════════════════════════════════════ */
-function HomeworkTab({ classes, homeworkApi }) {
+function HomeworkTab({ classes, homeworkApi, user }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ subject: '', classId: '', section: '', date: todayStr(), description: '' });
+  const [form, setForm] = useState({ subject: '', classId: '', section: '', dueDate: todayStr(), description: '' });
   const [localHW, setLocalHW] = useState(() => lsGet(LS_HW));
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'submissions'
+  const [selectedHW, setSelectedHW] = useState(null);
 
   const cls = classes.find(c => c.id === parseInt(form.classId));
   const sections = cls?.sections || [];
@@ -732,89 +739,664 @@ function HomeworkTab({ classes, homeworkApi }) {
     retry: false,
   });
 
+  /* Load all homework assigned by this teacher */
+  const { data: myHomework = [], isLoading: hwLoading, refetch: refetchHW } = useQuery({
+    queryKey: ['my-homework', user?.id],
+    queryFn: () => api.get('/homework', { params: { createdBy: user?.id, limit: 100 } }).then(r => r.data.data || []).catch(() => []),
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  /* Load submissions for selected homework */
+  const { data: submissions = [], isLoading: subLoading } = useQuery({
+    queryKey: ['hw-submissions', selectedHW?.id],
+    queryFn: () => api.get(`/homework/${selectedHW?.id}/submissions`).then(r => r.data.data || []).catch(() => []),
+    enabled: !!selectedHW?.id,
+    staleTime: 30_000,
+    retry: false,
+  });
+
   const addMut = useMutation({
     mutationFn: () => api.post('/homework', {
       classId: parseInt(form.classId),
       sectionId: form.section ? parseInt(form.section) : undefined,
       subjectId: form.subject ? parseInt(form.subject) : undefined,
-      description: form.description, date: form.date,
+      description: form.description,
+      date: form.dueDate,
+      dueDate: form.dueDate,
     }),
-    onSuccess: () => { qc.invalidateQueries(['homework']); setForm({ subject: '', classId: '', section: '', date: todayStr(), description: '' }); toast.success('Homework posted!'); },
+    onSuccess: () => {
+      qc.invalidateQueries(['homework']);
+      qc.invalidateQueries(['my-homework', user?.id]);
+      setForm({ subject: '', classId: '', section: '', dueDate: todayStr(), description: '' });
+      toast.success('Homework posted successfully!');
+    },
     onError: () => {
       const entry = { id: Date.now(), ...form, className: cls?.name, createdAt: new Date().toISOString() };
       const updated = [entry, ...localHW];
       setLocalHW(updated);
       lsSet(LS_HW, updated);
-      setForm({ subject: '', classId: '', section: '', date: todayStr(), description: '' });
+      setForm({ subject: '', classId: '', section: '', dueDate: todayStr(), description: '' });
       toast.error('Homework saved locally (API unavailable)');
     },
   });
 
-  const allHW = [...homeworkApi, ...localHW];
+  const allHW = [...myHomework, ...localHW.filter(lh => !myHomework.find(mh => mh.id === lh.id))];
   const valid = form.classId && form.description;
   const iStyle = { width: '100%', padding: '9px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#F8FAFC', outline: 'none' };
 
-  const formFields = [
-    { label: 'Class',   key: 'classId',  type: 'select', options: classes.map(c => ({ value: c.id, label: c.name })) },
-    ...(sections.length > 0 ? [{ label: 'Section', key: 'section', type: 'select', options: sections.map(s => ({ value: s.id, label: s.name })) }] : []),
-    { label: 'Subject', key: 'subject',  type: 'select', options: subjects.map(s => ({ value: s.id, label: s.name })) },
-    { label: 'Date',    key: 'date',     type: 'date' },
-  ];
+  const submitted = submissions.filter(s => s.status === 'submitted' || s.submittedAt);
+  const pending   = submissions.filter(s => !s.status || s.status === 'pending' || !s.submittedAt);
 
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: NAVY }}>Homework Diary</div>
-        <div style={{ color: '#64748B', fontSize: 13, marginTop: 3 }}>Assign and track daily homework</div>
+        <div style={{ color: '#64748B', fontSize: 13, marginTop: 3 }}>Assign homework and track student submissions</div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 18 }}>
+        {/* LEFT: Add Homework Form */}
         <div className="card card-body" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 22px', alignSelf: 'start' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <Plus size={16} color={NAVY} />
-            <span style={{ fontWeight: 700, fontSize: 14, color: NAVY }}>Add Homework</span>
+            <span style={{ fontWeight: 700, fontSize: 14, color: NAVY }}>Assign Homework</span>
           </div>
-          {formFields.map(f => (
-            <div key={f.key} style={{ marginBottom: 12 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{f.label}</label>
-              {f.type === 'select'
-                ? <select value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} style={iStyle}>
-                    <option value="">Select {f.label}</option>
-                    {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                : <input type={f.type} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} style={{ ...iStyle, boxSizing: 'border-box' }} />
-              }
+
+          {/* Class */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Class *</label>
+            <select value={form.classId} onChange={e => setForm(p => ({ ...p, classId: e.target.value, section: '', subject: '' }))} style={iStyle}>
+              <option value="">Select Class</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          {/* Section */}
+          {sections.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Section</label>
+              <select value={form.section} onChange={e => setForm(p => ({ ...p, section: e.target.value }))} style={iStyle}>
+                <option value="">All Sections</option>
+                {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
             </div>
-          ))}
+          )}
+
+          {/* Subject */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Subject</label>
+            <select value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))} style={iStyle} disabled={!form.classId}>
+              <option value="">Select Subject</option>
+              {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+
+          {/* Due Date */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Due Date *</label>
+            <input type="date" value={form.dueDate} onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))} style={{ ...iStyle, boxSizing: 'border-box' }} />
+          </div>
+
+          {/* Description */}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description</label>
-            <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={3}
-              placeholder="Describe the homework…"
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Homework Description *</label>
+            <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={4}
+              placeholder="Describe the homework task in detail…"
               style={{ ...iStyle, resize: 'vertical', boxSizing: 'border-box' }} />
           </div>
+
           <button onClick={() => addMut.mutate()} disabled={!valid || addMut.isPending}
             style={{ width: '100%', padding: '10px', background: valid ? NAVY : '#E2E8F0', color: valid ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontFamily: 'inherit', fontWeight: 700, fontSize: 13.5, cursor: valid ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
             <Save size={15} />{addMut.isPending ? 'Posting…' : 'Post Homework'}
           </button>
         </div>
+
+        {/* RIGHT: List or Submissions */}
         <div>
-          <SectionTitle>Posted Homework</SectionTitle>
-          {allHW.length === 0 ? (
-            <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '48px', textAlign: 'center', color: '#94A3B8' }}>No homework posted yet</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {allHW.map((hw, i) => (
-                <div key={hw.id || i} className="card" style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', padding: '14px 18px', borderLeft: `4px solid ${NAVY}` }}>
-                  <div style={{ fontWeight: 700, fontSize: 13.5, color: NAVY }}>
-                    {hw.subject?.name || hw.subjectName || hw.subject || 'Subject'} — {hw.class?.name || hw.className || '—'}
-                  </div>
-                  <div style={{ fontSize: 13, color: '#374151', margin: '5px 0' }}>{hw.description}</div>
-                  <div style={{ fontSize: 11.5, color: '#94A3B8' }}>Date: {hw.date || fmtDate(hw.createdAt)}</div>
+          {!selectedHW ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <SectionTitle>Posted Homework ({allHW.length})</SectionTitle>
+                <button onClick={() => refetchHW()} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', border: '1px solid #E2E8F0', borderRadius: 7, background: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#64748B' }}>
+                  <RefreshCw size={12} /> Refresh
+                </button>
+              </div>
+              {hwLoading ? (
+                <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '48px', textAlign: 'center', color: '#94A3B8' }}>Loading homework…</div>
+              ) : allHW.length === 0 ? (
+                <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '48px', textAlign: 'center', color: '#94A3B8' }}>No homework posted yet. Use the form to assign homework.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {allHW.map((hw, i) => {
+                    const duePast = hw.dueDate && new Date(hw.dueDate) < new Date();
+                    return (
+                      <div key={hw.id || i} className="card" style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', padding: '14px 18px', borderLeft: `4px solid ${duePast ? '#DC2626' : NAVY}` }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13.5, color: NAVY }}>
+                              {hw.subject?.name || hw.subjectName || hw.subject || 'General'} — {hw.class?.name || hw.className || '—'}
+                            </div>
+                            <div style={{ fontSize: 13, color: '#374151', margin: '5px 0', lineHeight: 1.5 }}>{hw.description}</div>
+                            <div style={{ fontSize: 11.5, color: '#94A3B8' }}>
+                              Due: {hw.dueDate ? fmtDate(hw.dueDate) : fmtDate(hw.date || hw.createdAt)}
+                              {hw.section?.name && <span> · Section {hw.section.name}</span>}
+                              {duePast && <span style={{ marginLeft: 8, color: '#DC2626', fontWeight: 700 }}>OVERDUE</span>}
+                            </div>
+                          </div>
+                          {hw.id && !hw.id.toString().startsWith(Date.now().toString().slice(0,5)) && (
+                            <button onClick={() => setSelectedHW(hw)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: '#EFF6FF', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, color: '#2563EB', cursor: 'pointer', flexShrink: 0 }}>
+                              <Eye size={13} /> Submissions
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              )}
+            </>
+          ) : (
+            /* Submissions View */
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                <button onClick={() => setSelectedHW(null)} style={{ padding: '6px 12px', border: '1px solid #E2E8F0', borderRadius: 7, background: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#64748B' }}>
+                  Back
+                </button>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: NAVY }}>{selectedHW.subject?.name || 'Homework'} Submissions</div>
+                  <div style={{ fontSize: 12, color: '#64748B' }}>{selectedHW.class?.name || selectedHW.className} · Due: {fmtDate(selectedHW.dueDate || selectedHW.date)}</div>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                {[
+                  { label: 'Submitted', value: submitted.length, color: '#15803D', bg: '#DCFCE7' },
+                  { label: 'Pending',   value: pending.length,   color: '#B45309', bg: '#FEF3C7' },
+                  { label: 'Total',     value: submissions.length, color: NAVY,   bg: '#EFF6FF' },
+                ].map(s => (
+                  <div key={s.label} style={{ background: s.bg, borderRadius: 9, padding: '8px 18px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.value}</div>
+                    <div style={{ fontSize: 11.5, color: s.color, fontWeight: 600 }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {subLoading ? (
+                <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '40px', textAlign: 'center', color: '#94A3B8' }}>Loading submissions…</div>
+              ) : submissions.length === 0 ? (
+                <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '40px', textAlign: 'center', color: '#94A3B8' }}>No submissions recorded yet.</div>
+              ) : (
+                <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px', padding: '10px 18px', background: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
+                    {['Student', 'Status', 'Submitted At'].map(h => (
+                      <div key={h} style={{ fontSize: 11.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</div>
+                    ))}
+                  </div>
+                  {submissions.map((sub, i) => {
+                    const isSubmitted = sub.status === 'submitted' || !!sub.submittedAt;
+                    return (
+                      <div key={sub.id || i} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px', padding: '11px 18px', borderBottom: i < submissions.length - 1 ? '1px solid #F1F5F9' : 'none', alignItems: 'center' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>{sub.student?.name || sub.studentName || 'Student'}</div>
+                          <div style={{ fontSize: 11.5, color: '#94A3B8' }}>Roll: {sub.student?.rollNo || '—'}</div>
+                        </div>
+                        <div>
+                          <span style={{ background: isSubmitted ? '#DCFCE7' : '#FEF3C7', color: isSubmitted ? '#15803D' : '#B45309', padding: '3px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 700 }}>
+                            {isSubmitted ? 'Submitted' : 'Pending'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#64748B' }}>{sub.submittedAt ? fmtDate(sub.submittedAt) : '—'}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB: LESSON PLANS
+═══════════════════════════════════════════════════════════ */
+const LP_STATUS_META = {
+  draft:     { label: 'Draft',     color: '#64748B', bg: '#F1F5F9' },
+  submitted: { label: 'Submitted', color: '#2563EB', bg: '#EFF6FF' },
+  approved:  { label: 'Approved',  color: '#15803D', bg: '#DCFCE7' },
+  rejected:  { label: 'Rejected',  color: '#DC2626', bg: '#FEE2E2' },
+};
+
+function LessonPlansTab({ classes, user }) {
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [viewPlan, setViewPlan] = useState(null);
+  const [form, setForm] = useState({ classId: '', subject: '', unit: '', week: '', objectives: '', content: '', activities: '', assessment: '' });
+
+  const { data: plans = [], isLoading, refetch } = useQuery({
+    queryKey: ['lesson-plans', user?.id],
+    queryFn: () => api.get('/lesson-plans', { params: { createdBy: user?.id, limit: 100 } }).then(r => r.data.data || []).catch(() => []),
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const { data: subjects = [] } = useQuery({
+    queryKey: ['lp-subjects', form.classId],
+    enabled: !!form.classId,
+    queryFn: () => api.get('/classes/subjects', { params: { classId: form.classId } }).then(r => r.data.data || []),
+    retry: false,
+  });
+
+  const createMut = useMutation({
+    mutationFn: (status) => api.post('/lesson-plans', {
+      classId: parseInt(form.classId),
+      subjectId: form.subject ? parseInt(form.subject) : undefined,
+      unit: form.unit,
+      week: form.week,
+      objectives: form.objectives,
+      content: form.content,
+      activities: form.activities,
+      assessment: form.assessment,
+      status: status || 'draft',
+    }),
+    onSuccess: (_, status) => {
+      qc.invalidateQueries(['lesson-plans', user?.id]);
+      setShowForm(false);
+      setForm({ classId: '', subject: '', unit: '', week: '', objectives: '', content: '', activities: '', assessment: '' });
+      toast.success(status === 'submitted' ? 'Lesson plan submitted for approval!' : 'Lesson plan saved as draft!');
+    },
+    onError: err => toast.error(err.response?.data?.message || 'Failed to save lesson plan'),
+  });
+
+  const submitMut = useMutation({
+    mutationFn: (id) => api.put(`/lesson-plans/${id}`, { status: 'submitted' }),
+    onSuccess: () => { qc.invalidateQueries(['lesson-plans', user?.id]); toast.success('Lesson plan submitted for approval!'); },
+    onError: err => toast.error(err.response?.data?.message || 'Failed to submit lesson plan'),
+  });
+
+  const iStyle = { width: '100%', padding: '9px 12px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#F8FAFC', outline: 'none', boxSizing: 'border-box' };
+  const formValid = form.classId && form.unit;
+
+  if (viewPlan) {
+    const meta = LP_STATUS_META[viewPlan.status] || LP_STATUS_META.draft;
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <button onClick={() => setViewPlan(null)} style={{ padding: '7px 14px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#64748B' }}>Back</button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: NAVY }}>{viewPlan.unit || 'Lesson Plan'}</div>
+            <div style={{ fontSize: 13, color: '#64748B' }}>{viewPlan.class?.name || '—'} · {viewPlan.subject?.name || '—'}{viewPlan.week ? ` · Week ${viewPlan.week}` : ''}</div>
+          </div>
+          <span style={{ background: meta.bg, color: meta.color, padding: '4px 14px', borderRadius: 99, fontSize: 12, fontWeight: 700 }}>{meta.label}</span>
+        </div>
+        <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '24px 28px' }}>
+          {[
+            { label: 'Learning Objectives', value: viewPlan.objectives },
+            { label: 'Content / Topics',    value: viewPlan.content    },
+            { label: 'Activities',          value: viewPlan.activities },
+            { label: 'Assessment',          value: viewPlan.assessment },
+          ].filter(f => f.value).map(f => (
+            <div key={f.label} style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{f.label}</div>
+              <div style={{ fontSize: 13.5, color: '#374151', lineHeight: 1.7, whiteSpace: 'pre-wrap', background: '#F8FAFC', borderRadius: 8, padding: '10px 14px' }}>{f.value}</div>
+            </div>
+          ))}
+          {viewPlan.adminNotes && (
+            <div style={{ marginTop: 16, padding: '12px 16px', background: viewPlan.status === 'rejected' ? '#FEE2E2' : '#DCFCE7', borderRadius: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 12, color: viewPlan.status === 'rejected' ? '#DC2626' : '#15803D', marginBottom: 4, textTransform: 'uppercase' }}>Admin Feedback</div>
+              <div style={{ fontSize: 13, color: '#374151' }}>{viewPlan.adminNotes}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: NAVY }}>Lesson Plans</div>
+          <div style={{ color: '#64748B', fontSize: 13, marginTop: 3 }}>Create and submit lesson plans for admin approval</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => refetch()} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#64748B' }}>
+            <RefreshCw size={13} /> Refresh
+          </button>
+          <button onClick={() => setShowForm(s => !s)}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', background: NAVY, color: 'white', border: 'none', borderRadius: 9, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            <Plus size={14} /> New Plan
+          </button>
+        </div>
+      </div>
+
+      {/* Summary counts */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
+        {Object.entries(LP_STATUS_META).map(([key, meta]) => {
+          const count = plans.filter(p => (p.status || 'draft') === key).length;
+          return (
+            <div key={key} style={{ background: meta.bg, borderRadius: 10, padding: '8px 18px', textAlign: 'center', minWidth: 80 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: meta.color }}>{count}</div>
+              <div style={{ fontSize: 11.5, color: meta.color, fontWeight: 600 }}>{meta.label}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* New Plan Form */}
+      {showForm && (
+        <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '22px 24px', marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: NAVY, marginBottom: 16 }}>Create New Lesson Plan</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Class *</label>
+              <select value={form.classId} onChange={e => setForm(p => ({ ...p, classId: e.target.value, subject: '' }))} style={iStyle}>
+                <option value="">Select Class</option>
+                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Subject</label>
+              <select value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))} style={iStyle} disabled={!form.classId}>
+                <option value="">Select Subject</option>
+                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Week</label>
+              <input type="text" value={form.week} onChange={e => setForm(p => ({ ...p, week: e.target.value }))} placeholder="e.g. Week 3 / Oct 7–11" style={iStyle} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Unit / Topic Title *</label>
+            <input type="text" value={form.unit} onChange={e => setForm(p => ({ ...p, unit: e.target.value }))} placeholder="e.g. Chapter 4 – Photosynthesis" style={iStyle} />
+          </div>
+          {[
+            { key: 'objectives', label: 'Learning Objectives', placeholder: 'What students will learn by the end of the lesson…' },
+            { key: 'content',    label: 'Content / Topics',    placeholder: 'Topics to be covered…' },
+            { key: 'activities', label: 'Activities',          placeholder: 'Classroom activities, group work, experiments…' },
+            { key: 'assessment', label: 'Assessment',          placeholder: 'How will learning be assessed…' },
+          ].map(f => (
+            <div key={f.key} style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{f.label}</label>
+              <textarea value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} rows={2} placeholder={f.placeholder} style={{ ...iStyle, resize: 'vertical' }} />
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+            <button onClick={() => setShowForm(false)} style={{ padding: '9px 18px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#64748B' }}>Cancel</button>
+            <button onClick={() => createMut.mutate('draft')} disabled={!formValid || createMut.isPending}
+              style={{ padding: '9px 18px', border: `1px solid ${NAVY}`, borderRadius: 8, background: '#fff', fontSize: 13, fontWeight: 700, cursor: formValid ? 'pointer' : 'not-allowed', color: NAVY, opacity: formValid ? 1 : 0.5 }}>
+              <Save size={13} style={{ display: 'inline', marginRight: 5 }} />Save as Draft
+            </button>
+            <button onClick={() => createMut.mutate('submitted')} disabled={!formValid || createMut.isPending}
+              style={{ padding: '9px 18px', background: formValid ? NAVY : '#E2E8F0', color: formValid ? '#fff' : '#94A3B8', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: formValid ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Send size={13} />{createMut.isPending ? 'Submitting…' : 'Submit for Approval'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Plans List */}
+      {isLoading ? (
+        <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '48px', textAlign: 'center', color: '#94A3B8' }}>Loading lesson plans…</div>
+      ) : plans.length === 0 ? (
+        <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '64px', textAlign: 'center', color: '#94A3B8' }}>
+          <FileText size={40} style={{ opacity: 0.3, display: 'block', margin: '0 auto 12px' }} />
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#64748B', marginBottom: 6 }}>No Lesson Plans Yet</div>
+          <div style={{ fontSize: 13 }}>Click "New Plan" to create your first lesson plan.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {plans.map((plan, i) => {
+            const meta = LP_STATUS_META[plan.status || 'draft'] || LP_STATUS_META.draft;
+            return (
+              <div key={plan.id || i} className="card" style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: meta.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <FileText size={18} color={meta.color} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: NAVY }}>{plan.unit || 'Untitled Plan'}</div>
+                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
+                    {plan.class?.name || '—'} · {plan.subject?.name || '—'}
+                    {plan.week && <span> · {plan.week}</span>}
+                    <span style={{ marginLeft: 8 }}>{fmtDate(plan.createdAt)}</span>
+                  </div>
+                </div>
+                <span style={{ background: meta.bg, color: meta.color, padding: '4px 12px', borderRadius: 99, fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>{meta.label}</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setViewPlan(plan)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: '#EFF6FF', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, color: '#2563EB', cursor: 'pointer' }}>
+                    <Eye size={13} /> View
+                  </button>
+                  {(plan.status === 'draft' || plan.status === 'rejected') && (
+                    <button onClick={() => submitMut.mutate(plan.id)} disabled={submitMut.isPending}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: NAVY, border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
+                      <Send size={13} /> Submit
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB: CLASS PERFORMANCE REPORT
+═══════════════════════════════════════════════════════════ */
+function ClassReportTab({ classes, exams, user }) {
+  const [classId, setClassId] = useState('');
+  const [sectionId, setSectionId] = useState('');
+
+  const cls = classes.find(c => c.id === parseInt(classId));
+  const sections = cls?.sections || [];
+
+  /* Today's attendance for the selected class */
+  const { data: attToday = [], isLoading: attLoading } = useQuery({
+    queryKey: ['class-att-today', classId, sectionId],
+    queryFn: () => api.get('/attendance', { params: { classId, sectionId: sectionId || undefined, date: todayStr() } }).then(r => r.data.data || []).catch(() => []),
+    enabled: !!classId,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  /* Recent exam marks for this class */
+  const { data: recentMarks = [], isLoading: marksLoading } = useQuery({
+    queryKey: ['class-recent-marks', classId],
+    queryFn: () => api.get('/marks', { params: { classId, limit: 50, sort: '-createdAt' } }).then(r => r.data.data || []).catch(() => []),
+    enabled: !!classId,
+    staleTime: 120_000,
+    retry: false,
+  });
+
+  /* Pending homework for this class */
+  const { data: hwList = [], isLoading: hwLoading } = useQuery({
+    queryKey: ['class-hw', classId],
+    queryFn: () => api.get('/homework', { params: { classId, limit: 50, sort: '-createdAt' } }).then(r => r.data.data || []).catch(() => []),
+    enabled: !!classId,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const presentCount = attToday.filter(a => a.status === 'present').length;
+  const absentCount  = attToday.filter(a => a.status === 'absent').length;
+  const leaveCount   = attToday.filter(a => a.status === 'leave').length;
+  const totalAtt     = attToday.length;
+  const attPct       = totalAtt > 0 ? Math.round((presentCount / totalAtt) * 100) : null;
+
+  const pendingHW = hwList.filter(hw => {
+    const due = hw.dueDate || hw.date;
+    return due && new Date(due) >= new Date(todayStr());
+  });
+
+  const iStyle = { padding: '9px 14px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#F8FAFC', outline: 'none' };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: NAVY }}>Class Performance</div>
+        <div style={{ color: '#64748B', fontSize: 13, marginTop: 3 }}>Attendance, exam marks, and homework overview for your class</div>
+      </div>
+
+      {/* Class / Section selector */}
+      <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '18px 22px', marginBottom: 20, display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ flex: '0 0 200px' }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Class</label>
+          <select value={classId} onChange={e => { setClassId(e.target.value); setSectionId(''); }} style={iStyle}>
+            <option value="">Select Class</option>
+            {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        {sections.length > 0 && (
+          <div style={{ flex: '0 0 160px' }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Section</label>
+            <select value={sectionId} onChange={e => setSectionId(e.target.value)} style={iStyle}>
+              <option value="">All Sections</option>
+              {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        )}
+        {!classId && <div style={{ fontSize: 13, color: '#94A3B8', alignSelf: 'center' }}>Select a class to view performance data</div>}
+      </div>
+
+      {classId && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Section 1: Today's Attendance */}
+          <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px' }}>
+            <SectionTitle>Today's Attendance — {cls?.name}{sectionId ? ` (${sections.find(s=>s.id===parseInt(sectionId))?.name})` : ''}</SectionTitle>
+            {attLoading ? (
+              <div style={{ textAlign: 'center', padding: '28px', color: '#94A3B8' }}>Loading attendance…</div>
+            ) : attToday.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '28px', color: '#94A3B8' }}>No attendance marked yet for today in this class.</div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 14, marginBottom: 16, flexWrap: 'wrap' }}>
+                  {[
+                    { label: 'Present', value: presentCount, color: '#15803D', bg: '#DCFCE7' },
+                    { label: 'Absent',  value: absentCount,  color: '#DC2626', bg: '#FEE2E2' },
+                    { label: 'Leave',   value: leaveCount,   color: '#B45309', bg: '#FEF3C7' },
+                    { label: 'Total',   value: totalAtt,     color: NAVY,      bg: '#EFF6FF' },
+                    ...(attPct !== null ? [{ label: 'Attendance %', value: `${attPct}%`, color: attPct >= 75 ? '#15803D' : '#DC2626', bg: attPct >= 75 ? '#DCFCE7' : '#FEE2E2' }] : []),
+                  ].map(s => (
+                    <div key={s.label} style={{ background: s.bg, borderRadius: 10, padding: '10px 18px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+                      <div style={{ fontSize: 11.5, color: s.color, fontWeight: 600 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: '#F8FAFC' }}>
+                        {['Roll No', 'Student Name', 'Status'].map(h => (
+                          <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: '#64748B', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attToday.map((a, i) => {
+                        const statusColors = { present: { bg: '#DCFCE7', color: '#15803D' }, absent: { bg: '#FEE2E2', color: '#DC2626' }, leave: { bg: '#FEF3C7', color: '#B45309' } };
+                        const sc = statusColors[a.status] || { bg: '#F1F5F9', color: '#64748B' };
+                        return (
+                          <tr key={a.id || i} style={{ borderBottom: '1px solid #F1F5F9' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                            <td style={{ padding: '9px 14px', color: '#64748B' }}>{a.student?.rollNo || a.rollNo || '—'}</td>
+                            <td style={{ padding: '9px 14px', fontWeight: 600, color: NAVY }}>{a.student?.name || a.studentName || '—'}</td>
+                            <td style={{ padding: '9px 14px' }}>
+                              <span style={{ background: sc.bg, color: sc.color, padding: '3px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 700, textTransform: 'capitalize' }}>{a.status}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Section 2: Recent Exam Marks */}
+          <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px' }}>
+            <SectionTitle>Recent Exam Marks</SectionTitle>
+            {marksLoading ? (
+              <div style={{ textAlign: 'center', padding: '28px', color: '#94A3B8' }}>Loading marks…</div>
+            ) : recentMarks.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '28px', color: '#94A3B8' }}>No exam marks found for this class.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#F8FAFC' }}>
+                      {['Student', 'Exam', 'Subject', 'Obtained', 'Total', 'Grade'].map(h => (
+                        <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: '#64748B', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentMarks.slice(0, 20).map((m, i) => {
+                      const pct = m.totalMarks > 0 ? Math.round((m.obtainedMarks / m.totalMarks) * 100) : 0;
+                      const grade = m.isAbsent ? 'ABS' : pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 50 ? 'D' : pct >= 40 ? 'E' : 'F';
+                      const gradeColor = { 'A+': '#15803D', A: '#15803D', B: '#1D4ED8', C: '#1D4ED8', D: '#B45309', E: '#B45309', F: '#DC2626', ABS: '#94A3B8' }[grade] || '#94A3B8';
+                      return (
+                        <tr key={m.id || i} style={{ borderBottom: '1px solid #F1F5F9' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          <td style={{ padding: '9px 14px', fontWeight: 600, color: NAVY }}>{m.student?.name || '—'}</td>
+                          <td style={{ padding: '9px 14px', color: '#64748B' }}>{m.exam?.name || m.exam?.title || '—'}</td>
+                          <td style={{ padding: '9px 14px', color: '#64748B' }}>{m.subject?.name || '—'}</td>
+                          <td style={{ padding: '9px 14px', fontWeight: 700, color: NAVY }}>{m.isAbsent ? 'ABS' : (m.obtainedMarks ?? '—')}</td>
+                          <td style={{ padding: '9px 14px', color: '#64748B' }}>{m.totalMarks ?? '—'}</td>
+                          <td style={{ padding: '9px 14px' }}>
+                            <span style={{ fontWeight: 800, fontSize: 14, color: gradeColor }}>{grade}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {recentMarks.length > 20 && <div style={{ textAlign: 'right', fontSize: 12, color: '#94A3B8', padding: '8px 14px' }}>Showing 20 of {recentMarks.length} entries</div>}
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Pending Homework */}
+          <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px' }}>
+            <SectionTitle>Pending / Upcoming Homework ({pendingHW.length})</SectionTitle>
+            {hwLoading ? (
+              <div style={{ textAlign: 'center', padding: '28px', color: '#94A3B8' }}>Loading homework…</div>
+            ) : pendingHW.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '28px', color: '#94A3B8' }}>No pending homework for this class.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {pendingHW.map((hw, i) => (
+                  <div key={hw.id || i} style={{ background: '#F8FAFC', borderRadius: 10, padding: '12px 16px', borderLeft: `3px solid ${NAVY}`, display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>{hw.subject?.name || 'General'}</div>
+                      <div style={{ fontSize: 12.5, color: '#374151', marginTop: 3 }}>{(hw.description || '').slice(0, 100)}{(hw.description || '').length > 100 ? '…' : ''}</div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: 11.5, color: '#64748B' }}>Due</div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>{fmtDate(hw.dueDate || hw.date)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
     </div>
   );
 }

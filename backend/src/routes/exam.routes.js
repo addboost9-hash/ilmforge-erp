@@ -1281,7 +1281,7 @@ router.post('/:id/unpublish', wrap(async (req, res) => {
   res.json({ success: true, data: updated, message: 'Exam unpublished.' });
 }));
 
-// GET /exams/:id/results/sms-blast — send SMS to parents with result summary via Twilio
+// GET /exams/:id/results/sms-blast — send SMS to parents with result summary via Twilio (legacy)
 router.get('/:id/results/sms-blast', wrap(async (req, res) => {
   if (!canManageExams(req.user?.role)) {
     return res.status(403).json({ success: false, message: 'Access denied.' });
@@ -1347,6 +1347,118 @@ router.get('/:id/results/sms-blast', wrap(async (req, res) => {
   res.json({
     success: true,
     message: `SMS blast complete. Sent: ${sent.length}, Failed: ${failed.length}.`,
+    sent,
+    failed,
+    data: { sent: sent.length, failed: failed.length },
+  });
+}));
+
+// ---------------------------------------------------------------------------
+// POST /exams/:id/results/sms-blast — parent-friendly notification SMS on result publish
+// Uses the school's notification SMS service (POST /notifications/sms internally)
+// Body: { portalLink?: string }
+// ---------------------------------------------------------------------------
+router.post('/:id/results/sms-blast', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const examId = parseInt(req.params.id);
+  const portalLink = req.body?.portalLink || process.env.PARENT_PORTAL_URL || 'https://portal.ilmforge.com';
+
+  // Load exam and result rows
+  const result = await buildGazette(examId, req.schoolId);
+  if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  const { exam, rows } = result;
+
+  // Load students with parent phone numbers
+  const studentIds = rows.map((r) => r.studentId);
+  const students = await prisma.student.findMany({
+    where: { id: { in: studentIds } },
+    select: { id: true, name: true, parentPhone: true, fatherPhone: true, motherPhone: true },
+  });
+
+  const studentMap = {};
+  students.forEach((s) => {
+    studentMap[s.id] = {
+      name: s.name,
+      phone: s.parentPhone || s.fatherPhone || s.motherPhone || null,
+    };
+  });
+
+  // Try to use the school's notification SMS service
+  let sendBulkSMS;
+  try {
+    ({ sendBulkSMS } = require('../services/sms.service'));
+  } catch (_) {
+    sendBulkSMS = null;
+  }
+
+  // Load channel config for this school
+  let channelCfg = {};
+  try {
+    const path = require('path');
+    const fs = require('fs');
+    const settingsPath = path.join(__dirname, '../../data/school-settings.json');
+    if (fs.existsSync(settingsPath)) {
+      const raw = fs.readFileSync(settingsPath, 'utf8');
+      const all = JSON.parse(raw || '{}');
+      channelCfg = all[String(req.schoolId)]?.channels || {};
+    }
+  } catch (_) {}
+
+  const sent = [];
+  const failed = [];
+
+  for (const row of rows) {
+    const info = studentMap[row.studentId];
+    if (!info?.phone) {
+      failed.push({ studentId: row.studentId, name: row.name, reason: 'No parent phone' });
+      continue;
+    }
+
+    // Parent-friendly message as specified
+    const message =
+      `Dear Parent, ${row.name} result for ${exam.title} has been published. ` +
+      `Login to parent portal to view: ${portalLink}`;
+
+    try {
+      if (sendBulkSMS) {
+        await sendBulkSMS([info.phone], message, channelCfg);
+      } else {
+        // Fallback: Twilio direct
+        const accountSid = process.env.TWILIO_ACCOUNT_SID || channelCfg.smsAccountSid;
+        const authToken  = process.env.TWILIO_AUTH_TOKEN  || channelCfg.smsAuthToken;
+        const fromNumber = process.env.TWILIO_FROM_NUMBER || channelCfg.smsFromNumber;
+        if (!accountSid || !authToken || !fromNumber) throw new Error('SMS credentials not configured.');
+        const twilio = require('twilio');
+        const client = twilio(accountSid, authToken);
+        await client.messages.create({ body: message, from: fromNumber, to: info.phone });
+      }
+      sent.push({ studentId: row.studentId, name: row.name, phone: info.phone });
+    } catch (err) {
+      failed.push({ studentId: row.studentId, name: row.name, phone: info.phone, reason: err.message });
+    }
+  }
+
+  // Log the notification
+  try {
+    await prisma.notificationLog.create({
+      data: {
+        schoolId: req.schoolId,
+        type: 'sms',
+        title: `Result publish notification — ${exam.title}`,
+        body: `Result published SMS sent to ${sent.length}/${rows.length} parents.`,
+        status: sent.length > 0 ? 'sent' : 'failed',
+        sentAt: new Date(),
+      },
+    });
+  } catch (_) { /* non-critical */ }
+
+  res.json({
+    success: true,
+    message: `Results published! SMS sent to ${sent.length} parent${sent.length !== 1 ? 's' : ''}.`,
+    data: { sent: sent.length, failed: failed.length },
     sent,
     failed,
   });

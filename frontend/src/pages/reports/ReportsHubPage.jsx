@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
-import { Search, Printer, Download, FileText, BarChart2, ChevronRight, ExternalLink } from 'lucide-react';
+import { Search, Printer, Download, FileText, BarChart2, ChevronRight, ExternalLink, TrendingUp, Calendar, Award } from 'lucide-react';
 
 const REPORT_CATEGORIES = [
   {
@@ -136,9 +136,62 @@ const REPORT_CATEGORIES = [
 
 const ALL_REPORTS = REPORT_CATEGORIES.flatMap(c => c.reports.map(r => ({ ...r, catId:c.id, catLabel:c.label, catColor:c.color, catIcon:c.icon })));
 
+/* ── Featured report card component ── */
+function FeaturedCard({ icon, title, subtitle, badge, badgeColor, gradient, to, stats }) {
+  return (
+    <Link to={to} style={{ textDecoration: 'none' }}>
+      <div style={{
+        background: gradient, borderRadius: 14, padding: '20px 22px',
+        color: 'white', position: 'relative', overflow: 'hidden',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.12)', cursor: 'pointer',
+        transition: 'transform .15s, box-shadow .15s',
+        minHeight: 140,
+      }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 10px 28px rgba(0,0,0,0.18)'; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'; }}
+      >
+        <div style={{ position: 'absolute', right: -10, top: -10, fontSize: 80, opacity: 0.1, lineHeight: 1 }}>{icon}</div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontSize: 28 }}>{icon}</div>
+          {badge && (
+            <span style={{ background: badgeColor || 'rgba(255,255,255,0.2)', color: 'white', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, whiteSpace: 'nowrap' }}>
+              {badge}
+            </span>
+          )}
+        </div>
+        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{title}</div>
+        <div style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.5 }}>{subtitle}</div>
+        {stats && (
+          <div style={{ display: 'flex', gap: 14, marginTop: 12 }}>
+            {stats.map((s, i) => (
+              <div key={i} style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '5px 10px', fontSize: 11, fontWeight: 700 }}>
+                {s}
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ position: 'absolute', bottom: 14, right: 14, opacity: 0.6 }}>
+          <ChevronRight size={16} />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 export default function ReportsHubPage() {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
+
+  /* ── Live data for featured cards ── */
+  const { data: dashStats } = useQuery({
+    queryKey: ['reports-hub-featured-stats'],
+    queryFn: () => api.get('/dashboard/stats').then(r => r.data?.data || r.data).catch(() => ({})),
+    staleTime: 60_000,
+    retry: 0,
+  });
+  const todayAttendance = dashStats?.students?.presentToday ?? dashStats?.presentToday ?? null;
+  const todayFee        = dashStats?.finance?.incomeToday   ?? dashStats?.incomeToday  ?? null;
+  const totalStudents   = dashStats?.students?.total        ?? dashStats?.totalStudents ?? null;
 
   const filtered = ALL_REPORTS.filter(r => {
     const matchSearch = !search || r.label.toLowerCase().includes(search.toLowerCase()) || r.desc.toLowerCase().includes(search.toLowerCase());
@@ -159,6 +212,46 @@ export default function ReportsHubPage() {
             <p style={{ margin:'4px 0 0', fontSize:13, opacity:0.8 }}>{totalReports}+ reports — Students, Fees, Exams, Staff, Certificates & More</p>
           </div>
         </div>
+      </div>
+
+      {/* ── Featured Report Cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 20 }}>
+        <FeaturedCard
+          icon="📅"
+          title="Today's Summary"
+          subtitle="Live attendance and fee collection for today"
+          badge="LIVE"
+          badgeColor="rgba(16,185,129,0.8)"
+          gradient="linear-gradient(135deg, #0f766e 0%, #0d9488 100%)"
+          to="/attendance/report"
+          stats={[
+            todayAttendance !== null ? `${todayAttendance} present` : 'Attendance',
+            todayFee !== null ? `Rs.${Number(todayFee).toLocaleString()} collected` : 'Fee Collection',
+          ]}
+        />
+        <FeaturedCard
+          icon="📊"
+          title="Monthly Overview"
+          subtitle="Fee collection, admissions and attendance trends this month"
+          badge="THIS MONTH"
+          badgeColor="rgba(255,255,255,0.2)"
+          gradient="linear-gradient(135deg, #1B2F6E 0%, #0073b7 100%)"
+          to="/accounting/balancesheet"
+          stats={[
+            totalStudents !== null ? `${totalStudents} students` : 'Students',
+            'Monthly trends',
+          ]}
+        />
+        <FeaturedCard
+          icon="🏆"
+          title="Academic Performance"
+          subtitle="Exam pass rates, merit lists and subject analysis"
+          badge="EXAMS"
+          badgeColor="rgba(255,255,255,0.2)"
+          gradient="linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)"
+          to="/exams/merit-list"
+          stats={['Merit List', 'Pass Rates', 'Subject Analysis']}
+        />
       </div>
 
       {/* Search + Filter */}

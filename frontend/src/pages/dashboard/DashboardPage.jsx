@@ -24,14 +24,41 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-PK', { day: '2-digit
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/* ── Count-up hook ── */
+function useCountUp(target, duration = 1200) {
+  const [count, setCount] = React.useState(0);
+  const prevTarget = React.useRef(null);
+  React.useEffect(() => {
+    const numTarget = parseInt(String(target).replace(/[^0-9]/g, ''), 10);
+    if (isNaN(numTarget) || numTarget === prevTarget.current) return;
+    prevTarget.current = numTarget;
+    let start = null;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const elapsed = ts - start;
+      const pct = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - pct, 3);
+      setCount(Math.round(numTarget * eased));
+      if (pct < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [target, duration]);
+  // If the value has a non-numeric prefix/suffix (like "Rs."), preserve it
+  if (typeof target === 'string' && target.startsWith('Rs.')) {
+    return 'Rs.' + Number(count).toLocaleString();
+  }
+  return count;
+}
+
 /* ── Stat Card ── */
 const StatCard = React.memo(function StatCard({ value, label, icon, gradient, href }) {
+  const displayed = useCountUp(value);
   return (
     <a href={href || '#'} style={{textDecoration:'none'}}>
       <div className="ilm-stat-card ilm-animate" style={{background: gradient}}>
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
           <div>
-            <div className="ilm-stat-value">{value ?? 0}</div>
+            <div className="ilm-stat-value">{displayed ?? 0}</div>
             <div className="ilm-stat-label">{label}</div>
           </div>
           <div style={{fontSize:40, opacity:0.25, lineHeight:1}}>{icon}</div>
@@ -101,6 +128,16 @@ export default function DashboardPage() {
   const { user, school: authSchool } = useAuthStore();
   const { t } = useTranslation();
 
+  /* ── Welcome modal: shown once when school has no data yet ── */
+  const [isNewSchool, setIsNewSchool] = useState(() => {
+    try { return !sessionStorage.getItem('ilm_welcome_dismissed'); }
+    catch { return false; }
+  });
+  const dismissWelcome = () => {
+    try { sessionStorage.setItem('ilm_welcome_dismissed', '1'); } catch {}
+    setIsNewSchool(false);
+  };
+
   /* ── Upcoming birthdays (next 7 days) ── */
   const { data: upcomingBirthdays = [] } = useQuery({
     queryKey: ['upcoming-birthdays-dashboard'],
@@ -116,6 +153,7 @@ export default function DashboardPage() {
     queryKey: ['dashboard'],
     queryFn: () => api.get('/dashboard/stats').then(r => r.data.data || r.data),
     staleTime: 30_000,
+    refetchInterval: 60_000, // auto-refresh every 60 seconds
     retry: 1,
   });
 
@@ -165,8 +203,36 @@ export default function DashboardPage() {
     { label:'PENDING FEES', value:feeDefaulters, icon:'📋', gradient:'var(--ilm-gradient-danger)', href:'/fees/defaulters' },
   ];
 
+  /* Auto-dismiss welcome if school already has data */
+  useEffect(() => {
+    if (!isLoading && (totalStudents > 0 || totalStaff > 0)) {
+      setIsNewSchool(false);
+    }
+  }, [isLoading, totalStudents, totalStaff]);
+
   return (
     <div className="page-content fade-in" style={{ padding: '20px 22px 40px' }}>
+
+      {/* ══ WELCOME MODAL (first-time / empty school) ══ */}
+      {isNewSchool && !isLoading && totalStudents === 0 && totalStaff === 0 && (
+        <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{background:'white', borderRadius:20, padding:40, maxWidth:480, width:'90%', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.3)', animation:'welcomeSlideIn .35s ease'}}>
+            <div style={{fontSize:60, marginBottom:16}}>🎓</div>
+            <h2 style={{color:'#1B2F6E', fontSize:22, fontWeight:800, margin:'0 0 10px'}}>Welcome to IlmForge!</h2>
+            <p style={{color:'#64748b', fontSize:14, lineHeight:1.7, margin:0}}>
+              Your school management system is ready. Let's set it up in just a few steps so you can start managing students, fees, attendance and more.
+            </p>
+            <div style={{display:'flex', flexDirection:'column', gap:10, marginTop:24}}>
+              <a href="/launch-setup" style={{background:'var(--ilm-gradient-primary)', color:'white', padding:'12px 24px', borderRadius:10, textDecoration:'none', fontWeight:700, fontSize:14, display:'block'}}>
+                🚀 Start Setup Wizard
+              </a>
+              <button onClick={dismissWelcome} style={{background:'none', border:'none', color:'#94a3b8', cursor:'pointer', fontSize:13, padding:'6px 0'}}>
+                Skip for now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ GRADIENT PAGE HEADER ══ */}
       <div className="ilm-page-header ilm-animate">
@@ -174,11 +240,16 @@ export default function DashboardPage() {
           <h1 className="ilm-page-title">Dashboard</h1>
           <p className="ilm-page-subtitle">School overview and quick statistics</p>
         </div>
-        <button className="ilm-btn ilm-btn-sm"
-          style={{background:'rgba(255,255,255,0.15)',color:'white',border:'1px solid rgba(255,255,255,0.3)'}}
-          onClick={() => refetch()}>
-          🔄 Refresh
-        </button>
+        <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:0}}>
+          <button className="ilm-btn ilm-btn-sm"
+            style={{background:'rgba(255,255,255,0.15)',color:'white',border:'1px solid rgba(255,255,255,0.3)'}}
+            onClick={() => refetch()}>
+            🔄 Refresh
+          </button>
+          <div style={{fontSize:11, color:'rgba(255,255,255,0.6)', marginTop:4}}>
+            Auto-refreshes every minute
+          </div>
+        </div>
       </div>
 
       {/* ══ SMART WORKFLOW HUB BANNER ══ */}
@@ -285,6 +356,33 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ══ CLASS-WISE ATTENDANCE TODAY ══ */}
+      {s.classStats && s.classStats.length > 0 && (
+        <div className="ilm-card" style={{marginBottom:16}}>
+          <div className="ilm-card-header">
+            <h3>📊 Class-wise Attendance Today</h3>
+          </div>
+          <div className="ilm-card-body">
+            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:12}}>
+              {s.classStats.map(c => (
+                <div key={c.classId} style={{background:'#f8fafc', borderRadius:10, padding:12, border:'1px solid #e2e8f0'}}>
+                  <div style={{fontWeight:700, fontSize:13, color:'#1e3a5f', marginBottom:6}}>{c.className}</div>
+                  <div style={{display:'flex', justifyContent:'space-between', marginBottom:6}}>
+                    <span style={{fontSize:12, color:'#64748b'}}>{c.presentToday}/{c.strength}</span>
+                    <span style={{fontSize:12, fontWeight:700, color: c.strength>0 && c.presentToday/c.strength>=0.9 ? '#059669' : '#DC2626'}}>
+                      {c.strength > 0 ? Math.round((c.presentToday/c.strength)*100) : 0}%
+                    </span>
+                  </div>
+                  <div style={{height:6, background:'#e2e8f0', borderRadius:3, overflow:'hidden'}}>
+                    <div style={{height:'100%', background:'var(--ilm-gradient-success)', borderRadius:3, width: c.strength>0 ? (c.presentToday/c.strength*100)+'%' : '0%', transition:'width 0.5s'}}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ UPCOMING BIRTHDAYS (next 7 days) ══ */}
       {upcomingBirthdays.length > 0 && (
@@ -415,6 +513,10 @@ export default function DashboardPage() {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes welcomeSlideIn {
+          from { opacity: 0; transform: translateY(-24px) scale(0.96); }
+          to   { opacity: 1; transform: translateY(0)     scale(1); }
+        }
       `}</style>
     </div>
   );

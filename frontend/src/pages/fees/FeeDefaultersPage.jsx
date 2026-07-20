@@ -78,6 +78,7 @@ const money = v => 'Rs. ' + ((v||0)/100).toLocaleString();
 
 export default function FeeDefaultersPage() {
   const [filter, setFilter] = useState('');
+  const [reminderProgress, setReminderProgress] = useState(null); // null | { sent, total }
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['defaulters'],
@@ -89,21 +90,36 @@ export default function FeeDefaultersPage() {
 
   // Bulk reminder: collect all unique parent phones from defaulter invoices, then POST /notifications/sms
   const sendSMS = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const phones = [...new Set(
         invoices
           .map(inv => inv.student?.emergencyPhone || inv.student?.parent?.phone)
           .filter(Boolean)
       )];
-      if (!phones.length) return Promise.reject(new Error('No phone numbers available for defaulters.'));
+      if (!phones.length) throw new Error('No phone numbers available for defaulters.');
+      const total = phones.length;
+      setReminderProgress({ sent: 0, total });
       const message = `Dear Parent, your child has an outstanding fee balance. Please clear dues at the earliest. — IlmForge School`;
-      return api.post('/notifications/sms', { phones, message });
+      // Send in batches of 10, updating progress between batches
+      const batchSize = 10;
+      let sent = 0;
+      for (let i = 0; i < phones.length; i += batchSize) {
+        const batch = phones.slice(i, i + batchSize);
+        await api.post('/notifications/sms', { phones: batch, message });
+        sent += batch.length;
+        setReminderProgress({ sent, total });
+      }
+      return { sent, total };
     },
-    onSuccess: (r) => {
-      const sentCount = r.data?.data?.sent ?? r.data?.data?.total ?? invoices.length;
-      toast.success(`Reminder sent to ${sentCount} parent${sentCount !== 1 ? 's' : ''}.`);
+    onSuccess: ({ sent, total }) => {
+      setReminderProgress({ sent, total, done: true });
+      toast.success(`Sent to ${sent} parent${sent !== 1 ? 's' : ''} successfully!`);
+      setTimeout(() => setReminderProgress(null), 4000);
     },
-    onError: err => toast.error(err.response?.data?.message || err.message || 'Failed to send SMS reminder'),
+    onError: err => {
+      setReminderProgress(null);
+      toast.error(err.response?.data?.message || err.message || 'Failed to send SMS reminder');
+    },
   });
 
   // Per-student reminder
@@ -136,9 +152,13 @@ export default function FeeDefaultersPage() {
           <button className="btn btn-outline btn-sm" onClick={() => printDefaultersReport(invoices, localStorage.getItem('registeredSchoolName') || 'IlmForge School')}>
             <Printer size={13}/> Print Report
           </button>
-          <button className="btn btn-amber" onClick={() => sendSMS.mutate()} disabled={sendSMS.isPending || invoices.length===0}>
+          <button className="btn btn-primary" onClick={() => sendSMS.mutate()} disabled={sendSMS.isPending || invoices.length===0}>
             <MessageSquare size={15}/>
-            {sendSMS.isPending ? 'Sending...' : 'Send SMS Reminder'}
+            {sendSMS.isPending && reminderProgress
+              ? `Sending... ${reminderProgress.sent}/${reminderProgress.total}`
+              : reminderProgress?.done
+              ? `Sent to ${reminderProgress.sent} parents`
+              : 'Send Reminders to All Defaulters'}
           </button>
         </div>
       </div>

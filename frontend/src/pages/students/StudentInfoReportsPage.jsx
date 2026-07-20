@@ -6,9 +6,42 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import api from '../../api/client';
-import { Printer, Users, UserX, GraduationCap, LogOut } from 'lucide-react';
+import { Printer, Users, UserX, GraduationCap, LogOut, FileSpreadsheet } from 'lucide-react';
+import { downloadExcel } from '../../utils/export';
 
-const fmtDate = d => d ? new Date(d).toLocaleDateString('en-PK', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-PK', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+
+/**
+ * Export a student list to Excel.
+ * Columns: Reg No, Name, Father Name, Class, Section, Phone, CNIC, DOB, Status
+ */
+async function exportStudentsExcel(students, filename = 'students-report.xlsx') {
+  const rows = students.map(s => ({
+    'Reg No':      s.rollNo || '',
+    'Name':        s.name || '',
+    'Father Name': s.fatherName || '',
+    'Class':       s.class?.name || '',
+    'Section':     s.section?.name || '',
+    'Phone':       s.emergencyPhone || s.parent?.phone || '',
+    'CNIC':        s.cnic || '',
+    'DOB':         fmtDate(s.dob),
+    'Status':      s.status || '',
+  }));
+
+  const columns = [
+    { header: 'Reg No',      key: 'Reg No',      width: 14 },
+    { header: 'Name',        key: 'Name',         width: 24 },
+    { header: 'Father Name', key: 'Father Name',  width: 24 },
+    { header: 'Class',       key: 'Class',        width: 14 },
+    { header: 'Section',     key: 'Section',      width: 12 },
+    { header: 'Phone',       key: 'Phone',        width: 16 },
+    { header: 'CNIC',        key: 'CNIC',         width: 18 },
+    { header: 'DOB',         key: 'DOB',          width: 14 },
+    { header: 'Status',      key: 'Status',       width: 12 },
+  ];
+
+  await downloadExcel(rows, filename, 'Students', columns);
+}
 
 function printStudentList(students, title, school) {
   const sName = school?.name || localStorage.getItem('registeredSchoolName') || 'IlmForge School';
@@ -95,6 +128,7 @@ export default function StudentInfoReportsPage() {
       bg: '#eff6ff',
       count: active.length,
       onPrint: () => printStudentList(active, 'All Active Students', school),
+      onExport: () => exportStudentsExcel(active, 'active-students.xlsx'),
     },
     {
       title: 'All Inactive Students',
@@ -104,6 +138,7 @@ export default function StudentInfoReportsPage() {
       bg: '#fef2f2',
       count: inactive.length,
       onPrint: () => printStudentList(inactive, 'All Inactive Students', school),
+      onExport: () => exportStudentsExcel(inactive, 'inactive-students.xlsx'),
     },
     {
       title: 'Class Wise Student Report',
@@ -113,6 +148,7 @@ export default function StudentInfoReportsPage() {
       bg: '#f5f3ff',
       count: classWise.length,
       onPrint: () => printStudentList(classWise, `Class Wise Student Report${classId ? ` — ${classes.find(c=>c.id===parseInt(classId))?.name||''}` : ''}`, school),
+      onExport: () => exportStudentsExcel(classWise, 'classwise-students.xlsx'),
       extra: (
         <select className="form-select" style={{ marginTop: 8, fontSize: 12 }} value={classId} onChange={e => setClassId(e.target.value)}>
           <option value="">All Classes</option>
@@ -128,6 +164,7 @@ export default function StudentInfoReportsPage() {
       bg: '#f0fdf4',
       count: passout.length,
       onPrint: () => printStudentList(passout, 'All Passout Students', school),
+      onExport: () => exportStudentsExcel(passout, 'passout-students.xlsx'),
     },
   ];
 
@@ -181,10 +218,16 @@ export default function StudentInfoReportsPage() {
                     </div>
                     <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{r.desc}</div>
                     {r.extra}
-                    <button onClick={r.onPrint} className="btn btn-sm"
-                      style={{ marginTop: 12, background: r.color, color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>
-                      <Printer size={13} /> Print
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                      <button onClick={r.onPrint} className="btn btn-sm"
+                        style={{ background: r.color, color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>
+                        <Printer size={13} /> Print
+                      </button>
+                      <button onClick={r.onExport} className="btn btn-sm"
+                        style={{ background: '#fff', color: r.color, border: `1.5px solid ${r.color}`, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>
+                        <FileSpreadsheet size={13} /> Export Excel
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -109,6 +109,21 @@ export default function ParentPortalPage() {
   const [cSubject, setCSubject] = useState('');
   const [cDesc,    setCDesc]    = useState('');
 
+  /* ── Pay Online modal state ── */
+  const [payModal, setPayModal] = useState(null); // { invoice }
+  const [payMethod, setPayMethod] = useState('jazzcash');
+  const [payRef, setPayRef] = useState('');
+  const [payDone, setPayDone] = useState(false);
+
+  const submitOnlinePayment = useMutation({
+    mutationFn: ({ invoiceId, method, reference }) =>
+      api.post('/fees/payments/online', { invoiceId, method, reference }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['parent-fees'] });
+      setPayDone(true);
+    },
+  });
+
   /* ── Load parent's children ── */
   const { data: children = [], isLoading } = useQuery({
     queryKey: ['parent-children'],
@@ -520,12 +535,13 @@ export default function ParentPortalPage() {
                     {invoices.map((inv, i) => {
                       const STATUS_MAP = { paid:{ bg:'#DCFCE7', c:'#15803D' }, unpaid:{ bg:'#FEE2E2', c:'#B91C1C' }, partial:{ bg:'#FEF3C7', c:'#B45309' }, overdue:{ bg:'#FCE7F3', c:'#9D174D' } };
                       const bd = STATUS_MAP[inv.status] || STATUS_MAP.unpaid;
+                      const isUnpaid = inv.status !== 'paid';
                       return (
-                        <div key={inv.id} style={{ padding:'14px 18px', borderBottom: i<invoices.length-1 ? '1px solid #F8FAFC' : 'none', display:'flex', alignItems:'center', gap:12 }}>
+                        <div key={inv.id} style={{ padding:'14px 18px', borderBottom: i<invoices.length-1 ? '1px solid #F8FAFC' : 'none', display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
                           <div style={{ width:42, height:42, borderRadius:10, background:bd.bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                             <DollarSign size={18} color={bd.c}/>
                           </div>
-                          <div style={{ flex:1 }}>
+                          <div style={{ flex:1, minWidth:140 }}>
                             <div style={{ fontWeight:700, fontSize:13.5, color:NAVY }}>{inv.feeTitle||'Monthly Fee'}</div>
                             <div style={{ fontSize:12, color:'#94A3B8', marginTop:2 }}>
                               {inv.month&&inv.year ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][inv.month-1]} ${inv.year}` : fmtDate(inv.createdAt)}
@@ -536,7 +552,14 @@ export default function ParentPortalPage() {
                           <span style={{ background:bd.bg, color:bd.c, padding:'4px 10px', borderRadius:99, fontSize:11.5, fontWeight:700, textTransform:'capitalize', flexShrink:0 }}>
                             {inv.status}
                           </span>
-                          <button onClick={() => printFeeVoucher({ student: child, invoice: inv, school: { name: 'IlmForge School' } })}
+                          {isUnpaid && (
+                            <button
+                              onClick={() => { setPayModal({ invoice: inv }); setPayMethod('jazzcash'); setPayRef(''); setPayDone(false); }}
+                              style={{ padding:'6px 12px', background:'#15803D', color:'white', border:'none', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', gap:5 }}>
+                              💳 Pay Online
+                            </button>
+                          )}
+                          <button onClick={() => printFeeVoucher({ student: child, invoice: inv, school: { name: schoolName } })}
                             style={{ width:32, height:32, borderRadius:7, border:'1px solid #e2e8f0', background:'white', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}
                             title="Print Voucher">
                             <Printer size={13} color="#374151"/>
@@ -548,8 +571,8 @@ export default function ParentPortalPage() {
                 )}
                 <div style={{ marginTop:14, background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:10, padding:'12px 16px' }}>
                   <p style={{ margin:0, color:'#1D4ED8', fontSize:12.5, lineHeight:1.6 }}>
-                    ℹ️ To pay fees, visit the school office or contact them on WhatsApp.<br/>
-                    Download a printable voucher:&nbsp;
+                    ℹ️ Click <strong>Pay Online</strong> next to any unpaid invoice to send payment via JazzCash, EasyPaisa, or Bank Transfer. The school will confirm once verified.<br/>
+                    Or visit the school office · Download voucher:&nbsp;
                     <a href="/fee-voucher" target="_blank" rel="noreferrer" style={{ color:NAVY, fontWeight:700 }}>Click Here →</a>
                   </p>
                 </div>
@@ -588,7 +611,7 @@ export default function ParentPortalPage() {
                   <EmptyCard icon="🏆" title="Results Not Announced Yet"
                     desc="Published exam results will appear here once the school releases them." />
                 ) : (
-                  publishedExams.map(exam => <ExamCard key={exam.id} exam={exam} studentId={child.id}/>)
+                  publishedExams.map(exam => <ExamCard key={exam.id} exam={exam} studentId={child.id} student={child}/>)
                 )}
               </div>
             )}
@@ -844,6 +867,135 @@ export default function ParentPortalPage() {
           {schoolName} · Powered by IlmForge · Ilm Ko Asaan Banaye
         </div>
       </div>
+
+      {/* ── Pay Online Modal ── */}
+      {payModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+          onClick={e => { if (e.target === e.currentTarget) { setPayModal(null); submitOnlinePayment.reset(); } }}>
+          <div style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:420, padding:'24px 22px', boxShadow:'0 20px 60px rgba(0,0,0,0.25)', maxHeight:'90vh', overflowY:'auto' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
+              <div style={{ fontWeight:800, fontSize:16, color:NAVY }}>💳 Online Payment</div>
+              <button onClick={() => { setPayModal(null); submitOnlinePayment.reset(); }}
+                style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#94A3B8', lineHeight:1 }}>×</button>
+            </div>
+
+            {/* Invoice summary */}
+            <div style={{ background:'#F8FAFC', borderRadius:10, padding:'12px 14px', marginBottom:18, border:'1px solid #E2E8F0' }}>
+              <div style={{ fontSize:13, color:'#64748B' }}>Invoice</div>
+              <div style={{ fontWeight:700, fontSize:14, color:NAVY, marginTop:2 }}>{payModal.invoice.feeTitle||'Monthly Fee'}</div>
+              <div style={{ fontSize:13, color:'#DC2626', fontWeight:700, marginTop:4 }}>Due: {Rs(payModal.invoice.dueAmount||payModal.invoice.totalAmount)}</div>
+              {payModal.invoice.voucherNo && <div style={{ fontSize:12, color:'#94A3B8', marginTop:2 }}>Voucher: #{payModal.invoice.voucherNo}</div>}
+            </div>
+
+            {/* Payment method selector */}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:12, fontWeight:600, color:'#64748B', marginBottom:8 }}>Select Payment Method</div>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                {[
+                  { id:'jazzcash', label:'JazzCash', color:'#E41D24' },
+                  { id:'easypaisa', label:'EasyPaisa', color:'#4CAF50' },
+                  { id:'bank', label:'Bank Transfer', color:'#1B2F6E' },
+                ].map(m => (
+                  <button key={m.id} onClick={() => setPayMethod(m.id)}
+                    style={{ flex:1, minWidth:90, padding:'9px 10px', borderRadius:9, border:`2px solid ${payMethod===m.id ? m.color : '#E2E8F0'}`, background: payMethod===m.id ? m.color+'15' : '#fff', color: payMethod===m.id ? m.color : '#6B7280', fontWeight:700, fontSize:12.5, cursor:'pointer', transition:'all .15s', fontFamily:'inherit' }}>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment instructions */}
+            {(payMethod === 'jazzcash' || payMethod === 'easypaisa') && (
+              <div style={{ background: payMethod==='jazzcash' ? '#FFF1F2' : '#F0FDF4', border:`1px solid ${payMethod==='jazzcash'?'#FECDD3':'#BBF7D0'}`, borderRadius:10, padding:'14px 16px', marginBottom:16 }}>
+                <div style={{ fontWeight:700, fontSize:13, color: payMethod==='jazzcash'?'#E41D24':'#15803D', marginBottom:6 }}>
+                  {payMethod==='jazzcash' ? '📱 JazzCash Instructions' : '📱 EasyPaisa Instructions'}
+                </div>
+                <ol style={{ margin:0, paddingLeft:18, fontSize:13, color:'#374151', lineHeight:2 }}>
+                  <li>Open your {payMethod==='jazzcash'?'JazzCash':'EasyPaisa'} app</li>
+                  <li>Go to <strong>Send Money</strong> or <strong>Mobile Account</strong></li>
+                  <li>Send <strong>{Rs(payModal.invoice.dueAmount||payModal.invoice.totalAmount)}</strong> to:</li>
+                </ol>
+                <div style={{ background:'#fff', borderRadius:8, padding:'10px 14px', marginTop:8, border:'1px solid #E2E8F0' }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:NAVY }}>
+                    {payMethod==='jazzcash' ? '0300-XXXXXXX' : '0300-XXXXXXX'}
+                  </div>
+                  <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>Account Title: {schoolName}</div>
+                  {payModal.invoice.voucherNo && (
+                    <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>Reference: <strong>{payModal.invoice.voucherNo}</strong></div>
+                  )}
+                </div>
+                <div style={{ fontSize:12, color:'#64748B', marginTop:8 }}>
+                  After sending, enter the transaction reference below and click <strong>"I Have Paid"</strong>.
+                </div>
+              </div>
+            )}
+
+            {payMethod === 'bank' && (
+              <div style={{ background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:10, padding:'14px 16px', marginBottom:16 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:NAVY, marginBottom:8 }}>🏦 Bank Transfer Details</div>
+                <div style={{ fontSize:13, color:'#374151', lineHeight:1.9 }}>
+                  <div><span style={{ color:'#6B7280' }}>Bank:</span> <strong>HBL / Allied Bank</strong></div>
+                  <div><span style={{ color:'#6B7280' }}>Account Title:</span> <strong>{schoolName}</strong></div>
+                  <div><span style={{ color:'#6B7280' }}>Account No:</span> <strong>XXXX-XXXX-XXXX</strong></div>
+                  <div><span style={{ color:'#6B7280' }}>Amount:</span> <strong>{Rs(payModal.invoice.dueAmount||payModal.invoice.totalAmount)}</strong></div>
+                  {payModal.invoice.voucherNo && <div><span style={{ color:'#6B7280' }}>Reference/Narration:</span> <strong>{payModal.invoice.voucherNo}</strong></div>}
+                </div>
+                <div style={{ fontSize:12, color:'#6B7280', marginTop:8 }}>
+                  After completing the transfer, enter the bank transaction reference below.
+                </div>
+              </div>
+            )}
+
+            {/* Transaction reference input */}
+            <div style={{ marginBottom:16 }}>
+              <label style={{ fontSize:12, fontWeight:600, color:'#64748B', display:'block', marginBottom:5 }}>
+                Transaction Reference / TID (optional)
+              </label>
+              <input
+                placeholder="e.g. TXN123456789"
+                value={payRef}
+                onChange={e => setPayRef(e.target.value)}
+                style={{ width:'100%', border:'1.5px solid #E5E7EB', borderRadius:9, padding:'10px 14px', fontSize:13, fontFamily:'inherit', boxSizing:'border-box', outline:'none' }}
+                onFocus={e => e.target.style.borderColor=NAVY}
+                onBlur={e => e.target.style.borderColor='#E5E7EB'}
+              />
+            </div>
+
+            {/* Success / error messages */}
+            {payDone && (
+              <div style={{ background:'#DCFCE7', border:'1px solid #86EFAC', borderRadius:8, padding:'10px 14px', marginBottom:12, color:'#15803D', fontSize:13, fontWeight:600 }}>
+                ✅ Payment intent submitted! School admin will confirm once transfer is verified.
+              </div>
+            )}
+            {submitOnlinePayment.isError && (
+              <div style={{ background:'#FEE2E2', border:'1px solid #FECACA', borderRadius:8, padding:'10px 14px', marginBottom:12, color:'#DC2626', fontSize:13 }}>
+                ❌ {submitOnlinePayment.error?.response?.data?.message || 'Something went wrong. Please try again.'}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            {!payDone ? (
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={() => { setPayModal(null); submitOnlinePayment.reset(); }}
+                  style={{ flex:1, padding:'11px', background:'#F1F5F9', color:'#374151', border:'none', borderRadius:9, fontWeight:600, fontSize:13.5, cursor:'pointer', fontFamily:'inherit' }}>
+                  Cancel
+                </button>
+                <button
+                  onClick={() => submitOnlinePayment.mutate({ invoiceId: payModal.invoice.id, method: payMethod, reference: payRef })}
+                  disabled={submitOnlinePayment.isPending}
+                  style={{ flex:2, padding:'11px', background:NAVY, color:'white', border:'none', borderRadius:9, fontWeight:700, fontSize:13.5, cursor:'pointer', fontFamily:'inherit' }}>
+                  {submitOnlinePayment.isPending ? '⏳ Submitting…' : '✅ I Have Paid'}
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => { setPayModal(null); submitOnlinePayment.reset(); }}
+                style={{ width:'100%', padding:'11px', background:NAVY, color:'white', border:'none', borderRadius:9, fontWeight:700, fontSize:13.5, cursor:'pointer', fontFamily:'inherit' }}>
+                Close
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1061,8 +1213,92 @@ function AttendanceTab({ attendLoading, myAttendance, dayMap, attendMonth, atten
   );
 }
 
+/* ── Print Result Card ──────────────────────────────────── */
+function printResultCard({ exam, studentId, studentMarks, studentName, rollNo, className, overallObtained, overallTotal, overallPct, grade, passed }) {
+  const schoolName = localStorage.getItem('registeredSchoolName') || 'IlmForge School';
+  const gradeColor = grade ? (grade.g === 'A+' || grade.g === 'A' ? '#15803D' : grade.g === 'B' ? '#2563EB' : grade.g === 'C' || grade.g === 'D' ? '#D97706' : '#DC2626') : '#374151';
+
+  const rows = studentMarks.map(s => {
+    const pct = s.obtained !== null && s.total > 0 ? Math.round((s.obtained / s.total) * 100) : null;
+    const fail = s.obtained !== null && s.obtained < s.passing;
+    return `
+      <tr>
+        <td>${s.subject}</td>
+        <td style="text-align:center">${s.total}</td>
+        <td style="text-align:center;color:${fail?'#dc2626':'#15803d'};font-weight:700">${s.obtained !== null ? s.obtained : '—'}</td>
+        <td style="text-align:center">${s.passing}</td>
+        <td style="text-align:center;font-weight:700;color:${fail?'#dc2626':'#0d9488'}">${pct !== null ? pct+'%' : '—'}</td>
+        <td style="text-align:center;font-weight:700;color:${fail?'#dc2626':'#15803d'}">${fail ? 'Fail' : 'Pass'}</td>
+      </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Result Card — ${studentName}</title>
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family:Arial,sans-serif; font-size:12px; background:#fff; color:#1a1a1a; }
+      .page { padding:24px; max-width:700px; margin:0 auto; }
+      .header { text-align:center; border-bottom:3px solid #1B2F6E; padding-bottom:14px; margin-bottom:18px; }
+      .school-name { font-size:20px; font-weight:900; color:#1B2F6E; }
+      .title { font-size:14px; font-weight:700; color:#374151; margin-top:4px; letter-spacing:1px; text-transform:uppercase; }
+      .info-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px 16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 16px; margin-bottom:16px; }
+      .info-item { font-size:12px; }
+      .info-label { color:#64748b; font-size:11px; }
+      table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+      th { background:#1B2F6E; color:#fff; padding:8px 10px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.3px; }
+      td { padding:8px 10px; border-bottom:1px solid #f1f5f9; font-size:12px; }
+      tr:nth-child(even) td { background:#f8fafc; }
+      .summary { display:flex; justify-content:space-between; align-items:center; border:2px solid #1B2F6E; border-radius:8px; padding:14px 18px; margin-bottom:16px; }
+      .grade-box { text-align:center; }
+      .grade-big { font-size:40px; font-weight:900; color:${gradeColor}; line-height:1; }
+      .grade-label { font-size:11px; color:#64748b; margin-top:2px; }
+      .result-badge { font-size:16px; font-weight:800; padding:8px 20px; border-radius:99px; ${passed ? 'background:#dcfce7;color:#15803d;' : 'background:#fee2e2;color:#dc2626;'} }
+      .sig-row { display:flex; justify-content:space-between; margin-top:20px; padding-top:12px; border-top:1px solid #e2e8f0; }
+      .sig-box { font-size:11px; color:#64748b; }
+      .footer { text-align:center; font-size:10px; color:#94a3b8; margin-top:12px; }
+      @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+    </style></head><body>
+    <div class="page">
+      <div class="header">
+        <div class="school-name">${schoolName}</div>
+        <div class="title">Student Result Card</div>
+      </div>
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Student Name</div><strong>${studentName||'—'}</strong></div>
+        <div class="info-item"><div class="info-label">Roll No</div><strong>${rollNo||'—'}</strong></div>
+        <div class="info-item"><div class="info-label">Class</div><strong>${className||'—'}</strong></div>
+        <div class="info-item"><div class="info-label">Exam</div><strong>${exam.title||exam.name||'—'}</strong></div>
+        <div class="info-item"><div class="info-label">Date</div><strong>${exam.date||exam.startDate ? new Date(exam.date||exam.startDate).toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</strong></div>
+        <div class="info-item"><div class="info-label">Total Marks</div><strong>${overallObtained} / ${overallTotal}</strong></div>
+      </div>
+      <table>
+        <thead><tr><th>Subject</th><th style="text-align:center">Total</th><th style="text-align:center">Obtained</th><th style="text-align:center">Passing</th><th style="text-align:center">%</th><th style="text-align:center">Result</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="summary">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#1B2F6E">Overall: ${overallObtained} / ${overallTotal}</div>
+          <div style="font-size:12px;color:#64748b;margin-top:3px">Percentage: ${overallPct !== null ? overallPct+'%' : '—'}</div>
+        </div>
+        ${grade ? `<div class="grade-box"><div class="grade-big">${grade.g}</div><div class="grade-label">Grade</div></div>` : ''}
+        <div class="result-badge">${passed ? 'PASSED' : 'FAILED'}</div>
+      </div>
+      <div class="sig-row">
+        <div class="sig-box">Class Teacher: _________________</div>
+        <div class="sig-box">Principal: _________________</div>
+        <div class="sig-box">Parent Signature: _________________</div>
+      </div>
+      <div class="footer">Generated by IlmForge School Management System • ${new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'})}</div>
+    </div>
+    <script>window.onload=()=>{window.print();}<\/script>
+    </body></html>`;
+
+  const w = window.open('', '_blank', 'width=860,height=700');
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
 /* ── Exam Result Card ───────────────────────────────────── */
-function ExamCard({ exam, studentId }) {
+function ExamCard({ exam, studentId, student }) {
   const subjects = exam.subjects || exam.results || [];
 
   const studentMarks = useMemo(() => {
@@ -1084,12 +1320,34 @@ function ExamCard({ exam, studentId }) {
   const grade           = overallPct !== null ? gradeLabel(overallPct) : null;
   const passed          = studentMarks.every(m => m.obtained === null || m.obtained >= m.passing);
 
+  const handleDownloadResultCard = () => {
+    printResultCard({
+      exam,
+      studentId,
+      studentMarks,
+      studentName: student?.name || '—',
+      rollNo:      student?.rollNo || '—',
+      className:   student?.class?.name || '—',
+      overallObtained,
+      overallTotal,
+      overallPct,
+      grade,
+      passed,
+    });
+  };
+
   return (
     <div className="card" style={{ background:'#fff', borderRadius:12, border:'1px solid #E5E7EB', overflow:'hidden', marginBottom:14 }}>
       <div className="card-header" style={{ background:`linear-gradient(90deg,${NAVY},#243e8f)`, padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <div>
+        <div style={{ flex:1 }}>
           <div style={{ color:'#fff', fontWeight:800, fontSize:15 }}>{exam.title||exam.name||'Exam'}</div>
           <div style={{ color:'rgba(255,255,255,0.65)', fontSize:12, marginTop:2 }}>{fmtDate(exam.date||exam.startDate||exam.examDate)}</div>
+          {studentMarks.length > 0 && (
+            <button onClick={handleDownloadResultCard}
+              style={{ marginTop:8, padding:'5px 12px', background:'rgba(255,255,255,0.18)', border:'1px solid rgba(255,255,255,0.35)', borderRadius:7, color:'#fff', fontSize:11.5, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'inline-flex', alignItems:'center', gap:5 }}>
+              <Printer size={12}/> Download Result Card
+            </button>
+          )}
         </div>
         <div style={{ textAlign:'right' }}>
           {grade && (

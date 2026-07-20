@@ -27,15 +27,26 @@ const typeBadge = {
 };
 
 /* ─── Confirm Modal ──────────────────────────────────── */
-function ConfirmModal({ exam, onConfirm, onCancel, loading }) {
-  const [sendSms, setSendSms] = useState(false);
+function ConfirmModal({ exam, onConfirm, onCancel, loading, publishStep }) {
+  const [sendSms, setSendSms] = useState(true); // default ON
+  const [portalLink, setPortalLink] = useState(window.location.origin + '/portal');
+
+  /* Step indicator labels */
+  const steps = [
+    { key: 'idle',        label: null },
+    { key: 'publishing',  label: 'Step 1 of 2 — Publishing results…' },
+    { key: 'sms',         label: 'Step 2 of 2 — Sending SMS notifications…' },
+    { key: 'done',        label: null },
+  ];
+  const currentStep = steps.find(s => s.key === (publishStep || 'idle'));
+
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
       zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <div style={{
-        background: '#fff', borderRadius: 14, padding: 28, maxWidth: 440, width: '100%',
+        background: '#fff', borderRadius: 14, padding: 28, maxWidth: 460, width: '100%',
         boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -48,31 +59,79 @@ function ConfirmModal({ exam, onConfirm, onCancel, loading }) {
           </div>
         </div>
 
-        <p style={{ fontSize: 13.5, color: '#374151', lineHeight: 1.6, marginBottom: 16 }}>
+        <p style={{ fontSize: 13.5, color: '#374151', lineHeight: 1.6, marginBottom: 14 }}>
           Results will be <strong>visible to all parents and students</strong> on their portals.
-          This action can be undone by unpublishing. Continue?
+          This action can be undone by unpublishing.
         </p>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', marginBottom: 20, padding: '10px 12px', background: '#F0FDF4', borderRadius: 8, border: '1px solid #BBF7D0' }}>
+        {/* SMS toggle */}
+        <label style={{
+          display: 'flex', alignItems: 'flex-start', gap: 9, cursor: 'pointer',
+          marginBottom: 14, padding: '12px 14px',
+          background: sendSms ? '#F0FDF4' : '#F8FAFC',
+          borderRadius: 8,
+          border: `1px solid ${sendSms ? '#BBF7D0' : '#E2E8F0'}`,
+          transition: 'all 0.15s',
+        }}>
           <button
             onClick={() => setSendSms(s => !s)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: sendSms ? '#0F766E' : '#D1D5DB', display: 'inline-flex' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+              color: sendSms ? '#0F766E' : '#D1D5DB', display: 'inline-flex', marginTop: 1 }}
           >
             {sendSms ? <CheckSquare size={18} /> : <Square size={18} />}
           </button>
-          <span style={{ fontSize: 13, color: '#0F766E', fontWeight: 600 }}>
-            Also send SMS notification to all parents
-          </span>
+          <div>
+            <div style={{ fontSize: 13, color: sendSms ? '#0F766E' : '#6B7280', fontWeight: 700, marginBottom: 4 }}>
+              Auto-notify parents via SMS
+            </div>
+            <div style={{ fontSize: 12, color: '#6B7280' }}>
+              Message: "Dear Parent, [Student] result for <em>{exam?.title}</em> has been published.
+              Login to view: [portal link]"
+            </div>
+          </div>
         </label>
+
+        {/* Portal link input (shown when SMS is on) */}
+        {sendSms && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>
+              Portal link in message
+            </label>
+            <input
+              type="url"
+              className="form-input"
+              value={portalLink}
+              onChange={e => setPortalLink(e.target.value)}
+              placeholder="https://your-school-portal.com/portal"
+              style={{ fontSize: 12 }}
+            />
+          </div>
+        )}
+
+        {/* Progress indicator */}
+        {currentStep?.label && (
+          <div style={{
+            marginBottom: 14, padding: '8px 12px',
+            background: '#EFF6FF', border: '1px solid #BFDBFE',
+            borderRadius: 6, fontSize: 12.5, color: '#1D4ED8', fontWeight: 600,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+            {currentStep.label}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button
             className="btn btn-teal"
-            onClick={() => onConfirm(sendSms)}
+            onClick={() => onConfirm(sendSms, portalLink)}
             disabled={loading}
             style={{ flex: 1 }}
           >
-            <Globe size={14} /> {loading ? 'Publishing…' : 'Publish Results'}
+            <Globe size={14} />
+            {loading
+              ? (publishStep === 'sms' ? 'Sending SMS…' : 'Publishing…')
+              : (sendSms ? 'Publish & Notify Parents' : 'Publish Results')}
           </button>
           <button className="btn btn-outline" onClick={onCancel} disabled={loading}>
             Cancel
@@ -134,6 +193,7 @@ export default function ResultPublicationPage() {
   const [unpublishModal, setUnpublishModal] = useState(null);  // exam object
   const [actionLoading,  setActionLoading]  = useState({});
   const [bulkLoading,    setBulkLoading]    = useState(false);
+  const [publishStep,    setPublishStep]    = useState('idle'); // 'idle'|'publishing'|'sms'|'done'
 
   /* Load all exams */
   const { data: exams = [], isLoading } = useQuery({
@@ -154,25 +214,51 @@ export default function ResultPublicationPage() {
 
   const allSelected = exams.length > 0 && selected.size === exams.length;
 
-  /* ─── Publish single ─────────────────────────────── */
-  const doPublish = async (exam, sendSms = false) => {
+  /* ─── Publish single (two-step: publish → SMS notify) ─── */
+  const doPublish = async (exam, sendSms = true, portalLink = '') => {
     setActionLoading(p => ({ ...p, [exam.id]: 'publish' }));
+    setPublishStep('publishing');
     try {
+      /* Step 1 — Mark exam as published */
       await api.post(`/exams/${exam.id}/publish`);
+      qc.invalidateQueries({ queryKey: ['exams'] });
+
       if (sendSms) {
+        /* Step 2 — Collect parent phones from results, then POST /notifications/sms */
+        setPublishStep('sms');
         try {
-          await api.post(`/exams/${exam.id}/results/sms-blast`);
-          toast.success(`"${exam.title}" published and SMS sent to parents.`);
-        } catch {
-          toast.success(`"${exam.title}" published. SMS sending failed.`);
+          /* Fetch result rows to build parent phone list */
+          const resultsRes = await api.get(`/exams/${exam.id}/results`);
+          const resultRows = resultsRes.data?.data || [];
+
+          /* Collect unique student IDs */
+          const uniqueStudentIds = [...new Set(resultRows.map(r => r.studentId).filter(Boolean))];
+
+          /* Build per-student SMS message using sms-blast endpoint which already
+             loads parent phones server-side; we just fire it and capture sent count */
+          const blastRes = await api.post(`/exams/${exam.id}/results/sms-blast`, {
+            portalLink: portalLink || window.location.origin + '/portal',
+          });
+          const sent = blastRes.data?.sent?.length ?? blastRes.data?.data?.sent ?? uniqueStudentIds.length;
+          toast.success(
+            `Results published! SMS sent to ${sent} parent${sent !== 1 ? 's' : ''}.`,
+            { duration: 5000 }
+          );
+        } catch (smsErr) {
+          /* Publish succeeded but SMS failed — show partial success */
+          toast.success(`"${exam.title}" published successfully.`, { duration: 4000 });
+          toast.error(
+            `SMS notification failed: ${errMsg(smsErr)}`,
+            { duration: 6000 }
+          );
         }
       } else {
         toast.success(`"${exam.title}" results published successfully.`);
       }
-      qc.invalidateQueries({ queryKey: ['exams'] });
     } catch (err) {
       toast.error(errMsg(err));
     } finally {
+      setPublishStep('idle');
       setActionLoading(p => ({ ...p, [exam.id]: null }));
       setPublishModal(null);
     }
@@ -244,9 +330,10 @@ export default function ResultPublicationPage() {
       {publishModal && (
         <ConfirmModal
           exam={publishModal}
-          onConfirm={(sms) => doPublish(publishModal, sms)}
-          onCancel={() => setPublishModal(null)}
+          onConfirm={(sms, portalLink) => doPublish(publishModal, sms, portalLink)}
+          onCancel={() => { if (!actionLoading[publishModal.id]) { setPublishModal(null); setPublishStep('idle'); } }}
           loading={!!actionLoading[publishModal.id]}
+          publishStep={publishStep}
         />
       )}
       {unpublishModal && (

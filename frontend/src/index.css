@@ -4,6 +4,7 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@300;400;600;700&family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');
+@import url('./styles/ilmforge-design.css');
 
 @tailwind base;
 @tailwind components;
@@ -1635,5 +1636,3 @@ body.lang-ur .metric-value { font-family: 'Noto Nastaliq Urdu', serif; }
   [dir="rtl"] .sidebar.mobile-open { transform: translateX(0); }
   [dir="rtl"] .main-wrapper { margin-right: 0 !important; }
 }
-
-@import url('./styles/ilmforge-design.css');

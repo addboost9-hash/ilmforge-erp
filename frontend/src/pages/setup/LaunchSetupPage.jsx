@@ -146,24 +146,61 @@ function StepCard({ step, index, isDone, isLoading }) {
   );
 }
 
+/* ── Animated progress bar ── */
+function AnimatedProgressBar({ progress }) {
+  const [displayed, setDisplayed] = useState(0);
+  useEffect(() => {
+    let start = null;
+    const target = progress;
+    const duration = 900;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const elapsed = ts - start;
+      const pct = Math.min(elapsed / duration, 1);
+      // ease-out
+      setDisplayed(Math.round(target * (1 - Math.pow(1 - pct, 3))));
+      if (pct < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [progress]);
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: 99, height: 12, overflow: 'hidden', position: 'relative' }}>
+      <div style={{
+        height: '100%', borderRadius: 99,
+        background: progress === 100 ? '#0d9488' : 'linear-gradient(90deg, #38bdf8, #60a5fa)',
+        width: `${displayed}%`, transition: 'width .06s linear',
+        boxShadow: progress > 0 ? '0 0 8px rgba(96,165,250,0.6)' : 'none',
+      }} />
+    </div>
+  );
+}
+
 export default function LaunchSetupPage() {
   const { data: setupData, isLoading, refetch } = useQuery({
     queryKey: ['launch-setup-status'],
     queryFn: async () => {
-      const [school, classes, staff, sessions] = await Promise.allSettled([
+      const [school, classes, subjects, staff, feeStructures, sessions, admins] = await Promise.allSettled([
         api.get('/settings/school').then(r => r.data),
         api.get('/settings/classes').then(r => r.data),
+        api.get('/subjects').then(r => r.data),
         api.get('/staff/stats').then(r => r.data?.data || r.data),
+        api.get('/fees/structures').then(r => r.data),
         api.get('/settings/sessions').then(r => r.data),
+        api.get('/settings/admins').then(r => r.data),
       ]);
+      const classList  = classes.status === 'fulfilled'       ? (classes.value?.data   || classes.value   || []) : [];
+      const subjList   = subjects.status === 'fulfilled'      ? (subjects.value?.data  || subjects.value  || []) : [];
+      const sessionList= sessions.status === 'fulfilled'      ? (sessions.value?.data  || sessions.value  || []) : [];
+      const feeList    = feeStructures.status === 'fulfilled' ? (feeStructures.value?.data || feeStructures.value || []) : [];
+      const adminList  = admins.status === 'fulfilled'        ? (admins.value?.data    || admins.value    || []) : [];
       return {
-        school:       school.status === 'fulfilled'   ? school.value   : null,
-        classes:      classes.status === 'fulfilled'  ? { total: (classes.value?.data || classes.value || []).length } : { total: 0 },
-        staff:        staff.status === 'fulfilled'    ? staff.value    : { total: 0 },
-        sessions:     sessions.status === 'fulfilled' ? { total: (sessions.value?.data || sessions.value || []).length } : { total: 0 },
-        subjects:     { total: 0 }, // will show pending until subjects API checked
-        feeStructures: 0,
-        admins:       { total: 1 },
+        school:        school.status === 'fulfilled'   ? school.value   : null,
+        classes:       { total: Array.isArray(classList)  ? classList.length  : (classList?.total ?? 0) },
+        subjects:      { total: Array.isArray(subjList)   ? subjList.length   : (subjList?.total  ?? 0) },
+        staff:         staff.status === 'fulfilled'    ? staff.value    : { total: 0 },
+        feeStructures: Array.isArray(feeList) ? feeList.length : (feeList?.total ?? 0),
+        sessions:      { total: Array.isArray(sessionList) ? sessionList.length : (sessionList?.total ?? 0) },
+        admins:        { total: Array.isArray(adminList) ? adminList.length : (adminList?.total ?? 1) },
       };
     },
     staleTime: 60_000,
@@ -172,7 +209,14 @@ export default function LaunchSetupPage() {
 
   const doneCount = SETUP_STEPS.filter(s => s.check(setupData || {})).length;
   const totalCount = SETUP_STEPS.length;
+  const remaining = totalCount - doneCount;
   const progress = Math.round((doneCount / totalCount) * 100);
+  const estMinutes = remaining * 5;
+  const estLabel = remaining === 0
+    ? 'All done!'
+    : estMinutes >= 60
+      ? `~${Math.round(estMinutes / 60)} hour${Math.round(estMinutes / 60) > 1 ? 's' : ''} remaining`
+      : `~${estMinutes} minute${estMinutes !== 1 ? 's' : ''} remaining`;
 
   return (
     <div className="page-content page-animate" style={{ padding: '20px 22px 40px' }}>
@@ -206,22 +250,31 @@ export default function LaunchSetupPage() {
 
         {/* Progress Bar */}
         <div style={{ marginTop: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600 }}>
-              Setup Progress — {doneCount} of {totalCount} steps complete
+              Setup {progress}% complete — {doneCount} of {totalCount} steps done
             </span>
-            <span style={{ color: '#fff', fontSize: 20, fontWeight: 800 }}>{progress}%</span>
+            <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 600 }}>
+              {estLabel}
+            </span>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: 99, height: 10, overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', borderRadius: 99,
-              background: progress === 100 ? '#0d9488' : 'linear-gradient(90deg, #38bdf8, #60a5fa)',
-              width: `${progress}%`, transition: 'width .6s ease',
-            }} />
-          </div>
-          {progress === 100 && (
+          <AnimatedProgressBar progress={progress} />
+          {progress === 100 ? (
             <div style={{ marginTop: 12, color: '#6ee7b7', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
               <CheckCircle size={16} /> Your school is fully set up! All systems go.
+            </div>
+          ) : (
+            <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {SETUP_STEPS.map(s => {
+                const done = s.check(setupData || {});
+                return (
+                  <div key={s.id} title={s.title} style={{
+                    width: 10, height: 10, borderRadius: '50%',
+                    background: done ? '#6ee7b7' : 'rgba(255,255,255,0.25)',
+                    transition: 'background .3s',
+                  }} />
+                );
+              })}
             </div>
           )}
         </div>

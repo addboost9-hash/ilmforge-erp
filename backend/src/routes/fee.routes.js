@@ -467,6 +467,78 @@ router.get('/payments', requireFinanceRole, wrap(async (req, res) => {
   });
 }));
 
+// GET /api/v1/fees/payments/export
+// Returns all fee payments for a given month/year as JSON (frontend handles CSV/Excel download).
+// Query: ?month=<1-12>&year=<YYYY>&from=YYYY-MM-DD&to=YYYY-MM-DD
+router.get('/payments/export', requireFinanceRole, wrap(async (req, res) => {
+  const { month, year, from, to } = req.query;
+
+  const where = {
+    schoolId: req.schoolId,
+    ...(from && to && {
+      paymentDate: {
+        gte: new Date(new Date(from).setHours(0, 0, 0, 0)),
+        lte: new Date(new Date(to).setHours(23, 59, 59, 999)),
+      },
+    }),
+    ...(from && !to && {
+      paymentDate: { gte: new Date(new Date(from).setHours(0, 0, 0, 0)) },
+    }),
+    ...(!from && to && {
+      paymentDate: { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) },
+    }),
+    ...(month && year && {
+      invoice: { month: parseInt(month), year: parseInt(year) },
+    }),
+    ...(!from && !to && month && !year && {
+      invoice: { month: parseInt(month) },
+    }),
+    ...(!from && !to && !month && year && {
+      invoice: { year: parseInt(year) },
+    }),
+  };
+
+  const payments = await prisma.feePayment.findMany({
+    where,
+    include: {
+      invoice: {
+        select: {
+          feeTitle: true,
+          month: true,
+          year: true,
+          voucherNo: true,
+          student: {
+            select: { id: true, name: true, rollNo: true, class: { select: { name: true } } },
+          },
+        },
+      },
+    },
+    orderBy: { paymentDate: 'desc' },
+    take: 5000, // safety cap
+  });
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  const rows = payments.map(p => ({
+    'Receipt No':    p.receiptNo || '',
+    'Voucher No':    p.invoice?.voucherNo || '',
+    'Student Name':  p.invoice?.student?.name || '',
+    'Roll No':       p.invoice?.student?.rollNo || '',
+    'Class':         p.invoice?.student?.class?.name || '',
+    'Fee Title':     p.invoice?.feeTitle || '',
+    'Month':         p.invoice?.month ? (MONTHS[(parseInt(p.invoice.month) - 1)] || p.invoice.month) : '',
+    'Year':          p.invoice?.year || '',
+    'Amount Paid':   p.amountPaid || 0,
+    'Discount':      p.discount || 0,
+    'Method':        p.method || 'cash',
+    'Payment Date':  p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('en-PK') : '',
+  }));
+
+  const totalAmount = payments.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
+
+  res.json({ success: true, data: rows, total: rows.length, totalAmount });
+}));
+
 /* ── POST /fees/increment — Apply fee increment to all students in a class ── */
 router.post('/increment', requireFinanceRole, wrap(async (req, res) => {
   const { schoolId } = req;
@@ -647,6 +719,46 @@ router.put('/student-discount/:studentId', requireFinanceRole, wrap(async (req, 
   }).catch(() => null);
 
   res.json({ success: true, message: `Discounts applied. ${updated} invoice(s) updated.`, updated, totalDiscount });
+}));
+
+/* ── POST /fees/payments/online — Parent self-service "I have paid" ── */
+// Accessible to all authenticated users (parents included).
+// Records a payment intent with method=online and status pending.
+// Admin/accountant will confirm the payment after verifying transfer proof.
+router.post('/payments/online', wrap(async (req, res) => {
+  const { schoolId } = req;
+  const { invoiceId, method = 'online', reference = '' } = req.body;
+  if (!invoiceId) return res.status(400).json({ success: false, message: 'invoiceId required.' });
+
+  const invoice = await prisma.feeInvoice.findFirst({
+    where: { id: parseInt(invoiceId), schoolId },
+    include: { student: { select: { name: true, rollNo: true } } },
+  });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice not found.' });
+  if (invoice.status === 'paid') return res.status(400).json({ success: false, message: 'This invoice is already paid.' });
+
+  // Create a pending payment record — amount = full due amount, not yet credited
+  const receiptNo = `ONL-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+  const payment = await prisma.feePayment.create({
+    data: {
+      schoolId,
+      invoiceId: parseInt(invoiceId),
+      studentId: invoice.studentId,
+      amountPaid: 0,           // 0 until accountant confirms
+      discount: 0,
+      method,
+      receivedBy: req.user.id,
+      notifiedVia: 'none',
+      receiptNo,
+      remarks: JSON.stringify({ onlinePayment: true, method, reference, status: 'pending_confirmation', submittedBy: req.user.id, submittedAt: new Date().toISOString() }),
+    },
+  });
+
+  res.status(201).json({
+    success: true,
+    data: { payment, receiptNo },
+    message: 'Payment intent recorded. School admin will confirm once transfer is verified.',
+  });
 }));
 
 module.exports = router;

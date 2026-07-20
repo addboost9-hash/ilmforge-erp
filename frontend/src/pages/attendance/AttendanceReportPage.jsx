@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
-import { Printer, Search, BarChart2 } from 'lucide-react';
+import { Printer, Search, BarChart2, FileDown } from 'lucide-react';
+import { downloadExcel } from '../../utils/export';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -65,6 +66,40 @@ export default function AttendanceReportPage() {
     : 0;
   const totalStudents = filtered.length;
 
+  async function handleExportExcel() {
+    if (!filtered.length) return;
+    const MONTH_NAMES = [
+      'January','February','March','April','May','June',
+      'July','August','September','October','November','December',
+    ];
+    const monthLabel = MONTH_NAMES[(activeFilters?.month || filters.month) - 1] || String(filters.month);
+    const yearLabel  = activeFilters?.year || filters.year;
+
+    const rows = filtered.map(s => ({
+      'Reg No':      s.regNo || s.rollNo || '',
+      'Name':        s.name || '',
+      'Father Name': s.fatherName || '',
+      'Total Days':  s.total || 0,
+      'Present':     s.present || 0,
+      'Absent':      s.absent || 0,
+      'Leave':       s.leave || 0,
+      'Percentage':  `${s.percentage || 0}%`,
+    }));
+
+    const columns = [
+      { header: 'Reg No',      key: 'Reg No',      width: 14 },
+      { header: 'Name',        key: 'Name',         width: 24 },
+      { header: 'Father Name', key: 'Father Name',  width: 24 },
+      { header: 'Total Days',  key: 'Total Days',   width: 12 },
+      { header: 'Present',     key: 'Present',      width: 10 },
+      { header: 'Absent',      key: 'Absent',       width: 10 },
+      { header: 'Leave',       key: 'Leave',        width: 10 },
+      { header: 'Percentage',  key: 'Percentage',   width: 12 },
+    ];
+
+    await downloadExcel(rows, `attendance-${monthLabel}-${yearLabel}.xlsx`, 'Attendance', columns);
+  }
+
   return (
     <div className="page-content fade-in">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -72,13 +107,22 @@ export default function AttendanceReportPage() {
           <h1 className="page-title">Attendance Report</h1>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>Monthly attendance summary per student</p>
         </div>
-        <button
-          className="btn btn-outline"
-          onClick={() => window.print()}
-          disabled={!submitted || filtered.length === 0}
-        >
-          <Printer size={14} /> Print / PDF
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn btn-outline"
+            onClick={handleExportExcel}
+            disabled={!submitted || filtered.length === 0}
+          >
+            <FileDown size={14} /> Download Excel
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={() => window.print()}
+            disabled={!submitted || filtered.length === 0}
+          >
+            <Printer size={14} /> Print / PDF
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

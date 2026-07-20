@@ -14,11 +14,25 @@ export default function DiscountedStudentsPage() {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [form, setForm] = useState({ discountType:'Fixed Amount', discountValue:'', reason:'' });
 
-  // Load discounts from API
-  const { data: discounts = [], isLoading } = useQuery({
+  // Load discounts from API — backend returns: { studentId, discount, student: { id, name, rollNo, class: { name } } }
+  const { data: rawDiscounts = [], isLoading } = useQuery({
     queryKey: ['fee-discounts'],
     queryFn: () => api.get('/fees/discounts').then(r => r.data.data || []),
   });
+
+  // Normalise DB rows to the shape expected by the table
+  const discounts = rawDiscounts.map(d => ({
+    id: d.studentId,
+    studentCode: d.student?.rollNo || String(d.studentId),
+    studentName: d.student?.name || '—',
+    parent: d.student?.fatherName || '—',
+    className: d.student?.class?.name || '—',
+    section: d.student?.section?.name || '—',
+    discountType: 'Fixed Amount',
+    discountValue: Math.round((d.discount || 0) / 100), // stored in paisa → convert to Rs
+    reason: d.reason || '—',
+    _raw: d,
+  }));
 
   const { data: results, isLoading: searching } = useQuery({
     queryKey: ['disc-search', studentSearch],
@@ -34,7 +48,14 @@ export default function DiscountedStudentsPage() {
     onError: (e) => toast.error(e.response?.data?.message || 'Failed'),
   });
 
-  const uniqueClasses = [...new Set((discounts||[]).map(d => d.student?.class?.name))].filter(Boolean).sort();
+  // Remove discount: re-apply a 0 discount to clear it from the student's invoices
+  const removeMut = useMutation({
+    mutationFn: (studentId) => api.post('/fees/discounts', { studentId, discountType: 'flat', discountValue: 0, reason: 'Discount removed' }),
+    onSuccess: () => { qc.invalidateQueries(['fee-discounts']); toast.success('Discount removed.'); },
+    onError: (e) => toast.error(e.response?.data?.message || 'Failed to remove discount'),
+  });
+
+  const uniqueClasses = [...new Set((discounts||[]).map(d => d.className))].filter(c => c && c !== '—').sort();
 
   const handleAdd = () => {
     if (!selectedStudent) return toast.error('Select a student first');
@@ -79,15 +100,15 @@ export default function DiscountedStudentsPage() {
         </div>
         <div className="card" style={{ background:'linear-gradient(135deg,#EFF6FF,#DBEAFE)', border:'1px solid #BFDBFE', padding:16 }}>
           <div style={{ fontSize:28, fontWeight:800, color:'#1D4ED8' }}>
-            {discounts.filter(d => d.discountType === 'Percentage').length}
+            {[...new Set(discounts.map(d => d.className))].filter(Boolean).length}
           </div>
-          <div style={{ fontSize:12, color:'#1D4ED8', fontWeight:600 }}>Percentage Discounts</div>
+          <div style={{ fontSize:12, color:'#1D4ED8', fontWeight:600 }}>Classes Covered</div>
         </div>
         <div className="card" style={{ background:'linear-gradient(135deg,#FFF7ED,#FED7AA)', border:'1px solid #FED7AA', padding:16 }}>
-          <div style={{ fontSize:28, fontWeight:800, color:'#C2410C' }}>
-            {discounts.filter(d => d.discountType === 'Fixed Amount').length}
+          <div style={{ fontSize:24, fontWeight:800, color:'#C2410C' }}>
+            Rs. {discounts.reduce((s, d) => s + (d.discountValue || 0), 0).toLocaleString()}
           </div>
-          <div style={{ fontSize:12, color:'#C2410C', fontWeight:600 }}>Fixed Amount Discounts</div>
+          <div style={{ fontSize:12, color:'#C2410C', fontWeight:600 }}>Total Discount Amount</div>
         </div>
       </div>
 
@@ -149,7 +170,8 @@ export default function DiscountedStudentsPage() {
                   <button
                     className="btn btn-sm"
                     style={{ background:'#FEF2F2', border:'1px solid #FECACA', color:'#B91C1C', display:'flex', alignItems:'center', gap:4 }}
-                    onClick={() => { if (window.confirm('Remove this discount?')) { persist(discounts.filter(x => x.id !== d.id)); toast.success('Discount removed'); } }}
+                    onClick={() => { if (window.confirm('Remove this discount?')) { removeMut.mutate(d.id); } }}
+                    disabled={removeMut.isPending}
                     title="Remove Discount"
                   >
                     <Trash2 size={12} /> Remove

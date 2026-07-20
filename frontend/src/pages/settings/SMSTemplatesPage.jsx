@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { Save, MessageSquare, Info, Tag } from 'lucide-react';
@@ -185,9 +185,25 @@ const DEFAULT_TEMPLATES = [
 const CATEGORIES = ['All', 'Finance', 'Attendance', 'Exams', 'Admissions', 'Academics', 'Miscellaneous'];
 
 export default function SMSTemplatesPage() {
+  const queryClient = useQueryClient();
   const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
   const [activeCategory, setActiveCategory] = useState('All');
   const [editingId, setEditingId] = useState(null);
+
+  const { data: settings } = useQuery({
+    queryKey: ['school-settings'],
+    queryFn: () => api.get('/settings').then(r => r.data.data || {}),
+  });
+
+  useEffect(() => {
+    if (settings?.smsTemplates && Array.isArray(settings.smsTemplates) && settings.smsTemplates.length > 0) {
+      // Merge saved templates over defaults so new default templates are still included
+      setTemplates(DEFAULT_TEMPLATES.map(def => {
+        const saved = settings.smsTemplates.find(s => s.id === def.id);
+        return saved ? { ...def, ...saved } : def;
+      }));
+    }
+  }, [settings]);
 
   const filtered = activeCategory === 'All'
     ? templates
@@ -202,8 +218,13 @@ export default function SMSTemplatesPage() {
   };
 
   const save = useMutation({
-    mutationFn: () => Promise.resolve({ ok: true }),
-    onSuccess: () => { toast.success('SMS templates saved!'); setEditingId(null); },
+    mutationFn: (data) => api.put('/settings', { smsTemplates: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['school-settings'] });
+      toast.success('SMS templates saved!');
+      setEditingId(null);
+    },
+    onError: () => toast.error('Failed to save SMS templates'),
   });
 
   const categoryColors = { Finance:'#15803D', Attendance:'#2563EB', Exams:'#7C3AED', Admissions:'#0D9488', Miscellaneous:'#D97706' };
@@ -215,7 +236,7 @@ export default function SMSTemplatesPage() {
           <h1 className="page-title">SMS Templates</h1>
           <p className="page-subtitle">Configure automated SMS messages for each school event</p>
         </div>
-        <button className="btn btn-teal" onClick={() => save.mutate()}>
+        <button className="btn btn-teal" onClick={() => save.mutate(templates)} disabled={save.isPending}>
           <Save size={15}/> Save All Templates
         </button>
       </div>
@@ -317,7 +338,7 @@ export default function SMSTemplatesPage() {
                   </div>
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
-                  <button className="btn btn-teal btn-sm" onClick={() => { save.mutate(); setEditingId(null); }}>
+                  <button className="btn btn-teal btn-sm" onClick={() => save.mutate(templates)} disabled={save.isPending}>
                     <Save size={13}/> Save
                   </button>
                   <button className="btn btn-outline btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
