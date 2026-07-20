@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { Save, CheckCircle, XCircle, Clock, RefreshCw, Users } from 'lucide-react';
+import { Save, CheckCircle, XCircle, Clock, RefreshCw, Users, AlertTriangle } from 'lucide-react';
 
 export default function AttendancePage() {
   const qc    = useQueryClient();
@@ -35,13 +35,16 @@ export default function AttendancePage() {
     }),
     onSuccess: (r, _variables, _context) => {
       const count = Object.keys(attendance).length;
-      toast.success(`Attendance saved for ${count} student${count !== 1 ? 's' : ''}!`);
+      const label = filters.date < today ? 'correction saved' : 'saved';
+      toast.success(`Attendance ${label} for ${count} student${count !== 1 ? 's' : ''}!`);
       // Refresh dashboard so attendance stats update immediately
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['attendance'] });
     },
     onError: err => toast.error(err.response?.data?.message || 'Failed to save attendance'),
   });
+
+  const isPastDate = filters.date && filters.date < today;
 
   const cls = (classes||[]).find(c => c.id === parseInt(filters.classId));
   const sections = cls?.sections || [];
@@ -76,10 +79,34 @@ export default function AttendancePage() {
         <div style={{display:'flex', gap:8}}>
           <button className="btn btn-outline btn-sm" onClick={() => refetch()}><RefreshCw size={14}/></button>
           <button className="btn btn-teal" onClick={() => save.mutate()} disabled={save.isPending || !filters.classId || total===0}>
-            <Save size={15}/> {save.isPending ? 'Saving...' : 'Save & Notify'}
+            <Save size={15}/> {save.isPending ? 'Saving...' : isPastDate ? 'Save Correction' : 'Save & Notify'}
           </button>
         </div>
       </div>
+
+      {/* Past-date correction banner */}
+      {isPastDate && (
+        <div style={{
+          background: 'linear-gradient(90deg,#FEF3C7,#FDE68A)',
+          border: '1.5px solid #F59E0B',
+          borderRadius: 10,
+          padding: '11px 18px',
+          marginBottom: 14,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+          <AlertTriangle size={20} color="#B45309" style={{flexShrink:0}} />
+          <div>
+            <div style={{fontWeight:700, fontSize:13.5, color:'#78350F'}}>
+              Editing attendance for {new Date(filters.date + 'T00:00:00').toLocaleDateString('en-PK', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}
+            </div>
+            <div style={{fontSize:12, color:'#92400E', marginTop:2}}>
+              You are modifying a past date. Changes will be saved as corrections and may override existing records for this date.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card" style={{marginBottom:14, padding:14}}>

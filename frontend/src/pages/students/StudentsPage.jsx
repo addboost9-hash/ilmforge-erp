@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { ChevronDown, ChevronUp, X, FileText, Search } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
+import EmptyState from '../../components/ui/EmptyState';
 
 /* ─── helpers ─────────────────────────────────────────────────── */
 const TEAL = '#0D9488';
@@ -381,6 +382,7 @@ function AddStudentRow({ classId, sectionId, onAdded }) {
 
 /* ─── Main Component ─────────────────────────────────────────── */
 export default function StudentsPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('active');
   const [expandedRow, setExpandedRow] = useState(null);
   const [promoteRow, setPromoteRow] = useState(null);
@@ -523,7 +525,13 @@ export default function StudentsPage() {
               </button>
             </div>
             {!searchLoading && searchResults.length === 0 && (
-              <div style={{ textAlign:'center', padding:'16px 0', color:'#9CA3AF', fontSize:13 }}>No students found matching "{searchQuery}"</div>
+              <EmptyState
+                type="students"
+                title="No students found"
+                description="Try a different search or add a new student"
+                action={() => navigate('/admissions/wizard')}
+                actionLabel="Admit Student"
+              />
             )}
             {searchResults.length > 0 && (
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, background:'#fff', borderRadius:6, overflow:'hidden' }}>

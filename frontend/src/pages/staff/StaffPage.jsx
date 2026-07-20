@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import { UserPlus, Edit, Award, Users, UserCheck, UserX, Phone, Mail } from 'lucide-react';
+import EmptyState from '../../components/ui/EmptyState';
 
 const money = v => 'Rs. ' + ((v||0)/100).toLocaleString();
 
@@ -94,13 +95,13 @@ export default function StaffPage() {
                 ))}
                 {(!data?.data||data.data.length===0) && (
                   <tr><td colSpan={8}>
-                    <div className="empty-state">
-                      <div className="empty-state-icon">👨‍🏫</div>
-                      <div className="empty-state-text">No staff members added</div>
-                      <div className="empty-state-sub">
-                        <Link to="/staff/new" style={{color:'#0D9488'}}>Add your first teacher →</Link>
-                      </div>
-                    </div>
+                    <EmptyState
+                      type="staff"
+                      title="No staff members added"
+                      description="Add your teachers and staff to get started"
+                      action={() => window.location.href = '/staff/new'}
+                      actionLabel="Add Staff Member"
+                    />
                   </td></tr>
                 )}
               </tbody>

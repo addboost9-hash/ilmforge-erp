@@ -1,17 +1,47 @@
-import { useState } from 'react';
-import { Bell, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Bell, Save, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '../../api/client';
+
+const DEFAULT_PREFS = {
+  attendanceAlerts: true,
+  feeAlerts: true,
+  examAlerts: true,
+  complaintAlerts: true,
+  channelApp: true,
+  channelSms: false,
+  channelEmail: true,
+  channelWhatsapp: false,
+};
 
 export default function NotificationConfigPage() {
-  const [prefs, setPrefs] = useState({
-    attendanceAlerts: true,
-    feeAlerts: true,
-    examAlerts: true,
-    complaintAlerts: true,
-    channelApp: true,
-    channelSms: false,
-    channelEmail: true,
-    channelWhatsapp: false,
+  const qc = useQueryClient();
+  const [prefs, setPrefs] = useState(DEFAULT_PREFS);
+  const [savedOk, setSavedOk] = useState(false);
+
+  /* Load preferences from backend */
+  const { data: savedPrefs } = useQuery({
+    queryKey: ['notification-prefs'],
+    queryFn: () => api.get('/settings/notifications').then(r => r.data.data),
+  });
+
+  useEffect(() => {
+    if (savedPrefs) setPrefs({ ...DEFAULT_PREFS, ...savedPrefs });
+  }, [savedPrefs]);
+
+  /* Save preferences to backend */
+  const saveMutation = useMutation({
+    mutationFn: (data) => api.put('/settings/notifications', data).then(r => r.data.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notification-prefs'] });
+      setSavedOk(true);
+      toast.success('Notification preferences saved.');
+      setTimeout(() => setSavedOk(false), 2500);
+    },
+    onError: (err) => {
+      toast.error(err?.response?.data?.message || 'Failed to save notification preferences.');
+    },
   });
 
   const toggle = (key) => setPrefs((p) => ({ ...p, [key]: !p[key] }));
@@ -38,7 +68,7 @@ export default function NotificationConfigPage() {
             ['complaintAlerts', 'Complaint updates'],
           ].map(([k, label]) => (
             <label key={k} style={row}>
-              <input type="checkbox" checked={prefs[k]} onChange={() => toggle(k)} />
+              <input type="checkbox" checked={!!prefs[k]} onChange={() => toggle(k)} />
               <span>{label}</span>
             </label>
           ))}
@@ -53,7 +83,7 @@ export default function NotificationConfigPage() {
             ['channelWhatsapp', 'WhatsApp notifications'],
           ].map(([k, label]) => (
             <label key={k} style={row}>
-              <input type="checkbox" checked={prefs[k]} onChange={() => toggle(k)} />
+              <input type="checkbox" checked={!!prefs[k]} onChange={() => toggle(k)} />
               <span>{label}</span>
             </label>
           ))}
@@ -62,10 +92,14 @@ export default function NotificationConfigPage() {
 
       <div style={{ marginTop: 14 }}>
         <button
-          onClick={() => toast.success('Notification preferences saved locally.')}
-          style={{ border: 'none', background: '#0D9488', color: '#fff', borderRadius: 8, padding: '8px 12px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          onClick={() => saveMutation.mutate(prefs)}
+          disabled={saveMutation.isPending}
+          style={{ border: 'none', background: '#0D9488', color: '#fff', borderRadius: 8, padding: '8px 12px', fontWeight: 700, cursor: saveMutation.isPending ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: saveMutation.isPending ? 0.7 : 1 }}
         >
-          <Save size={14} /> Save Preferences
+          {savedOk
+            ? <><CheckCircle size={14} /> Saved!</>
+            : <><Save size={14} /> {saveMutation.isPending ? 'Saving…' : 'Save Preferences'}</>
+          }
         </button>
       </div>
     </div>

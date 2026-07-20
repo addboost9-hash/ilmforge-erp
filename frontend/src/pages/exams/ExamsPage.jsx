@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { Plus, ClipboardList, BarChart2, GraduationCap, X, ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react';
+import EmptyState from '../../components/ui/EmptyState';
 
 const TEAL = '#0D9488';
 const typeBadge = { test:'badge-blue', midterm:'badge-amber', final:'badge-red' };
@@ -226,6 +227,7 @@ function ExamModal({ classes = [], initial = null, onClose, onSubmit, isSubmitti
 }
 
 export default function ExamsPage() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editExam, setEditExam] = useState(null);
@@ -410,11 +412,13 @@ export default function ExamsPage() {
                 })}
                 {(!data || data.length === 0) && (
                   <tr><td colSpan={7}>
-                    <div className="empty-state">
-                      <div className="empty-state-icon">📝</div>
-                      <div className="empty-state-text">No exams yet</div>
-                      <div className="empty-state-sub">Click "+ Add Exam" to add your first exam</div>
-                    </div>
+                    <EmptyState
+                      type="exams"
+                      title="No exams created yet"
+                      description="Create your first exam to start managing marks and results"
+                      action={() => navigate('/examination')}
+                      actionLabel="Create Exam"
+                    />
                   </td></tr>
                 )}
               </tbody>

@@ -296,6 +296,32 @@ router.post('/smtp-test', wrap(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------------------
+// Notification preferences persisted in backend JSON store (school-scoped)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_NOTIFICATION_PREFS = {
+  attendanceAlerts: true,
+  feeAlerts: true,
+  examAlerts: true,
+  complaintAlerts: true,
+  channelApp: true,
+  channelSms: false,
+  channelEmail: true,
+  channelWhatsapp: false,
+};
+
+router.get('/notifications', wrap(async (req, res) => {
+  const settings = await getSchoolSettings(req.schoolId);
+  res.json({ success: true, data: settings.notificationPrefs || DEFAULT_NOTIFICATION_PREFS });
+}));
+
+router.put('/notifications', wrap(async (req, res) => {
+  const prefs = { ...DEFAULT_NOTIFICATION_PREFS, ...(req.body || {}) };
+  const settings = await setSchoolSettings(req.schoolId, { notificationPrefs: prefs });
+  res.json({ success: true, data: settings.notificationPrefs });
+}));
+
+// ---------------------------------------------------------------------------
 // General settings alias (same as /school for backwards compat)
 // ---------------------------------------------------------------------------
 router.get('/general', wrap(async (req, res) => {

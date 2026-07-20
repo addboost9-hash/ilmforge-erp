@@ -1,6 +1,6 @@
 /**
- * IlmForge — Notification Hub v3.6
- * Unified: SMS + WhatsApp + Email + Push + Templates + Automation + History
+ * IlmForge — Notification Hub v3.7
+ * Unified: SMS + WhatsApp + Email + Push + Templates + Automation + History + Inbox
  */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,6 +12,7 @@ import {
   FileText, PlayCircle, BarChart2,
   CheckCircle, AlertTriangle, RefreshCw, Plus, Eye, Copy,
   DollarSign, Calendar, Gift, QrCode, Megaphone,
+  Inbox, Trash2, CheckSquare, Filter,
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -34,12 +35,185 @@ const CHANNEL_COLORS = {
 };
 
 const TABS = [
+  { id: 'inbox',      label: 'Inbox',      icon: Inbox },
   { id: 'overview',   label: 'Overview',   icon: BarChart2 },
   { id: 'send',       label: 'Send Now',   icon: Send },
   { id: 'templates',  label: 'Templates',  icon: FileText },
   { id: 'automation', label: 'Automation', icon: Zap },
   { id: 'history',    label: 'History',    icon: Clock },
 ];
+
+/* ── Inbox ─────────────────────────────────────────────────────── */
+function InboxTab() {
+  const qc = useQueryClient();
+  const [filterType, setFilterType] = useState('all');
+  // Locally track read/deleted state (UI-only — backend NotificationLog has no user inbox concept)
+  const [readIds, setReadIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('ilmforge_notif_read') || '[]')); } catch { return new Set(); }
+  });
+  const [deletedIds, setDeletedIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('ilmforge_notif_deleted') || '[]')); } catch { return new Set(); }
+  });
+
+  const persist = (key, set) => {
+    try { localStorage.setItem(key, JSON.stringify([...set])); } catch (_) {}
+  };
+
+  const { data: raw = [], isLoading, refetch } = useQuery({
+    queryKey: ['notif-inbox'],
+    queryFn: () => api.get('/notifications/history').then(r => r.data.data || []).catch(() => []),
+    refetchInterval: 30000,
+  });
+
+  const TYPE_FILTERS = [
+    { id: 'all',       label: 'All' },
+    { id: 'sms',       label: 'SMS' },
+    { id: 'whatsapp',  label: 'WhatsApp' },
+    { id: 'email',     label: 'Email' },
+    { id: 'push',      label: 'Push' },
+  ];
+
+  const visible = raw
+    .filter(n => !deletedIds.has(n.id))
+    .filter(n => filterType === 'all' || n.type === filterType);
+
+  const unreadCount = visible.filter(n => !readIds.has(n.id)).length;
+
+  const markRead = (id) => {
+    const next = new Set(readIds); next.add(id);
+    setReadIds(next); persist('ilmforge_notif_read', next);
+  };
+
+  const markAllRead = () => {
+    const next = new Set([...readIds, ...visible.map(n => n.id)]);
+    setReadIds(next); persist('ilmforge_notif_read', next);
+    toast.success('All notifications marked as read');
+  };
+
+  const deleteNotif = (id) => {
+    const next = new Set(deletedIds); next.add(id);
+    setDeletedIds(next); persist('ilmforge_notif_deleted', next);
+  };
+
+  const clearDeleted = () => {
+    setDeletedIds(new Set()); persist('ilmforge_notif_deleted', new Set());
+    toast.success('Deleted items restored');
+  };
+
+  return (
+    <div>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Filter size={13} color="#64748b" />
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: '#64748b' }}>Filter:</span>
+          {TYPE_FILTERS.map(f => {
+            const ch = CHANNEL_COLORS[f.id] || {};
+            return (
+              <button key={f.id} onClick={() => setFilterType(f.id)}
+                style={{
+                  padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all .15s',
+                  border: `1.5px solid ${filterType === f.id ? (ch.color || '#1e3a5f') : '#e2e8f0'}`,
+                  background: filterType === f.id ? (ch.bg || '#eff6ff') : 'white',
+                  color: filterType === f.id ? (ch.color || '#1e3a5f') : '#64748b',
+                }}>
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {unreadCount > 0 && (
+            <span style={{ fontSize: 12, fontWeight: 700, background: '#ef4444', color: 'white', borderRadius: 20, padding: '3px 9px' }}>
+              {unreadCount} unread
+            </span>
+          )}
+          <button className="btn btn-outline btn-sm" onClick={markAllRead} disabled={unreadCount === 0}>
+            <CheckSquare size={13} /> Mark All Read
+          </button>
+          <button className="btn btn-outline btn-sm" onClick={() => refetch()}>
+            <RefreshCw size={13} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* List */}
+      {isLoading ? (
+        <div className="loading-center"><div className="spinner" /></div>
+      ) : visible.length === 0 ? (
+        <div className="card">
+          <div className="empty-state">
+            <div className="empty-state-icon"><Inbox size={40} /></div>
+            <div className="empty-state-text">Inbox is empty</div>
+            <div className="empty-state-sub">
+              {filterType !== 'all' ? `No ${filterType.toUpperCase()} notifications` : 'No notifications received yet'}
+            </div>
+            {deletedIds.size > 0 && (
+              <button className="btn btn-outline btn-sm" style={{ marginTop: 12 }} onClick={clearDeleted}>
+                Restore Deleted ({deletedIds.size})
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {visible.map(n => {
+            const ch = CHANNEL_COLORS[n.type] || CHANNEL_COLORS.sms;
+            const isRead = readIds.has(n.id);
+            return (
+              <div key={n.id}
+                onClick={() => markRead(n.id)}
+                style={{
+                  padding: '12px 16px', borderRadius: 10, cursor: 'pointer', transition: 'background .15s',
+                  background: isRead ? 'white' : '#f0f9ff',
+                  border: `1px solid ${isRead ? '#e2e8f0' : '#bae6fd'}`,
+                  borderLeft: `4px solid ${ch.color}`,
+                  display: 'flex', alignItems: 'flex-start', gap: 12,
+                }}>
+                {/* Channel badge */}
+                <span style={{ padding: '3px 8px', borderRadius: 12, background: ch.bg, color: ch.color, fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 2 }}>
+                  {ch.label}
+                </span>
+                {/* Content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: isRead ? 500 : 700, color: '#1e3a5f', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {n.title || n.body || '(no title)'}
+                  </div>
+                  {n.title && n.body && (
+                    <div style={{ fontSize: 12, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {n.body}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                    {n.sentAt ? new Date(n.sentAt).toLocaleString('en-PK') : '—'}
+                    {!isRead && <span style={{ marginLeft: 8, color: '#0ea5e9', fontWeight: 700 }}>New</span>}
+                  </div>
+                </div>
+                {/* Status + delete */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: n.status === 'sent' ? '#dcfce7' : n.status === 'failed' ? '#fee2e2' : '#fef9c3', color: n.status === 'sent' ? '#15803d' : n.status === 'failed' ? '#dc2626' : '#92400e' }}>
+                    {n.status}
+                  </span>
+                  <button
+                    onClick={e => { e.stopPropagation(); deleteNotif(n.id); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', padding: 2 }}
+                    title="Delete">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {deletedIds.size > 0 && (
+            <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'center', marginTop: 8 }} onClick={clearDeleted}>
+              <RefreshCw size={12} /> Restore {deletedIds.size} deleted
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ── Overview ─────────────────────────────────────────────────── */
 function OverviewTab() {
@@ -643,8 +817,8 @@ function HistoryTab() {
    MAIN PAGE
 ═══════════════════════════════════════════════════════════════ */
 export default function NotificationsPage() {
-  const [activeTab, setActiveTab] = useState('overview');
-  const tabComponents = { overview: OverviewTab, send: SendNowTab, templates: TemplatesTab, automation: AutomationTab, history: HistoryTab };
+  const [activeTab, setActiveTab] = useState('inbox');
+  const tabComponents = { inbox: InboxTab, overview: OverviewTab, send: SendNowTab, templates: TemplatesTab, automation: AutomationTab, history: HistoryTab };
   const Tab = tabComponents[activeTab];
 
   return (

@@ -1,9 +1,10 @@
 /**
- * IlmForge Messenger 💬 — WhatsApp-style role-structured chat
- * ═══════════════════════════════════════════════════════════
- * Left: conversations (unread badges). Right: thread + composer.
- * Features: direct chats (role-guarded), class broadcasts (teacher/admin),
- * document/image attachments (≤2MB), 5s polling, mobile responsive.
+ * IlmForge Messenger — WhatsApp-style role-structured chat
+ * =========================================================
+ * Left: conversations grouped by role (Teachers / Parents / Staff).
+ * Right: thread + composer. Features: direct chats (role-guarded),
+ * class broadcasts (teacher/admin), document/image attachments (<=2MB),
+ * 5s polling, read status ticks, mobile responsive.
  */
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,10 +13,39 @@ import useAuthStore from '../../store/auth.store';
 import {
   MessageCircle, Send, Paperclip, Plus, Megaphone, Search,
   FileText, Image as ImageIcon, Download, X, ChevronLeft, Users,
+  CheckCheck, Check,
 } from 'lucide-react';
 
 const roleColor = { admin: '#0D9488', super_admin: '#0D9488', teacher: '#7C3AED', parent: '#F59E0B', student: '#2563EB', accountant: '#0891B2', gatekeeper: '#65A30D' };
 const roleLabel = { admin: 'Admin', super_admin: 'Admin', teacher: 'Teacher', parent: 'Parent', student: 'Student', accountant: 'Accountant', gatekeeper: 'Gatekeeper' };
+
+/* Group conversations into labelled buckets for the sidebar */
+const GROUPS = [
+  { label: 'Broadcasts', roles: ['class_broadcast'], isBroadcast: true },
+  { label: 'Teachers',   roles: ['teacher'] },
+  { label: 'Parents',    roles: ['parent'] },
+  { label: 'Staff',      roles: ['admin', 'super_admin', 'accountant', 'gatekeeper'] },
+  { label: 'Students',   roles: ['student'] },
+];
+
+function groupConversations(convos) {
+  const grouped = {};
+  const used = new Set();
+  for (const g of GROUPS) {
+    const matches = convos.filter(c => {
+      if (g.isBroadcast) return c.type === 'class_broadcast' && !used.has(c.id);
+      return c.type !== 'class_broadcast' && g.roles.includes(c.otherRole) && !used.has(c.id);
+    });
+    if (matches.length) {
+      grouped[g.label] = matches;
+      matches.forEach(c => used.add(c.id));
+    }
+  }
+  // Uncategorised fallback
+  const rest = convos.filter(c => !used.has(c.id));
+  if (rest.length) grouped['Other'] = rest;
+  return grouped;
+}
 
 export default function ChatPage() {
   const { user } = useAuthStore();
@@ -94,39 +124,54 @@ export default function ChatPage() {
             <button onClick={() => setShowNew(true)} className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center hover:bg-teal-700 transition"><Plus className="w-4 h-4" /></button>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {convos.map(c => (
-              <button key={c.id} onClick={() => { setActive(c); setMobileThread(true); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-50 hover:bg-slate-50 transition ${active?.id === c.id ? 'bg-teal-50/70' : ''}`}>
-                <div className="w-11 h-11 rounded-full flex items-center justify-center text-white text-xs font-extrabold shrink-0"
-                  style={{ background: c.type === 'class_broadcast' ? '#EA580C' : (roleColor[c.otherRole] || '#64748B') }}>
-                  {c.type === 'class_broadcast' ? <Megaphone className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} /> : (c.title || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-slate-800 truncate">{c.title || 'Chat'}</span>
-                    {c.lastMessage && <span className="text-[10px] text-slate-400 shrink-0">{timeStr(c.lastMessage.createdAt)}</span>}
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-slate-400 truncate">
-                      {c.otherRole && <b style={{ color: roleColor[c.otherRole] }}>{roleLabel[c.otherRole]} · </b>}
-                      {c.lastMessage?.body || (c.lastMessage?.attachmentName ? `📎 ${c.lastMessage.attachmentName}` : 'Start conversation…')}
-                    </span>
-                    {c.unread > 0 && <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-teal-600 text-white text-[10px] font-extrabold flex items-center justify-center">{c.unread}</span>}
-                  </div>
-                </div>
-              </button>
-            ))}
-            {!convos.length && (
+            {convos.length === 0 ? (
               <div className="text-center py-14 px-6">
                 <MessageCircle className="w-10 h-10 text-slate-200 mx-auto mb-2" />
-                <p className="text-xs text-slate-400">Koi conversation nahi — + button se admin/teacher se chat shuru karein</p>
+                <p className="text-xs text-slate-400">No conversations yet — use the + button to start a chat</p>
               </div>
+            ) : (
+              Object.entries(groupConversations(convos)).map(([groupLabel, groupConvos]) => (
+                <div key={groupLabel}>
+                  {/* Group header */}
+                  <div className="px-4 py-1.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 bg-slate-50 border-b border-slate-100 flex items-center gap-1.5">
+                    <Users style={{ width: 11, height: 11 }} />
+                    {groupLabel}
+                    <span className="ml-auto font-bold normal-case text-[9px] text-slate-300">{groupConvos.length}</span>
+                  </div>
+                  {groupConvos.map(c => (
+                    <button key={c.id} onClick={() => { setActive(c); setMobileThread(true); }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-50 hover:bg-slate-50 transition ${active?.id === c.id ? 'bg-teal-50/70' : ''}`}>
+                      <div className="w-11 h-11 rounded-full flex items-center justify-center text-white text-xs font-extrabold shrink-0"
+                        style={{ background: c.type === 'class_broadcast' ? '#EA580C' : (roleColor[c.otherRole] || '#64748B') }}>
+                        {c.type === 'class_broadcast'
+                          ? <Megaphone style={{ width: 18, height: 18 }} />
+                          : (c.title || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-slate-800 truncate">{c.title || 'Chat'}</span>
+                          {c.lastMessage && <span className="text-[10px] text-slate-400 shrink-0">{timeStr(c.lastMessage.createdAt)}</span>}
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-slate-400 truncate">
+                            {c.lastMessage?.body || (c.lastMessage?.attachmentName ? `\u{1F4CE} ${c.lastMessage.attachmentName}` : 'Start conversation…')}
+                          </span>
+                          {c.unread > 0
+                            ? <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-teal-600 text-white text-[10px] font-extrabold flex items-center justify-center">{c.unread}</span>
+                            : c.lastMessage && <CheckCheck style={{ width: 13, height: 13, flexShrink: 0, color: '#0D9488' }} />
+                          }
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ))
             )}
           </div>
         </div>
 
         {/* ═══ RIGHT: Thread ═══ */}
-        <div className={`flex-1 flex-col ${mobileThread ? 'flex' : 'hidden md:flex'}`}>
+        <div className={`flex-1 flex flex-col ${mobileThread ? '' : 'hidden md:flex'}`}>
           {active ? (<>
             {/* Thread header */}
             <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
@@ -159,7 +204,14 @@ export default function ChatPage() {
                             </button>
                       )}
                       {m.body && <div className="text-sm whitespace-pre-wrap break-words">{m.body}</div>}
-                      <div className={`text-[9px] mt-1 ${mine ? 'text-white/60' : 'text-slate-300'} text-right`}>{timeStr(m.createdAt)}</div>
+                      <div className={`text-[9px] mt-1 flex items-center justify-end gap-1 ${mine ? 'text-white/60' : 'text-slate-300'}`}>
+                        {timeStr(m.createdAt)}
+                        {mine && (
+                          m.readAt
+                            ? <CheckCheck style={{ width: 11, height: 11, color: mine ? '#a7f3d0' : '#0D9488' }} />
+                            : <Check style={{ width: 11, height: 11 }} />
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

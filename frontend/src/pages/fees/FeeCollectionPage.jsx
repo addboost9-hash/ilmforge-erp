@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { Search, DollarSign, Printer, X, CheckCircle, Receipt, CreditCard } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
+import EmptyState from '../../components/ui/EmptyState';
 
 const money = v => 'Rs. ' + ((v || 0) / 100).toLocaleString();
 
@@ -126,7 +127,11 @@ export default function FeeCollectionPage() {
                 <div style={{ padding: '10px 14px', color: 'var(--text-muted)', fontSize: 13 }}>Searching...</div>
               )}
               {!sLoading && (searchResults || []).length === 0 && (
-                <div style={{ padding: '10px 14px', color: 'var(--text-muted)', fontSize: 13 }}>No students found</div>
+                <EmptyState
+                  type="fees"
+                  title="Student not found"
+                  description="Search by name, roll number or registration number"
+                />
               )}
               {(searchResults || []).map(s => (
                 <div
