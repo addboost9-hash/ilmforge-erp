@@ -18,6 +18,8 @@ export default function FeeCollectionPage() {
   const [activeInv, setActiveInv] = useState(null);
   const [payForm, setPayForm] = useState({ amountPaid: '', discount: 0, method: 'cash', notifyVia: 'whatsapp_sms' });
   const [receiptData, setReceiptData] = useState(null); // holds last payment receipt for display
+  const [showCoin, setShowCoin] = useState(false);
+  const [paidAmount, setPaidAmount] = useState(0);
 
   const { data: searchResults, isFetching: sLoading } = useQuery({
     queryKey: ['fee-search', search],
@@ -36,8 +38,12 @@ export default function FeeCollectionPage() {
     onSuccess: (r, variables) => {
       const receiptNo = r.data.data?.receiptNo || r.data.data?.payment?.id || 'N/A';
       const studentName = selected?.name || feeData?.student?.name || 'Student';
+      const collectedAmt = Math.round((variables.amountPaid || 0) / 100);
+      setPaidAmount(collectedAmt);
+      setShowCoin(true);
+      setTimeout(() => setShowCoin(false), 3000);
+      toast.success(`Rs. ${collectedAmt.toLocaleString()} collected from ${studentName}. Receipt: ${receiptNo}`);
       const paidAmount = money(variables.amountPaid);
-      toast.success(`Payment of ${paidAmount} collected from ${studentName}. Receipt: ${receiptNo}`);
       qc.invalidateQueries(['student-fee', selected?.id]);
       qc.invalidateQueries(['dashboard']);
       // Store receipt data for the success/print modal
@@ -478,6 +484,17 @@ export default function FeeCollectionPage() {
           </div>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Search a Student to Collect Fee</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Type at least 2 characters to search by name, roll number, or father's name</div>
+        </div>
+      )}
+
+      {/* Coin Celebration Overlay */}
+      {showCoin && (
+        <div style={{ position: 'fixed', top: '20%', left: '50%', transform: 'translateX(-50%)', zIndex: 9999, textAlign: 'center', pointerEvents: 'none', animation: 'ilm-fade-in 0.3s ease-out' }}>
+          <div style={{ background: 'linear-gradient(135deg,#059669,#10B981)', borderRadius: 20, padding: '20px 32px', boxShadow: '0 12px 40px rgba(5,150,105,0.4)', color: 'white' }}>
+            <div style={{ fontSize: 40, marginBottom: 6 }}>💰</div>
+            <div style={{ fontSize: 20, fontWeight: 800 }}>Rs. {paidAmount.toLocaleString()}</div>
+            <div style={{ fontSize: 13, opacity: 0.85 }}>Payment Collected!</div>
+          </div>
         </div>
       )}
     </div>

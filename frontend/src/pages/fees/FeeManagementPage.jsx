@@ -3,7 +3,7 @@
  * 5-tab unified fee page matching School Mentor layout
  * Tabs: Fee Structure | Fee Challans | Fee Receiving | Fee History | Reports
  */
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
@@ -363,11 +363,40 @@ function FeeChallansTab() {
   const [year, setYear] = useState('2026');
   const [search, setSearch] = useState('');
   const [fetched, setFetched] = useState(false);
+  const [genProgress, setGenProgress] = useState(0);
+  const [genRunning, setGenRunning] = useState(false);
 
   const { data: summary = [], isLoading, refetch } = useQuery({
     queryKey: ['challans-summary', month, year],
     queryFn: () => api.get(`/fees/challans-summary?month=${month}&year=${year}`).then(r => r.data?.data || r.data || []),
     enabled: false,
+  });
+
+  const generateMut = useMutation({
+    mutationFn: () => api.post(`/fees/challans/generate`, { month, year }),
+    onMutate: () => {
+      setGenRunning(true);
+      setGenProgress(0);
+      const interval = setInterval(() => {
+        setGenProgress(p => p >= 90 ? 90 : p + 15);
+      }, 300);
+      return interval;
+    },
+    onSuccess: (res, _, interval) => {
+      clearInterval(interval);
+      setGenProgress(100);
+      setTimeout(() => { setGenRunning(false); setGenProgress(0); }, 1500);
+      const count = res.data?.data?.generated || 0;
+      toast.success(`${count} challans generated!`);
+      setFetched(true);
+      refetch();
+    },
+    onError: (_, __, interval) => {
+      clearInterval(interval);
+      setGenRunning(false);
+      setGenProgress(0);
+      toast.error('Failed to generate challans');
+    },
   });
 
   const handleGet = () => { setFetched(true); refetch(); };
@@ -414,6 +443,28 @@ function FeeChallansTab() {
         onMonth={setMonth} onYear={setYear} onSearch={setSearch}
         onGet={handleGet} onReset={handleReset}
       />
+
+      {/* Generate Challans button + progress bar */}
+      <div style={{ marginBottom: 16 }}>
+        <button
+          onClick={() => generateMut.mutate()}
+          disabled={genRunning}
+          style={{ ...tealBtn, opacity: genRunning ? 0.75 : 1 }}
+        >
+          <Play size={13} /> Generate Challans
+        </button>
+        {genRunning && (
+          <div style={{ margin: '12px 0', padding: '14px 16px', background: '#f0f9ff', borderRadius: 12, border: '1px solid #bae6fd' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#0284c7' }}>
+              <span>Generating challans...</span>
+              <span>{genProgress}%</span>
+            </div>
+            <div style={{ height: 8, background: '#e0f2fe', borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', background: 'linear-gradient(90deg,#0073b7,#1B2F6E)', borderRadius: 999, width: `${genProgress}%`, transition: 'width 0.3s ease' }} />
+            </div>
+          </div>
+        )}
+      </div>
 
       {isLoading && <div style={{ padding: '20px', color: '#94a3b8', textAlign: 'center' }}>Loading challans...</div>}
 
@@ -865,6 +916,13 @@ function ReportsTab() {
 /* ─── MAIN COMPONENT ─────────────────────────────── */
 export default function FeeManagementPage() {
   const [activeTab, setActiveTab] = useState('structure');
+  const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem('fee_mgmt_visited'));
+  const [tabVisible, setTabVisible] = useState(true);
+
+  const switchTab = (tab) => {
+    setTabVisible(false);
+    setTimeout(() => { setActiveTab(tab); setTabVisible(true); }, 180);
+  };
 
   const tabStyle = (id) => ({
     padding: '10px 20px', fontSize: 14, fontWeight: activeTab === id ? 700 : 500,
@@ -885,6 +943,44 @@ export default function FeeManagementPage() {
 
   return (
     <div style={{ padding: '20px 24px', minHeight: '100vh', background: '#f0f4f8' }}>
+
+      {/* ── Onboarding Modal ── */}
+      {showOnboarding && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(20px)', borderRadius: 24, padding: '36px 32px', maxWidth: 500, width: '100%', textAlign: 'center', boxShadow: '0 25px 80px rgba(27,47,110,0.25)', animation: 'scaleIn 0.3s ease-out' }}>
+            <div style={{ fontSize: 64, marginBottom: 12 }}>💰</div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1B2F6E', margin: '0 0 8px' }}>Fee Management</h2>
+            <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.7, margin: '0 0 24px' }}>Complete fee management in 5 simple steps.</p>
+
+            {/* 5-step process */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: 24 }}>
+              {[
+                { n: 1, l: 'Structure', i: '⚙️' },
+                { n: 2, l: 'Challans',  i: '📄' },
+                { n: 3, l: 'Collect',   i: '💳' },
+                { n: 4, l: 'Defaulters',i: '⚠️' },
+                { n: 5, l: 'Reports',   i: '📊' },
+              ].map((s, i) => (
+                <React.Fragment key={s.n}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'linear-gradient(135deg,#1B2F6E,#0073b7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, margin: '0 auto 4px', animation: `ilm-fade-in 0.3s ease-out ${i * 80}ms both` }}>{s.i}</div>
+                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{s.l}</div>
+                  </div>
+                  {i < 4 && <div style={{ width: 20, height: 2, background: '#e2e8f0', margin: '0 2px', marginBottom: 14 }} />}
+                </React.Fragment>
+              ))}
+            </div>
+
+            <button
+              onClick={() => { localStorage.setItem('fee_mgmt_visited', '1'); setShowOnboarding(false); }}
+              style={{ background: 'linear-gradient(135deg,#1B2F6E,#0073b7)', color: 'white', border: 'none', borderRadius: 999, padding: '12px 32px', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(27,47,110,0.35)' }}
+            >
+              Manage Fees →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* IlmForge Page header */}
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -913,14 +1009,19 @@ export default function FeeManagementPage() {
           scrollbarWidth: 'none',
         }}>
           {TABS.map(tab => (
-            <button key={tab.id} style={tabStyle(tab.id)} onClick={() => setActiveTab(tab.id)}>
+            <button key={tab.id} style={tabStyle(tab.id)} onClick={() => switchTab(tab.id)}>
               {tab.label}
             </button>
           ))}
         </div>
 
-        {/* Tab content */}
-        <div style={{ padding: '24px 22px' }}>
+        {/* Tab content with fade/slide animation */}
+        <div style={{
+          padding: '24px 22px',
+          opacity: tabVisible ? 1 : 0,
+          transform: tabVisible ? 'translateY(0)' : 'translateY(6px)',
+          transition: 'opacity 0.18s ease, transform 0.18s ease',
+        }}>
           {tabContent[activeTab]}
         </div>
       </div>
