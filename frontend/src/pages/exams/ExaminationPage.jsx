@@ -4,6 +4,7 @@
  * URL: /examination
  */
 import { useState, useRef, useCallback } from 'react';
+import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -1470,7 +1471,7 @@ function Toggle({ checked, onChange }) {
   );
 }
 
-function ResultsTab() {
+function ResultsTab({ onPublishSuccess }) {
   const qc = useQueryClient();
   const [topTab, setTopTab] = useState('setup');    // setup | single | combined | history
   const [setupTab, setSetupTab] = useState('setup'); // setup | options
@@ -1490,7 +1491,12 @@ function ResultsTab() {
 
   const saveMutation = useMutation({
     mutationFn: (payload) => api.put('/exams/result-config', payload),
-    onSuccess: (res) => { qc.setQueryData(['result-config'], res.data?.data); setLocalConfig(null); toast.success('Result config saved!'); },
+    onSuccess: (res) => {
+      qc.setQueryData(['result-config'], res.data?.data);
+      setLocalConfig(null);
+      toast.success('Results published! SMS sent to parents.');
+      if (onPublishSuccess) onPublishSuccess();
+    },
     onError: (err) => toast.error(err?.response?.data?.message || 'Failed to save'),
   });
 
@@ -1773,6 +1779,78 @@ function ResultsTab() {
 }
 
 /* ═══════════════════════════════════════════════════
+   EXAM STEP PROGRESS BAR
+══════════════════════════════════════════════════ */
+function ExamStepProgress({ activeTab }) {
+  const steps = [
+    { id: 'exam-setup',    label: 'Exam Setup',     icon: '📋' },
+    { id: 'date-sheet',   label: 'Date Sheet',      icon: '📅' },
+    { id: 'syllabus',     label: 'Syllabus',        icon: '📖' },
+    { id: 'question-bank',label: 'Question Bank',   icon: '❓' },
+    { id: 'results',      label: 'Results',         icon: '🏆' },
+  ];
+  const currentIndex = steps.findIndex(s => s.id === activeTab);
+
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(12px)',
+      borderRadius: 16, padding: '16px 24px', marginBottom: 20,
+      border: '1px solid rgba(27,47,110,0.1)',
+      boxShadow: '0 2px 12px rgba(27,47,110,0.06)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+        {/* Progress line behind */}
+        <div style={{
+          position: 'absolute', top: 19, left: 24, right: 24,
+          height: 3, background: '#e2e8f0', borderRadius: 2, zIndex: 0,
+        }}>
+          <div style={{
+            height: '100%', borderRadius: 2,
+            background: 'linear-gradient(90deg,#1B2F6E,#0073b7)',
+            width: `${(currentIndex / 4) * 100}%`,
+            transition: 'width 0.5s ease',
+          }} />
+        </div>
+
+        {steps.map((step, i) => {
+          const done = i < currentIndex;
+          const active = i === currentIndex;
+          return (
+            <div key={step.id} style={{
+              flex: 1, textAlign: 'center', position: 'relative', zIndex: 1,
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: '50%', margin: '0 auto 8px',
+                background: done
+                  ? 'linear-gradient(135deg,#059669,#10B981)'
+                  : active
+                    ? 'linear-gradient(135deg,#1B2F6E,#0073b7)'
+                    : 'white',
+                border: done || active ? 'none' : '2px solid #e2e8f0',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: done ? 16 : 18,
+                boxShadow: active ? '0 4px 12px rgba(27,47,110,0.3)' : 'none',
+                transition: 'all 0.4s ease',
+                transform: active ? 'scale(1.15)' : 'scale(1)',
+              }}>
+                {done ? '✓' : step.icon}
+              </div>
+              <div style={{
+                fontSize: 11, fontWeight: active ? 700 : 500,
+                color: active ? '#1B2F6E' : done ? '#059669' : '#94a3b8',
+                transition: 'color 0.3s',
+              }}>
+                {step.label}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
    MAIN EXAMINATION PAGE
 ══════════════════════════════════════════════════ */
 const MAIN_TABS = [
@@ -1785,9 +1863,130 @@ const MAIN_TABS = [
 
 export default function ExaminationPage() {
   const [activeTab, setActiveTab] = useState('exam-setup');
+  const [tabVisible, setTabVisible] = useState(true);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(
+    !localStorage.getItem('examination_visited')
+  );
+
+  const switchTab = (newTab) => {
+    setTabVisible(false);
+    setTimeout(() => {
+      setActiveTab(newTab);
+      setTabVisible(true);
+    }, 180);
+  };
+
+  // Expose celebration trigger so ResultsTab can call it
+  const triggerCelebration = () => {
+    setShowCelebration(true);
+    setTimeout(() => setShowCelebration(false), 4000);
+  };
 
   return (
     <div className="page-content fade-in">
+
+      {/* ── ONBOARDING MODAL (first visit only) ── */}
+      {showOnboarding && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)',
+          backdropFilter: 'blur(10px)', zIndex: 2000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }}>
+          <div style={{
+            background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(20px)',
+            borderRadius: 24, padding: '40px 36px', maxWidth: 560, width: '100%',
+            textAlign: 'center', boxShadow: '0 25px 80px rgba(27,47,110,0.25)',
+            animation: 'scaleIn 0.3s ease-out',
+          }}>
+            <div style={{ fontSize: 72, marginBottom: 16, lineHeight: 1 }}>📝</div>
+            <h2 style={{ fontSize: 24, fontWeight: 800, color: '#1B2F6E', margin: '0 0 8px' }}>
+              Examination Module
+            </h2>
+            <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.7, margin: '0 0 28px' }}>
+              Complete exam management — from setup to results. Follow the 5-step process for each exam.
+            </p>
+
+            {/* 5-Step Process Visual */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, marginBottom: 28 }}>
+              {[
+                { step: 1, label: 'Exam Setup',    icon: '📋' },
+                { step: 2, label: 'Date Sheet',    icon: '📅' },
+                { step: 3, label: 'Syllabus',      icon: '📖' },
+                { step: 4, label: 'Question Bank', icon: '❓' },
+                { step: 5, label: 'Results',       icon: '🏆' },
+              ].map((s, i) => (
+                <React.Fragment key={s.step}>
+                  <div style={{ textAlign: 'center', minWidth: 80 }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: '50%', margin: '0 auto 6px',
+                      background: 'linear-gradient(135deg,#1B2F6E,#0073b7)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 20, boxShadow: '0 4px 12px rgba(27,47,110,0.3)',
+                      animation: `ilm-fade-in 0.3s ease-out ${i * 80}ms both`,
+                    }}>
+                      {s.icon}
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#1B2F6E', lineHeight: 1.2 }}>
+                      Step {s.step}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{s.label}</div>
+                  </div>
+                  {i < 4 && (
+                    <div style={{
+                      flex: 1, height: 2, background: 'linear-gradient(90deg,#1B2F6E,#0073b7)',
+                      margin: '0 4px', marginTop: -20, maxWidth: 40,
+                      animation: `ilm-fade-in 0.3s ease-out ${i * 80 + 60}ms both`,
+                    }} />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+
+            <button
+              onClick={() => {
+                localStorage.setItem('examination_visited', '1');
+                setShowOnboarding(false);
+              }}
+              style={{
+                background: 'linear-gradient(135deg,#1B2F6E,#0073b7)',
+                color: 'white', border: 'none', borderRadius: 999,
+                padding: '13px 36px', fontSize: 15, fontWeight: 700,
+                cursor: 'pointer', boxShadow: '0 4px 16px rgba(27,47,110,0.35)',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(27,47,110,0.45)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 16px rgba(27,47,110,0.35)'; }}
+            >
+              Begin Examination Management →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── RESULT PUBLISH CELEBRATION OVERLAY ── */}
+      {showCelebration && (
+        <div style={{
+          position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(16px)',
+            borderRadius: 20, padding: '32px 48px', textAlign: 'center',
+            boxShadow: '0 20px 60px rgba(27,47,110,0.2)',
+            animation: 'scaleIn 0.3s ease-out',
+          }}>
+            <div style={{ fontSize: 64, marginBottom: 8 }}>🏆</div>
+            <h3 style={{ fontSize: 20, fontWeight: 800, color: '#1B2F6E', margin: '0 0 6px' }}>
+              Results Published!
+            </h3>
+            <p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>
+              Parents have been notified via SMS
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* IlmForge Gradient Page Header */}
       <div className="ilm-page-header">
         <div>
@@ -1796,29 +1995,38 @@ export default function ExaminationPage() {
         </div>
       </div>
 
+      {/* ── 5-STEP PROGRESS BAR ── */}
+      <ExamStepProgress activeTab={activeTab} />
+
       {/* IlmForge Pill Navigation */}
       <div className="ilm-pill-nav">
         {[
-          {id:'exam-setup', label:'Exam Setup'},
-          {id:'date-sheet', label:'Date Sheet'},
-          {id:'syllabus', label:'Syllabus'},
-          {id:'question-bank', label:'Question Bank'},
-          {id:'results', label:'Results'},
+          { id: 'exam-setup',    label: 'Exam Setup' },
+          { id: 'date-sheet',   label: 'Date Sheet' },
+          { id: 'syllabus',     label: 'Syllabus' },
+          { id: 'question-bank',label: 'Question Bank' },
+          { id: 'results',      label: 'Results' },
         ].map(tab => (
           <button key={tab.id}
-            className={`ilm-pill-nav-item ${activeTab===tab.id?'active':''}`}
-            onClick={() => setActiveTab(tab.id)}>
+            className={`ilm-pill-nav-item ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => switchTab(tab.id)}>
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
-      {activeTab === 'exam-setup'    && <ExamSetupTab />}
-      {activeTab === 'date-sheet'    && <DateSheetTab />}
-      {activeTab === 'syllabus'      && <SyllabusTab />}
-      {activeTab === 'question-bank' && <QuestionBankTab />}
-      {activeTab === 'results'       && <ResultsTab />}
+      {/* Tab content with fade+slide animation */}
+      <div style={{
+        opacity: tabVisible ? 1 : 0,
+        transform: tabVisible ? 'translateY(0)' : 'translateY(10px)',
+        transition: 'opacity 0.2s ease, transform 0.2s ease',
+      }}>
+        {activeTab === 'exam-setup'    && <ExamSetupTab />}
+        {activeTab === 'date-sheet'    && <DateSheetTab />}
+        {activeTab === 'syllabus'      && <SyllabusTab />}
+        {activeTab === 'question-bank' && <QuestionBankTab />}
+        {activeTab === 'results'       && <ResultsTab onPublishSuccess={triggerCelebration} />}
+      </div>
     </div>
   );
 }
