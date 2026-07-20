@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import toast from 'react-hot-toast';
@@ -96,6 +96,10 @@ export default function PayrollPage() {
   const now = new Date();
   const [selMonth, setSelMonth] = useState(7);
   const [selYear, setSelYear] = useState(2026);
+  const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem('payroll_visited'));
+  const [generating, setGenerating] = useState(false);
+  const [genProgress, setGenProgress] = useState(0);
+  const genTimerRef = useRef(null);
 
   const { data: records = [], isLoading } = useQuery({
     queryKey: ['payroll', selMonth, selYear],
@@ -115,9 +119,24 @@ export default function PayrollPage() {
       qc.invalidateQueries(['payroll']);
       qc.invalidateQueries(['payroll-summary']);
       toast.success(`Generated: ${res.data.data?.generated || 0}, Skipped: ${res.data.data?.skipped || 0}`);
+      setGenProgress(100);
+      setTimeout(() => { setGenerating(false); setGenProgress(0); }, 600);
     },
-    onError: () => toast.error('Failed to generate'),
+    onError: () => { toast.error('Failed to generate'); setGenerating(false); setGenProgress(0); },
   });
+
+  const handleGenerate = () => {
+    if (!confirm('Generate payroll?')) return;
+    setGenerating(true);
+    setGenProgress(0);
+    let p = 0;
+    genTimerRef.current = setInterval(() => {
+      p += Math.random() * 18 + 5;
+      if (p >= 90) { p = 90; clearInterval(genTimerRef.current); }
+      setGenProgress(Math.round(p));
+    }, 200);
+    generateMutation.mutate();
+  };
 
   const payMutation = useMutation({
     mutationFn: (id) => api.post(`/payroll/pay/${id}`),
@@ -146,6 +165,38 @@ export default function PayrollPage() {
 
   return (
     <div style={{ background: LIGHT_BG, minHeight: '100vh', padding: 24 }}>
+
+      {/* ── Payroll Onboarding Modal ── */}
+      {showOnboarding && (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',backdropFilter:'blur(8px)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div style={{background:'rgba(255,255,255,0.97)',borderRadius:24,padding:36,maxWidth:440,width:'100%',textAlign:'center',animation:'scaleIn 0.3s ease-out',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
+            <div style={{fontSize:64,marginBottom:12}}>💼</div>
+            <h2 style={{fontSize:22,fontWeight:800,color:NAVY,margin:'0 0 8px'}}>Payroll Management</h2>
+            <p style={{color:'#64748b',fontSize:13,lineHeight:1.7,margin:'0 0 20px'}}>Generate, review, and pay monthly salaries — all with one click.</p>
+            <div style={{display:'flex',justifyContent:'center',gap:8,marginBottom:20,flexWrap:'wrap'}}>
+              {['📊 Generate','👁 Review','💸 Pay','🧾 Slips'].map((step, i) => (
+                <div key={step} style={{display:'flex',alignItems:'center',gap:4}}>
+                  <div style={{background:'#f0f4ff',borderRadius:8,padding:'6px 12px',fontSize:12,fontWeight:600,color:NAVY}}>{step}</div>
+                  {i < 3 && <span style={{color:'#94a3b8',fontSize:14}}>→</span>}
+                </div>
+              ))}
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:24}}>
+              {[['Auto Calculate','Based on salary + attendance'],['Deductions','Late & absent cuts'],['Payslips','Print-ready slips']].map(([t,d]) => (
+                <div key={t} style={{background:'#f8fafc',borderRadius:10,padding:'10px 8px',border:'1px solid #e2e8f0'}}>
+                  <div style={{fontWeight:700,fontSize:12,color:NAVY,marginBottom:2}}>{t}</div>
+                  <div style={{fontSize:10.5,color:'#64748b'}}>{d}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => { localStorage.setItem('payroll_visited','1'); setShowOnboarding(false); }}
+              style={{background:`linear-gradient(135deg,${NAVY},#0073b7)`,color:'white',border:'none',borderRadius:999,padding:'11px 32px',fontSize:14,fontWeight:700,cursor:'pointer',width:'100%'}}>
+              Get Started →
+            </button>
+          </div>
+        </div>
+      )}
+
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
@@ -159,8 +210,8 @@ export default function PayrollPage() {
             <select style={inputStyle} value={selYear} onChange={e => setSelYear(parseInt(e.target.value))}>
               {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
-            <button style={btnStyle('#6366f1')} onClick={() => { if (confirm('Generate payroll?')) generateMutation.mutate(); }} disabled={generateMutation.isPending}>
-              {generateMutation.isPending ? 'Generating...' : 'Generate Payroll'}
+            <button style={btnStyle('#6366f1')} onClick={handleGenerate} disabled={generating || generateMutation.isPending}>
+              {generating ? 'Generating...' : 'Generate Payroll'}
             </button>
             {records.filter(r => r.status === 'pending').length > 0 && (
               <button style={btnStyle('#059669')} onClick={() => { if (confirm('Pay all pending?')) payAllMutation.mutate(); }} disabled={payAllMutation.isPending}>
@@ -169,6 +220,19 @@ export default function PayrollPage() {
             )}
           </div>
         </div>
+
+        {/* Generate Progress Bar */}
+        {generating && (
+          <div style={{background:'#fff',borderRadius:10,padding:'14px 20px',marginBottom:16,boxShadow:'0 2px 8px rgba(27,47,110,0.08)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:8,fontSize:13,fontWeight:600,color:NAVY}}>
+              <span>Generating payroll records...</span>
+              <span>{genProgress}%</span>
+            </div>
+            <div style={{height:8,background:'#e2e8f0',borderRadius:4,overflow:'hidden'}}>
+              <div style={{height:'100%',background:'linear-gradient(90deg,#6366f1,#0073b7)',borderRadius:4,width:`${genProgress}%`,transition:'width 0.3s ease'}} />
+            </div>
+          </div>
+        )}
 
         {/* Summary Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>

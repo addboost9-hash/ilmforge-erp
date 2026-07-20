@@ -51,11 +51,11 @@ function useCountUp(target, duration = 1200) {
 }
 
 /* ── Stat Card ── */
-const StatCard = React.memo(function StatCard({ value, label, icon, gradient, href }) {
+const StatCard = React.memo(function StatCard({ value, label, icon, gradient, href, style: extraStyle }) {
   const displayed = useCountUp(value);
   return (
     <a href={href || '#'} style={{textDecoration:'none'}}>
-      <div className="ilm-stat-card ilm-animate" style={{background: gradient}}>
+      <div className="ilm-stat-card ilm-animate" style={{background: gradient, ...extraStyle}}>
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
           <div>
             <div className="ilm-stat-value">{displayed ?? 0}</div>
@@ -287,7 +287,7 @@ export default function DashboardPage() {
 
       {/* ══ GRADIENT STAT CARDS ══ */}
       <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:14, marginBottom:20}}>
-        {STAT_CARDS.map(c => <StatCard key={c.label} {...c} />)}
+        {STAT_CARDS.map((c, i) => <StatCard key={c.label} {...c} style={{animation:`ilm-fade-in 0.4s ease-out ${i*100}ms both`}} />)}
       </div>
 
       {/* ══ TWO CHARTS SIDE BY SIDE ══ */}
@@ -365,8 +365,8 @@ export default function DashboardPage() {
           </div>
           <div className="ilm-card-body">
             <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:12}}>
-              {s.classStats.map(c => (
-                <div key={c.classId} style={{background:'#f8fafc', borderRadius:10, padding:12, border:'1px solid #e2e8f0'}}>
+              {s.classStats.map((c, i) => (
+                <div key={c.classId} style={{background:'#f8fafc', borderRadius:10, padding:12, border:'1px solid #e2e8f0', animation:`ilm-fade-in 0.4s ease-out ${i*80}ms both`}}>
                   <div style={{fontWeight:700, fontSize:13, color:'#1e3a5f', marginBottom:6}}>{c.className}</div>
                   <div style={{display:'flex', justifyContent:'space-between', marginBottom:6}}>
                     <span style={{fontSize:12, color:'#64748b'}}>{c.presentToday}/{c.strength}</span>

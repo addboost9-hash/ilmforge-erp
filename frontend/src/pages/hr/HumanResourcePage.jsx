@@ -252,6 +252,14 @@ function LoansTab() {
 ══════════════════════════════════════ */
 export default function HumanResourcePage() {
   const [activeTab, setActiveTab] = useState('staff');
+  const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem('hr_visited'));
+  const [tabVisible, setTabVisible] = useState(true);
+
+  const switchTab = (id) => {
+    if (id === activeTab) return;
+    setTabVisible(false);
+    setTimeout(() => { setActiveTab(id); setTabVisible(true); }, 160);
+  };
 
   const { data: staff, isLoading } = useQuery({
     queryKey: ['staff'],
@@ -268,6 +276,41 @@ export default function HumanResourcePage() {
 
   return (
     <div className="page-content page-animate" style={{ padding: '20px 22px 40px' }}>
+
+      {/* ── HR Onboarding Modal ── */}
+      {showOnboarding && (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',backdropFilter:'blur(8px)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div style={{background:'rgba(255,255,255,0.97)',borderRadius:24,padding:36,maxWidth:460,width:'100%',textAlign:'center',animation:'scaleIn 0.3s ease-out',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
+            <div style={{fontSize:64,marginBottom:12}}>👔</div>
+            <h2 style={{fontSize:22,fontWeight:800,color:'#1B2F6E',margin:'0 0 8px'}}>HR & Human Resource</h2>
+            <p style={{color:'#64748b',fontSize:13,lineHeight:1.7,margin:'0 0 20px'}}>Manage all your school's human resource operations from one place.</p>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:24}}>
+              {[
+                ['👥','Staff Management','Track all staff details & roles'],
+                ['💰','Payroll','Generate & pay monthly salaries'],
+                ['🏆','Appraisals','Performance reviews & KPIs'],
+                ['📅','Leave Management','Approve & track leave requests'],
+                ['📄','Loans','Issue & recover staff loans'],
+              ].map(([icon, title, desc]) => (
+                <div key={title} style={{background:'#f8fafc',borderRadius:10,padding:'12px 10px',border:'1px solid #e2e8f0',textAlign:'left'}}>
+                  <div style={{fontSize:24,marginBottom:4}}>{icon}</div>
+                  <div style={{fontWeight:700,fontSize:12.5,color:'#1B2F6E'}}>{title}</div>
+                  <div style={{fontSize:11,color:'#64748b',marginTop:2}}>{desc}</div>
+                </div>
+              ))}
+              <div style={{background:'linear-gradient(135deg,#1B2F6E,#2d4a8a)',borderRadius:10,padding:'12px 10px',textAlign:'left',display:'flex',flexDirection:'column',justifyContent:'center'}}>
+                <div style={{fontSize:24,marginBottom:4}}>📊</div>
+                <div style={{fontWeight:700,fontSize:12.5,color:'#fff'}}>Attendance</div>
+                <div style={{fontSize:11,color:'rgba(255,255,255,0.7)',marginTop:2}}>Daily staff attendance reports</div>
+              </div>
+            </div>
+            <button onClick={() => { localStorage.setItem('hr_visited','1'); setShowOnboarding(false); }}
+              style={{background:'linear-gradient(135deg,#1B2F6E,#0073b7)',color:'white',border:'none',borderRadius:999,padding:'11px 36px',fontSize:14,fontWeight:700,cursor:'pointer',width:'100%'}}>
+              Get Started →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{
@@ -315,7 +358,7 @@ export default function HumanResourcePage() {
           const active = activeTab === tab.id;
           return (
             <button key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => switchTab(tab.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px',
                 borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13,
@@ -333,7 +376,7 @@ export default function HumanResourcePage() {
       </div>
 
       {/* Tab Content */}
-      <div>
+      <div style={{ opacity: tabVisible ? 1 : 0, transform: tabVisible ? 'translateY(0)' : 'translateY(8px)', transition: 'opacity 0.16s, transform 0.16s' }}>
         {activeTab === 'staff'      && <StaffTab staff={staff} stats={stats} isLoading={isLoading} />}
         {activeTab === 'payroll'    && <PayrollTab />}
         {activeTab === 'attendance' && <AttendanceTab />}

@@ -101,6 +101,8 @@ export default function ParentPortalPage() {
 
   const [selectedChild, setSelectedChild] = useState(null);
   const [activeTab,     setActiveTab]     = useState('overview');
+  const [showWelcome,   setShowWelcome]   = useState(!localStorage.getItem('parent_portal_seen'));
+  const [tabVisible,    setTabVisible]    = useState(true);
 
   const now = new Date();
   const [attendMonth, setAttendMonth] = useState(now.getMonth());
@@ -281,6 +283,28 @@ export default function ParentPortalPage() {
   return (
     <div style={{ minHeight:'100vh', background:'#F0F4F8', fontFamily:"'Inter',system-ui,sans-serif" }}>
 
+      {/* ── Welcome Modal (first time) ── */}
+      {showWelcome && (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',backdropFilter:'blur(8px)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}
+          onClick={() => { localStorage.setItem('parent_portal_seen','1'); setShowWelcome(false); }}>
+          <div style={{background:'rgba(255,255,255,0.95)',borderRadius:24,padding:36,maxWidth:420,textAlign:'center',animation:'scaleIn 0.3s ease-out',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}
+            onClick={e => e.stopPropagation()}>
+            <div style={{fontSize:64,marginBottom:12}}>👨‍👩‍👧</div>
+            <h2 style={{fontSize:20,fontWeight:800,color:'#1B2F6E',margin:'0 0 8px'}}>Welcome to Parent Portal</h2>
+            <p style={{color:'#64748b',fontSize:13,lineHeight:1.7,margin:'0 0 20px'}}>Track your child's attendance, fees, and exam results — all in one place.</p>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:20}}>
+              {['📋 Attendance','💰 Fee Status','📝 Results','🏠 Apply Leave'].map(f => (
+                <div key={f} style={{background:'#f8fafc',borderRadius:8,padding:'8px 10px',fontSize:12,fontWeight:600,color:'#1e3a5f',border:'1px solid #e2e8f0'}}>{f}</div>
+              ))}
+            </div>
+            <button onClick={() => { localStorage.setItem('parent_portal_seen','1'); setShowWelcome(false); }}
+              style={{background:'linear-gradient(135deg,#1B2F6E,#0073b7)',color:'white',border:'none',borderRadius:999,padding:'10px 28px',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+              View My Child's Info →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Messenger FAB */}
       <a href="/chat"
         style={{
@@ -398,7 +422,11 @@ export default function ParentPortalPage() {
             <div style={{ overflowX:'auto', marginBottom:16, WebkitOverflowScrolling:'touch' }}>
               <div style={{ display:'flex', gap:0, background:'#fff', borderRadius:12, padding:4, border:'1px solid #E5E7EB', minWidth:'max-content' }}>
                 {TABS.map(t => (
-                  <button key={t.id} onClick={() => setActiveTab(t.id)}
+                  <button key={t.id} onClick={() => {
+                    if (t.id === activeTab) return;
+                    setTabVisible(false);
+                    setTimeout(() => { setActiveTab(t.id); setTabVisible(true); }, 180);
+                  }}
                     className={`tab-btn${activeTab===t.id ? ' active' : ''}`}
                     style={{
                       padding:'8px 14px', border:'none', borderRadius:9,
@@ -412,6 +440,9 @@ export default function ParentPortalPage() {
                 ))}
               </div>
             </div>
+
+            {/* ── Tab content with fade transition ── */}
+            <div style={{ opacity: tabVisible ? 1 : 0, transform: tabVisible ? 'translateY(0)' : 'translateY(8px)', transition: 'opacity 0.18s, transform 0.18s' }}>
 
             {/* ════════════════════════════════
                 TAB: OVERVIEW
@@ -859,6 +890,9 @@ export default function ParentPortalPage() {
                 ))}
               </div>
             )}
+
+            {/* ── end tab transition wrapper ── */}
+            </div>
           </>
         )}
 

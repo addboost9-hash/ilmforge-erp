@@ -142,6 +142,7 @@ const FEE_HEADS = ['Admission Fee', 'Tuition Fee', 'Stationary', 'Annual Fund'];
 export default function AdmissionWizardPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [stepVisible, setStepVisible] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [errors, setErrors] = useState({});
@@ -297,8 +298,16 @@ export default function AdmissionWizardPage() {
     setErrors(e);
     return Object.keys(e).length === 0;
   };
-  const next = () => { if (validate(step)) setStep(s => Math.min(5, s + 1)); };
-  const back = () => setStep(s => Math.max(1, s - 1));
+  const next = () => {
+    if (validate(step)) {
+      setStepVisible(false);
+      setTimeout(() => { setStep(s => Math.min(5, s + 1)); setStepVisible(true); }, 200);
+    }
+  };
+  const back = () => {
+    setStepVisible(false);
+    setTimeout(() => { setStep(s => Math.max(1, s - 1)); setStepVisible(true); }, 200);
+  };
 
   /* ── SUBMIT ── */
   const submit = async () => {
@@ -522,7 +531,12 @@ export default function AdmissionWizardPage() {
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6"
+        style={{
+          opacity: stepVisible ? 1 : 0,
+          transform: stepVisible ? 'translateX(0)' : 'translateX(20px)',
+          transition: 'opacity 0.2s, transform 0.2s',
+        }}>
 
         {/* ─── STEP 1: Student Info (School Mentor style) ─── */}
         {step === 1 && (
