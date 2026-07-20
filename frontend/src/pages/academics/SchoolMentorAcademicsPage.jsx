@@ -1,11 +1,14 @@
-﻿/**
- * IlmForge — School Mentor Academics Module (Complete Rewrite)
+/**
+ * IlmForge — School Mentor Academics Module (Complete Rewrite + Onboarding/Animations)
  * URL: /academics
  * Matches School Mentor UI exactly per screenshots:
  *   Tab 1: Scheme of Studies → Textbooks | Calendar → Academic Calendar | Activity Calendar
  *   Tab 2: Lesson Plans → Session & Term Setting | Term Breakup | Create Lesson Plan | View Lesson Plan
+ *
+ * v4.0 — Onboarding wizard, animated tab switching, month progress indicator,
+ *         AI sparkle button, animated calendar date cards, staggered textbook rows
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
@@ -132,6 +135,112 @@ function exportKeyDatesPDF(keyDates) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   ONBOARDING MODAL
+═══════════════════════════════════════════════════════════════ */
+function OnboardingModal({ onClose }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
+      backdropFilter: 'blur(8px)', zIndex: 1000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div style={{
+        background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(20px)',
+        borderRadius: 24, padding: 40, maxWidth: 520, width: '100%', textAlign: 'center',
+        animation: 'scaleIn 0.3s ease-out',
+        boxShadow: '0 25px 80px rgba(27,47,110,0.25)',
+      }}>
+        <div style={{ fontSize: 64, marginBottom: 16 }}>📚</div>
+        <h2 style={{ fontSize: 24, fontWeight: 800, color: '#1B2F6E', margin: '0 0 8px' }}>
+          Academics Module
+        </h2>
+        <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.7, margin: '0 0 24px' }}>
+          Manage your school's complete academic structure —
+          from lesson plans and scheme of studies to academic calendar and textbooks.
+        </p>
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12,
+          marginBottom: 24, textAlign: 'left',
+        }}>
+          {[
+            { icon: '📋', title: 'Scheme of Studies', desc: 'Monthly teaching plans per subject' },
+            { icon: '📖', title: 'Lesson Plans',       desc: 'AI-powered lesson planning'        },
+            { icon: '📅', title: 'Academic Calendar',  desc: 'Key dates and events'              },
+            { icon: '📚', title: 'Textbooks',          desc: 'Per class textbook management'     },
+          ].map(f => (
+            <div key={f.title} style={{
+              background: '#f8fafc', borderRadius: 12, padding: '12px 14px',
+              border: '1px solid #e2e8f0', display: 'flex', gap: 10, alignItems: 'flex-start',
+            }}>
+              <span style={{ fontSize: 24 }}>{f.icon}</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#1e3a5f' }}>{f.title}</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{f.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'linear-gradient(135deg,#1B2F6E,#0073b7)',
+            color: 'white', border: 'none', borderRadius: 999,
+            padding: '12px 32px', fontSize: 15, fontWeight: 700,
+            cursor: 'pointer', boxShadow: '0 4px 15px rgba(27,47,110,0.3)',
+          }}
+        >
+          Get Started →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MONTH PROGRESS — visual 12-month circles
+═══════════════════════════════════════════════════════════════ */
+function MonthProgress({ months }) {
+  const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const currentMonth = new Date().getMonth(); // 0-indexed
+
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '12px 0', alignItems: 'center' }}>
+      {MONTH_LABELS.map((m, i) => {
+        const filled  = months?.[i]?.topics;
+        const isCurr  = i === currentMonth;
+        return (
+          <div
+            key={m}
+            title={m}
+            className={isCurr && !filled ? 'pulse' : undefined}
+            style={{
+              width: 32, height: 32, borderRadius: '50%',
+              background: filled
+                ? 'linear-gradient(135deg,#1B2F6E,#0073b7)'
+                : 'transparent',
+              border: filled
+                ? 'none'
+                : isCurr
+                  ? '2.5px solid #0073b7'
+                  : '2px dashed #cbd5e1',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 10, color: filled ? 'white' : isCurr ? '#0073b7' : '#94a3b8',
+              fontWeight: 700, cursor: 'default',
+              transition: 'all 0.2s',
+            }}
+          >
+            {filled ? '✓' : m.slice(0, 1)}
+          </div>
+        );
+      })}
+      <span style={{ fontSize: 11, color: '#64748b', alignSelf: 'center', marginLeft: 6 }}>
+        {months?.filter(m => m?.topics).length || 0}/12 months filled
+      </span>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
    GREEN CIRCLE S.NO BADGE
 ═══════════════════════════════════════════════════════════════ */
 function GreenBadge({ n }) {
@@ -148,7 +257,7 @@ function GreenBadge({ n }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   KEY DATE CARD
+   KEY DATE CARD (original compact style)
 ═══════════════════════════════════════════════════════════════ */
 function KeyDateCard({ d }) {
   return (
@@ -212,8 +321,42 @@ function AcademicCalendarTab() {
 
   const schoolName = 'School Mentor Demo';
 
+  /* Animated key-date cards for the top horizontal scroll strip */
+  const dateCards = [
+    { label: 'Term 1 Start',  date: '1st March 2026',  icon: '🎒', color: '#1B2F6E' },
+    { label: 'Monthly Test',  date: '6th April 2026',  icon: '📝', color: '#0073b7' },
+    { label: 'Term 1 Exams',  date: '20th May 2026',   icon: '📋', color: '#7c3aed' },
+    { label: 'PTM',           date: '6th June 2026',   icon: '👨‍👩‍👧', color: '#059669' },
+    { label: 'Term 2 Start',  date: '1st Sep 2026',    icon: '📚', color: '#D97706' },
+  ];
+
   return (
     <div>
+      {/* Animated horizontal key-date cards */}
+      <div style={{
+        display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, marginBottom: 20,
+      }}>
+        {dateCards.map((d, i) => (
+          <div
+            key={d.label}
+            style={{
+              background: `linear-gradient(135deg, ${d.color}, ${d.color}cc)`,
+              color: 'white', borderRadius: 16, padding: '16px 20px', minWidth: 160,
+              animation: `ilm-fade-in 0.3s ease-out ${i * 80}ms both`,
+              cursor: 'pointer', transition: 'transform 0.2s',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = ''; }}
+          >
+            <div style={{ fontSize: 28, marginBottom: 8 }}>{d.icon}</div>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>{d.label}</div>
+            <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>{d.date}</div>
+          </div>
+        ))}
+      </div>
+
       {/* Card */}
       <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
         {/* Card Header */}
@@ -337,12 +480,12 @@ function AcademicCalendarTab() {
 ═══════════════════════════════════════════════════════════════ */
 function ActivityCalendarTab() {
   const [activities] = useState([
-    { id: 1, event: 'Annual Sports Day', date: '2026-03-15', category: 'Sports' },
-    { id: 2, event: 'Science Exhibition', date: '2026-04-20', category: 'Academic' },
-    { id: 3, event: 'Quran Competition', date: '2026-05-10', category: 'Islamic' },
-    { id: 4, event: 'Farewell Party (Grade X)', date: '2026-06-15', category: 'Social' },
-    { id: 5, event: 'Back to School Drive', date: '2026-09-05', category: 'Academic' },
-    { id: 6, event: 'Debate Competition', date: '2026-11-20', category: 'Academic' },
+    { id: 1, event: 'Annual Sports Day',         date: '2026-03-15', category: 'Sports'   },
+    { id: 2, event: 'Science Exhibition',         date: '2026-04-20', category: 'Academic' },
+    { id: 3, event: 'Quran Competition',          date: '2026-05-10', category: 'Islamic'  },
+    { id: 4, event: 'Farewell Party (Grade X)',   date: '2026-06-15', category: 'Social'   },
+    { id: 5, event: 'Back to School Drive',       date: '2026-09-05', category: 'Academic' },
+    { id: 6, event: 'Debate Competition',         date: '2026-11-20', category: 'Academic' },
   ]);
 
   const CATEGORY_COLORS = {
@@ -524,8 +667,7 @@ function TextbooksExpanded({ classId, className }) {
 
 /* ═══════════════════════════════════════════════════════════════
    TEXTBOOKS TAB — shows classes list with expand ▼
-   Fetches classes from API: GET /classes
-   Default textbook subjects shown per class on expand
+   Animated stagger on expanded subject rows
 ═══════════════════════════════════════════════════════════════ */
 const DEFAULT_SUBJECTS_FULL  = ['English', 'Urdu', 'Mathematics', 'Science', 'Islamiyat'];
 const DEFAULT_SUBJECTS_SHORT = ['English', 'Urdu', 'Mathematics'];
@@ -612,8 +754,15 @@ function TextbooksTab() {
                               </tr>
                             </thead>
                             <tbody>
+                              {/* Animated stagger on expanded subject rows */}
                               {subjects.map((subj, si) => (
-                                <tr key={si} style={{ borderTop: '1px solid #dbeafe' }}>
+                                <tr
+                                  key={si}
+                                  style={{
+                                    borderTop: '1px solid #dbeafe',
+                                    animation: `ilm-fade-in 0.2s ease-out ${si * 60}ms both`,
+                                  }}
+                                >
                                   <td style={{ padding: '8px 12px' }}>{si + 1}</td>
                                   <td style={{ padding: '8px 12px', color: TEAL, fontWeight: 600 }}>{subj}</td>
                                   <td style={{ padding: '8px 12px' }}>{subj} Textbook – {cls.name}</td>
@@ -645,15 +794,46 @@ function TextbooksTab() {
 
 /* ═══════════════════════════════════════════════════════════════
    SCHEME OF STUDIES TAB
+   Includes MonthProgress demo
 ═══════════════════════════════════════════════════════════════ */
 function SchemeOfStudiesTab() {
   const [sos, setSos] = useState('textbooks');
+
+  // Demo months data for MonthProgress illustration
+  const demoMonths = [
+    { topics: true  }, // Jan
+    { topics: true  }, // Feb
+    { topics: true  }, // Mar
+    { topics: false }, // Apr
+    { topics: false }, // May
+    { topics: false }, // Jun
+    { topics: false }, // Jul
+    { topics: false }, // Aug
+    { topics: false }, // Sep
+    { topics: false }, // Oct
+    { topics: false }, // Nov
+    { topics: false }, // Dec
+  ];
+
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button style={subTabBtn(sos === 'textbooks')} onClick={() => setSos('textbooks')}>Textbooks</button>
         <button style={subTabBtn(sos === 'calendar')}  onClick={() => setSos('calendar')}>Calendar</button>
       </div>
+
+      {/* Monthly Progress Indicator (always visible in Scheme of Studies) */}
+      <div style={{
+        background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0',
+        padding: '14px 18px', marginBottom: 16,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+      }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: NAVY, marginBottom: 4 }}>
+          📊 Monthly Teaching Plan Coverage
+        </div>
+        <MonthProgress months={demoMonths} />
+      </div>
+
       {sos === 'textbooks' && <TextbooksTab />}
       {sos === 'calendar'  && <CalendarTab />}
     </div>
@@ -872,7 +1052,7 @@ function SessionTermSettingTab() {
   return (
     <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
       <div style={{ background: TEAL, padding: '14px 20px' }}>
-        <span style={{ fontWeight: 800, fontSize: 16, color: '#fff' }}>Session & Term Setting</span>
+        <span style={{ fontWeight: 800, fontSize: 16, color: '#fff' }}>Session &amp; Term Setting</span>
       </div>
       <div style={{ padding: 28 }}>
         {/* Session */}
@@ -999,7 +1179,7 @@ function TermBreakupTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   CREATE LESSON PLAN TAB
+   CREATE LESSON PLAN TAB — with AI Generate sparkle button
 ═══════════════════════════════════════════════════════════════ */
 function CreateLessonPlanTab() {
   const { data: classes = [] } = useQuery({
@@ -1014,6 +1194,16 @@ function CreateLessonPlanTab() {
     { id: 1, topicName: '', mainQuestion: '', questionType: 'table', details: '' },
   ]);
   const [saving, setSaving] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiDots, setAiDots] = useState('');
+
+  useEffect(() => {
+    if (!aiLoading) return;
+    const interval = setInterval(() => {
+      setAiDots(d => d.length >= 3 ? '' : d + '.');
+    }, 400);
+    return () => clearInterval(interval);
+  }, [aiLoading]);
 
   const subjectsForClass = classes.find(c => String(c.id) === String(form.classId))?.subjects || [];
 
@@ -1024,6 +1214,23 @@ function CreateLessonPlanTab() {
   const updateTopic = (id, field, value) => setTopics(t =>
     t.map(tp => tp.id === id ? { ...tp, [field]: value } : tp)
   );
+
+  const handleAIGenerate = () => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    // Simulate AI generation (3 seconds)
+    setTimeout(() => {
+      setAiLoading(false);
+      setAiDots('');
+      // Populate with AI-generated demo content
+      setTopics([
+        { id: Date.now(), topicName: 'Word Opposites', mainQuestion: 'Match the word opposites', questionType: 'Word Opposite', details: 'day/night, morning/evening, long/short, small/big, up/down' },
+        { id: Date.now() + 1, topicName: 'Short Questions', mainQuestion: 'Answer the following questions', questionType: 'Short Answer', details: 'Q1: What is science? Q2: Name 3 living things. Q3: What is photosynthesis?' },
+      ]);
+      if (!form.unitName) setForm(f => ({ ...f, unitName: 'AI Generated Unit', timeRequired: '45' }));
+      toast.success('AI lesson plan generated!');
+    }, 3000);
+  };
 
   const handleSave = async () => {
     if (!form.classId) return toast.error('Please select a class');
@@ -1050,8 +1257,25 @@ function CreateLessonPlanTab() {
 
   return (
     <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-      <div style={{ background: TEAL, padding: '14px 20px' }}>
+      <div style={{ background: TEAL, padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontWeight: 800, fontSize: 16, color: '#fff' }}>Create Lesson Plan</span>
+        {/* AI Generate Button */}
+        <button
+          onClick={handleAIGenerate}
+          disabled={aiLoading}
+          style={{
+            background: aiLoading
+              ? 'linear-gradient(135deg,#6366f1,#8b5cf6)'
+              : 'linear-gradient(135deg,rgba(255,255,255,0.2),rgba(255,255,255,0.1))',
+            color: 'white', border: '1.5px solid rgba(255,255,255,0.5)',
+            borderRadius: 999, padding: '7px 18px',
+            fontSize: 13, fontWeight: 700, cursor: aiLoading ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+            transition: 'all 0.3s', whiteSpace: 'nowrap',
+          }}
+        >
+          {aiLoading ? `✨ Generating${aiDots}` : '✨ Generate with AI'}
+        </button>
       </div>
       <div style={{ padding: 28 }}>
         {/* Main form fields */}
@@ -1097,7 +1321,14 @@ function CreateLessonPlanTab() {
           </div>
 
           {topics.map((tp, idx) => (
-            <div key={tp.id} style={{ background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0', padding: 16, marginBottom: 12 }}>
+            <div
+              key={tp.id}
+              style={{
+                background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0',
+                padding: 16, marginBottom: 12,
+                animation: `ilm-fade-in 0.25s ease-out ${idx * 80}ms both`,
+              }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <span style={{ fontWeight: 700, fontSize: 13, color: TEAL }}>Topic {idx + 1}</span>
                 {topics.length > 1 && (
@@ -1499,33 +1730,79 @@ function LessonPlansTab() {
 
 /* ═══════════════════════════════════════════════════════════════
    ROOT ACADEMICS PAGE
+   - Onboarding wizard on first visit
+   - Animated tab switching (fade + slide)
+   - Enhanced page header with AI-Powered badge
 ═══════════════════════════════════════════════════════════════ */
 export default function SchoolMentorAcademicsPage() {
+  // ── Onboarding ──
+  const isFirstVisit = !localStorage.getItem('academics_visited');
+  const [showOnboarding, setShowOnboarding] = useState(isFirstVisit);
+
+  // ── Tab animation ──
   const [mainTab, setMainTab] = useState('scheme');
+  const [tabAnim, setTabAnim] = useState(true);
+
+  const handleTabChange = (tab) => {
+    if (tab === mainTab) return;
+    setTabAnim(false);
+    setTimeout(() => {
+      setMainTab(tab);
+      setTabAnim(true);
+    }, 150);
+  };
 
   return (
     <div className="page-content fade-in">
-      {/* IlmForge Page Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: NAVY }}>
-          Academics Hub
-        </h1>
-        <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>ilmفورج</span>
+      {/* ── Onboarding Modal ── */}
+      {showOnboarding && (
+        <OnboardingModal
+          onClose={() => {
+            localStorage.setItem('academics_visited', '1');
+            setShowOnboarding(false);
+          }}
+        />
+      )}
+
+      {/* ── Page Header ── */}
+      <div className="ilm-page-header" style={{ marginBottom: 20 }}>
+        <div>
+          <h1 className="ilm-page-title">📚 Academics</h1>
+          <p className="ilm-page-subtitle">
+            Scheme of Studies · Lesson Plans · Academic Calendar · Textbooks
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{
+            background: 'rgba(255,255,255,0.15)',
+            borderRadius: 999, padding: '6px 14px',
+            fontSize: 12, color: 'white', fontWeight: 600,
+            border: '1px solid rgba(255,255,255,0.25)',
+          }}>
+            ✨ AI-Powered
+          </div>
+        </div>
       </div>
 
-      {/* Main Tabs — IlmForge underline style */}
-      <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', borderBottom: '2px solid #e2e8f0', marginBottom: 24 }}>
-        <button style={mainTabBtn(mainTab === 'scheme')} onClick={() => setMainTab('scheme')}>
+      {/* ── Main Tabs — IlmForge underline style ── */}
+      <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', borderBottom: '2px solid #e2e8f0', marginBottom: 24, position: 'relative' }}>
+        <button style={mainTabBtn(mainTab === 'scheme')} onClick={() => handleTabChange('scheme')}>
           Scheme of Studies
         </button>
-        <button style={mainTabBtn(mainTab === 'lesson')} onClick={() => setMainTab('lesson')}>
+        <button style={mainTabBtn(mainTab === 'lesson')} onClick={() => handleTabChange('lesson')}>
           Lesson Plans
         </button>
       </div>
 
-      {/* Tab Content */}
-      {mainTab === 'scheme' && <SchemeOfStudiesTab />}
-      {mainTab === 'lesson' && <LessonPlansTab />}
+      {/* ── Tab Content with fade/slide animation ── */}
+      <div style={{
+        opacity: tabAnim ? 1 : 0,
+        transform: tabAnim ? 'translateY(0)' : 'translateY(8px)',
+        transition: 'opacity 0.2s ease, transform 0.2s ease',
+      }}>
+        {mainTab === 'scheme' && <SchemeOfStudiesTab />}
+        {mainTab === 'lesson' && <LessonPlansTab />}
+      </div>
     </div>
   );
 }
