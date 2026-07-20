@@ -600,6 +600,9 @@ export default function AdminLayout() {
         style={{
           width: SW,
           background: '#1B2F6E',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderRight: '1px solid rgba(255,255,255,0.08)',
           boxShadow: '3px 0 16px rgba(5,20,60,0.35)',
           transition: 'width 0.28s cubic-bezier(0.4,0,0.2,1)',
         }}

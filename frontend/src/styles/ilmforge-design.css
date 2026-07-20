@@ -189,3 +189,193 @@
 .ilm-toggle-slider:before { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: white; left: 3px; top: 3px; transition: 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 .ilm-toggle input:checked + .ilm-toggle-slider { background: var(--ilm-navy); }
 .ilm-toggle input:checked + .ilm-toggle-slider:before { transform: translateX(20px); }
+
+/* ═══════════════════════════════════════════════════
+   GLASSMORPHISM THEME — IlmForge v5.0
+   Premium frosted glass design
+═══════════════════════════════════════════════════ */
+
+/* Animated background for the entire app */
+body {
+  background: linear-gradient(135deg, #dde8ff 0%, #eef4ff 25%, #e8f5e9 60%, #fff8e1 100%) !important;
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 15% 15%, rgba(27,47,110,0.07) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 85%, rgba(0,115,183,0.06) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 50%, rgba(217,119,6,0.03) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root { position: relative; z-index: 1; }
+
+/* Glass card */
+.card, .ilm-card {
+  background: rgba(255,255,255,0.65) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255,255,255,0.45) !important;
+  box-shadow: 0 8px 32px rgba(27,47,110,0.10), 0 2px 8px rgba(0,0,0,0.04) !important;
+  border-radius: 16px !important;
+  transition: transform 0.2s, box-shadow 0.2s !important;
+}
+
+.card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 16px 48px rgba(27,47,110,0.14), 0 4px 12px rgba(0,0,0,0.06) !important;
+}
+
+/* Glass pill nav */
+.ilm-pill-nav {
+  background: rgba(255,255,255,0.55) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255,255,255,0.45) !important;
+  box-shadow: 0 2px 12px rgba(27,47,110,0.06) !important;
+}
+
+/* Glass modal backdrop */
+.ilm-modal-overlay {
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  background: rgba(15,23,42,0.35) !important;
+}
+
+/* Glass modal */
+.ilm-modal {
+  background: rgba(255,255,255,0.88) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255,255,255,0.5) !important;
+  box-shadow: 0 25px 80px rgba(27,47,110,0.2) !important;
+}
+
+/* Glass inputs */
+input[type="text"], input[type="email"], input[type="number"],
+input[type="date"], input[type="time"], input[type="password"],
+input[type="search"], input[type="tel"], select, textarea,
+.form-input, .form-select, .ilm-input {
+  background: rgba(255,255,255,0.75) !important;
+  backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(27,47,110,0.12) !important;
+  border-radius: 10px !important;
+  color: #1e293b !important;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif !important;
+  transition: all 0.15s !important;
+}
+
+input:focus, select:focus, textarea:focus, .form-input:focus, .ilm-input:focus {
+  outline: none !important;
+  background: rgba(255,255,255,0.95) !important;
+  border-color: #1B2F6E !important;
+  box-shadow: 0 0 0 3px rgba(27,47,110,0.1) !important;
+}
+
+/* Glass buttons */
+.btn, .ilm-btn {
+  border-radius: 999px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-teal, .ilm-btn-primary {
+  background: linear-gradient(135deg, #1B2F6E 0%, #0073b7 100%) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(27,47,110,0.3) !important;
+}
+
+.btn-teal:hover, .ilm-btn-primary:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px rgba(27,47,110,0.4) !important;
+}
+
+.btn-outline, .ilm-btn-ghost {
+  background: rgba(255,255,255,0.7) !important;
+  backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(27,47,110,0.15) !important;
+  color: #1B2F6E !important;
+}
+
+.btn-outline:hover, .ilm-btn-ghost:hover {
+  background: rgba(255,255,255,0.9) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Glass stat cards hover */
+.ilm-stat-card {
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
+  transition: transform 0.2s, box-shadow 0.2s !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.ilm-stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 50%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.ilm-stat-card:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.22) !important;
+}
+
+/* Glass page header */
+.ilm-page-header {
+  box-shadow: 0 8px 32px rgba(27,47,110,0.25) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.ilm-page-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 60%);
+  pointer-events: none;
+}
+
+/* Table glass */
+thead tr {
+  background: rgba(27,47,110,0.04) !important;
+}
+
+tbody tr:hover {
+  background: rgba(255,255,255,0.5) !important;
+}
+
+/* Sidebar glass */
+/* Note: sidebar has inline styles, so we use a different approach */
+.sidebar-glass {
+  background: rgba(15,29,69,0.92) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+/* Toasts glass */
+[class*="Toaster"] > div > div {
+  background: rgba(255,255,255,0.9) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255,255,255,0.5) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12) !important;
+  border-radius: 12px !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(27,47,110,0.04); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: rgba(27,47,110,0.18); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(27,47,110,0.35); }
+
+/* Page animations */
+.page-content, .fade-in, .ilm-animate { animation: ilm-fade-in 0.3s ease-out; }

@@ -76,7 +76,7 @@ export default function LoginPage() {
       className="ilm-login-shell"
       style={{
         minHeight: '100vh', display: 'flex', width: '100%',
-        fontFamily: "'Inter','Poppins',system-ui,sans-serif", background: '#F1F5F9',
+        fontFamily: "'Inter','Poppins',system-ui,sans-serif", background: 'linear-gradient(135deg, #dde8ff 0%, #eef4ff 25%, #e8f5e9 60%, #fff8e1 100%)',
       }}
     >
       {/* ============ LEFT BRANDING PANEL (40%) ============ */}
