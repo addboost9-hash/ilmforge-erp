@@ -970,6 +970,7 @@ function ReportsTab() {
 /* ─── Main Hub Page ───────────────────────────────────────────── */
 export default function AttendanceHubPage() {
   const [mainTab, setMainTab] = useState('student');
+  const [showHubOnboarding, setShowHubOnboarding] = useState(!localStorage.getItem('att_hub_visited'));
 
   const mainTabStyle = (tab) => ({
     padding: '12px 24px',
@@ -985,6 +986,35 @@ export default function AttendanceHubPage() {
 
   return (
     <div style={{ padding: 20, background: '#F9FAFB', minHeight: '100vh' }}>
+      {/* Hub Onboarding Modal */}
+      {showHubOnboarding && (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',backdropFilter:'blur(10px)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div style={{background:'rgba(255,255,255,0.96)',backdropFilter:'blur(20px)',borderRadius:24,padding:'36px 32px',maxWidth:500,width:'100%',textAlign:'center',boxShadow:'0 25px 80px rgba(27,47,110,0.25)',animation:'scaleIn 0.3s ease-out'}}>
+            <div style={{fontSize:64,marginBottom:12}}>🏫</div>
+            <h2 style={{fontSize:22,fontWeight:800,color:'#1B2F6E',margin:'0 0 8px'}}>Class Attendance Hub</h2>
+            <p style={{color:'#64748b',fontSize:14,lineHeight:1.7,margin:'0 0 24px'}}>Manage all attendance from one place. Switch between students, staff, and reports using the tabs below.</p>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:24,textAlign:'left'}}>
+              {[
+                {icon:'👨‍🎓',t:'Student Attendance',d:'Class-wise daily attendance marking'},
+                {icon:'👩‍🏫',t:'Staff Attendance',d:'Track teacher & staff presence'},
+                {icon:'📊',t:'Reports',d:'Download & view attendance data'},
+              ].map(f => (
+                <div key={f.t} style={{background:'#f8fafc',borderRadius:10,padding:'12px 10px',border:'1px solid #e2e8f0',display:'flex',flexDirection:'column',alignItems:'center',gap:6,textAlign:'center'}}>
+                  <span style={{fontSize:28}}>{f.icon}</span>
+                  <div style={{fontWeight:700,fontSize:11,color:'#1e3a5f'}}>{f.t}</div>
+                  <div style={{fontSize:10,color:'#64748b'}}>{f.d}</div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => { localStorage.setItem('att_hub_visited','1'); setShowHubOnboarding(false); }}
+              style={{background:'linear-gradient(135deg,#1B2F6E,#0073b7)',color:'white',border:'none',borderRadius:999,padding:'12px 32px',fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 16px rgba(27,47,110,0.35)'}}
+            >
+              Get Started →
+            </button>
+          </div>
+        </div>
+      )}
       {/* IlmForge Page header */}
       <div
         style={{

@@ -9,6 +9,8 @@ export default function AttendancePage() {
   const today = new Date().toISOString().split('T')[0];
   const [filters, setFilters] = useState({ classId:'', sectionId:'', date:today });
   const [attendance, setAttendance] = useState({});
+  const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem('attendance_visited'));
+  const [notifyBadge, setNotifyBadge] = useState('');
 
   const { data:classes } = useQuery({ queryKey:['classes'], queryFn:()=>api.get('/classes').then(r=>r.data.data) });
 
@@ -33,11 +35,14 @@ export default function AttendancePage() {
       date: filters.date,
       records: Object.entries(attendance).map(([studentId, status]) => ({ studentId: parseInt(studentId), status })),
     }),
-    onSuccess: (r, _variables, _context) => {
+    onSuccess: (r) => {
       const count = Object.keys(attendance).length;
-      const label = filters.date < today ? 'correction saved' : 'saved';
-      toast.success(`Attendance ${label} for ${count} student${count !== 1 ? 's' : ''}!`);
-      // Refresh dashboard so attendance stats update immediately
+      const absentCount = Object.values(attendance).filter(v => v === 'absent').length;
+      toast.success(`Attendance saved for ${count} students!`);
+      if (absentCount > 0) {
+        setNotifyBadge(`📱 ${absentCount} parents notified`);
+        setTimeout(() => setNotifyBadge(''), 4000);
+      }
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['attendance'] });
     },
@@ -68,6 +73,39 @@ export default function AttendancePage() {
 
   return (
     <div className="page-content fade-in">
+      {/* Onboarding Modal */}
+      {showOnboarding && (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',backdropFilter:'blur(10px)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div style={{background:'rgba(255,255,255,0.96)',backdropFilter:'blur(20px)',borderRadius:24,padding:'36px 32px',maxWidth:480,width:'100%',textAlign:'center',boxShadow:'0 25px 80px rgba(27,47,110,0.25)',animation:'scaleIn 0.3s ease-out'}}>
+            <div style={{fontSize:64,marginBottom:12}}>📋</div>
+            <h2 style={{fontSize:22,fontWeight:800,color:'#1B2F6E',margin:'0 0 8px'}}>Daily Attendance</h2>
+            <p style={{color:'#64748b',fontSize:14,lineHeight:1.7,margin:'0 0 24px'}}>Mark attendance for any class in seconds. Previous day correction is also supported.</p>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:24,textAlign:'left'}}>
+              {[
+                {icon:'✅',t:'Mark Present',d:'One click per student'},
+                {icon:'❌',t:'Mark Absent',d:'Auto-notifies parents'},
+                {icon:'🕐',t:'Late Arrival',d:'Track late students'},
+                {icon:'📅',t:'Past Date',d:'Correct previous records'},
+              ].map(f => (
+                <div key={f.t} style={{background:'#f8fafc',borderRadius:10,padding:'10px 12px',border:'1px solid #e2e8f0',display:'flex',gap:8,alignItems:'flex-start'}}>
+                  <span style={{fontSize:20}}>{f.icon}</span>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:12,color:'#1e3a5f'}}>{f.t}</div>
+                    <div style={{fontSize:11,color:'#64748b'}}>{f.d}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => { localStorage.setItem('attendance_visited','1'); setShowOnboarding(false); }}
+              style={{background:'linear-gradient(135deg,#1B2F6E,#0073b7)',color:'white',border:'none',borderRadius:999,padding:'12px 32px',fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 16px rgba(27,47,110,0.35)'}}
+            >
+              Start Marking →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20}}>
         <div>
@@ -76,10 +114,26 @@ export default function AttendancePage() {
             Select class and mark each student's attendance
           </p>
         </div>
-        <div style={{display:'flex', gap:8}}>
+        <div style={{display:'flex', gap:8, alignItems:'center'}}>
+          {notifyBadge && (
+            <div style={{
+              background:'linear-gradient(135deg,#059669,#10B981)',
+              color:'white',borderRadius:999,padding:'6px 14px',
+              fontSize:12,fontWeight:700,
+              animation:'ilm-fade-in 0.3s ease-out',
+            }}>
+              {notifyBadge}
+            </div>
+          )}
           <button className="btn btn-outline btn-sm" onClick={() => refetch()}><RefreshCw size={14}/></button>
           <button className="btn btn-teal" onClick={() => save.mutate()} disabled={save.isPending || !filters.classId || total===0}>
-            <Save size={15}/> {save.isPending ? 'Saving...' : isPastDate ? 'Save Correction' : 'Save & Notify'}
+            <Save size={15}/>
+            {save.isPending ? (
+              <>
+                <span style={{display:'inline-block',animation:'spin 0.8s linear infinite'}}>⟳</span>
+                {' '}Saving...
+              </>
+            ) : isPastDate ? 'Save Correction' : 'Save & Notify'}
           </button>
         </div>
       </div>
@@ -158,7 +212,7 @@ export default function AttendancePage() {
             { label:'Leave', val:leave, color:'#B45309', bg:'#FEF3C7' },
           ].map(item => (
             <div key={item.label} style={{background:item.bg, borderRadius:8, padding:'8px 16px', textAlign:'center', minWidth:80}}>
-              <div style={{fontSize:20, fontWeight:800, color:item.color}}>{item.val}</div>
+              <div style={{fontSize:20, fontWeight:800, color:item.color, transition:'all 0.2s ease'}}>{item.val}</div>
               <div style={{fontSize:11, color:'#64748B', fontWeight:600}}>{item.label}</div>
             </div>
           ))}
@@ -224,10 +278,12 @@ export default function AttendancePage() {
                             <button key={val} onClick={() => setAttendance({...attendance, [s.id]:val})}
                               style={{
                                 padding:'5px 12px', borderRadius:6, border:`1.5px solid ${attendance[s.id]===val ? border : '#E8EDF3'}`,
-                                cursor:'pointer', fontWeight:attendance[s.id]===val ? 700 : 400,
+                                cursor:'pointer',
                                 fontSize:12, background:attendance[s.id]===val ? bg : '#FAFAFA',
                                 color:attendance[s.id]===val ? color : '#94a3b8',
-                                transition:'all 0.1s',
+                                transition: 'all 0.15s ease',
+                                transform: attendance[s.id] === val ? 'scale(1.08)' : 'scale(1)',
+                                fontWeight: attendance[s.id] === val ? 800 : 600,
                               }}>
                               {label}
                             </button>
