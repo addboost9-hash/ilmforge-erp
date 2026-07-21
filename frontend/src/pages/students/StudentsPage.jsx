@@ -468,19 +468,18 @@ export default function StudentsPage() {
           </p>
         </div>
         <div style={{ display:'flex', gap:8 }}>
-          <div style={{ position:'relative' }}>
-            <Search size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'#9CA3AF', pointerEvents:'none' }}/>
+          <div style={{position:'relative', flex:'1 1 220px'}}>
+            <Search size={14} style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'#94a3b8',pointerEvents:'none'}}/>
             <input
-              style={{ paddingLeft:30, paddingRight: searchInput ? 28 : 10, padding:'8px 10px 8px 30px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13, width:240 }}
-              placeholder="Search by name, roll, father..."
-              value={searchInput}
-              onChange={e => handleSearchChange(e.target.value)}
+              value={searchInput} onChange={e=>handleSearchChange(e.target.value)}
+              placeholder="Search by name, roll number, father name..."
+              style={{paddingLeft:32, paddingRight:searchInput?32:14, padding:'8px 14px 8px 32px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13, width:240}}
             />
             {searchInput && (
-              <button
-                onClick={() => { setSearchInput(''); setSearchQuery(''); }}
-                style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', color:'#9CA3AF', padding:0, lineHeight:1 }}>
-                <X size={13}/>
+              <button onClick={()=>{ setSearchInput(''); }}
+                style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',
+                  background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:18,lineHeight:1}}>
+                ×
               </button>
             )}
           </div>

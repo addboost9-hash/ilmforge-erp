@@ -30,7 +30,7 @@ const NAV = [
   {
     group: 'MAIN',
     items: [
-      { to: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard', shortcut: 'Ctrl+D' },
       { to: '/mentor-ai',   icon: Bot,             label: 'AI Tools' },
       { to: '/reports-hub', icon: BarChart2,        label: 'Reports',  roles: ['super_admin', 'admin'] },
     ],
@@ -40,14 +40,14 @@ const NAV = [
     items: [
       { to: '/academics',      icon: BookOpen,      label: 'Academics' },
       { to: '/examination',    icon: ClipboardList, label: 'Examination' },
-      { to: '/attendance-hub', icon: CheckSquare,   label: 'Attendance' },
+      { to: '/attendance-hub', icon: CheckSquare,   label: 'Attendance', shortcut: 'Ctrl+A' },
       { to: '/timetable',      icon: CalendarDays,  label: 'Timetable' },
     ],
   },
   {
     group: 'STUDENTS & STAFF',
     items: [
-      { to: '/hub/students',   icon: GraduationCap, label: 'Students' },
+      { to: '/hub/students',   icon: GraduationCap, label: 'Students', shortcut: 'Ctrl+S' },
       { to: '/hub/staff',      icon: Briefcase,     label: 'Staff' },
       { to: '/human-resource', icon: UserCheck,     label: 'HR',      roles: ['super_admin', 'admin'] },
       { to: '/hub/parents',    icon: Users,         label: 'Parents' },
@@ -56,7 +56,7 @@ const NAV = [
   {
     group: 'FINANCE',
     items: [
-      { to: '/fee-management', icon: DollarSign, label: 'Fee Management' },
+      { to: '/fee-management', icon: DollarSign, label: 'Fee Management', shortcut: 'Ctrl+F' },
       { to: '/accounts',       icon: Landmark,   label: 'Accounts',       roles: ['super_admin', 'admin', 'accountant'] },
       { to: '/payroll',        icon: Wallet,     label: 'Salary',          roles: ['super_admin', 'admin', 'accountant'] },
     ],
@@ -202,9 +202,63 @@ function NavItem({ item, collapsed, onNavigate }) {
               {item.badge}
             </span>
           )}
+          {!collapsed && item.shortcut && (
+            <span style={{
+              fontSize: 9, background: 'rgba(255,255,255,0.15)',
+              borderRadius: 4, padding: '1px 5px', marginLeft: 'auto',
+              color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace',
+              flexShrink: 0,
+            }}>
+              {item.shortcut}
+            </span>
+          )}
         </>
       )}
     </NavLink>
+  );
+}
+
+/* ── Floating Action Button ── */
+function FloatingActionButton() {
+  const [open, setOpen] = useState(false);
+  const actions = [
+    { label:'Mark Attendance', icon:'📋', to:'/attendance-hub', color:'#1B2F6E' },
+    { label:'Collect Fee', icon:'💰', to:'/fee-management', color:'#059669' },
+    { label:'Admit Student', icon:'➕', to:'/admissions/wizard', color:'#0073b7' },
+    { label:'New Exam', icon:'📝', to:'/examination', color:'#7c3aed' },
+  ];
+  return (
+    <div style={{position:'fixed', bottom:24, right:24, zIndex:400}}>
+      {open && actions.map((a, i) => (
+        <a key={a.label} href={a.to} title={a.label}
+          onClick={() => setOpen(false)}
+          style={{
+            position:'absolute', bottom:(i+1)*56, right:4,
+            width:44, height:44, borderRadius:'50%',
+            background:a.color, color:'white',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:18, textDecoration:'none',
+            boxShadow:'0 4px 14px rgba(0,0,0,0.25)',
+            animation:`ilm-fade-in 0.2s ease-out ${i*50}ms both`,
+            transition:'transform 0.15s',
+          }}
+          onMouseEnter={e=>e.currentTarget.style.transform='scale(1.12)'}
+          onMouseLeave={e=>e.currentTarget.style.transform=''}
+        >{a.icon}</a>
+      ))}
+      <button onClick={() => setOpen(o => !o)}
+        style={{
+          width:52, height:52, borderRadius:'50%',
+          background:'linear-gradient(135deg,#1B2F6E,#0073b7)',
+          color:'white', border:'none', cursor:'pointer',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          fontSize:26, boxShadow:'0 6px 20px rgba(27,47,110,0.4)',
+          transition:'transform 0.3s ease',
+          transform: open ? 'rotate(45deg)' : 'rotate(0)',
+        }}>
+        +
+      </button>
+    </div>
   );
 }
 
@@ -215,6 +269,42 @@ export default function AdminLayout() {
   const { user, school, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Browser title per page
+  useEffect(() => {
+    const titles = {
+      '/dashboard': 'Dashboard',
+      '/examination': 'Examination',
+      '/attendance-hub': 'Attendance',
+      '/fee-management': 'Fee Management',
+      '/academics': 'Academics',
+      '/students': 'Students',
+      '/staff': 'Staff',
+      '/human-resource': 'HR',
+      '/payroll': 'Salary',
+      '/accounts': 'Accounts',
+      '/sops': 'SOPs',
+      '/reports-hub': 'Reports',
+    };
+    const title = titles[location.pathname];
+    document.title = title ? `${title} — IlmForge` : 'IlmForge — School ERP';
+  }, [location.pathname]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        const key = e.key.toLowerCase();
+        const map = { d:'/dashboard', a:'/attendance-hub', f:'/fee-management', s:'/hub/students' };
+        if (map[key] && document.activeElement.tagName !== 'INPUT') {
+          e.preventDefault();
+          navigate(map[key]);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [navigate]);
 
   /* Sidebar state — load user preference from localStorage */
   const [isPinnedOpen, setIsPinnedOpen] = useState(() => {
@@ -227,6 +317,8 @@ export default function AdminLayout() {
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef(null);
 
   /* Auto-collapse refs */
   const inactivityTimerRef = useRef(null);
@@ -480,6 +572,17 @@ export default function AdminLayout() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  /* ── Click outside → close profile menu ── */
+  useEffect(() => {
+    const handler = (e) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   /* ── Keyboard: Escape close + Ctrl+K focus search ── */
   const searchInputRef = useRef(null);
   useEffect(() => {
@@ -558,6 +661,20 @@ export default function AdminLayout() {
   const pageLabel = pageMap[location.pathname]
     || location.pathname.split('/').filter(Boolean).pop()?.replace(/-/g, ' ')
     || 'Dashboard';
+
+  /* ── Breadcrumb group resolution ── */
+  const breadcrumbGroup = useMemo(() => {
+    const path = location.pathname;
+    for (const group of NAV) {
+      for (const item of group.items) {
+        if (path === item.to || (item.to !== '/dashboard' && path.startsWith(item.to + '/'))) {
+          // Convert group label to title-case
+          return group.group.split(' ').map(w => w[0] + w.slice(1).toLowerCase()).join(' ');
+        }
+      }
+    }
+    return null;
+  }, [location.pathname]);
 
   /* ════════════════════════════════════════════
      RENDER
@@ -791,7 +908,20 @@ export default function AdminLayout() {
 
             {/* Breadcrumb */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-              <span style={{ color: '#999', fontWeight: 500 }}>Home</span>
+              <Link to="/dashboard" style={{ color: '#999', fontWeight: 500, textDecoration: 'none' }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#0073b7'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = '#999'; }}
+              >
+                Home
+              </Link>
+              {breadcrumbGroup && (
+                <>
+                  <ChevronRight size={13} color="#ccc" />
+                  <span style={{ color: '#94a3b8', fontWeight: 500, textTransform: 'capitalize' }}>
+                    {breadcrumbGroup}
+                  </span>
+                </>
+              )}
               <ChevronRight size={13} color="#ccc" />
               <span style={{ color: '#333', fontWeight: 700, textTransform: 'capitalize' }}>
                 {pageLabel}
@@ -1012,13 +1142,17 @@ export default function AdminLayout() {
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#0073b7'; e.currentTarget.style.color = '#0073b7'; e.currentTarget.style.background = '#e8f4fd'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = '#dee2e6'; e.currentTarget.style.color = '#666'; e.currentTarget.style.background = '#fff'; }}
             >
-              <Bell size={16} />
-              <span style={{
-                position: 'absolute', top: 7, right: 7,
-                width: 7, height: 7,
-                background: '#dd4b39',
-                borderRadius: '50%', border: '2px solid #fff',
-              }} />
+              <div style={{position:'relative',display:'inline-flex'}}>
+                <Bell size={18}/>
+                <span style={{
+                  position:'absolute',top:-3,right:-3,
+                  background:'#DC2626',color:'white',
+                  borderRadius:'50%',width:14,height:14,
+                  fontSize:8,fontWeight:700,
+                  display:'flex',alignItems:'center',justifyContent:'center',
+                  border:'1.5px solid white',
+                }}>3</span>
+              </div>
             </button>
 
             {/* Academic session badge */}
@@ -1036,17 +1170,21 @@ export default function AdminLayout() {
               <span>2025-2026</span>
             </div>
 
-            {/* User avatar chip */}
-            <Link to="/profile" style={{ textDecoration: 'none' }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '4px 10px 4px 6px', borderRadius: 4,
-                border: '1px solid #dee2e6', background: '#fff',
-                cursor: 'pointer', transition: 'all .12s',
-              }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#0073b7'; e.currentTarget.style.background = '#e8f4fd'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#dee2e6'; e.currentTarget.style.background = '#fff'; }}
+            {/* User avatar chip with dropdown */}
+            <div ref={profileMenuRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowProfileMenu(o => !o)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '4px 10px 4px 6px', borderRadius: 4,
+                  border: `1px solid ${showProfileMenu ? '#0073b7' : '#dee2e6'}`,
+                  background: showProfileMenu ? '#e8f4fd' : '#fff',
+                  cursor: 'pointer', transition: 'all .12s',
+                  fontFamily: 'inherit',
+                }}
                 title={`${user?.name || 'Admin'} (${user?.role || 'admin'})`}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#0073b7'; e.currentTarget.style.background = '#e8f4fd'; }}
+                onMouseLeave={e => { if (!showProfileMenu) { e.currentTarget.style.borderColor = '#dee2e6'; e.currentTarget.style.background = '#fff'; } }}
               >
                 {/* Avatar circle with initials */}
                 <div style={{
@@ -1065,8 +1203,82 @@ export default function AdminLayout() {
                     {user?.role || 'admin'}
                   </div>
                 </div>
-              </div>
-            </Link>
+                <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 2 }}>▼</span>
+              </button>
+
+              {/* Profile dropdown menu */}
+              {showProfileMenu && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 600,
+                  background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
+                  boxShadow: '0 8px 28px rgba(0,0,0,0.13)', minWidth: 210, overflow: 'hidden',
+                }}>
+                  {/* Header */}
+                  <div style={{ padding: '12px 16px', background: 'linear-gradient(135deg,#1B2F6E,#0073b7)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+                      {initials}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{user?.name || 'Admin'}</div>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', textTransform: 'capitalize' }}>{user?.role || 'admin'}</div>
+                    </div>
+                  </div>
+
+                  {/* Section 1: Account */}
+                  <div style={{ padding: '6px 0' }}>
+                    {[
+                      { label: 'My Profile', to: '/profile', icon: '👤' },
+                      { label: 'Change Password', to: '/profile', icon: '🔑' },
+                    ].map(link => (
+                      <Link
+                        key={link.label}
+                        to={link.to}
+                        onClick={() => setShowProfileMenu(false)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', textDecoration: 'none', color: '#374151', fontSize: 13, fontWeight: 500, transition: 'background .1s' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#f0f9ff'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <span style={{ fontSize: 15 }}>{link.icon}</span>
+                        {link.label}
+                      </Link>
+                    ))}
+                  </div>
+
+                  {/* Divider */}
+                  <div style={{ borderTop: '1px solid #f1f5f9' }} />
+
+                  {/* Section 2: School */}
+                  <div style={{ padding: '6px 0' }}>
+                    <Link
+                      to="/settings"
+                      onClick={() => setShowProfileMenu(false)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', textDecoration: 'none', color: '#374151', fontSize: 13, fontWeight: 500, transition: 'background .1s' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#f0f9ff'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <span style={{ fontSize: 15 }}>🏫</span>
+                      School Settings
+                    </Link>
+                  </div>
+
+                  {/* Divider */}
+                  <div style={{ borderTop: '1px solid #f1f5f9' }} />
+
+                  {/* Section 3: Logout */}
+                  <div style={{ padding: '6px 0' }}>
+                    <button
+                      onClick={() => { setShowProfileMenu(false); setShowLogoutConfirm(true); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 16px', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 13, fontWeight: 600, textAlign: 'left', fontFamily: 'inherit', transition: 'background .1s' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <span style={{ fontSize: 15 }}>🚪</span>
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -1074,6 +1286,7 @@ export default function AdminLayout() {
         <main style={{ flex: 1, overflowY: 'auto' }}>
           <LicenseBanner />
           <Outlet />
+          <FloatingActionButton />
         </main>
       </div>
 

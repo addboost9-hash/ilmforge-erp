@@ -271,10 +271,10 @@ export default function AdmissionWizardPage() {
   const validate = (s) => {
     const e = {};
     if (s === 1) {
-      if (!form.name.trim()) e.name = 'First Name is required';
-      if (!form.fatherName.trim()) e.fatherName = "Father's Name is required";
+      if (!form.name.trim()) e.name = "Please enter the student's first name (required)";
+      if (!form.fatherName.trim()) e.fatherName = "Please enter the father's full name (required)";
       if (!form.emergencyPhone.trim()) {
-        e.emergencyPhone = 'Mobile No is required';
+        e.emergencyPhone = "Parent's phone number is required for portal access and notifications";
       } else if (!validatePhone(form.emergencyPhone)) {
         e.emergencyPhone = 'Enter a valid Pakistan mobile number (e.g. 0312-3456789 or +923123456789)';
       }
@@ -286,13 +286,13 @@ export default function AdmissionWizardPage() {
       }
     }
     if (s === 2) {
-      if (!form.classId) e.classId = 'Class selection is required';
+      if (!form.classId) e.classId = 'Please select a class for this student';
     }
     if (s === 4) {
       if (!form.emergencyPhone.trim()) {
-        e.emergencyPhone = 'Parent phone required';
+        e.emergencyPhone = "Parent's phone number is required for portal access and notifications";
       } else if (!validatePhone(form.emergencyPhone)) {
-        e.emergencyPhone = 'Enter a valid Pakistan mobile number';
+        e.emergencyPhone = 'Enter a valid Pakistan mobile number (e.g. 0312-3456789 or +923123456789)';
       }
     }
     setErrors(e);
@@ -587,7 +587,7 @@ export default function AdmissionWizardPage() {
                         setErrors(er => ({ ...er, bFormNo: 'Format: XXXXX-XXXXXXX-X' }));
                       } else { setErrors(er => ({ ...er, bFormNo: null })); }
                     }}
-                    placeholder="XXXXX-XXXXXXX-X" maxLength={15} />
+                    placeholder="XXXXX-XXXXXXXX-X" maxLength={16} />
                 </Field>
               </div>
             </div>
@@ -595,7 +595,7 @@ export default function AdmissionWizardPage() {
             {/* Name fields */}
             <div className="grid sm:grid-cols-2 gap-3 mb-3">
               <Field label="First Name *" error={errors.name}>
-                <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Ahmed" autoFocus />
+                <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Muhammad Ahmad" autoFocus />
               </Field>
               <Field label="Last Name">
                 <input className={inputCls} value={form.lastName} onChange={e => set('lastName', e.target.value)} placeholder="e.g. Khan" />
@@ -611,7 +611,7 @@ export default function AdmissionWizardPage() {
             {/* Father fields */}
             <div className="grid sm:grid-cols-2 gap-3 mb-3">
               <Field label="Father Name *" error={errors.fatherName}>
-                <input className={inputCls} value={form.fatherName} onChange={e => set('fatherName', e.target.value)} placeholder="e.g. Muhammad Ali Khan" />
+                <input className={inputCls} value={form.fatherName} onChange={e => set('fatherName', e.target.value)} placeholder="e.g. Muhammad Ali" />
               </Field>
               <Field label="Father Name In Urdu">
                 <input className={inputCls} dir="rtl" value={form.fatherNameUrdu} onChange={e => set('fatherNameUrdu', e.target.value)} placeholder="محمد علی خان" style={{ fontFamily:'serif' }} />
@@ -633,6 +633,14 @@ export default function AdmissionWizardPage() {
                   placeholder="XXXXX-XXXXXXX-X"
                   maxLength={15}
                 />
+                {form.fatherCnic && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    color: validateCNIC(form.fatherCnic) ? '#059669' : '#DC2626'
+                  }}>
+                    {validateCNIC(form.fatherCnic) ? '✓ Valid' : '✗ Incomplete (13 digits required)'}
+                  </span>
+                )}
               </Field>
               <Field label="Father's Qualification">
                 <select className={inputCls} value={form.fatherQualification} onChange={e => set('fatherQualification', e.target.value)}>
@@ -667,6 +675,14 @@ export default function AdmissionWizardPage() {
                   placeholder="XXXXX-XXXXXXX-X"
                   maxLength={15}
                 />
+                {form.motherCnic && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    color: validateCNIC(form.motherCnic) ? '#059669' : '#DC2626'
+                  }}>
+                    {validateCNIC(form.motherCnic) ? '✓ Valid' : '✗ Incomplete (13 digits required)'}
+                  </span>
+                )}
               </Field>
               <Field label="Mother's Qualification">
                 <select className={inputCls} value={form.motherQualification} onChange={e => set('motherQualification', e.target.value)}>
@@ -747,15 +763,23 @@ export default function AdmissionWizardPage() {
                       setErrors(er => ({ ...er, emergencyPhone: 'Enter a valid Pakistan mobile number (e.g. 0312-3456789 or +923123456789)' }));
                     }
                   }}
-                  placeholder="+92 348 120000"
+                  placeholder="03XX-XXXXXXX"
                   maxLength={15}
                 />
+                {form.emergencyPhone && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    color: validatePhone(form.emergencyPhone) ? '#059669' : '#DC2626'
+                  }}>
+                    {validatePhone(form.emergencyPhone) ? '✓ Valid' : '✗ Invalid format'}
+                  </span>
+                )}
               </Field>
               <Field label="Mother Mobile No">
                 <input className={inputCls} value={form.motherPhone} onChange={e => set('motherPhone', e.target.value)} placeholder="+92 3XX XXXXXXX" />
               </Field>
               <Field label="Email">
-                <input type="email" className={inputCls} value={form.email} onChange={e => set('email', e.target.value)} placeholder="student@email.com" />
+                <input type="email" className={inputCls} value={form.email} onChange={e => set('email', e.target.value)} placeholder="parent@email.com (optional)" />
               </Field>
             </div>
 
@@ -989,6 +1013,14 @@ export default function AdmissionWizardPage() {
                   placeholder="03XX-XXXXXXX"
                   maxLength={15}
                 />
+                {form.emergencyPhone && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    color: validatePhone(form.emergencyPhone) ? '#059669' : '#DC2626'
+                  }}>
+                    {validatePhone(form.emergencyPhone) ? '✓ Valid' : '✗ Invalid format'}
+                  </span>
+                )}
                 <p className="text-[11px] text-slate-400 mt-1">Sibling detection uses this number — same parent = same account</p>
               </Field>
               <Field label="Parent Email (optional)">
