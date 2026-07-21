@@ -735,6 +735,34 @@ router.put('/:id', wrap(async (req, res) => {
   res.json({ success: true, data: updated });
 }));
 
+// GET /exams/:id/marks — fetch saved marks for an exam, optionally filtered by classId
+router.get('/:id/marks', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Only admin/teacher can view exam marks.' });
+  }
+  const examId = parseInt(req.params.id);
+  const { classId } = req.query;
+
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+  const where = { examId };
+  if (classId) {
+    where.student = { classId: parseInt(classId) };
+  }
+
+  const marks = await prisma.examMark.findMany({
+    where,
+    include: {
+      student: { select: { id: true, name: true, rollNo: true } },
+      subject: { select: { id: true, name: true } },
+    },
+    orderBy: { studentId: 'asc' },
+  });
+
+  res.json({ success: true, data: marks });
+}));
+
 // POST /exams/:id/marks — upsert marks with full field support + grade from ExamSettings
 router.post(
   '/:id/marks',

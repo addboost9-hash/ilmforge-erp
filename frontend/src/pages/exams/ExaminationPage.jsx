@@ -504,7 +504,7 @@ function ExamSetupTab() {
                         <tr key={`${e.id}-detail`} style={{ background: '#eff6ff' }}>
                           <td colSpan={8} style={{ padding: '14px 20px' }}>
                             <div style={{ border: '1px solid #dbeafe', borderRadius: 8, padding: '14px 18px', background: '#fff' }}>
-                              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', color: '#374151', fontSize: 13 }}>
+                              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', color: '#374151', fontSize: 13, alignItems: 'center' }}>
                                 <span><strong>Exam Name:</strong> {e.title}</span>
                                 <span>
                                   <strong>Classes:</strong>{' '}
@@ -517,6 +517,12 @@ function ExamSetupTab() {
                                 </span>
                                 <span><strong>From:</strong> {fmtDate(e.dateStart)}</span>
                                 <span><strong>To:</strong> {fmtDate(e.dateEnd)}</span>
+                                <Link
+                                  to={`/exams/${e.id}/marks`}
+                                  style={{ marginLeft: 'auto', background: 'linear-gradient(135deg,#059669,#10B981)', color: 'white', textDecoration: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                                >
+                                  ✏️ Enter Marks
+                                </Link>
                               </div>
                             </div>
                           </td>
