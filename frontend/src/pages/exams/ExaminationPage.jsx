@@ -1996,8 +1996,8 @@ export default function ExaminationPage() {
       {/* IlmForge Gradient Page Header */}
       <div className="ilm-page-header">
         <div>
-          <h1 className="ilm-page-title">Examination</h1>
-          <p className="ilm-page-subtitle">Manage exams, question banks and results</p>
+          <h1 className="ilm-page-title">🗄️ Exam Vault</h1>
+          <p className="ilm-page-subtitle">Create Exams · Question Bank · Results · Report Cards</p>
         </div>
       </div>
 

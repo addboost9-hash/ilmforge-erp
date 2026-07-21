@@ -276,23 +276,38 @@ export default function TaskManagementPage() {
   return (
     <div className="page-content fade-up">
 
-      {/* ── Header ─────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+      {/* ── IlmForge Task Board Header ──────────────── */}
+      <div className="ilm-page-header ilm-animate" style={{ marginBottom: 20 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <div style={{ width: 4, height: 22, background: 'linear-gradient(180deg,#0F766E,#D97706)', borderRadius: 99 }} />
-            <p style={{ fontSize: 11.5, color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>
-              Administration
-            </p>
-          </div>
-          <h1 className="page-title">Task Management</h1>
-          <p className="page-subtitle">Assign and track school tasks for staff members</p>
+          <h1 className="ilm-page-title">📌 Task Board</h1>
+          <p className="ilm-page-subtitle" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              background: 'linear-gradient(135deg,#1B2F6E,#0073b7)',
+              color: 'white', fontSize: 10, fontWeight: 800,
+              padding: '2px 8px', borderRadius: 999, letterSpacing: 0.5,
+            }}>
+              ilmفورج Task Manager
+            </span>
+            <span style={{ opacity: 0.85 }}>Assign and track school tasks across all staff</span>
+          </p>
         </div>
-        <button className="btn btn-teal" onClick={openAdd}>
+        <button
+          style={{
+            background: 'linear-gradient(135deg,#1B2F6E,#0073b7)',
+            color: 'white', border: 'none', borderRadius: 10,
+            padding: '10px 18px', fontWeight: 700, fontSize: 13,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+            boxShadow: '0 4px 14px rgba(27,47,110,0.30)',
+            transition: 'transform 0.15s, box-shadow 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 22px rgba(27,47,110,0.38)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 14px rgba(27,47,110,0.30)'; }}
+          onClick={openAdd}
+        >
           <Plus size={15} /> Add Task
           {pending > 0 && (
             <span style={{
-              marginLeft: 6,
+              marginLeft: 2,
               background: '#EF4444',
               color: '#fff',
               borderRadius: '50%',
@@ -309,6 +324,25 @@ export default function TaskManagementPage() {
             </span>
           )}
         </button>
+      </div>
+
+      {/* ── Kanban-style status legend with IlmForge navy theme ── */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Pending', color: '#D97706', bg: '#FEF3C7' },
+          { label: 'In Progress', color: '#1B2F6E', bg: '#EFF6FF' },
+          { label: 'Completed', color: '#059669', bg: '#D1FAE5' },
+        ].map(col => (
+          <div key={col.label} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: col.bg, borderRadius: 8,
+            padding: '5px 12px', fontSize: 12, fontWeight: 700, color: col.color,
+            border: `1px solid ${col.color}33`,
+          }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: col.color, display: 'inline-block' }} />
+            {col.label}
+          </div>
+        ))}
       </div>
 
       {/* ── Stat Cards ─────────────────────────────── */}

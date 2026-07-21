@@ -1213,10 +1213,10 @@ DOCUMENTATION
           </div>
           <div>
             <h1 className="ilm-page-title" style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#111827' }}>
-              📋 Standard Operating Procedures
+              📘 School Playbook
             </h1>
             <p className="ilm-page-subtitle" style={{ margin: 0, fontSize: 12, color: '#6b7280', marginTop: 2 }}>
-              School management guidelines and best practices
+              Academic Manuals · Administrative Guidelines
             </p>
           </div>
         </div>

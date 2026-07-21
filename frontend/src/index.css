@@ -352,7 +352,7 @@ body {
   white-space: nowrap; overflow: hidden;
 }
 .sb-item:hover { background: var(--sb-hover-bg); color: var(--sb-hover-c); border-left-color: rgba(255,255,255,0.7); }
-.sb-item.active { background: var(--sb-active-bg); color: var(--sb-active-c); font-weight: 700; border-left-color: var(--stat-cyan); }
+.sb-item.active { background: rgba(217,119,6,0.12); color: var(--sb-active-c); font-weight: 700; border-left-color: #D97706; }
 
 /* Legacy sb-icon alias */
 .sb-icon {
@@ -1582,7 +1582,7 @@ body.lang-ur,
 
 /* RTL sidebar nav items */
 [dir="rtl"] .sb-item { border-left: none !important; border-right: 3px solid transparent; padding: 9px 13px 9px 11px !important; text-align: right; }
-[dir="rtl"] .sb-item.active { border-right-color: var(--stat-cyan); }
+[dir="rtl"] .sb-item.active { border-right-color: #D97706; }
 [dir="rtl"] .sb-item:hover { border-right-color: rgba(255,255,255,0.6); }
 
 /* RTL card borders */

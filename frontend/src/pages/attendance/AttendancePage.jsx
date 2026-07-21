@@ -109,7 +109,7 @@ export default function AttendancePage() {
       {/* Header */}
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20}}>
         <div>
-          <h1 className="page-title">Mark Attendance</h1>
+          <h1 className="page-title">📋 Daily Attendance</h1>
           <p style={{color:'#64748B', fontSize:13, marginTop:2}}>
             Select class and mark each student's attendance
           </p>

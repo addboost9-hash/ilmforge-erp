@@ -1028,8 +1028,8 @@ export default function AttendanceHubPage() {
           justifyContent: 'space-between',
         }}
       >
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1B2F6E' }}>Class Attendance</h1>
-        <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>ilmفورج</span>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1B2F6E' }}>✅ Attendance Tracker</h1>
+        <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>Mark attendance, view reports, track staff punctuality</span>
       </div>
 
       {/* Main tab panel */}

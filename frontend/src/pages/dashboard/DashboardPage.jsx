@@ -237,7 +237,7 @@ export default function DashboardPage() {
       {/* ══ GRADIENT PAGE HEADER ══ */}
       <div className="ilm-page-header ilm-animate">
         <div>
-          <h1 className="ilm-page-title">Dashboard</h1>
+          <h1 className="ilm-page-title">📊 Smart Dashboard</h1>
           <p className="ilm-page-subtitle">School overview and quick statistics</p>
         </div>
         <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:0}}>
@@ -288,6 +288,33 @@ export default function DashboardPage() {
       {/* ══ GRADIENT STAT CARDS ══ */}
       <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:14, marginBottom:20}}>
         {STAT_CARDS.map((c, i) => <StatCard key={c.label} {...c} style={{animation:`ilm-fade-in 0.4s ease-out ${i*100}ms both`}} />)}
+      </div>
+
+      {/* ══ UNIQUE ILMFORGE TODAY'S SNAPSHOT ══ */}
+      <div style={{
+        background:'linear-gradient(135deg,rgba(27,47,110,0.05),rgba(0,115,183,0.03))',
+        borderRadius:16, padding:'16px 20px', marginBottom:20,
+        border:'1px solid rgba(27,47,110,0.08)',
+      }}>
+        <div style={{fontWeight:700, fontSize:14, color:'#1B2F6E', marginBottom:12, display:'flex', alignItems:'center', gap:8}}>
+          <span>⚡</span> Today at a Glance
+        </div>
+        <div style={{display:'flex', gap:20, flexWrap:'wrap'}}>
+          {[
+            {label:'Attendance Rate', val: totalStudents > 0 ? Math.round((presentToday/totalStudents)*100)+'%' : '—', icon:'📋', ok: presentToday/totalStudents > 0.85},
+            {label:'Fee Collected', val: 'Rs.'+Number(feeToday).toLocaleString(), icon:'💰', ok: feeToday > 0},
+            {label:'Active Exams', val: '—', icon:'📝', ok: true},
+            {label:'Alerts', val: feeDefaulters > 0 ? feeDefaulters+' pending' : 'All clear', icon:'🔔', ok: feeDefaulters === 0},
+          ].map(item => (
+            <div key={item.label} style={{display:'flex', alignItems:'center', gap:8, minWidth:160}}>
+              <span style={{fontSize:20}}>{item.icon}</span>
+              <div>
+                <div style={{fontSize:11, color:'#64748b'}}>{item.label}</div>
+                <div style={{fontSize:14, fontWeight:700, color:item.ok?'#059669':'#DC2626'}}>{item.val}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ══ TWO CHARTS SIDE BY SIDE ══ */}

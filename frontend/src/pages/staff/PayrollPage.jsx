@@ -200,8 +200,8 @@ export default function PayrollPage() {
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
-            <h1 style={{ color: NAVY, margin: 0, fontSize: 24, fontWeight: 800 }}>Payroll Management</h1>
-            <p style={{ color: '#6b7280', margin: '4px 0 0', fontSize: 13 }}>Generate and manage monthly salary records</p>
+            <h1 style={{ color: NAVY, margin: 0, fontSize: 24, fontWeight: 800 }}>💼 Payroll Manager</h1>
+            <p style={{ color: '#6b7280', margin: '4px 0 0', fontSize: 13 }}>Generate payroll · Review · Approve · Pay staff</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <select style={inputStyle} value={selMonth} onChange={e => setSelMonth(parseInt(e.target.value))}>

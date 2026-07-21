@@ -20,6 +20,8 @@ import {
   ShieldCheck, BarChart2, Database, ClipboardList,
   ShoppingCart,
   CalendarDays, Rocket, Truck,
+  TrendingUp, BookMarked, Globe, QrCode, UserPlus, Receipt, Award,
+  BookOpenCheck,
 } from 'lucide-react';
 import LicenseBanner from '../components/license/LicenseBanner';
 
@@ -28,54 +30,77 @@ import LicenseBanner from '../components/license/LicenseBanner';
 ═══════════════════════════════════════════════════ */
 const NAV = [
   {
-    group: 'MAIN',
+    group: 'OVERVIEW',
     items: [
-      { to: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard', shortcut: 'Ctrl+D' },
-      { to: '/mentor-ai',   icon: Bot,             label: 'AI Tools' },
-      { to: '/reports-hub', icon: BarChart2,        label: 'Reports',  roles: ['super_admin', 'admin'] },
+      { to: '/dashboard',    icon: LayoutDashboard, label: 'Smart Dashboard',   shortcut: 'Ctrl+D' },
+      { to: '/mentor-ai',    icon: Bot,             label: 'AI Copilot' },
+      { to: '/reports-hub',  icon: BarChart2,        label: 'Insights Hub',     roles: ['super_admin','admin'] },
+      { to: '/analytics/students', icon: TrendingUp, label: 'Analytics',        roles: ['super_admin','admin'] },
     ],
   },
   {
-    group: 'ACADEMICS',
+    group: 'LEARNING',
     items: [
-      { to: '/academics',      icon: BookOpen,      label: 'Academics' },
-      { to: '/examination',    icon: ClipboardList, label: 'Examination' },
-      { to: '/attendance-hub', icon: CheckSquare,   label: 'Attendance', shortcut: 'Ctrl+A' },
-      { to: '/timetable',      icon: CalendarDays,  label: 'Timetable' },
+      { to: '/academics',      icon: BookOpen,      label: 'Curriculum Planner' },
+      { to: '/examination',    icon: ClipboardList, label: 'Exam Vault' },
+      { to: '/timetable',      icon: CalendarDays,  label: 'Class Schedule' },
+      { to: '/homework',       icon: BookMarked,    label: 'Homework Diary' },
+      { to: '/online-classes', icon: Globe,         label: 'Virtual Classes',   roles: ['super_admin','admin','teacher'] },
     ],
   },
   {
-    group: 'STUDENTS & STAFF',
+    group: 'TRACKING',
     items: [
-      { to: '/hub/students',   icon: GraduationCap, label: 'Students', shortcut: 'Ctrl+S' },
-      { to: '/hub/staff',      icon: Briefcase,     label: 'Staff' },
-      { to: '/human-resource', icon: UserCheck,     label: 'HR',      roles: ['super_admin', 'admin'] },
-      { to: '/hub/parents',    icon: Users,         label: 'Parents' },
+      { to: '/attendance-hub', icon: CheckSquare,   label: 'Attendance Tracker', shortcut: 'Ctrl+A' },
+      { to: '/behaviour',      icon: ShieldCheck,   label: 'Behaviour Log' },
+      { to: '/gate-passes',    icon: QrCode,        label: 'Gate Control',       roles: ['super_admin','admin','gatekeeper'] },
+      { to: '/ptm',            icon: Users,         label: 'Parent Meetings',    roles: ['super_admin','admin'] },
     ],
   },
   {
-    group: 'FINANCE',
+    group: 'FINANCES',
     items: [
-      { to: '/fee-management', icon: DollarSign, label: 'Fee Management', shortcut: 'Ctrl+F' },
-      { to: '/accounts',       icon: Landmark,   label: 'Accounts',       roles: ['super_admin', 'admin', 'accountant'] },
-      { to: '/payroll',        icon: Wallet,     label: 'Salary',          roles: ['super_admin', 'admin', 'accountant'] },
+      { to: '/fee-management', icon: DollarSign,   label: 'Invoicing Hub',     shortcut: 'Ctrl+F',  roles: ['super_admin','admin','accountant'] },
+      { to: '/accounts',       icon: Landmark,     label: 'Accounts Ledger',   roles: ['super_admin','admin','accountant'] },
+      { to: '/payroll',        icon: Wallet,        label: 'Payroll Manager',   roles: ['super_admin','admin','accountant'] },
+      { to: '/expense-management', icon: Receipt,  label: 'Expense Tracker',   roles: ['super_admin','admin','accountant'] },
+    ],
+  },
+  {
+    group: 'PEOPLE',
+    items: [
+      { to: '/students',        icon: GraduationCap, label: 'Student Registry',  shortcut: 'Ctrl+S' },
+      { to: '/admissions/wizard',icon: UserPlus,    label: 'New Admission' },
+      { to: '/staff',           icon: Briefcase,    label: 'Staff Directory' },
+      { to: '/human-resource',  icon: UserCheck,    label: 'HR Central',        roles: ['super_admin','admin'] },
+      { to: '/hub/parents',     icon: Users,        label: 'Parent Network' },
+      { to: '/alumni',          icon: Award,        label: 'Alumni Portal',     roles: ['super_admin','admin'] },
+    ],
+  },
+  {
+    group: 'CONNECT',
+    items: [
+      { to: '/announcements',      icon: Bell,          label: 'Announcements' },
+      { to: '/notifications/sms',  icon: MessageSquare, label: 'SMS Gateway',       roles: ['super_admin','admin','accountant'] },
+      { to: '/chat',               icon: MessageSquare, label: 'Team Messenger' },
+      { to: '/sops',               icon: ShieldCheck,   label: 'School Playbook',   roles: ['super_admin','admin'] },
     ],
   },
   {
     group: 'OPERATIONS',
     items: [
-      { to: '/sops',              icon: ShieldCheck,   label: 'SOPs',          roles: ['super_admin', 'admin'] },
-      { to: '/stock/pos',         icon: ShoppingCart,  label: 'POS',           roles: ['super_admin', 'admin', 'accountant'] },
-      { to: '/transport',         icon: Truck,         label: 'Transport',     roles: ['super_admin', 'admin'] },
-      { to: '/hub/communication', icon: MessageSquare, label: 'Communication' },
+      { to: '/library',       icon: BookOpenCheck, label: 'Library System',    roles: ['super_admin','admin','accountant','teacher'] },
+      { to: '/transport',     icon: Truck,         label: 'Fleet Manager',     roles: ['super_admin','admin'] },
+      { to: '/stock/pos',     icon: ShoppingCart,  label: 'School Store',      roles: ['super_admin','admin','accountant'] },
+      { to: '/tasks',         icon: ClipboardList, label: 'Task Board',        roles: ['super_admin','admin','teacher'] },
     ],
   },
   {
-    group: 'SETTINGS',
+    group: 'ADMIN',
     items: [
-      { to: '/settings',        icon: Settings, label: 'School Settings' },
-      { to: '/launch-setup',    icon: Rocket,   label: 'Setup',          roles: ['super_admin', 'admin'] },
-      { to: '/settings/backup', icon: Database, label: 'Backup',         roles: ['super_admin', 'admin'] },
+      { to: '/settings',        icon: Settings,    label: 'School Settings' },
+      { to: '/launch-setup',    icon: Rocket,      label: 'Quick Setup',       roles: ['super_admin','admin'] },
+      { to: '/settings/backup', icon: Database,    label: 'Backup & Restore',  roles: ['super_admin','admin'] },
     ],
   },
 ];
@@ -725,25 +750,38 @@ export default function AdminLayout() {
         }}
       >
         {/* ── Brand area ── */}
-        <div className="sb-logo" style={{ background: 'rgba(0,0,0,0.22)', borderBottom: '1px solid rgba(255,255,255,0.09)', padding: '10px 14px' }}>
-          {/* School logo or IlmForge icon */}
-          {logo ? (
-            <img src={logo} alt="School Logo"
-              style={{ width:36, height:36, borderRadius:9, objectFit:'cover', flexShrink:0, border:'2px solid rgba(255,255,255,0.28)' }} />
-          ) : (
-            <div style={{ width:36, height:36, borderRadius:9, flexShrink:0, background:'linear-gradient(135deg,#1B2F6E,#0073b7)', display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid rgba(255,255,255,0.2)', fontSize:20 }}>
-              🎓
-            </div>
-          )}
+        <div style={{
+          padding:'16px 14px 12px',
+          borderBottom:'1px solid rgba(255,255,255,0.08)',
+        }}>
+          {/* IlmForge brand */}
+          <div style={{display:'flex', alignItems:'center', gap:10, marginBottom: collapsed ? 0 : 10}}>
+            <div style={{
+              width:36, height:36, borderRadius:10, flexShrink:0,
+              background:'linear-gradient(135deg,#D97706,#F59E0B)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              fontSize:18, boxShadow:'0 4px 12px rgba(217,119,6,0.4)',
+            }}>🎓</div>
+            {!collapsed && (
+              <div>
+                <div style={{fontSize:15, fontWeight:900, color:'white', lineHeight:1, letterSpacing:-0.3}}>
+                  ilm<span style={{color:'#D97706', fontFamily:"'Noto Nastaliq Urdu',serif"}}>فورج</span>
+                </div>
+                <div style={{fontSize:9, color:'rgba(255,255,255,0.5)', marginTop:1, letterSpacing:0.5}}>
+                  ILM KO ASAAN BANAYE
+                </div>
+              </div>
+            )}
+          </div>
+          {/* School name (smaller, below brand) */}
           {!collapsed && (
-            <div style={{ overflow:'hidden', flex:1, minWidth:0 }}>
-              {/* School name OR IlmForge */}
-              <div style={{ fontFamily:"'Poppins','Inter',sans-serif", fontWeight:800, fontSize:14.5, color:'white', letterSpacing:'-0.02em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', lineHeight:1.2 }}>
-                {school?.name || localStorage.getItem('registeredSchoolName') || 'IlmForge'}
-              </div>
-              <div style={{ fontSize:10.5, color:'rgba(255,255,255,0.55)', letterSpacing:'0.08em', textTransform:'uppercase', fontWeight:600, marginTop:2, fontFamily:"'Inter',sans-serif" }}>
-                School Management System
-              </div>
+            <div style={{
+              background:'rgba(255,255,255,0.08)', borderRadius:8,
+              padding:'6px 10px', fontSize:11, color:'rgba(255,255,255,0.7)',
+              fontWeight:600, overflow:'hidden', whiteSpace:'nowrap',
+              textOverflow:'ellipsis',
+            }}>
+              🏫 {school?.name || localStorage.getItem('registeredSchoolName') || 'My School'}
             </div>
           )}
         </div>
@@ -787,11 +825,16 @@ export default function AdminLayout() {
               <div key={group.group}>
                 {/* Section label */}
                 {!collapsed && (
-                  <div className="sb-section">
-                    <span className="sb-section-label" style={{ fontSize: 10, letterSpacing: 1.1, color: 'rgba(196,220,248,0.75)' }}>
-                      {group.group}
-                    </span>
-                    <div className="sb-section-line" />
+                  <div style={{
+                    fontSize:9, fontWeight:800, letterSpacing:2,
+                    color:'rgba(255,255,255,0.3)',
+                    padding:'14px 14px 4px',
+                    textTransform:'uppercase',
+                    display:'flex', alignItems:'center', gap:6,
+                  }}>
+                    <div style={{flex:1, height:'1px', background:'rgba(255,255,255,0.06)'}}/>
+                    {group.group}
+                    <div style={{flex:1, height:'1px', background:'rgba(255,255,255,0.06)'}}/>
                   </div>
                 )}
                 {collapsed && <div style={{ height: 6 }} />}

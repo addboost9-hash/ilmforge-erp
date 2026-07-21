@@ -323,9 +323,9 @@ export default function HumanResourcePage() {
             <Briefcase size={24} color="#fff" />
           </div>
           <div>
-            <h1 style={{ color: '#fff', fontSize: 20, fontWeight: 700, margin: 0 }}>Human Resource</h1>
+            <h1 style={{ color: '#fff', fontSize: 20, fontWeight: 700, margin: 0 }}>🏢 HR Central</h1>
             <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, margin: '3px 0 0' }}>
-              Manage staff, payroll, attendance, appraisals, leaves & loans
+              Staff · Payroll · Appraisals · Leave · Loans
             </p>
           </div>
         </div>

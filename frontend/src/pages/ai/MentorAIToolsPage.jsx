@@ -1,6 +1,52 @@
 import { useMemo, useState } from 'react';
 import { Sparkles, MessageCircle, FileText, BookOpenCheck, Palette } from 'lucide-react';
 
+/* ── IlmForge AI Copilot — unique tool cards ── */
+const AI_TOOLS = [
+  {
+    title: 'Lesson Plan Generator',
+    desc: "Create complete lesson plans using Bloom's Taxonomy in seconds",
+    icon: '📖', color: '#1B2F6E',
+    link: '/academics/lesson-plans',
+    badge: 'POPULAR',
+  },
+  {
+    title: 'Smart Exam Builder',
+    desc: 'Generate exam questions: MCQ, Short, Long, Essay, Applications',
+    icon: '📝', color: '#7c3aed',
+    link: '/exams/question-papers',
+    badge: 'AI',
+  },
+  {
+    title: 'Worksheet Creator',
+    desc: 'Create practice worksheets for any subject and topic instantly',
+    icon: '📋', color: '#059669',
+    link: '/academics/worksheets',
+    badge: 'NEW',
+  },
+  {
+    title: 'Quick MCQ Bank',
+    desc: 'Generate topic-wise multiple choice questions with answer keys',
+    icon: '❓', color: '#D97706',
+    link: '/exams/mcq-generator',
+    badge: 'FAST',
+  },
+  {
+    title: 'RoboBuddy Assistant',
+    desc: 'Setup WhatsApp bot to answer parent queries automatically',
+    icon: '🤖', color: '#DC2626',
+    link: '/robobuddy',
+    badge: 'BOT',
+  },
+  {
+    title: 'School Insights',
+    desc: 'AI-powered analysis of attendance, fees, and exam performance',
+    icon: '📊', color: '#0073b7',
+    link: '/analytics/students',
+    badge: 'SMART',
+  },
+];
+
 const TOOL_CONFIG = {
   chat: {
     title: 'AI Chat',
@@ -55,20 +101,58 @@ export default function MentorAIToolsPage() {
 
   return (
     <div className="page-content fade-in" style={{ paddingBottom: 24 }}>
-      <div style={{
-        background: 'linear-gradient(120deg,#0F172A 0%,#1D4ED8 45%,#059669 100%)',
-        borderRadius: 16,
-        color: '#fff',
-        padding: '20px 22px',
-        marginBottom: 14,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Sparkles size={20} />
-          <div style={{ fontSize: 22, fontWeight: 900 }}>Mentor AI Workspace</div>
+      {/* ── IlmForge AI Copilot Header ── */}
+      <div className="ilm-page-header ilm-animate" style={{ marginBottom: 20 }}>
+        <div>
+          <h1 className="ilm-page-title">🤖 AI Copilot</h1>
+          <p className="ilm-page-subtitle">Powered by Gemini AI — Your intelligent school management assistant</p>
         </div>
-        <div style={{ marginTop: 6, fontSize: 13, opacity: 0.9 }}>
-          AI Chat, Lesson Plans, Worksheets and Design Studio in one place.
+      </div>
+
+      {/* ── AI Tool Cards Grid (unique IlmForge feature) ── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#1B2F6E', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Sparkles size={15} /> Quick Access Tools
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
+          {AI_TOOLS.map((tool, i) => (
+            <a key={tool.title} href={tool.link} style={{ textDecoration: 'none' }}>
+              <div
+                style={{
+                  background: 'rgba(255,255,255,0.65)', backdropFilter: 'blur(16px)',
+                  borderRadius: 16, overflow: 'hidden',
+                  border: '1px solid rgba(255,255,255,0.45)',
+                  boxShadow: '0 4px 20px rgba(27,47,110,0.08)',
+                  animation: `ilm-fade-in 0.4s ease-out ${i * 80}ms both`,
+                  transition: 'transform 0.2s, box-shadow 0.2s', cursor: 'pointer',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 16px 48px rgba(27,47,110,0.15)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 20px rgba(27,47,110,0.08)'; }}
+              >
+                <div style={{ background: `linear-gradient(135deg,${tool.color},${tool.color}bb)`, padding: '20px 22px', color: 'white', position: 'relative' }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>{tool.icon}</div>
+                  <div style={{ fontWeight: 800, fontSize: 16 }}>{tool.title}</div>
+                  {tool.badge && (
+                    <span style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(255,255,255,0.25)', color: 'white', fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 999, letterSpacing: 1 }}>
+                      {tool.badge}
+                    </span>
+                  )}
+                </div>
+                <div style={{ padding: '14px 22px' }}>
+                  <p style={{ color: '#64748b', fontSize: 13, margin: 0, lineHeight: 1.6 }}>{tool.desc}</p>
+                  <div style={{ marginTop: 10, fontSize: 12, fontWeight: 700, color: tool.color }}>
+                    Use Tool →
+                  </div>
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Divider ── */}
+      <div style={{ fontWeight: 700, fontSize: 13, color: '#1B2F6E', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Sparkles size={15} /> AI Workspace — Generate Content
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 12 }}>

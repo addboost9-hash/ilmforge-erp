@@ -1938,9 +1938,9 @@ export default function SchoolMentorAcademicsPage() {
       {/* ── Page Header ── */}
       <div className="ilm-page-header" style={{ marginBottom: 20 }}>
         <div>
-          <h1 className="ilm-page-title">📚 Academics</h1>
+          <h1 className="ilm-page-title">📚 Curriculum Planner</h1>
           <p className="ilm-page-subtitle">
-            Scheme of Studies · Lesson Plans · Academic Calendar · Textbooks
+            Lesson Plans · Teaching Journal · Class Calendar · Textbooks
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

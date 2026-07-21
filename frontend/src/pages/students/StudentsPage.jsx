@@ -563,7 +563,7 @@ export default function StudentsPage() {
         }}
       >
         <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827' }}>Students</h1>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827' }}>🎓 Student Registry</h1>
           <p style={{ margin: '2px 0 0', fontSize: 13, color: '#6B7280' }}>
             Total Active: <strong>{total}</strong>
           </p>

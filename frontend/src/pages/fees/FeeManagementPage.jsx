@@ -991,9 +991,9 @@ export default function FeeManagementPage() {
             <DollarSign size={20} color="#fff" />
           </div>
           <div>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1B2F6E' }}>Fee Management</h2>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1B2F6E' }}>💳 Invoicing Hub</h2>
             <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
-              Structure · Challans · Receiving · History · Reports
+              Generate · Collect · Track · Report
             </div>
           </div>
         </div>
