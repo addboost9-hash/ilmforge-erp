@@ -440,3 +440,29 @@ tbody tr:hover {
 .badge-pending { background: #fef3c7 !important; color: #D97706 !important; }
 .badge-inactive { background: #f1f5f9 !important; color: #64748b !important; }
 .badge-urgent { background: #fee2e2 !important; color: #DC2626 !important; }
+
+/* ═══════════════════════════════════════════════════
+   CONSISTENT UTILITIES (v3.3)
+═══════════════════════════════════════════════════ */
+.page-card {
+  background: rgba(255,255,255,0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.45);
+  box-shadow: 0 4px 20px rgba(27,47,110,0.08);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.section-header {
+  font-size: 12px; font-weight: 700; color: #1B2F6E;
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 2px solid rgba(27,47,110,0.08);
+}
+@media (max-width: 768px) {
+  .ilm-page-header { flex-direction: column; gap: 12px; }
+  .ilm-pill-nav { overflow-x: auto; }
+  .ilm-pill-nav-item { padding: 7px 14px; font-size: 12px; }
+  .ilm-stat-value { font-size: 24px; }
+}

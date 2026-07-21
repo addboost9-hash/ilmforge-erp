@@ -15,12 +15,13 @@ import {
 
 /* ── Certificate types ─────────────────────────── */
 const CERT_TYPES = [
-  { id:'leaving',    icon:FileText,      label:'Leaving Certificate',    desc:'For students leaving the school',        color:'#0F766E', forStaff:false },
-  { id:'character',  icon:Award,         label:'Character Certificate',  desc:'Certificate of good conduct',            color:'#7C3AED', forStaff:false },
-  { id:'dob',        icon:Calendar,      label:'Date of Birth Cert.',    desc:'Official DOB from school records',        color:'#2563EB', forStaff:false },
-  { id:'experience', icon:GraduationCap, label:'Experience Certificate', desc:'For outgoing teachers & staff',           color:'#D97706', forStaff:true  },
-  { id:'admit',      icon:User,          label:'Exam Admit Card',        desc:'Exam entrance slip with barcode',         color:'#DC2626', forStaff:false },
-  { id:'birthday',   icon:Gift,          label:'Birthday Wish Card',     desc:'Personalized birthday card',              color:'#EC4899', forStaff:null  },
+  { id:'leaving',   icon:FileText,      label:'Leaving Certificate',    desc:'For students leaving the school',        color:'#0F766E', forStaff:false },
+  { id:'character', icon:Award,         label:'Character Certificate',  desc:'Certificate of good conduct',            color:'#7C3AED', forStaff:false },
+  { id:'bonafide',  icon:CheckCircle,   label:'Bonafide Certificate',   desc:'Confirms student enrollment status',     color:'#2563EB', forStaff:false },
+  { id:'dob',       icon:Calendar,      label:'Date of Birth Cert.',    desc:'Official DOB from school records',        color:'#0891B2', forStaff:false },
+  { id:'experience',icon:GraduationCap, label:'Experience Certificate', desc:'For outgoing teachers & staff',          color:'#D97706', forStaff:true  },
+  { id:'admit',     icon:User,          label:'Exam Admit Card',        desc:'Exam entrance slip with barcode',        color:'#DC2626', forStaff:false },
+  { id:'birthday',  icon:Gift,          label:'Birthday Wish Card',     desc:'Personalized birthday card',             color:'#EC4899', forStaff:null  },
 ];
 
 /* ════════════════════════════════════════════════════
@@ -181,6 +182,31 @@ const getCertHTML = (type, person, school, extras = {}) => {
     </div>`;
 
   const TEMPLATES = {
+    bonafide: `
+      <div style="max-width:720px;margin:0 auto;padding:40px;border:3px double #2563EB;border-radius:4px;font-family:Georgia,serif;">
+        ${header('#2563EB')}
+        <h2 style="text-align:center;font-size:19px;font-weight:800;color:#2563EB;letter-spacing:2px;text-transform:uppercase;margin:0 0 20px;padding:10px;border:1px solid #2563EB;background:#EFF6FF;">
+          BONAFIDE CERTIFICATE
+        </h2>
+        <p style="font-size:14px;line-height:2.1;color:#1F2937;margin-bottom:14px;">
+          This is to certify that <strong style="color:#1E3A8A;">${person.name}</strong>,
+          Son/Daughter of <strong>${person.fatherName || '_______________'}</strong>,
+          bearing Roll No. <strong>${person.rollNo || '___'}</strong>,
+          is a <em>bonafide</em> student of this institution,
+          currently enrolled in <strong>Class ${person.class?.name || '___'}
+          ${person.section?.name ? '— Section ' + person.section.name : ''}</strong>
+          during the academic session <strong>${year - 1}–${year}</strong>.
+        </p>
+        <p style="font-size:14px;line-height:2.1;color:#1F2937;margin-bottom:14px;">
+          His/Her conduct and attendance record has been satisfactory. This certificate
+          is issued at the request of the student/parent for official purposes.
+        </p>
+        <p style="font-size:14px;line-height:2.1;color:#1F2937;">
+          This school takes no responsibility for any misuse of this document.
+        </p>
+        ${sig}
+      </div>`,
+
     leaving: `
       <div style="max-width:720px;margin:0 auto;padding:40px;border:3px double #0F766E;border-radius:4px;font-family:Georgia,serif;">
         ${header('#0F766E')}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
-import { UserPlus, Edit, Award, Users, UserCheck, UserX, Phone, Mail, LayoutGrid, Table, X } from 'lucide-react';
+import { UserPlus, Edit, Award, Users, UserCheck, UserX, Phone, Mail, LayoutGrid, Table, X, GraduationCap, ShieldCheck, Activity } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
 
 const money = v => 'Rs. ' + ((v||0)/100).toLocaleString();
@@ -139,13 +139,27 @@ export default function StaffPage() {
 
   const staffList = data?.data || [];
 
+  /* Derive counts from list for granular stats */
+  const teacherCount = staffList.filter(s =>
+    s.designation?.toLowerCase().includes('teacher') ||
+    s.designation?.toLowerCase().includes('lecturer') ||
+    s.role?.toLowerCase() === 'teacher'
+  ).length;
+  const adminCount = staffList.filter(s =>
+    s.designation?.toLowerCase().includes('admin') ||
+    s.designation?.toLowerCase().includes('principal') ||
+    s.designation?.toLowerCase().includes('head') ||
+    s.role?.toLowerCase() === 'admin'
+  ).length;
+  const activeCount = staffList.filter(s => s.status === 'active' || s.isActive !== false).length;
+
   return (
     <div className="page-content fade-in">
       {/* Header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
         <div>
-          <h1 className="page-title">Staff Management</h1>
-          <p style={{ color:'#64748B', fontSize:13, marginTop:2 }}>Manage teachers and non-teaching staff</p>
+          <h1 className="page-title">Staff Directory</h1>
+          <p style={{ color:'#64748B', fontSize:13, marginTop:2 }}>Manage teachers and non-teaching staff members</p>
         </div>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
           {/* View-mode toggle */}
@@ -185,12 +199,13 @@ export default function StaffPage() {
       {/* Onboarding banner */}
       {showOnboarding && <OnboardingBanner onDismiss={dismissOnboarding}/>}
 
-      {/* Stats */}
-      <div className="stats-grid-3" style={{ marginBottom:20 }}>
+      {/* Stats — Total / Teachers / Admin / Active */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))', gap:14, marginBottom:20 }}>
         {[
-          { l:'Total Staff',    v:stats?.total||data?.total||0, bg:'linear-gradient(135deg,#1E3A5F,#253D63)', icon:Users },
-          { l:'Present Today',  v:stats?.presentToday||0,       bg:'linear-gradient(135deg,#0D9488,#0F766E)', icon:UserCheck },
-          { l:'Absent Today',   v:stats?.absentToday||0,        bg:'linear-gradient(135deg,#DC2626,#B91C1C)', icon:UserX },
+          { l:'Total Staff',  v:stats?.total||staffList.length||0,             bg:'linear-gradient(135deg,#1E3A5F,#253D63)', icon:Users },
+          { l:'Teachers',     v:stats?.teachers||teacherCount,                 bg:'linear-gradient(135deg,#0D9488,#0F766E)', icon:GraduationCap },
+          { l:'Admin / Other',v:stats?.admin||adminCount,                      bg:'linear-gradient(135deg,#7C3AED,#6D28D9)', icon:ShieldCheck },
+          { l:'Active',       v:stats?.active||activeCount||staffList.length,  bg:'linear-gradient(135deg,#059669,#047857)', icon:Activity },
         ].map(item => {
           const Icon = item.icon;
           return (

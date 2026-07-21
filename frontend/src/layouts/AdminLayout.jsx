@@ -667,6 +667,43 @@ export default function AdminLayout() {
   const hasResults = searchResults.students?.length > 0 || searchResults.staff?.length > 0
     || searchResults.modules?.length > 0 || searchResults.recent?.length > 0;
 
+  /* ── IlmForge route label map ── */
+  const ROUTE_LABELS = {
+    'dashboard':       'Smart Dashboard',
+    'academics':       'Curriculum Planner',
+    'academics-hub':   'Curriculum Planner',
+    'examination':     'Exam Vault',
+    'attendance-hub':  'Attendance Tracker',
+    'attendance':      'Attendance Tracker',
+    'fee-management':  'Invoicing Hub',
+    'fees':            'Invoicing Hub',
+    'students':        'Student Registry',
+    'admissions':      'Student Registry',
+    'staff':           'Staff Directory',
+    'human-resource':  'HR Central',
+    'payroll':         'Payroll Manager',
+    'salary':          'Payroll Manager',
+    'reports-hub':     'Insights Hub',
+    'reports':         'Insights Hub',
+    'mentor-ai':       'AI Copilot',
+    'sops':            'School Playbook',
+    'settings':        'School Settings',
+    'timetable':       'Class Schedule',
+    'homework':        'Homework Diary',
+    'library':         'Library',
+    'certificates':    'Certificates',
+    'exams':           'Exam Vault',
+    'hub':             'Operations Hub',
+    'analytics':       'Analytics',
+    'notifications':   'Notifications',
+    'behaviour':       'Behaviour Log',
+    'transport':       'Transport',
+    'accounting':      'Accounting',
+    'online-classes':  'Virtual Classes',
+    'profile':         'My Profile',
+    'workflow':        'Smart Workflow Hub',
+  };
+
   /* ── Breadcrumb page label — translatable ── */
   const pageMap = {
     '/dashboard':  i18nT('dashboard','title',lang),
@@ -683,9 +720,18 @@ export default function AdminLayout() {
     '/profile':    i18nT('common','profile',lang),
     '/library':    i18nT('nav','library',lang),
   };
-  const pageLabel = pageMap[location.pathname]
-    || location.pathname.split('/').filter(Boolean).pop()?.replace(/-/g, ' ')
+
+  const pathSegments = location.pathname.split('/').filter(Boolean);
+  const lastSegment  = pathSegments[pathSegments.length - 1] || 'dashboard';
+  const pageLabel = ROUTE_LABELS[lastSegment]
+    || pageMap[location.pathname]
+    || lastSegment.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     || 'Dashboard';
+
+  /* ── Full breadcrumb segments (max 3 levels) ── */
+  const breadcrumbSegments = pathSegments.slice(0, 3).map(seg =>
+    ROUTE_LABELS[seg] || seg.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  );
 
   /* ── Breadcrumb group resolution ── */
   const breadcrumbGroup = useMemo(() => {
@@ -912,6 +958,15 @@ export default function AdminLayout() {
             <LogOut size={14} />
             {!collapsed && <span>Logout</span>}
           </button>
+          {!collapsed && (
+            <div style={{
+              padding:'8px 14px', textAlign:'center',
+              borderTop:'1px solid rgba(255,255,255,0.06)',
+              fontSize:9, color:'rgba(255,255,255,0.25)', letterSpacing:0.5,
+            }}>
+              IlmForge v3.3 • Pakistan 🇵🇰
+            </div>
+          )}
         </div>
       </aside>
 
@@ -957,18 +1012,20 @@ export default function AdminLayout() {
               >
                 Home
               </Link>
-              {breadcrumbGroup && (
+              {breadcrumbSegments.length > 1 && breadcrumbSegments.slice(0, -1).map((seg, i) => (
+                <React.Fragment key={i}>
+                  <ChevronRight size={13} color="#ccc" />
+                  <span style={{ color: '#94a3b8', fontWeight: 500 }}>{seg}</span>
+                </React.Fragment>
+              ))}
+              {breadcrumbSegments.length > 0 && (
                 <>
                   <ChevronRight size={13} color="#ccc" />
-                  <span style={{ color: '#94a3b8', fontWeight: 500, textTransform: 'capitalize' }}>
-                    {breadcrumbGroup}
+                  <span style={{ color: '#333', fontWeight: 700 }}>
+                    {breadcrumbSegments[breadcrumbSegments.length - 1]}
                   </span>
                 </>
               )}
-              <ChevronRight size={13} color="#ccc" />
-              <span style={{ color: '#333', fontWeight: 700, textTransform: 'capitalize' }}>
-                {pageLabel}
-              </span>
             </div>
           </div>
 

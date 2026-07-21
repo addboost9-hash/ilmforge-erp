@@ -372,11 +372,11 @@ export default function DashboardPage() {
         </div>
         <div className="card-body">
           <div className="grid-4" style={{ gap: 12 }}>
-            <ActionTile label="Mark Attendance"    to="/attendance-hub"            Icon={ClipboardList} bg="#f0fdf4" color="#00a65a" />
-            <ActionTile label="Collect Fee"        to="/fee-management"            Icon={CreditCard}    bg="#eff6ff" color="#0073b7" />
+            <ActionTile label="Attendance Tracker"  to="/attendance-hub"            Icon={ClipboardList} bg="#f0fdf4" color="#00a65a" />
+            <ActionTile label="Invoicing Hub"      to="/fee-management"            Icon={CreditCard}    bg="#eff6ff" color="#0073b7" />
             <ActionTile label="Add Student"        to="/admissions/wizard"         Icon={UserPlus}      bg="#ecfeff" color="#00c0ef" />
-            <ActionTile label="Generate Report"    to="/reports-hub"               Icon={BarChart2}     bg="#f5f3ff" color="#605ca8" />
-            <ActionTile label="Add Exam"           to="/exams"                     Icon={FileText}      bg="#fef2f2" color="#dd4b39" />
+            <ActionTile label="Insights Hub"       to="/reports-hub"               Icon={BarChart2}     bg="#f5f3ff" color="#605ca8" />
+            <ActionTile label="Exam Vault"         to="/exams"                     Icon={FileText}      bg="#fef2f2" color="#dd4b39" />
             <ActionTile label="Academic Calendar"  to="/academic-calendar"         Icon={FileText}      bg="#fff7ed" color="#d97706" />
             <ActionTile label="Send SMS"           to="/hub/communication?tab=sms" Icon={MessageSquare} bg="#fffbeb" color="#f39c12" />
             <ActionTile label={t('dashboard','defaulters')}     to="/fees/defaulters"           Icon={ClipboardList} bg="#fef9c3" color="#b45309" />
