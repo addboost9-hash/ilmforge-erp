@@ -798,6 +798,9 @@ function TextbooksTab() {
 ═══════════════════════════════════════════════════════════════ */
 function SchemeOfStudiesTab() {
   const [sos, setSos] = useState('textbooks');
+  const [showSchemeOnboarding, setShowSchemeOnboarding] = useState(
+    !localStorage.getItem('scheme_visited')
+  );
 
   // Demo months data for MonthProgress illustration
   const demoMonths = [
@@ -817,6 +820,73 @@ function SchemeOfStudiesTab() {
 
   return (
     <div>
+      {/* Scheme of Studies Onboarding */}
+      {showSchemeOnboarding && (
+        <div style={{
+          position:'fixed', inset:0,
+          background:'rgba(15,23,42,0.55)',
+          backdropFilter:'blur(10px)',
+          zIndex:2000, display:'flex',
+          alignItems:'center', justifyContent:'center', padding:20
+        }}>
+          <div style={{
+            background:'rgba(255,255,255,0.96)',
+            backdropFilter:'blur(20px)',
+            borderRadius:24, padding:'36px 32px',
+            maxWidth:500, width:'100%',
+            textAlign:'center',
+            boxShadow:'0 25px 80px rgba(27,47,110,0.25)',
+            animation:'scaleIn 0.3s ease-out',
+          }}>
+            <div style={{fontSize:64, marginBottom:12}}>📋</div>
+            <h2 style={{fontSize:22, fontWeight:800, color:'#1B2F6E', margin:'0 0 8px'}}>
+              Scheme of Studies
+            </h2>
+            <p style={{color:'#64748b', fontSize:14, lineHeight:1.7, margin:'0 0 24px'}}>
+              Define the complete curriculum plan for each class — month by month, subject by subject.
+            </p>
+            {/* Monthly progress visual */}
+            <div style={{display:'flex', gap:4, justifyContent:'center', marginBottom:20, flexWrap:'wrap'}}>
+              {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                <div key={m} style={{
+                  width:32, height:32, borderRadius:'50%',
+                  background: i < 3
+                    ? 'linear-gradient(135deg,#1B2F6E,#0073b7)'
+                    : 'transparent',
+                  border: i < 3 ? 'none' : '2px dashed #cbd5e1',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize: i < 3 ? 12 : 10,
+                  color: i < 3 ? 'white' : '#94a3b8',
+                  fontWeight: 700,
+                  animation:`ilm-fade-in 0.2s ease-out ${i*60}ms both`,
+                }}>
+                  {i < 3 ? '✓' : m.slice(0,1)}
+                </div>
+              ))}
+            </div>
+            <p style={{fontSize:12, color:'#94a3b8', margin:'0 0 20px'}}>
+              Fill in topics month by month to track curriculum coverage
+            </p>
+            <div style={{display:'flex', gap:10, justifyContent:'center'}}>
+              <button
+                onClick={() => {
+                  localStorage.setItem('scheme_visited', '1');
+                  setShowSchemeOnboarding(false);
+                }}
+                style={{
+                  background:'linear-gradient(135deg,#1B2F6E,#0073b7)',
+                  color:'white', border:'none', borderRadius:999,
+                  padding:'11px 28px', fontSize:14, fontWeight:700,
+                  cursor:'pointer', boxShadow:'0 4px 16px rgba(27,47,110,0.35)'
+                }}
+              >
+                Setup Curriculum →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button style={subTabBtn(sos === 'textbooks')} onClick={() => setSos('textbooks')}>Textbooks</button>
         <button style={subTabBtn(sos === 'calendar')}  onClick={() => setSos('calendar')}>Calendar</button>
@@ -1400,7 +1470,14 @@ function ViewLessonPlanTab() {
     queryFn: () => api.get('/classes').then(r => r.data.data || []).catch(() => []),
   });
 
-  const subjectsForClass = classes.find(c => String(c.id) === String(classId))?.subjects || [];
+  const { data: viewSubjects = [] } = useQuery({
+    queryKey: ['subjects-for-lp', classId],
+    queryFn: () => api.get('/subjects', { params: { classId } }).then(r => r.data.data || []),
+    enabled: !!classId,
+    staleTime: 300_000,
+  });
+
+  const subjectsForClass = viewSubjects;
 
   const [units, setUnits] = useState([]);
 
@@ -1484,13 +1561,39 @@ function ViewLessonPlanTab() {
       <div style={{ marginBottom: 14 }}>
         <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Select subject</label>
         <select
-          style={{ ...inp }}
           value={subjectId}
           onChange={e => { setSubjectId(e.target.value); setFetched(false); setUnits([]); }}
+          style={{
+            width:'100%', padding:'10px 14px',
+            border:'1.5px solid rgba(27,47,110,0.12)',
+            borderRadius:10, fontSize:13,
+            background:'rgba(255,255,255,0.8)',
+            backdropFilter:'blur(8px)',
+            appearance:'none',
+            backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%231B2F6E' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+            backgroundRepeat:'no-repeat',
+            backgroundPosition:'right 12px center',
+            paddingRight:36,
+            cursor: classId ? 'pointer' : 'not-allowed',
+            opacity: classId ? 1 : 0.6,
+          }}
+          disabled={!classId}
         >
           <option value="">— Select Subject —</option>
-          {subjectsForClass.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {viewSubjects.map(s => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
         </select>
+        {classId && viewSubjects.length === 0 && (
+          <div style={{fontSize:11,color:'#D97706',marginTop:4}}>
+            ⚠️ No subjects found for this class. Add subjects in Settings → Subjects.
+          </div>
+        )}
+        {!classId && (
+          <div style={{fontSize:11,color:'#94a3b8',marginTop:4}}>
+            Select a class first to see available subjects
+          </div>
+        )}
       </div>
 
       {/* Fetch Button */}
@@ -1711,9 +1814,77 @@ function ViewLessonPlanTab() {
 ═══════════════════════════════════════════════════════════════ */
 function LessonPlansTab() {
   const [lpSub, setLpSub] = useState('view');
+  const [showLessonPlanOnboarding, setShowLessonPlanOnboarding] = useState(
+    !localStorage.getItem('lesson_plan_visited')
+  );
 
   return (
     <div>
+      {/* Lesson Plans Onboarding */}
+      {showLessonPlanOnboarding && (
+        <div style={{
+          position:'fixed', inset:0,
+          background:'rgba(15,23,42,0.55)',
+          backdropFilter:'blur(10px)',
+          zIndex:2000, display:'flex',
+          alignItems:'center', justifyContent:'center', padding:20
+        }}>
+          <div style={{
+            background:'rgba(255,255,255,0.96)',
+            backdropFilter:'blur(20px)',
+            borderRadius:24, padding:'36px 32px',
+            maxWidth:500, width:'100%',
+            textAlign:'center',
+            boxShadow:'0 25px 80px rgba(27,47,110,0.25)',
+            animation:'scaleIn 0.3s ease-out',
+          }}>
+            <div style={{fontSize:64, marginBottom:12}}>📖</div>
+            <h2 style={{fontSize:22, fontWeight:800, color:'#1B2F6E', margin:'0 0 8px'}}>
+              Lesson Plans
+            </h2>
+            <p style={{color:'#64748b', fontSize:14, lineHeight:1.7, margin:'0 0 24px'}}>
+              Plan your lessons professionally using AI assistance or manual creation.
+            </p>
+            {/* 4 sub-tabs as feature cards */}
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:24, textAlign:'left'}}>
+              {[
+                {icon:'⚙️', title:'Session & Term', desc:'Setup academic year'},
+                {icon:'📅', title:'Term Breakup', desc:'Week-by-week plan'},
+                {icon:'✏️', title:'Create Plan', desc:'Write lesson plans'},
+                {icon:'👁️', title:'View Plans', desc:'Browse by class+subject'},
+              ].map(f => (
+                <div key={f.title} style={{
+                  background:'#f8fafc', borderRadius:10, padding:'10px 12px',
+                  border:'1px solid #e2e8f0', display:'flex', gap:8, alignItems:'flex-start'
+                }}>
+                  <span style={{fontSize:20}}>{f.icon}</span>
+                  <div>
+                    <div style={{fontWeight:700, fontSize:12, color:'#1e3a5f'}}>{f.title}</div>
+                    <div style={{fontSize:11, color:'#64748b'}}>{f.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{display:'flex', gap:10, justifyContent:'center'}}>
+              <button
+                onClick={() => {
+                  localStorage.setItem('lesson_plan_visited', '1');
+                  setShowLessonPlanOnboarding(false);
+                }}
+                style={{
+                  background:'linear-gradient(135deg,#1B2F6E,#0073b7)',
+                  color:'white', border:'none', borderRadius:999,
+                  padding:'11px 28px', fontSize:14, fontWeight:700,
+                  cursor:'pointer', boxShadow:'0 4px 16px rgba(27,47,110,0.35)'
+                }}
+              >
+                Start Planning →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         <button style={subTabBtn(lpSub === 'session')} onClick={() => setLpSub('session')}>Session &amp; Term Setting</button>
         <button style={subTabBtn(lpSub === 'breakup')} onClick={() => setLpSub('breakup')}>Term Breakup</button>
