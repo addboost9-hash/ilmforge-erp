@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { ArrowRight, Loader2, CheckCircle, Upload, Camera, Mail, Phone, Building2 } from 'lucide-react';
+import IlmForgeLogo from '../../components/brand/IlmForgeLogo';
 
 const PLANS = [
   { val:'free',     label:'Free',     desc:'Up to 100 students',  color:'#64748B' },
@@ -145,12 +146,9 @@ export default function RegisterPage() {
       <div style={{ width:'100%', maxWidth:560, background:'#fff', borderRadius:16, padding:'32px 36px', boxShadow:'0 8px 32px rgba(0,0,0,0.1)' }}>
 
         {/* Header */}
-        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:24 }}>
-          <div style={{ width:42,height:42,background:'linear-gradient(135deg,#0D9488,#0F766E)',borderRadius:11,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>🎓</div>
-          <div>
-            <div style={{ fontSize:17, fontWeight:800, color:'#1E3A5F' }}>EduForge Pro</div>
-            <div style={{ fontSize:11.5, color:'#64748B' }}>Create your school account</div>
-          </div>
+        <div style={{ marginBottom:24 }}>
+          <IlmForgeLogo size="md" />
+          <div style={{ fontSize:11.5, color:'#64748B', marginTop:6 }}>Create your school account</div>
         </div>
 
         <h2 style={{ fontSize:21, fontWeight:800, color:'#1E3A5F', marginBottom:4 }}>Register Your School</h2>

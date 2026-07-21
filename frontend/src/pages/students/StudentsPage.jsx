@@ -45,6 +45,9 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
   const [selectAll, setSelectAll] = useState(false);
   const [selected, setSelected] = useState({});
   const [confirming, setConfirming] = useState(false);
+  const [promoted, setPromoted] = useState(false);
+  const [promotedCount, setPromotedCount] = useState(0);
+  const [targetClass, setTargetClass] = useState('');
 
   // Load students in this class-section for bulk promote
   const { data: students = [], isLoading } = useQuery({
@@ -117,7 +120,9 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
       qc.invalidateQueries({ queryKey: ['students-expanded'] });
       qc.invalidateQueries({ queryKey: ['students-for-promote'] });
       onPromoted && onPromoted();
-      onClose();
+      setPromotedCount(selectedCount);
+      setTargetClass(className + sectionLabel);
+      setPromoted(true);
     },
     onError: (err) => toast.error(err.response?.data?.message || err.message || 'Promote failed'),
   });
@@ -224,8 +229,20 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
           </label>
         </div>
 
+        {/* Promotion success animation */}
+        {promoted && (
+          <div style={{ textAlign: 'center', padding: 32, animation: 'scaleIn 0.3s ease-out' }}>
+            <div style={{ fontSize: 56, marginBottom: 12 }}>🎓</div>
+            <h3 style={{ color: '#059669', fontSize: 18, fontWeight: 800, margin: '0 0 6px' }}>
+              {promotedCount} Student{promotedCount !== 1 ? 's' : ''} Promoted!
+            </h3>
+            <p style={{ color: '#64748b', margin: '0 0 20px' }}>Students moved to {targetClass}</p>
+            <button style={btnTeal} onClick={onClose}>Close</button>
+          </div>
+        )}
+
         {/* Students table */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ flex: 1, overflow: 'auto', display: promoted ? 'none' : undefined }}>
           {isLoading ? (
             <div style={{ textAlign: 'center', padding: 40, color: '#9CA3AF' }}>Loading students…</div>
           ) : (
@@ -388,6 +405,7 @@ export default function StudentsPage() {
   const [promoteRow, setPromoteRow] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const searchQuery = useDebounce(searchInput.trim(), 400);
+  const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem('students_visited'));
 
   const qc = useQueryClient();
 
@@ -434,6 +452,13 @@ export default function StudentsPage() {
 
   const total = classSections.reduce((sum, r) => sum + r.studentCount, 0);
 
+  // Summary strip stats
+  const totalStudents = total;
+  const maleCount = classSections.reduce((sum, r) => sum + (r.maleCount || 0), 0);
+  const femaleCount = classSections.reduce((sum, r) => sum + (r.femaleCount || 0), 0);
+  const now = new Date();
+  const newCount = classSections.reduce((sum, r) => sum + (r.newThisMonth || 0), 0);
+
   const tabStyle = (tab) => ({
     padding: '10px 22px',
     border: 'none',
@@ -448,6 +473,82 @@ export default function StudentsPage() {
 
   return (
     <div style={{ padding: 20, background: '#F9FAFB', minHeight: '100vh' }}>
+
+      {/* ── Onboarding Modal ── */}
+      {showOnboarding && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        }} onClick={() => { setShowOnboarding(false); localStorage.setItem('students_visited', '1'); }}>
+          <div style={{
+            background: '#fff', borderRadius: 20, maxWidth: 560, width: '100%',
+            overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+            animation: 'ilm-fade-in 0.3s ease-out',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{
+              background: 'linear-gradient(135deg,#1B2F6E,#0073b7)', padding: '28px 28px 24px',
+              color: '#fff', textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 48, marginBottom: 8 }}>👨‍🎓</div>
+              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Students Module</h2>
+              <p style={{ margin: '6px 0 0', opacity: 0.85, fontSize: 14 }}>Everything you need to manage your students</p>
+            </div>
+            <div style={{ padding: '24px 28px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                {[
+                  { icon: '📋', title: 'Student Directory', desc: 'Browse all students by class & section' },
+                  { icon: '🎓', title: 'Admission', desc: 'Enroll new students with full details' },
+                  { icon: '⬆️', title: 'Promotions', desc: 'Move students to the next class in bulk' },
+                  { icon: '🪪', title: 'ID Cards', desc: 'Generate & print student ID cards' },
+                  { icon: '📊', title: 'Analytics', desc: 'View gender ratios and enrollment stats' },
+                ].map(f => (
+                  <div key={f.title} style={{
+                    border: '1px solid #E5E7EB', borderRadius: 10, padding: '12px 14px',
+                    display: 'flex', gap: 10, alignItems: 'flex-start',
+                  }}>
+                    <span style={{ fontSize: 22 }}>{f.icon}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#1B2F6E' }}>{f.title}</div>
+                      <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{f.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                style={{
+                  width: '100%', background: 'linear-gradient(135deg,#1B2F6E,#0073b7)',
+                  color: '#fff', border: 'none', borderRadius: 10, padding: '12px 20px',
+                  fontWeight: 700, fontSize: 14, cursor: 'pointer',
+                }}
+                onClick={() => { setShowOnboarding(false); localStorage.setItem('students_visited', '1'); }}
+              >
+                Get Started
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Summary Strip ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 20 }}>
+        {[
+          { label: 'Total Students', val: totalStudents, icon: '👨‍🎓', bg: 'linear-gradient(135deg,#1B2F6E,#0073b7)' },
+          { label: 'Boys', val: maleCount, icon: '👦', bg: 'linear-gradient(135deg,#0073b7,#38bdf8)' },
+          { label: 'Girls', val: femaleCount, icon: '👧', bg: 'linear-gradient(135deg,#ec4899,#f43f5e)' },
+          { label: 'New This Month', val: newCount, icon: '✨', bg: 'linear-gradient(135deg,#059669,#10b981)' },
+        ].map((s, i) => (
+          <div key={s.label} style={{
+            background: s.bg, color: 'white', borderRadius: 14, padding: '16px 18px',
+            animation: `ilm-fade-in 0.4s ease-out ${i * 80}ms both`,
+            boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+          }}>
+            <div style={{ fontSize: 28, marginBottom: 4 }}>{s.icon}</div>
+            <div style={{ fontSize: 22, fontWeight: 800 }}>{s.val || 0}</div>
+            <div style={{ fontSize: 11, opacity: 0.85, textTransform: 'uppercase', letterSpacing: 0.6 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
       {/* Page header */}
       <div
         style={{

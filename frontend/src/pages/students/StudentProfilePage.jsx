@@ -399,50 +399,66 @@ export default function StudentProfilePage() {
       </div>
 
       {/* Profile hero card */}
-      <div className="card" style={{marginBottom:16, background:'linear-gradient(135deg,#0F4C45,#0F766E)', color:'#fff'}}>
-        <div style={{display:'flex', alignItems:'center', gap:20}}>
-          {/* Photo area */}
-          <div style={{
-            width:80, height:80, borderRadius:14, overflow:'hidden', flexShrink:0,
-            border:'3px solid rgba(255,255,255,0.3)',
-            background: savedPhoto ? 'transparent' : (s.gender==='female'?'rgba(244,114,182,0.3)':'rgba(96,165,250,0.3)'),
-            display:'flex', alignItems:'center', justifyContent:'center',
-          }}>
-            {savedPhoto
-              ? <img src={savedPhoto} alt={s.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-              : <span style={{fontSize:30,fontWeight:900,color:'#fff'}}>{s.name?.charAt(0)}</span>
-            }
-          </div>
+      <div style={{
+        background: 'linear-gradient(135deg,#1B2F6E,#0073b7)',
+        borderRadius: 20, padding: '24px 28px', marginBottom: 20,
+        color: 'white', display: 'flex', gap: 20, alignItems: 'center',
+        boxShadow: '0 8px 32px rgba(27,47,110,0.3)',
+        animation: 'ilm-fade-in 0.4s ease-out',
+        flexWrap: 'wrap',
+      }}>
+        {/* Profile photo */}
+        <div style={{
+          width: 80, height: 80, borderRadius: '50%',
+          background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 36, overflow: 'hidden', flexShrink: 0,
+        }}>
+          {savedPhoto
+            ? <img src={savedPhoto} alt={s.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+            : (s.photoUrl
+                ? <img src={s.photoUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                : '👤')
+          }
+        </div>
 
-          <div style={{flex:1}}>
-            <div style={{fontSize:20, fontWeight:800, marginBottom:4}}>{s.name}</div>
-            <div style={{fontSize:13, opacity:0.8}}>
-              Roll: <strong style={{fontFamily:'monospace',fontSize:14}}>{s.rollNo||'—'}</strong>
-              {s.class?.name   && <> &nbsp;·&nbsp; <strong>{s.class.name}</strong></>}
-              {s.section?.name && <> – <strong>{s.section.name}</strong></>}
-              {s.fatherName    && <> &nbsp;·&nbsp; Father: <strong>{s.fatherName}</strong></>}
-            </div>
-            {!savedPhoto && (
-              <div style={{marginTop:6,fontSize:11.5,color:'rgba(255,255,255,0.55)',display:'flex',alignItems:'center',gap:5}}>
-                <Camera size={12}/>
-                <span>No photo — <Link to="/admissions" style={{color:'rgba(255,255,255,0.75)'}}>upload when admitting</Link> or via ID Cards page</span>
-              </div>
+        <div style={{flex: 1, minWidth: 180}}>
+          <h2 style={{margin: '0 0 4px', fontSize: 20, fontWeight: 800}}>{s.name}</h2>
+          <div style={{opacity: 0.85, fontSize: 13}}>
+            {s.fatherName && <>{s.fatherName} &bull; </>}Roll #{s.rollNo||'—'}
+          </div>
+          <div style={{marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap'}}>
+            {s.class?.name && (
+              <span style={{background:'rgba(255,255,255,0.2)',padding:'3px 10px',borderRadius:999,fontSize:11,fontWeight:700}}>
+                {s.class.name}{s.section?.name ? ` – ${s.section.name}` : ''}
+              </span>
+            )}
+            {s.status && (
+              <span style={{background:'rgba(255,255,255,0.2)',padding:'3px 10px',borderRadius:999,fontSize:11,fontWeight:700}}>
+                {s.status.toUpperCase()}
+              </span>
             )}
           </div>
+          {!savedPhoto && !s.photoUrl && (
+            <div style={{marginTop:6,fontSize:11.5,color:'rgba(255,255,255,0.55)',display:'flex',alignItems:'center',gap:5}}>
+              <Camera size={12}/>
+              <span>No photo — <Link to="/admissions" style={{color:'rgba(255,255,255,0.75)'}}>upload when admitting</Link> or via ID Cards page</span>
+            </div>
+          )}
+        </div>
 
-          <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
-            {[
-              {label:'Attendance', val:attCount>0?attPct+'%':'—', sub:`${present}/${attCount} days`, color:attPct>=75?'#DCFCE7':'#FEE2E2', tc:attPct>=75?'#15803D':'#B91C1C'},
-              {label:'Fee Paid',   val:money(totalPaid), sub:'total collected', color:'#DCFCE7', tc:'#15803D'},
-              {label:'Pending',    val:money(totalDue),  sub:totalDue>0?'outstanding':'all clear', color:totalDue>0?'#FEE2E2':'#DCFCE7', tc:totalDue>0?'#B91C1C':'#15803D'},
-            ].map(m => (
-              <div key={m.label} style={{background:'rgba(255,255,255,0.12)',borderRadius:10,padding:'9px 14px',textAlign:'center',minWidth:90}}>
-                <div style={{fontSize:15,fontWeight:800}}>{m.val}</div>
-                <div style={{fontSize:10,opacity:0.65,marginTop:1}}>{m.sub}</div>
-                <div style={{fontSize:11,opacity:0.7,marginTop:2}}>{m.label}</div>
-              </div>
-            ))}
-          </div>
+        <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
+          {[
+            {label:'Attendance', val:attCount>0?attPct+'%':'—', sub:`${present}/${attCount} days`},
+            {label:'Fee Paid',   val:money(totalPaid), sub:'total collected'},
+            {label:'Pending',    val:money(totalDue),  sub:totalDue>0?'outstanding':'all clear'},
+          ].map(m => (
+            <div key={m.label} style={{background:'rgba(255,255,255,0.15)',borderRadius:10,padding:'9px 14px',textAlign:'center',minWidth:90}}>
+              <div style={{fontSize:15,fontWeight:800}}>{m.val}</div>
+              <div style={{fontSize:10,opacity:0.65,marginTop:1}}>{m.sub}</div>
+              <div style={{fontSize:11,opacity:0.7,marginTop:2}}>{m.label}</div>
+            </div>
+          ))}
         </div>
       </div>
 

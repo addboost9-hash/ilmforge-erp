@@ -1,6 +1,6 @@
 /**
- * IlmForge — Split-Layout Login (v3.3 redesign)
- * Left branding panel (40%) + right form panel (60%).
+ * IlmForge — Premium Split-Layout Login (v3.4 redesign)
+ * Left dark navy branding panel (45%) + right glass card form panel (55%).
  * Responsive: on mobile the branding panel collapses to a compact top bar.
  * All auth logic (login, demo fill, role redirect, toasts) preserved exactly.
  */
@@ -8,11 +8,11 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Eye, EyeOff, ArrowRight, Loader2, ShieldCheck, FileDown, UserPlus,
-  Mail, Lock, CheckCircle2, CalendarCheck, Wallet, Users, MessageCircle,
+  Mail, Lock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useAuthStore from '../../store/auth.store';
-import { IlmForgeLogo } from '../../components/brand/Brand';
+import IlmForgeLogo from '../../components/brand/IlmForgeLogo';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -53,10 +53,10 @@ export default function LoginPage() {
   ];
 
   const features = [
-    { icon: CalendarCheck, label: 'Smart Attendance' },
-    { icon: Wallet, label: 'Fee Management' },
-    { icon: Users, label: 'Parent Portal' },
-    { icon: MessageCircle, label: 'WhatsApp Alerts' },
+    'Complete Exam Management',
+    'Smart Fee Collection',
+    'Real-time Attendance',
+    'AI Lesson Planner',
   ];
 
   const inputWrap = { position: 'relative', marginBottom: 16 };
@@ -76,61 +76,48 @@ export default function LoginPage() {
       className="ilm-login-shell"
       style={{
         minHeight: '100vh', display: 'flex', width: '100%',
-        fontFamily: "'Inter','Poppins',system-ui,sans-serif", background: 'linear-gradient(135deg, #dde8ff 0%, #eef4ff 25%, #e8f5e9 60%, #fff8e1 100%)',
+        fontFamily: "'Inter','Poppins',system-ui,sans-serif",
+        background: 'linear-gradient(135deg,#0f1d45,#1B2F6E,#0073b7)',
       }}
     >
-      {/* ============ LEFT BRANDING PANEL (40%) ============ */}
+      {/* ============ LEFT BRANDING PANEL (45%) ============ */}
       <div
         className="ilm-login-brand"
         style={{
-          flex: '0 0 40%', position: 'relative', overflow: 'hidden',
-          background: 'linear-gradient(135deg, #1B2F6E 0%, #0073b7 100%)',
-          color: '#fff', display: 'flex', flexDirection: 'column',
-          padding: '44px 40px', justifyContent: 'space-between',
+          flex: '0 0 45%', display: 'flex', flexDirection: 'column',
+          justifyContent: 'center', padding: 60, color: 'white', position: 'relative', overflow: 'hidden',
         }}
       >
-        <div className="mesh-blob" style={{ position: 'absolute', width: 460, height: 460, top: -180, left: -140, background: 'radial-gradient(circle, rgba(94,234,212,0.16), transparent 65%)', borderRadius: '50%', filter: 'blur(2px)' }} />
-        <div className="mesh-blob-2" style={{ position: 'absolute', width: 400, height: 400, bottom: -160, right: -120, background: 'radial-gradient(circle, rgba(96,165,250,0.22), transparent 65%)', borderRadius: '50%', filter: 'blur(2px)' }} />
-        <div className="grid-pattern" style={{ position: 'absolute', inset: 0, opacity: .35 }} />
+        {/* Decorative blobs */}
+        <div style={{ position: 'absolute', width: 460, height: 460, top: -180, left: -140, background: 'radial-gradient(circle, rgba(94,234,212,0.12), transparent 65%)', borderRadius: '50%', filter: 'blur(2px)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', width: 400, height: 400, bottom: -160, right: -120, background: 'radial-gradient(circle, rgba(96,165,250,0.18), transparent 65%)', borderRadius: '50%', filter: 'blur(2px)', pointerEvents: 'none' }} />
 
-        {/* Top: logo lockup */}
-        <div className="ilm-brand-top" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ position: 'relative' }}>
           {schoolLogo
-            ? <img src={schoolLogo} alt="School" style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', border: '3px solid rgba(255,255,255,0.85)', boxShadow: '0 8px 22px rgba(0,0,0,0.3)' }} />
-            : <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: 6, display: 'flex' }}><IlmForgeLogo size={40} showText={false} /></div>}
-          <span style={{ fontSize: 17, fontWeight: 900, letterSpacing: '-0.01em' }}>IlmForge</span>
+            ? <img src={schoolLogo} alt="School" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '3px solid rgba(255,255,255,0.85)', boxShadow: '0 8px 22px rgba(0,0,0,0.3)', marginBottom: 16 }} />
+            : <IlmForgeLogo size="lg" light />}
         </div>
 
-        {/* Middle: headline + features */}
-        <div className="ilm-brand-mid" style={{ position: 'relative' }}>
-          <h1 style={{ fontSize: 34, fontWeight: 900, lineHeight: 1.12, letterSpacing: '-0.03em', margin: 0 }}>
-            {schoolName || 'IlmForge'}
-          </h1>
-          <p style={{ fontSize: 15, fontWeight: 600, color: 'rgba(255,255,255,0.82)', marginTop: 10 }}>
-            Ilm Ko Asaan Banaye 🇵🇰
+        <div className="ilm-brand-mid" style={{ marginTop: 40, position: 'relative' }}>
+          <h2 style={{ fontSize: 28, fontWeight: 800, margin: '0 0 12px', lineHeight: 1.2 }}>
+            Pakistan's Premier School ERP
+          </h2>
+          <p style={{ opacity: 0.75, lineHeight: 1.7, fontSize: 15, margin: 0 }}>
+            Complete school management — admissions, fees, attendance, exams, and more in one platform.
           </p>
-
-          <div style={{ marginTop: 30, display: 'flex', flexDirection: 'column', gap: 15 }}>
-            {features.map(({ icon: Icon, label }) => (
-              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{
-                  width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-                  background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Icon size={17} color="#5EEAD4" />
-                </span>
-                <span style={{ fontSize: 15, fontWeight: 700 }}>
-                  <CheckCircle2 size={14} style={{ verticalAlign: '-2px', marginRight: 6, color: '#5EEAD4' }} />
-                  {label}
-                </span>
-              </div>
-            ))}
-          </div>
         </div>
 
-        {/* Bottom: badge */}
-        <div className="ilm-brand-bottom" style={{ position: 'relative' }}>
-          <span className="glass-dark" style={{
+        <div className="ilm-brand-mid" style={{ position: 'relative' }}>
+          {features.map((f, i) => (
+            <div key={f} style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 16, animation: `ilm-fade-in 0.4s ease-out ${i * 100}ms both` }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>✓</div>
+              <span style={{ fontSize: 14, opacity: 0.85 }}>{f}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="ilm-brand-bottom" style={{ marginTop: 40, position: 'relative' }}>
+          <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, borderRadius: 999,
             padding: '9px 16px', fontSize: 12.5, fontWeight: 800, color: '#fff',
             background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.22)',
@@ -140,17 +127,18 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ============ RIGHT FORM PANEL (60%) ============ */}
+      {/* ============ RIGHT FORM PANEL (55%) ============ */}
       <div
         className="ilm-login-form-side"
         style={{
-          flex: 1, background: '#ffffff', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', padding: '40px 24px',
+          flex: 1, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', padding: 40,
         }}
       >
         <div className="fade-up" style={{
-          width: '100%', maxWidth: 440,
-          background: '#ffffff', borderRadius: 20, padding: '8px 4px',
+          background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(24px)',
+          borderRadius: 24, padding: 40, width: '100%', maxWidth: 420,
+          boxShadow: '0 25px 80px rgba(0,0,0,0.3)',
         }}>
           <div style={{ marginBottom: 24 }}>
             <h2 style={{ fontSize: 26, fontWeight: 900, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
@@ -253,7 +241,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Responsive rules: collapse the left panel into a compact top bar on mobile */}
+      {/* Responsive rules */}
       <style>{`
         @media (max-width: 860px) {
           .ilm-login-shell { flex-direction: column; }
@@ -265,7 +253,7 @@ export default function LoginPage() {
             justify-content: space-between !important;
           }
           .ilm-brand-mid, .ilm-brand-bottom { display: none !important; }
-          .ilm-login-form-side { padding: 30px 18px !important; }
+          .ilm-login-form-side { padding: 20px 16px !important; }
         }
       `}</style>
     </div>

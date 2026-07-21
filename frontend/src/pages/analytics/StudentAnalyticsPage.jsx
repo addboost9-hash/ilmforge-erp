@@ -53,16 +53,27 @@ function DonutLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }) {
 }
 
 /* ── Stat summary card (top row) ── */
-function SummaryCard({ icon: Icon, label, value, color, sub }) {
+function SummaryCard({ icon: Icon, label, value, color, sub, animDelay = 0 }) {
   return (
-    <div className="ilm-stat-card ilm-animate" style={{ background: color }}>
+    <div style={{
+      background: color,
+      borderRadius: 14,
+      padding: '18px 20px',
+      color: '#fff',
+      boxShadow: '0 4px 20px rgba(27,47,110,0.15)',
+      animation: `ilm-fade-in 0.4s ease-out ${animDelay}ms both`,
+      transition: 'transform 0.2s, box-shadow 0.2s',
+    }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 10px 32px rgba(27,47,110,0.22)'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 20px rgba(27,47,110,0.15)'; }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <div className="ilm-stat-value">{value}</div>
-          <div className="ilm-stat-label">{label}</div>
+          <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.2 }}>{value}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', opacity: 0.85, marginTop: 4 }}>{label}</div>
           {sub && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>{sub}</div>}
         </div>
-        <div style={{ fontSize: 38, opacity: 0.22, lineHeight: 1 }}>
+        <div style={{ opacity: 0.22, lineHeight: 1 }}>
           <Icon size={38} />
         </div>
       </div>
@@ -70,18 +81,35 @@ function SummaryCard({ icon: Icon, label, value, color, sub }) {
   );
 }
 
-/* ── Chart card wrapper ── */
-function ChartCard({ title, subtitle, children, action }) {
+/* ── Chart card wrapper — glassmorphism ── */
+function ChartCard({ title, subtitle, children, action, animDelay = 0 }) {
   return (
-    <div className="ilm-card" style={{ marginBottom: 0 }}>
-      <div className="ilm-card-header">
+    <div style={{
+      background: 'rgba(255,255,255,0.72)',
+      backdropFilter: 'blur(16px)',
+      borderRadius: 16,
+      border: '1px solid rgba(255,255,255,0.50)',
+      boxShadow: '0 4px 24px rgba(27,47,110,0.09)',
+      overflow: 'hidden',
+      marginBottom: 0,
+      animation: `ilm-fade-in 0.45s ease-out ${animDelay}ms both`,
+    }}>
+      {/* card header — gradient strip */}
+      <div style={{
+        background: 'linear-gradient(135deg,#1B2F6E,#0073b7)',
+        padding: '12px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        color: '#fff',
+      }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{title}</h3>
+          <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{title}</h3>
           {subtitle && <p style={{ margin: '2px 0 0', fontSize: 11, opacity: 0.75 }}>{subtitle}</p>}
         </div>
         {action}
       </div>
-      <div className="ilm-card-body" style={{ padding: '16px 14px' }}>
+      <div style={{ padding: '16px 14px' }}>
         {children}
       </div>
     </div>
@@ -292,18 +320,18 @@ export default function StudentAnalyticsPage() {
 
       {/* ── SUMMARY STAT CARDS ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <SummaryCard icon={Users}       label="TOTAL STUDENTS"  value={totalStudents}  color="var(--ilm-gradient-primary)" sub={`${totalClasses} classes`} />
-        <SummaryCard icon={Users}       label="MALE STUDENTS"   value={maleCount}      color={`linear-gradient(135deg,#1B2F6E,#0073b7)`} sub={`${pct(maleCount, totalStudents)}% of total`} />
-        <SummaryCard icon={Users}       label="FEMALE STUDENTS" value={femaleCount}    color="linear-gradient(135deg,#9D174D,#DB2777)" sub={`${pct(femaleCount, totalStudents)}% of total`} />
-        <SummaryCard icon={CalendarDays} label="NEW THIS MONTH" value={newThisMonth}   color="var(--ilm-gradient-success)" />
-        <SummaryCard icon={DollarSign}  label="FEE COLLECTION"  value={`${feeCollection.rate}%`} color="var(--ilm-gradient-gold)" sub={Rs(feeCollection.collected)} />
+        <SummaryCard icon={Users}        label="TOTAL STUDENTS"  value={totalStudents}           color="linear-gradient(135deg,#1B2F6E,#2d4f8a)"    sub={`${totalClasses} classes`}                      animDelay={0}   />
+        <SummaryCard icon={Users}        label="MALE STUDENTS"   value={maleCount}               color="linear-gradient(135deg,#0073b7,#0ea5e9)"    sub={`${pct(maleCount, totalStudents)}% of total`}   animDelay={80}  />
+        <SummaryCard icon={Users}        label="FEMALE STUDENTS" value={femaleCount}             color="linear-gradient(135deg,#9D174D,#DB2777)"    sub={`${pct(femaleCount, totalStudents)}% of total`} animDelay={160} />
+        <SummaryCard icon={CalendarDays} label="NEW THIS MONTH"  value={newThisMonth}            color="linear-gradient(135deg,#059669,#10b981)"    animDelay={240} />
+        <SummaryCard icon={DollarSign}   label="FEE COLLECTION"  value={`${feeCollection.rate}%`} color="linear-gradient(135deg,#D97706,#f59e0b)"  sub={Rs(feeCollection.collected)}                    animDelay={320} />
       </div>
 
       {/* ── ROW 1: Gender Pie + Class Enrollment Bar ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginBottom: 16 }}>
 
         {/* Gender Distribution — Pie */}
-        <ChartCard title="Gender Distribution" subtitle="All enrolled students">
+        <ChartCard title="Gender Distribution" subtitle="Male / Female breakdown — all enrolled students" animDelay={0}>
           {isLoading ? <Skeleton /> : genderData.length === 0 ? (
             <EmptyState text="No student gender data available" />
           ) : (
@@ -330,7 +358,7 @@ export default function StudentAnalyticsPage() {
         </ChartCard>
 
         {/* Class-wise Enrollment — Bar */}
-        <ChartCard title="Class-wise Enrollment" subtitle="Students per class">
+        <ChartCard title="Class-wise Enrollment" subtitle="Total students enrolled per class" animDelay={100}>
           {isLoading ? <Skeleton /> : classEnrollment.length === 0 ? (
             <EmptyState text="No class enrollment data available" />
           ) : (
@@ -355,7 +383,8 @@ export default function StudentAnalyticsPage() {
       <div style={{ marginBottom: 16 }}>
         <ChartCard
           title="Monthly Admissions Trend"
-          subtitle={`${dateFrom} — ${dateTo}`}
+          subtitle={`New student admissions — ${dateFrom} to ${dateTo}`}
+          animDelay={200}
           action={
             <span style={{ fontSize: 11, background: 'rgba(255,255,255,0.18)', color: '#fff', padding: '3px 10px', borderRadius: 99, fontWeight: 600 }}>
               {monthlyAdmissions.reduce((a, b) => a + b.admissions, 0)} total admissions
@@ -385,7 +414,7 @@ export default function StudentAnalyticsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginBottom: 16 }}>
 
         {/* Attendance Rate by Class — Horizontal Bar */}
-        <ChartCard title="Attendance Rate by Class" subtitle="% present (selected period)">
+        <ChartCard title="Attendance Rate by Class" subtitle="Percentage present — selected date range" animDelay={0}>
           {loadingAtt ? <Skeleton h={260} /> : attByClass.length === 0 ? (
             <EmptyState text="No attendance data for this period" />
           ) : (
@@ -411,7 +440,7 @@ export default function StudentAnalyticsPage() {
         </ChartCard>
 
         {/* Fee Collection Rate — Donut */}
-        <ChartCard title="Fee Collection Rate" subtitle="Collected vs. pending (selected period)">
+        <ChartCard title="Fee Collection Rate" subtitle="Collected vs. pending — selected period" animDelay={100}>
           {feeCollection.total === 0 ? (
             <EmptyState text="No fee data available for this period" />
           ) : (
@@ -459,7 +488,8 @@ export default function StudentAnalyticsPage() {
       {/* ── EXAM PERFORMANCE SUMMARY ── */}
       <ChartCard
         title="Recent Exam Performance"
-        subtitle="Average scores across latest exams"
+        subtitle="Average percentage scores across the 8 most recent exams"
+        animDelay={200}
       >
         {loadingExams ? <Skeleton h={180} /> : examsRaw.length === 0 ? (
           <EmptyState text="No exam data available" />
@@ -469,7 +499,14 @@ export default function StudentAnalyticsPage() {
       </ChartCard>
 
       <style>{`
-        @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+        @keyframes shimmer {
+          0%   { background-position: -200% 0; }
+          100% { background-position:  200% 0; }
+        }
+        @keyframes ilm-fade-in {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
       `}</style>
     </div>
   );

@@ -74,6 +74,7 @@ export default function TransportPage() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name:'', vehicleNo:'', driverName:'', monthlyFee:'', description:'' });
+  const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem('transport_visited'));
 
   const { data, isLoading } = useQuery({ queryKey:['transport'], queryFn:()=>api.get('/transport').then(r=>r.data.data) });
   const { data:school } = useQuery({ queryKey:['school-settings'], queryFn:()=>api.get('/settings/school').then(r=>r.data.data) });
@@ -202,62 +203,69 @@ export default function TransportPage() {
         </div>
       )}
 
-      {/* ── Routes Table ── */}
-      <div className="card" style={{ padding:0, overflow:'hidden' }}>
-        <div style={{ padding:'14px 18px', borderBottom:'1px solid #F3F4F6', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:'#111827' }}>Transport Routes</h3>
-          <span style={{ fontSize:12.5, color:'#9CA3AF' }}>{routes.length} routes</span>
-        </div>
-        {isLoading ? <div className="loading-center"><div className="spinner"/></div> : (
-          <div className="table-wrap" style={{ borderRadius:0, border:'none' }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Route Name</th>
-                  <th>Vehicle No</th>
-                  <th>Driver</th>
-                  <th>Description</th>
-                  <th>Monthly Fee</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {routes.map((r, i) => (
-                  <tr key={r.id}>
-                    <td style={{ color:'#9CA3AF', fontSize:12 }}>{i+1}</td>
-                    <td>
-                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                        <div style={{ width:32,height:32,borderRadius:8,background:'#F0FDFA',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>🚌</div>
-                        <span style={{ fontWeight:700, fontSize:13 }}>{r.name}</span>
-                      </div>
-                    </td>
-                    <td><span className="badge badge-blue">{r.vehicleNo||'—'}</span></td>
-                    <td style={{ fontSize:13, color:'#374151' }}>{r.driverName||'—'}</td>
-                    <td style={{ fontSize:12.5, color:'#6B7280', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.description||'—'}</td>
-                    <td style={{ fontWeight:700, color:'#059669', fontSize:14 }}>{money(r.monthlyFee)}</td>
-                    <td>
-                      <button className="btn btn-sm btn-icon" style={{ background:'#FEF2F2',border:'1px solid #FECACA',color:'#B91C1C' }}
-                        onClick={()=>{ if(confirm('Delete route "'+r.name+'"?')) remove.mutate(r.id); }}>
-                        <Trash2 size={12}/>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {routes.length===0 && (
-                  <tr><td colSpan={7}>
-                    <div className="empty-state" style={{ padding:40 }}>
-                      <div className="empty-state-icon"><Truck size={40} style={{ opacity:.2 }}/></div>
-                      <div className="empty-state-text">No transport routes yet</div>
-                      <div className="empty-state-sub">Add your first route using the button above</div>
-                    </div>
-                  </td></tr>
-                )}
-              </tbody>
-            </table>
+      {/* ── Onboarding Banner ── */}
+      {showOnboarding && (
+        <div style={{ background:'linear-gradient(135deg,#1B2F6E,#0073b7)', borderRadius:14, padding:'18px 22px', marginBottom:20, display:'flex', alignItems:'center', gap:16, position:'relative', overflow:'hidden' }}>
+          <div style={{ fontSize:36 }}>🚌</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:700, fontSize:15, color:'white' }}>Welcome to Transport Management</div>
+            <div style={{ fontSize:12.5, color:'rgba(255,255,255,.8)', marginTop:3 }}>Add bus routes, assign drivers, set fees and view connected students — all from one place.</div>
           </div>
-        )}
+          <button onClick={()=>{ localStorage.setItem('transport_visited','1'); setShowOnboarding(false); }}
+            style={{ background:'rgba(255,255,255,.18)', border:'1px solid rgba(255,255,255,.35)', color:'white', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:12, fontWeight:600, flexShrink:0 }}>
+            Got it <X size={11} style={{ marginLeft:4, verticalAlign:'middle' }}/>
+          </button>
+        </div>
+      )}
+
+      {/* ── Route Cards ── */}
+      <div style={{ marginBottom:8, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:'#111827' }}>Transport Routes</h3>
+        <span style={{ fontSize:12.5, color:'#9CA3AF' }}>{routes.length} routes</span>
       </div>
+      {isLoading ? (
+        <div className="loading-center"><div className="spinner"/></div>
+      ) : routes.length === 0 ? (
+        <div className="card">
+          <div className="empty-state" style={{ padding:50 }}>
+            <div className="empty-state-icon"><Truck size={40} style={{ opacity:.2 }}/></div>
+            <div className="empty-state-text">No transport routes yet</div>
+            <div className="empty-state-sub">Add your first route using the button above</div>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:14 }}>
+          {routes.map((r, i) => (
+            <div key={r.id} style={{
+              background:'rgba(255,255,255,0.65)', backdropFilter:'blur(16px)',
+              borderRadius:14, padding:'18px 20px',
+              border:'1px solid rgba(255,255,255,0.45)',
+              boxShadow:'0 2px 12px rgba(0,0,0,.06)',
+              animation:`ilm-fade-in 0.3s ease-out ${i*60}ms both`,
+            }}>
+              <div style={{ display:'flex', gap:12, alignItems:'center', marginBottom:12 }}>
+                <div style={{ width:44, height:44, borderRadius:12, background:'linear-gradient(135deg,#1B2F6E,#0073b7)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>🚌</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:700, color:'#1e3a5f', fontSize:14, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.name}</div>
+                  <div style={{ fontSize:11.5, color:'#64748b' }}>{r.vehicleNo ? `Vehicle: ${r.vehicleNo}` : 'No vehicle assigned'}</div>
+                </div>
+                <button className="btn btn-sm btn-icon" style={{ background:'#FEF2F2', border:'1px solid #FECACA', color:'#B91C1C', flexShrink:0 }}
+                  onClick={()=>{ if(confirm('Delete route "'+r.name+'"?')) remove.mutate(r.id); }}>
+                  <Trash2 size={12}/>
+                </button>
+              </div>
+              <div style={{ fontSize:12.5, color:'#374151', display:'flex', flexDirection:'column', gap:5 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}><span>🚗</span><span>Driver: <strong>{r.driverName||'—'}</strong></span></div>
+                {r.description && <div style={{ display:'flex', alignItems:'center', gap:6 }}><span>📍</span><span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.description}</span></div>}
+              </div>
+              <div style={{ marginTop:12, paddingTop:12, borderTop:'1px solid rgba(0,0,0,.07)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <span style={{ fontSize:11, color:'#64748b', background:'#f0f9ff', borderRadius:6, padding:'3px 8px', border:'1px solid #bae6fd' }}>Monthly</span>
+                <span style={{ fontWeight:800, fontSize:15, color:'#059669' }}>{money(r.monthlyFee)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

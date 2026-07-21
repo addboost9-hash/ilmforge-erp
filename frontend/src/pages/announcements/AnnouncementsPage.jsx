@@ -148,60 +148,78 @@ export default function AnnouncementsPage() {
           <div style={{ fontSize:12, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>
             📌 Pinned Announcements
           </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {pinned.map(a => <AnnCard key={a.id} a={a} onPin={pin} onDel={del} className={className}/>)}
+          <div style={{ display:'grid', gap:12 }}>
+            {pinned.map((a,i) => <AnnCard key={a.id} a={a} index={i} onPin={pin} onDel={del} className={className}/>)}
           </div>
         </div>
       )}
 
       {/* Regular */}
-      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-        {regular.length===0&&pinned.length===0 ? (
-          <div className="card" style={{ textAlign:'center', padding:48 }}>
-            <div style={{ fontSize:48, marginBottom:12, opacity:.2 }}>📢</div>
-            <div style={{ fontSize:15, fontWeight:600, color:'#374151' }}>No announcements yet</div>
-            <div style={{ fontSize:13, color:'#9CA3AF', marginTop:4 }}>Click "New Announcement" to post one</div>
-          </div>
-        ) : regular.map(a => <AnnCard key={a.id} a={a} onPin={pin} onDel={del} className={className}/>)}
-      </div>
+      {regular.length===0&&pinned.length===0 ? (
+        <div className="card" style={{ textAlign:'center', padding:48 }}>
+          <div style={{ fontSize:48, marginBottom:12, opacity:.2 }}>📢</div>
+          <div style={{ fontSize:15, fontWeight:600, color:'#374151' }}>No announcements yet</div>
+          <div style={{ fontSize:13, color:'#9CA3AF', marginTop:4 }}>Click "New Announcement" to post one</div>
+        </div>
+      ) : (
+        <div style={{ display:'grid', gap:12 }}>
+          {regular.map((a,i) => <AnnCard key={a.id} a={a} index={i} onPin={pin} onDel={del} className={className}/>)}
+        </div>
+      )}
     </div>
   );
 }
 
-function AnnCard({ a, onPin, onDel, className }) {
+function AnnCard({ a, index=0, onPin, onDel, className }) {
   const [expanded, setExpanded] = useState(false);
   const pc = PRIORITY_CONFIG[a.priority]||PRIORITY_CONFIG.medium;
+  // Map priority to type-style colour logic for the new card border
+  const borderColor = a.priority==='high' ? '#DC2626' : a.priority==='low' ? '#059669' : '#0073b7';
+  const badgeBg    = a.priority==='high' ? '#fee2e2' : a.priority==='low' ? '#dcfce7' : '#dbeafe';
+  const badgeColor = a.priority==='high' ? '#DC2626' : a.priority==='low' ? '#059669' : '#0073b7';
+
   return (
-    <div className="card" style={{ padding:'16px 20px' }}>
-      <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
-        <div style={{ width:40,height:40,borderRadius:10,background:a.audience==='all'?'#EFF6FF':a.audience==='class'?'#FFFBEB':'#F5F3FF',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:18 }}>
-          {a.audience==='all'?'📢':a.audience==='class'?'📚':'👥'}
-        </div>
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5, flexWrap:'wrap' }}>
-            <span style={{ fontWeight:700, fontSize:14, color:'#111827' }}>{a.title}</span>
+    <div style={{
+      background:'rgba(255,255,255,0.65)', backdropFilter:'blur(16px)',
+      borderRadius:14, padding:'16px 20px',
+      border:'1px solid rgba(255,255,255,0.45)',
+      boxShadow:'0 2px 12px rgba(27,47,110,0.06)',
+      animation:`ilm-fade-in 0.3s ease-out ${index*60}ms both`,
+      borderLeft:`4px solid ${borderColor}`,
+    }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+        <div style={{ flex:1, minWidth:0, marginRight:12 }}>
+          <div style={{ fontWeight:700, fontSize:14, color:'#1e3a5f', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+            {a.title}
             {a.pinned && <span style={{ fontSize:10, background:'#DBEAFE', color:'#1D4ED8', padding:'1px 7px', borderRadius:99, fontWeight:700 }}>📌 PINNED</span>}
-            <span style={{ fontSize:11, padding:'1px 8px', borderRadius:99, background:pc.bg, color:pc.color, fontWeight:700 }}>{pc.label}</span>
-            {a.audience==='class' && a.classId && <span className="badge badge-gold">{className(a.classId)}</span>}
           </div>
-          <p style={{ fontSize:13, color:expanded?'#374151':'#6B7280', lineHeight:1.6, margin:0, overflow:expanded?'visible':'hidden', maxHeight:expanded?'none':'44px', textOverflow:expanded?'clip':'ellipsis', display:expanded?'block':'-webkit-box', WebkitLineClamp:expanded?undefined:2, WebkitBoxOrient:'vertical' }}>
-            {a.body}
-          </p>
-          {a.body.length > 100 && (
+          <div style={{ fontSize:12, color:'#64748b', marginTop:4 }}>
+            {expanded ? a.body : (a.body?.slice(0,100) + (a.body?.length > 100 ? '...' : ''))}
+          </div>
+          {a.body?.length > 100 && (
             <button onClick={()=>setExpanded(e=>!e)} style={{ fontSize:12, color:'#0F766E', background:'none', border:'none', cursor:'pointer', padding:'4px 0', fontWeight:600 }}>
               {expanded?'Show less ↑':'Read more ↓'}
             </button>
           )}
-          <div style={{ fontSize:11.5, color:'#9CA3AF', marginTop:5 }}>Posted on {a.createdAt}</div>
         </div>
-        <div style={{ display:'flex', gap:6, flexShrink:0 }}>
-          <button className="btn btn-ghost btn-icon btn-sm" title={a.pinned?'Unpin':'Pin'} onClick={()=>onPin(a.id)}>
-            <span style={{ fontSize:14 }}>{a.pinned?'📌':'📍'}</span>
-          </button>
-          <button className="btn btn-sm btn-icon" style={{ background:'#FEF2F2',border:'1px solid #FECACA',color:'#B91C1C' }} onClick={()=>onDel(a.id)}>
-            <Trash2 size={12}/>
-          </button>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6, flexShrink:0 }}>
+          <span style={{
+            fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:999,
+            background:badgeBg, color:badgeColor,
+          }}>{pc.label.toUpperCase()}</span>
+          <div style={{ display:'flex', gap:6 }}>
+            <button className="btn btn-ghost btn-icon btn-sm" title={a.pinned?'Unpin':'Pin'} onClick={()=>onPin(a.id)}>
+              <span style={{ fontSize:14 }}>{a.pinned?'📌':'📍'}</span>
+            </button>
+            <button className="btn btn-sm btn-icon" style={{ background:'#FEF2F2',border:'1px solid #FECACA',color:'#B91C1C' }} onClick={()=>onDel(a.id)}>
+              <Trash2 size={12}/>
+            </button>
+          </div>
         </div>
+      </div>
+      <div style={{ marginTop:10, fontSize:11, color:'#94a3b8', display:'flex', gap:16 }}>
+        <span>📅 {a.createdAt ? new Date(a.createdAt).toLocaleDateString('en-PK') : '—'}</span>
+        <span>👥 {a.audience==='all' ? 'All' : a.audience==='class' ? (a.classId ? className(a.classId) : 'Class') : 'Staff'}</span>
       </div>
     </div>
   );

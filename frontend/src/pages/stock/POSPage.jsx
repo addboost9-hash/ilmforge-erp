@@ -98,26 +98,45 @@ export default function POSPage() {
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
   return (
-    <div className="page-content fade-in">
-      <div className="page-header-band">
-        <div className="page-header-left">
-          <h1 className="page-title" style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <ShoppingCart size={20} color="#0073b7"/> Point of Sale
-          </h1>
-          <p style={{ color:'#64748b', fontSize:13, marginTop:2 }}>Canteen & school shop. Add products to cart and checkout.</p>
+    <div style={{ minHeight:'100vh', background:'#f0fdfa' }}>
+      {/* ── Cashier header bar ── */}
+      <div style={{ background:'linear-gradient(135deg,#0f766e,#0e9f6e)', padding:'14px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 2px 12px rgba(0,0,0,.12)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,.2)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <ShoppingCart size={20} color="white"/>
+          </div>
+          <div>
+            <div style={{ fontWeight:800, fontSize:16, color:'white' }}>Point of Sale</div>
+            <div style={{ fontSize:11.5, color:'rgba(255,255,255,.75)' }}>Canteen & school shop cashier screen</div>
+          </div>
+        </div>
+        <div style={{ background:'rgba(255,255,255,.15)', borderRadius:10, padding:'8px 16px', textAlign:'center' }}>
+          <div style={{ fontSize:11, color:'rgba(255,255,255,.7)' }}>Today</div>
+          <div style={{ fontWeight:700, fontSize:13, color:'white' }}>{new Date().toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'})}</div>
         </div>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:16 }}>
-        {/* Products */}
-        <div>
+      {/* ── Main split layout ── */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 360px', gap:0, height:'calc(100vh - 68px)', overflow:'hidden' }}>
+
+        {/* LEFT: Product grid */}
+        <div style={{ padding:20, overflowY:'auto' }}>
           {/* Filters */}
-          <div style={{ display:'flex', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
             <div style={{ position:'relative', flex:'1 1 200px' }}>
-              <Search size={14} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'#94a3b8' }}/>
-              <input className="form-input" style={{ paddingLeft:32 }} placeholder="Search product…" value={search} onChange={e => setSearch(e.target.value)} />
+              <Search size={14} style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:'#94a3b8' }}/>
+              <input
+                style={{ width:'100%', paddingLeft:34, paddingRight:12, height:38, borderRadius:9, border:'1.5px solid #d1fae5', background:'white', fontSize:13, outline:'none', boxSizing:'border-box' }}
+                placeholder="Search product…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
             </div>
-            <select className="form-select" style={{ flex:'0 0 160px' }} value={catFilter} onChange={e => setCat(e.target.value)}>
+            <select
+              style={{ flex:'0 0 160px', height:38, borderRadius:9, border:'1.5px solid #d1fae5', background:'white', fontSize:13, paddingLeft:10, outline:'none' }}
+              value={catFilter}
+              onChange={e => setCat(e.target.value)}
+            >
               <option value="">All Categories</option>
               {categories.filter(Boolean).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -126,33 +145,50 @@ export default function POSPage() {
           {isLoading ? (
             <div className="loading-center"><div className="spinner"/></div>
           ) : filtered.length === 0 ? (
-            <div className="card">
-              <div className="empty-state">
-                <div style={{ fontSize:40 }}><Package size={40}/></div>
-                <div className="empty-state-text">No products found</div>
-                <div className="empty-state-sub">Add products in Stock & Inventory → Products & Stock</div>
-              </div>
+            <div style={{ background:'white', borderRadius:14, padding:48, textAlign:'center', border:'1.5px dashed #a7f3d0' }}>
+              <Package size={44} color="#6ee7b7" style={{ marginBottom:12 }}/>
+              <div style={{ fontWeight:700, color:'#1e3a5f', fontSize:15 }}>No products found</div>
+              <div style={{ color:'#64748b', fontSize:12.5, marginTop:4 }}>Add products in Stock & Inventory → Products & Stock</div>
             </div>
           ) : (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))', gap:10 }}>
-              {filtered.map(p => {
+            /* 2-column product card grid */
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(155px,1fr))', gap:12 }}>
+              {filtered.map((p, idx) => {
                 const inCart = cart.find(i => i.id === p.id);
                 const outOfStock = Number(p.quantity || p.stock || 0) === 0;
                 return (
                   <div key={p.id}
                     onClick={() => !outOfStock && addToCart(p)}
-                    style={{ background:'white', borderRadius:10, border:`1.5px solid ${inCart?'#0073b7':'#e2e8f0'}`, padding:12, cursor: outOfStock ? 'not-allowed' : 'pointer', opacity: outOfStock ? 0.5 : 1, transition:'all .15s', position:'relative' }}>
+                    style={{
+                      background: inCart ? 'linear-gradient(135deg,#ecfdf5,#d1fae5)' : 'white',
+                      borderRadius:13,
+                      border:`2px solid ${inCart ? '#34d399' : outOfStock ? '#fca5a5' : '#e2e8f0'}`,
+                      padding:'14px 12px',
+                      cursor: outOfStock ? 'not-allowed' : 'pointer',
+                      opacity: outOfStock ? 0.55 : 1,
+                      transition:'all .18s',
+                      position:'relative',
+                      boxShadow: inCart ? '0 4px 14px rgba(52,211,153,.25)' : '0 1px 6px rgba(0,0,0,.05)',
+                      animation:`ilm-fade-in 0.3s ease-out ${idx*40}ms both`,
+                    }}>
+                    {/* Cart qty badge */}
                     {inCart && (
-                      <div style={{ position:'absolute', top:8, right:8, width:22, height:22, borderRadius:'50%', background:'#0073b7', color:'white', fontSize:11, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <div style={{ position:'absolute', top:8, right:8, width:24, height:24, borderRadius:'50%', background:'#059669', color:'white', fontSize:11, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 2px 6px rgba(5,150,105,.4)' }}>
                         {inCart.qty}
                       </div>
                     )}
-                    <div style={{ fontSize:32, textAlign:'center', marginBottom:6 }}>
-                      {p.imageUrl ? <img src={p.imageUrl} alt="" style={{ width:48, height:48, objectFit:'cover', borderRadius:6 }} /> : '📦'}
+                    {/* Product image / emoji */}
+                    <div style={{ width:56, height:56, borderRadius:12, background:'#f0fdfa', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 10px', fontSize:30, overflow:'hidden' }}>
+                      {p.imageUrl
+                        ? <img src={p.imageUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:12 }}/>
+                        : '📦'}
                     </div>
-                    <div style={{ fontSize:12.5, fontWeight:700, color:'#1e3a5f', textAlign:'center', lineHeight:1.3 }}>{p.name}</div>
-                    <div style={{ fontSize:13, fontWeight:800, color:'#0073b7', textAlign:'center', marginTop:4 }}>{Rs(p.salePrice)}</div>
-                    {outOfStock && <div style={{ fontSize:10, color:'#dc2626', textAlign:'center', fontWeight:700 }}>Out of Stock</div>}
+                    <div style={{ fontWeight:700, fontSize:12.5, color:'#1e3a5f', textAlign:'center', lineHeight:1.35, marginBottom:6 }}>{p.name}</div>
+                    <div style={{ fontWeight:900, fontSize:15, color:'#0f766e', textAlign:'center' }}>{Rs(p.salePrice)}</div>
+                    {outOfStock
+                      ? <div style={{ fontSize:10, color:'#dc2626', textAlign:'center', fontWeight:700, marginTop:4 }}>Out of Stock</div>
+                      : <div style={{ fontSize:10, color:'#64748b', textAlign:'center', marginTop:4 }}>Tap to add</div>
+                    }
                   </div>
                 );
               })}
@@ -160,57 +196,89 @@ export default function POSPage() {
           )}
         </div>
 
-        {/* Cart */}
-        <div>
-          <div className="card" style={{ position:'sticky', top:16 }}>
-            <div className="card-header" style={{ background:'#1e3a5f' }}>
-              <div style={{ color:'white', fontWeight:700, fontSize:14, display:'flex', alignItems:'center', gap:8 }}>
-                <ShoppingCart size={15}/> Cart
-                {cartCount > 0 && <span style={{ background:'#0073b7', color:'white', width:22, height:22, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:800 }}>{cartCount}</span>}
+        {/* RIGHT: Cart panel */}
+        <div style={{ background:'white', borderLeft:'2px solid #d1fae5', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+          {/* Cart header */}
+          <div style={{ background:'linear-gradient(135deg,#0f766e,#0e9f6e)', padding:'16px 20px', display:'flex', alignItems:'center', gap:10 }}>
+            <ShoppingCart size={18} color="white"/>
+            <span style={{ fontWeight:800, fontSize:15, color:'white' }}>Order Summary</span>
+            {cartCount > 0 && (
+              <span style={{ marginLeft:'auto', background:'white', color:'#0f766e', width:26, height:26, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:900 }}>
+                {cartCount}
+              </span>
+            )}
+          </div>
+
+          {/* Cart items */}
+          <div style={{ flex:1, overflowY:'auto', padding:'8px 0' }}>
+            {cart.length === 0 ? (
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', gap:12, padding:30 }}>
+                <ShoppingCart size={48} color="#a7f3d0"/>
+                <div style={{ fontWeight:700, color:'#94a3b8', fontSize:14 }}>Cart is empty</div>
+                <div style={{ fontSize:12, color:'#cbd5e1', textAlign:'center' }}>Tap a product on the left to add it here</div>
               </div>
-            </div>
-            <div style={{ maxHeight:350, overflowY:'auto' }}>
-              {cart.length === 0 ? (
-                <div className="empty-state" style={{ padding:30 }}>
-                  <ShoppingCart size={32} style={{ opacity:0.3 }}/>
-                  <div className="empty-state-sub" style={{ marginTop:8 }}>Cart is empty</div>
-                </div>
-              ) : (
-                cart.map(i => (
-                  <div key={i.id} style={{ padding:'10px 14px', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', gap:8 }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:'#1e3a5f', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{i.name}</div>
-                      <div style={{ fontSize:11.5, color:'#64748b' }}>{Rs(i.salePrice)} each</div>
-                    </div>
-                    <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                      <button onClick={() => updateQty(i.id,-1)} style={{ width:22, height:22, borderRadius:5, border:'1px solid #e2e8f0', background:'white', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><Minus size={11}/></button>
-                      <span style={{ fontSize:13, fontWeight:700, minWidth:20, textAlign:'center' }}>{i.qty}</span>
-                      <button onClick={() => updateQty(i.id,1)} style={{ width:22, height:22, borderRadius:5, border:'1px solid #e2e8f0', background:'white', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><Plus size={11}/></button>
-                    </div>
-                    <div style={{ fontWeight:700, fontSize:13, color:'#0073b7', minWidth:60, textAlign:'right' }}>{Rs(i.qty * Number(i.salePrice))}</div>
-                    <button onClick={() => setCart(c => c.filter(x => x.id !== i.id))} style={{ background:'none', border:'none', cursor:'pointer', color:'#dc2626' }}><Trash2 size={13}/></button>
+            ) : (
+              cart.map(i => (
+                <div key={i.id} style={{ padding:'10px 16px', borderBottom:'1px solid #f0fdf4', display:'flex', alignItems:'center', gap:10, transition:'background .15s' }}>
+                  <div style={{ width:34, height:34, borderRadius:8, background:'#f0fdfa', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>📦</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#1e3a5f', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{i.name}</div>
+                    <div style={{ fontSize:11, color:'#64748b' }}>{Rs(i.salePrice)} each</div>
                   </div>
-                ))
-              )}
-            </div>
-            {/* Total + Checkout */}
-            <div style={{ padding:'14px', borderTop:'2px solid #e2e8f0' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
-                <span style={{ fontWeight:700, fontSize:14, color:'#374151' }}>TOTAL:</span>
-                <span style={{ fontWeight:900, fontSize:18, color:'#1e3a5f' }}>{Rs(cartTotal)}</span>
+                  <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                    <button onClick={() => updateQty(i.id,-1)} style={{ width:24, height:24, borderRadius:6, border:'1.5px solid #d1fae5', background:'white', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#0f766e' }}><Minus size={11}/></button>
+                    <span style={{ fontSize:13, fontWeight:800, minWidth:22, textAlign:'center', color:'#1e3a5f' }}>{i.qty}</span>
+                    <button onClick={() => updateQty(i.id,1)} style={{ width:24, height:24, borderRadius:6, border:'1.5px solid #d1fae5', background:'#f0fdfa', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#0f766e' }}><Plus size={11}/></button>
+                  </div>
+                  <div style={{ fontWeight:800, fontSize:13.5, color:'#0f766e', minWidth:68, textAlign:'right' }}>{Rs(i.qty * Number(i.salePrice))}</div>
+                  <button onClick={() => setCart(c => c.filter(x => x.id !== i.id))} style={{ background:'none', border:'none', cursor:'pointer', color:'#f87171', padding:2, display:'flex', alignItems:'center' }}><Trash2 size={14}/></button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Totals & checkout footer */}
+          <div style={{ padding:'16px 20px', borderTop:'2px solid #d1fae5', background:'#f0fdfa' }}>
+            {/* Item breakdown */}
+            {cart.length > 0 && (
+              <div style={{ marginBottom:10, fontSize:12, color:'#64748b' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                  <span>Items ({cartCount})</span>
+                  <span>{Rs(cartTotal)}</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between' }}>
+                  <span>Tax</span>
+                  <span>Rs. 0</span>
+                </div>
               </div>
-              <button className="btn btn-primary w-full"
-                onClick={() => saleMut.mutate()}
-                disabled={cart.length === 0 || saleMut.isPending}
-                style={{ padding:'12px', fontSize:14, fontWeight:700 }}>
-                <Printer size={15}/> {saleMut.isPending ? 'Processing…' : 'Checkout & Print Receipt'}
-              </button>
-              {cart.length > 0 && (
-                <button className="btn btn-ghost w-full" style={{ marginTop:6, fontSize:12 }} onClick={() => setCart([])}>
-                  Clear Cart
-                </button>
-              )}
+            )}
+            {/* Grand total */}
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 14px', background:'white', borderRadius:12, border:'1.5px solid #a7f3d0', marginBottom:12 }}>
+              <span style={{ fontWeight:800, fontSize:15, color:'#1e3a5f' }}>TOTAL</span>
+              <span style={{ fontWeight:900, fontSize:22, color:'#0f766e' }}>{Rs(cartTotal)}</span>
             </div>
+            {/* Pay button */}
+            <button
+              onClick={() => saleMut.mutate()}
+              disabled={cart.length === 0 || saleMut.isPending}
+              style={{
+                width:'100%', padding:'14px', borderRadius:12, border:'none',
+                background: cart.length === 0 ? '#e2e8f0' : 'linear-gradient(135deg,#0f766e,#0e9f6e)',
+                color: cart.length === 0 ? '#94a3b8' : 'white',
+                fontWeight:800, fontSize:15, cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                boxShadow: cart.length > 0 ? '0 4px 16px rgba(15,118,110,.35)' : 'none',
+                transition:'all .2s',
+              }}>
+              <Printer size={16}/> {saleMut.isPending ? 'Processing…' : 'Pay & Print Receipt'}
+            </button>
+            {cart.length > 0 && (
+              <button
+                onClick={() => setCart([])}
+                style={{ width:'100%', marginTop:8, padding:'9px', borderRadius:10, border:'1.5px solid #fca5a5', background:'#fef2f2', color:'#dc2626', fontWeight:700, fontSize:12.5, cursor:'pointer' }}>
+                Clear Cart
+              </button>
+            )}
           </div>
         </div>
       </div>

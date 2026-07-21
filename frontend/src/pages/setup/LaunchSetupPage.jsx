@@ -122,9 +122,13 @@ function StepCard({ step, index, isDone, isLoading }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontWeight: 600, color: '#1e293b', fontSize: 14 }}>{step.title}</span>
           {isDone ? (
-            <span style={{ background: '#d1fae5', color: '#065f46', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99 }}>DONE</span>
+            <span style={{ background: '#d1fae5', color: '#065f46', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, display:'inline-flex', alignItems:'center', gap:3 }}>
+              ✓ Done
+            </span>
           ) : (
-            <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99 }}>PENDING</span>
+            <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, display:'inline-flex', alignItems:'center', gap:3 }}>
+              ○ Pending
+            </span>
           )}
         </div>
         <div style={{ fontSize: 12.5, color: '#64748b', marginTop: 3 }}>{step.desc}</div>
@@ -142,6 +146,54 @@ function StepCard({ step, index, isDone, isLoading }) {
       }}>
         {isDone ? 'Review' : 'Setup Now'} <ArrowRight size={13} />
       </Link>
+    </div>
+  );
+}
+
+/* ── SVG Progress Ring ── */
+function ProgressRing({ completedSteps, totalSteps }) {
+  const percentage = Math.round((completedSteps / totalSteps) * 100);
+  const radius = 42;
+  const stroke = 7;
+  const normalizedRadius = radius - stroke / 2;
+  const circumference = 2 * Math.PI * normalizedRadius;
+  const [dashOffset, setDashOffset] = useState(circumference);
+
+  useEffect(() => {
+    const target = circumference - (percentage / 100) * circumference;
+    const raf = requestAnimationFrame(() => setDashOffset(target));
+    return () => cancelAnimationFrame(raf);
+  }, [percentage, circumference]);
+
+  const color = percentage === 100 ? '#0d9488' : percentage >= 50 ? '#60a5fa' : '#f59e0b';
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, flexShrink:0 }}>
+      <svg width={radius * 2} height={radius * 2} viewBox={`0 0 ${radius * 2} ${radius * 2}`}>
+        {/* Track */}
+        <circle
+          cx={radius} cy={radius} r={normalizedRadius}
+          fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={stroke}
+        />
+        {/* Progress arc */}
+        <circle
+          cx={radius} cy={radius} r={normalizedRadius}
+          fill="none" stroke={color} strokeWidth={stroke}
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${radius} ${radius})`}
+          style={{ transition:'stroke-dashoffset 0.9s cubic-bezier(0.4,0,0.2,1)' }}
+        />
+        {/* Center text */}
+        <text x="50%" y="44%" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="800" dominantBaseline="middle">
+          {completedSteps}/{totalSteps}
+        </text>
+        <text x="50%" y="64%" textAnchor="middle" fill="rgba(255,255,255,0.65)" fontSize="8" dominantBaseline="middle">
+          DONE
+        </text>
+      </svg>
+      <span style={{ color:'rgba(255,255,255,0.75)', fontSize:11, fontWeight:600 }}>{percentage}% Complete</span>
     </div>
   );
 }
@@ -238,11 +290,14 @@ export default function LaunchSetupPage() {
               </p>
             </div>
           </div>
+          {/* Progress ring showing X/7 steps complete */}
+          <ProgressRing completedSteps={doneCount} totalSteps={totalCount} />
           <button onClick={() => refetch()} style={{
             display: 'flex', alignItems: 'center', gap: 6,
             background: 'rgba(255,255,255,0.15)', color: '#fff',
             border: '1px solid rgba(255,255,255,0.25)', borderRadius: 8,
             padding: '8px 14px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
+            alignSelf: 'flex-start',
           }}>
             <RefreshCw size={13} /> Refresh Status
           </button>

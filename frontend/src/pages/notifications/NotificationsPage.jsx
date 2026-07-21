@@ -367,24 +367,33 @@ function SendNowTab() {
     }
   };
 
-  const channelBtns = [
-    { id: 'sms', label: 'SMS', icon: MessageSquare, color: '#1d4ed8' },
-    { id: 'whatsapp', label: 'WhatsApp', icon: Phone, color: '#15803d' },
-    { id: 'email', label: 'Email', icon: Mail, color: '#92400e' },
+  const channels = [
+    { id: 'sms',      label: 'SMS',       icon: '📲', color: '#1B2F6E' },
+    { id: 'whatsapp', label: 'WhatsApp',  icon: '💬', color: '#25d366' },
+    { id: 'email',    label: 'Email',     icon: '📧', color: '#ea4335' },
+    { id: 'push',     label: 'Push',      icon: '🔔', color: '#f59e0b' },
   ];
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-        {channelBtns.map(ch => {
-          const Icon = ch.icon;
-          return (
-            <button key={ch.id} onClick={() => setChannel(ch.id)}
-              style={{ flex: 1, padding: '10px 14px', border: `2px solid ${channel === ch.id ? ch.color : '#e2e8f0'}`, borderRadius: 8, background: channel === ch.id ? ch.color + '12' : 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: channel === ch.id ? ch.color : '#64748b' }}>
-              <Icon size={15} /> {ch.label}
-            </button>
-          );
-        })}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+        {channels.map(ch => (
+          <button key={ch.id} onClick={() => setChannel(ch.id)}
+            style={{
+              flex: 1, padding: '12px 10px',
+              border: `2px solid ${channel === ch.id ? ch.color : '#e2e8f0'}`,
+              borderRadius: 12,
+              background: channel === ch.id ? ch.color + '14' : 'white',
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              fontWeight: 700, fontSize: 13,
+              color: channel === ch.id ? ch.color : '#64748b',
+              transition: 'all .15s',
+              boxShadow: channel === ch.id ? `0 2px 8px ${ch.color}30` : 'none',
+            }}>
+            <span style={{ fontSize: 17 }}>{ch.icon}</span> {ch.label}
+          </button>
+        ))}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -825,12 +834,24 @@ export default function NotificationsPage() {
     <div className="page-content fade-in">
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg, #1B2F6E 0%, #0073b7 100%)', borderRadius: 12, padding: '18px 22px', marginBottom: 20, color: 'white' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📢</div>
+        <div className="ilm-page-header" style={{ marginBottom: 20 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Notification Hub</h1>
-            <p style={{ margin: '3px 0 0', fontSize: 12.5, opacity: 0.8 }}>SMS · WhatsApp · Email · Push · 12 Templates · Auto Scheduler · History</p>
+            <h1 className="ilm-page-title">📱 Send Notifications</h1>
+            <p className="ilm-page-subtitle">Reach parents and staff instantly via SMS, WhatsApp and Email</p>
           </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {['SMS', 'WhatsApp', 'Email'].map(ch => (
+              <div key={ch} style={{
+                background: 'rgba(255,255,255,0.2)', color: 'white',
+                padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700,
+                border: '1px solid rgba(255,255,255,0.3)',
+              }}>{ch}</div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -8 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📢</div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>SMS · WhatsApp · Email · Push · 12 Templates · Auto Scheduler · History</div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <Link to="/notifications/sms" className="btn btn-sm" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', textDecoration: 'none', fontSize: 12 }}>
               <MessageSquare size={12} /> Quick SMS

@@ -225,76 +225,85 @@ function CatalogTab() {
         <StatCard label="Total Copies" value={totalCopies} color="stat-red" icon="📦" />
       </div>
 
-      {/* Books table */}
+      {/* Books card grid */}
       {booksQ.isLoading ? (
         <div className="loading-center"><div className="spinner" /></div>
+      ) : books.length === 0 ? (
+        <div className="empty-state" style={{ padding: 50 }}>
+          <div className="empty-state-icon">📚</div>
+          <div className="empty-state-text">No books found</div>
+          <div className="empty-state-sub">Add books to get started</div>
+        </div>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Title</th>
-                <th>Author</th>
-                <th>Category</th>
-                <th>ISBN</th>
-                <th>Qty</th>
-                <th>Available</th>
-                <th>Shelf</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {books.length === 0 && (
-                <tr>
-                  <td colSpan={9}>
-                    <div className="empty-state">
-                      <div className="empty-state-icon">📚</div>
-                      <div className="empty-state-text">No books found</div>
-                      <div className="empty-state-sub">Add books to get started</div>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {books.map((b, idx) => (
-                <tr key={b.id}>
-                  <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{idx + 1}</td>
-                  <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{b.title}</td>
-                  <td style={{ color: 'var(--text-secondary)' }}>{b.author || '—'}</td>
-                  <td>
-                    {b.category
-                      ? <span className="badge badge-primary">{b.category}</span>
-                      : <span style={{ color: 'var(--text-muted)' }}>—</span>
-                    }
-                  </td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{b.isbn || '—'}</td>
-                  <td style={{ fontWeight: 600 }}>{b.totalCopies}</td>
-                  <td>
-                    <span
-                      className={`badge ${b.availableCopies > 0 ? 'badge-success' : 'badge-danger'}`}
-                    >
-                      {b.availableCopies}
-                    </span>
-                  </td>
-                  <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{b.shelfCode || '—'}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button
-                        className="btn btn-sm btn-success"
-                        disabled={b.availableCopies <= 0}
-                        onClick={() => toast('Go to Issue & Return tab to issue this book.', { icon: 'ℹ️' })}
-                      >
-                        Issue
-                      </button>
-                      <button className="btn btn-sm btn-outline" onClick={() => openEdit(b)}>
-                        Edit
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 14 }}>
+          {books.map((b, idx) => {
+            const avail = b.availableCopies ?? 0;
+            const issued = (b.totalCopies ?? 0) - avail;
+            const isLost = avail === 0 && issued === 0 && (b.totalCopies ?? 0) > 0;
+            const statusLabel = isLost ? 'Lost' : avail > 0 ? 'Available' : 'Issued';
+            const statusColor = isLost ? '#dc2626' : avail > 0 ? '#059669' : '#d97706';
+            const statusBg = isLost ? '#fef2f2' : avail > 0 ? '#f0fdf4' : '#fffbeb';
+            const statusBorder = isLost ? '#fecaca' : avail > 0 ? '#bbf7d0' : '#fde68a';
+            return (
+              <div key={b.id} style={{
+                background: 'rgba(255,255,255,0.7)',
+                backdropFilter: 'blur(14px)',
+                borderRadius: 14,
+                padding: '16px 18px',
+                border: '1px solid rgba(255,255,255,0.5)',
+                boxShadow: '0 2px 10px rgba(0,0,0,.05)',
+                animation: `ilm-fade-in 0.35s ease-out ${idx * 50}ms both`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}>
+                {/* Top row: icon + status badge */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 10, background: 'linear-gradient(135deg,#1B2F6E,#0073b7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>📖</div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: statusBg, border: `1px solid ${statusBorder}`, borderRadius: 20, padding: '3px 9px', whiteSpace: 'nowrap' }}>
+                    {statusLabel}
+                  </span>
+                </div>
+                {/* Title & Author */}
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: '#1e3a5f', lineHeight: 1.3, marginBottom: 3 }}>{b.title}</div>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>{b.author || 'Unknown Author'}</div>
+                </div>
+                {/* Meta chips */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {b.category && (
+                    <span style={{ fontSize: 10.5, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 6, padding: '2px 7px' }}>{b.category}</span>
+                  )}
+                  {b.shelfCode && (
+                    <span style={{ fontSize: 10.5, background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', borderRadius: 6, padding: '2px 7px' }}>📌 {b.shelfCode}</span>
+                  )}
+                  {b.isbn && (
+                    <span style={{ fontSize: 10, background: '#f9fafb', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 7px', fontFamily: 'monospace' }}>{b.isbn}</span>
+                  )}
+                </div>
+                {/* Copies bar */}
+                <div style={{ fontSize: 11.5, color: '#374151', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Total: <strong>{b.totalCopies ?? 0}</strong></span>
+                  <span style={{ color: '#059669' }}>Avail: <strong>{avail}</strong></span>
+                  <span style={{ color: '#d97706' }}>Issued: <strong>{issued}</strong></span>
+                </div>
+                {/* Action buttons */}
+                <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                  <button
+                    className="btn btn-sm btn-success"
+                    style={{ flex: 1, fontSize: 11.5 }}
+                    disabled={avail <= 0}
+                    onClick={() => toast('Go to Issue & Return tab to issue this book.', { icon: 'ℹ️' })}
+                  >
+                    Issue
+                  </button>
+                  <button className="btn btn-sm btn-outline" style={{ flex: 1, fontSize: 11.5 }} onClick={() => openEdit(b)}>
+                    Edit
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

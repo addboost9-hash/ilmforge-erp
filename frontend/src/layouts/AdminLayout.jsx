@@ -1286,6 +1286,14 @@ export default function AdminLayout() {
         <main style={{ flex: 1, overflowY: 'auto' }}>
           <LicenseBanner />
           <Outlet />
+          {/* IlmForge branding footer */}
+          <div style={{
+            textAlign: 'center', padding: '8px', marginTop: 20,
+            fontSize: 11, color: '#94a3b8',
+            borderTop: '1px solid rgba(27,47,110,0.06)',
+          }}>
+            Powered by <strong style={{ color: '#1B2F6E' }}>IlmForge</strong> — ilmفورج • Ilm Ko Asaan Banaye 🎓
+          </div>
           <FloatingActionButton />
         </main>
       </div>

@@ -9,6 +9,16 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
 import { Search, Printer, Download, FileText, BarChart2, ChevronRight, ExternalLink, TrendingUp, Calendar, Award } from 'lucide-react';
 
+/* ── Beautiful category summary cards (6 top-level groups) ── */
+const CATEGORY_CARDS = [
+  { title:'Student Reports',    icon:'👨‍🎓', color:'#1B2F6E', reports:['Class-wise List','Admission Report','Birthday List','Transfer Certificate'], path:'/students/info-reports' },
+  { title:'Attendance Reports', icon:'📋', color:'#0073b7', reports:['Daily Summary','Monthly Report','Defaulters','Staff Attendance'],             path:'/attendance/report' },
+  { title:'Fee Reports',        icon:'💰', color:'#059669', reports:['Collection Report','Defaulters List','Daily Balance','Family Fee'],            path:'/fees' },
+  { title:'Exam Reports',       icon:'📝', color:'#7c3aed', reports:['Result Sheet','Merit List','Failed Students','Subject Analysis'],              path:'/exams/gazette' },
+  { title:'HR Reports',         icon:'👔', color:'#D97706', reports:['Staff Attendance','Payroll Report','Leave Balance','Appraisals'],              path:'/payroll' },
+  { title:'Financial Reports',  icon:'📊', color:'#dc2626', reports:['Income Statement','Expense Report','Balance Sheet','Bank Challan'],            path:'/accounting/balancesheet' },
+];
+
 const REPORT_CATEGORIES = [
   {
     id: 'students',
@@ -254,6 +264,36 @@ export default function ReportsHubPage() {
         />
       </div>
 
+      {/* ── Category Overview Cards ── */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))', gap:16, marginBottom:24 }}>
+        {CATEGORY_CARDS.map((cat, i) => (
+          <div key={cat.title} style={{
+            background:'rgba(255,255,255,0.65)', backdropFilter:'blur(16px)',
+            borderRadius:16, overflow:'hidden',
+            border:'1px solid rgba(255,255,255,0.45)',
+            boxShadow:'0 4px 20px rgba(27,47,110,0.08)',
+            animation:`ilm-fade-in 0.4s ease-out ${i * 80}ms both`,
+            transition:'transform 0.2s, box-shadow 0.2s', cursor:'pointer',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(27,47,110,0.15)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 20px rgba(27,47,110,0.08)'; }}
+            onClick={() => window.location.href = cat.path}
+          >
+            <div style={{ background:`linear-gradient(135deg,${cat.color},${cat.color}cc)`, padding:'16px 20px', color:'white', display:'flex', alignItems:'center', gap:12 }}>
+              <span style={{ fontSize:28 }}>{cat.icon}</span>
+              <div style={{ fontWeight:700, fontSize:15 }}>{cat.title}</div>
+            </div>
+            <div style={{ padding:'14px 20px' }}>
+              {cat.reports.map(r => (
+                <div key={r} style={{ padding:'5px 0', fontSize:13, color:'#374151', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ color:cat.color, fontSize:12 }}>▶</span> {r}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Search + Filter */}
       <div className="card" style={{ marginBottom:16 }}>
         <div className="card-body" style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
@@ -337,6 +377,13 @@ export default function ReportsHubPage() {
           )}
         </div>
       )}
+
+      <style>{`
+        @keyframes ilm-fade-in {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
