@@ -21,18 +21,35 @@ import api from '../../api/client';
 /* ─── helpers ─────────────────────────────────────── */
 const errMsg = (e) => e?.response?.data?.message || e?.message || 'Something went wrong';
 
+/* Event type category map — used for card badge rendering */
+const EVENT_TYPE_MAP = {
+  sports:   { color: '#059669', icon: '⚽', bg: '#dcfce7' },
+  academic: { color: '#0073b7', icon: '📚', bg: '#dbeafe' },
+  cultural: { color: '#7c3aed', icon: '🎭', bg: '#ede9fe' },
+  trip:     { color: '#D97706', icon: '🚌', bg: '#fef3c7' },
+  meeting:  { color: '#DC2626', icon: '👥', bg: '#fee2e2' },
+  exam:     { color: '#dd4b39', icon: '📝', bg: '#f8d7da' },
+  holiday:  { color: '#00c0ef', icon: '🌟', bg: '#d1ecf1' },
+  general:  { color: '#6c757d', icon: '📌', bg: '#e2e3e5' },
+};
+
 const EVENT_TYPES = [
-  { value: 'sports',   label: 'Sports',   color: '#00a65a', bg: '#d4edda', icon: Dumbbell   },
-  { value: 'cultural', label: 'Cultural', color: '#605ca8', bg: '#ede9fe', icon: Music       },
-  { value: 'academic', label: 'Academic', color: '#0073b7', bg: '#cce5ff', icon: BookOpen    },
+  { value: 'sports',   label: 'Sports',   color: '#059669', bg: '#dcfce7', icon: Dumbbell   },
+  { value: 'cultural', label: 'Cultural', color: '#7c3aed', bg: '#ede9fe', icon: Music       },
+  { value: 'academic', label: 'Academic', color: '#0073b7', bg: '#dbeafe', icon: BookOpen    },
   { value: 'exam',     label: 'Exam',     color: '#dd4b39', bg: '#f8d7da', icon: ClipboardList},
-  { value: 'meeting',  label: 'Meeting',  color: '#f39c12', bg: '#fff3cd', icon: Briefcase   },
+  { value: 'meeting',  label: 'Meeting',  color: '#DC2626', bg: '#fee2e2', icon: Briefcase   },
+  { value: 'trip',     label: 'Trip',     color: '#D97706', bg: '#fef3c7', icon: Star        },
   { value: 'holiday',  label: 'Holiday',  color: '#00c0ef', bg: '#d1ecf1', icon: Star        },
   { value: 'general',  label: 'General',  color: '#6c757d', bg: '#e2e3e5', icon: Flag        },
 ];
 
 function getTypeInfo(type) {
-  return EVENT_TYPES.find((t) => t.value === type) || EVENT_TYPES[EVENT_TYPES.length - 1];
+  const found = EVENT_TYPES.find((t) => t.value === type);
+  if (found) return found;
+  const mapped = EVENT_TYPE_MAP[type];
+  if (mapped) return { value: type, label: type, ...mapped, icon: Flag };
+  return EVENT_TYPES[EVENT_TYPES.length - 1];
 }
 
 function fmtDate(d) {
@@ -223,7 +240,10 @@ function UpcomingEventsTab() {
                       background: ti.bg, color: ti.color,
                       padding: '3px 9px', borderRadius: 99, fontSize: 11, fontWeight: 700,
                     }}>
-                      <Icon size={11} /> {ti.label}
+                      {EVENT_TYPE_MAP[ev.type]?.icon
+                        ? <span>{EVENT_TYPE_MAP[ev.type].icon}</span>
+                        : <Icon size={11} />}
+                      {ti.label}
                     </span>
                     <span className={`badge ${ev.status === 'completed' ? 'badge-success' : ev.status === 'cancelled' ? 'badge-danger' : ev.status === 'ongoing' ? 'badge-warning' : 'badge-info'}`}>
                       {ev.status}

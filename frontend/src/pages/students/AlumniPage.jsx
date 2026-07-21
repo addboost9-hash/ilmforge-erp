@@ -299,6 +299,46 @@ function InviteModal({ onClose, selectedIds }) {
   );
 }
 
+/* ─── Alumni Compact Row ──────────────────────────── */
+function AlumniCompactRow({ alumni, onUpdate, onView }) {
+  const color = yearColor(alumni.passoutYear);
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.65)',
+      backdropFilter: 'blur(12px)',
+      borderRadius: 16,
+      padding: '18px 20px',
+      border: '1px solid rgba(255,255,255,0.45)',
+      display: 'flex', gap: 14, alignItems: 'center',
+      boxShadow: '0 2px 12px rgba(27,47,110,0.06)',
+      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+    }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(27,47,110,0.12)'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(27,47,110,0.06)'; }}
+    >
+      <div style={{
+        width: 50, height: 50, borderRadius: '50%',
+        background: `linear-gradient(135deg, #1B2F6E, #0073b7)`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'white', fontSize: 20, flexShrink: 0, fontWeight: 700,
+      }}>
+        {alumni.photoUrl
+          ? <img src={alumni.photoUrl} alt={alumni.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+          : initials(alumni.name)}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, color: '#1e3a5f', fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{alumni.name}</div>
+        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+          {alumni.currentOccupation || alumni.profession || '—'} • {alumni.city || '—'}
+        </div>
+      </div>
+      <span style={{ background: '#eff6ff', color: '#1B2F6E', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+        Class of {alumni.passoutYear || '—'}
+      </span>
+    </div>
+  );
+}
+
 /* ─── Alumni Card ─────────────────────────────────── */
 function AlumniCard({ alumni, onUpdate, onView }) {
   const color = yearColor(alumni.passoutYear);
@@ -330,6 +370,9 @@ function AlumniCard({ alumni, onUpdate, onView }) {
             {alumni.class || 'N/A'} &nbsp;·&nbsp;
             <span style={{ color, fontWeight: 700 }}>{alumni.passoutYear || '—'}</span>
           </div>
+          <span style={{ background: '#eff6ff', color: '#1B2F6E', padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, marginTop: 4, display: 'inline-block' }}>
+            Class of {alumni.passoutYear || '—'}
+          </span>
         </div>
       </div>
 

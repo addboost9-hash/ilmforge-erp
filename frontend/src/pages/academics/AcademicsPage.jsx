@@ -39,6 +39,24 @@ const inp = {
   background: '#fff',
 };
 
+/* Subject color map for homework cards */
+const SUBJECT_COLORS = {
+  Mathematics: '#0073b7',
+  Math: '#0073b7',
+  English: '#7c3aed',
+  Science: '#059669',
+  Urdu: '#D97706',
+  Islamiyat: '#059669',
+  Physics: '#0ea5e9',
+  Chemistry: '#f97316',
+  Biology: '#10b981',
+  History: '#8b5cf6',
+  Geography: '#06b6d4',
+  Computer: '#6366f1',
+  Arts: '#ec4899',
+  General: '#1B2F6E',
+};
+
 /* ═══════════════════════════════════
    HOMEWORK TAB
 ═══════════════════════════════════ */
@@ -112,51 +130,66 @@ function HomeworkTab() {
         </button>
       </div>
 
-      {/* Table */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        {isLoading ? <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Loading…</div> : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th style={{ width: 50 }}>S.No.</th>
-                <th>Subject</th>
-                <th>Title</th>
-                <th>Due Date</th>
-                <th>Class</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {homeworks.length === 0 && (
-                <tr><td colSpan={6}>
-                  <div className="empty-state">
-                    <div className="empty-state-icon">📚</div>
-                    <div className="empty-state-text">No homework assigned</div>
-                    <div className="empty-state-sub">Click "+ Assign Homework" to add one</div>
+      {/* Homework Cards */}
+      {isLoading ? (
+        <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Loading…</div>
+      ) : homeworks.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">📚</div>
+          <div className="empty-state-text">No homework assigned</div>
+          <div className="empty-state-sub">Click "+ Assign Homework" to add one</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {homeworks.map((hw, i) => {
+            const subjectName = hw.subjectName || hw.subject?.name || hw.subject || 'General';
+            const borderColor = SUBJECT_COLORS[subjectName] || NAVY;
+            return (
+              <div key={hw.id} style={{
+                background: 'rgba(255,255,255,0.65)',
+                backdropFilter: 'blur(12px)',
+                borderRadius: 14,
+                padding: '16px 20px',
+                border: '1px solid rgba(255,255,255,0.45)',
+                borderLeft: `4px solid ${borderColor}`,
+                boxShadow: '0 2px 12px rgba(27,47,110,0.06)',
+                animation: `ilm-fade-in 0.3s ease-out ${i * 50}ms both`,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#1e3a5f' }}>
+                    {hw.title || hw.description || '—'}
                   </div>
-                </td></tr>
-              )}
-              {homeworks.map((hw, idx) => (
-                <tr key={hw.id}>
-                  <td style={{ color: '#94A3B8', fontSize: 12 }}>{idx + 1}</td>
-                  <td style={{ fontWeight: 600, color: NAVY }}>{hw.subjectName || hw.subject || '—'}</td>
-                  <td>{hw.title || hw.description || '—'}</td>
-                  <td>{hw.dueDate ? new Date(hw.dueDate).toLocaleDateString('en-PK') : (hw.date ? new Date(hw.date).toLocaleDateString('en-PK') : '—')}</td>
-                  <td>{getClassName(hw.classId)}</td>
-                  <td>
-                    <button
-                      onClick={() => { if (window.confirm('Delete this homework?')) delMut.mutate(hw.id); }}
-                      style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                    📚 {subjectName} • 🏫 {getClassName(hw.classId)}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                    Due: {hw.dueDate
+                      ? new Date(hw.dueDate).toLocaleDateString('en-PK')
+                      : hw.date
+                        ? new Date(hw.date).toLocaleDateString('en-PK')
+                        : 'No deadline'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, marginLeft: 12 }}>
+                  <span style={{
+                    background: '#f0fdf4', color: '#059669',
+                    padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                  }}>Active</span>
+                  <button
+                    onClick={() => { if (window.confirm('Delete this homework?')) delMut.mutate(hw.id); }}
+                    style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Assign Modal */}
       {showModal && (

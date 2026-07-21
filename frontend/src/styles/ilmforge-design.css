@@ -405,3 +405,38 @@ tbody tr:hover {
   60% { transform: translateX(-4px); }
   80% { transform: translateX(4px); }
 }
+
+/* ═══════════════════════════════════════════════════
+   FINAL POLISH — Subject Colors, Glass Inputs, Badges
+═══════════════════════════════════════════════════ */
+
+/* Subject colors for homework */
+.subject-math { border-left-color: #0073b7 !important; }
+.subject-english { border-left-color: #7c3aed !important; }
+.subject-science { border-left-color: #059669 !important; }
+.subject-urdu { border-left-color: #D97706 !important; }
+.subject-islamiyat { border-left-color: #059669 !important; }
+
+/* Glass search input */
+.glass-search {
+  background: rgba(255,255,255,0.8) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(27,47,110,0.12) !important;
+  border-radius: 999px !important;
+  padding: 10px 16px 10px 40px !important;
+}
+
+/* Card hover effects */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+.hover-lift:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 12px 40px rgba(27,47,110,0.15) !important;
+}
+
+/* Status badges */
+.badge-active { background: #dcfce7 !important; color: #059669 !important; }
+.badge-pending { background: #fef3c7 !important; color: #D97706 !important; }
+.badge-inactive { background: #f1f5f9 !important; color: #64748b !important; }
+.badge-urgent { background: #fee2e2 !important; color: #DC2626 !important; }

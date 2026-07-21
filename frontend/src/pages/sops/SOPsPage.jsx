@@ -1202,31 +1202,36 @@ DOCUMENTATION
   return (
     <div style={{ padding: '20px 24px', minHeight: '100vh', background: '#f0f4f8' }}>
       {/* Page header */}
-      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{
-          width: 38, height: 38, borderRadius: 8, background: TEAL,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <BookOpenCheck size={20} color="#fff" />
-        </div>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#111827' }}>SOPs & School Manuals</h2>
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
-            Standard Operating Procedures — Academic & Administrative
+      <div className="ilm-page-header" style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: 10, background: TEAL,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(13,148,136,0.35)',
+          }}>
+            <BookOpenCheck size={22} color="#fff" />
+          </div>
+          <div>
+            <h1 className="ilm-page-title" style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#111827' }}>
+              📋 Standard Operating Procedures
+            </h1>
+            <p className="ilm-page-subtitle" style={{ margin: 0, fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+              School management guidelines and best practices
+            </p>
           </div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{
             background: '#f0fdf4', color: TEAL, fontSize: 12, fontWeight: 700,
-            padding: '4px 12px', borderRadius: 99, border: `1px solid ${TEAL}`,
+            padding: '6px 14px', borderRadius: 999, border: `1px solid ${TEAL}`,
           }}>
-            {ACADEMIC_MANUALS.length} Academic SOPs
+            {ACADEMIC_MANUALS.length} Academic Manuals
           </span>
           <span style={{
             background: '#eff6ff', color: BLUE, fontSize: 12, fontWeight: 700,
-            padding: '4px 12px', borderRadius: 99, border: `1px solid ${BLUE}`,
+            padding: '6px 14px', borderRadius: 999, border: `1px solid ${BLUE}`,
           }}>
-            {adminRows.length} Admin SOPs
+            {adminRows.length} Admin Manuals
           </span>
         </div>
       </div>
