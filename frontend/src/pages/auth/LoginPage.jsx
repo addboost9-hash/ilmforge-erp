@@ -19,7 +19,7 @@ export default function LoginPage() {
   const { login, isLoading } = useAuthStore();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPw, setShowPw] = useState(false);
-  const [showDemoModal, setShowDemoModal] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
 
   const schoolLogo = typeof window !== 'undefined' ? localStorage.getItem('schoolLogoPreview') : null;
   const schoolName = typeof window !== 'undefined' ? localStorage.getItem('registeredSchoolName') : null;
@@ -151,12 +151,12 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit}>
             <div style={inputWrap}>
-              <label style={labelCss}>Email / Phone Number</label>
+              <label style={labelCss}>EMAIL / PHONE</label>
               <Mail size={17} style={iconCss} />
               <input
                 type="text" value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                placeholder="Email address or phone number (03XX-XXXXXXX)" style={inputCss}
+                placeholder="Email address or phone number" style={inputCss}
                 onFocus={e => { e.target.style.borderColor = brandColor; e.target.style.boxShadow = `0 0 0 4px ${brandColor}1a`; }}
                 onBlur={e => { e.target.style.borderColor = '#E2E8F0'; e.target.style.boxShadow = 'none'; }}
               />
@@ -195,41 +195,28 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Demo access subtle link */}
-          <div style={{ marginTop: 16, textAlign: 'center' }}>
-            <button
+          {/* Demo access subtle collapsible */}
+          <div style={{marginTop:12,textAlign:'center'}}>
+            <button onClick={()=>setShowDemo(s=>!s)}
               type="button"
-              onClick={() => setShowDemoModal(true)}
-              style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}
-            >
-              Demo access available
+              style={{background:'none',border:'none',color:'#94a3b8',fontSize:11,cursor:'pointer',textDecoration:'underline'}}>
+              {showDemo ? 'Hide' : 'Show'} demo credentials
             </button>
-          </div>
-
-          {/* Demo credentials modal */}
-          {showDemoModal && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ background: 'white', borderRadius: 16, padding: 28, maxWidth: 380, width: '100%' }}>
-                <h3 style={{ margin: '0 0 16px', color: '#1B2F6E', fontWeight: 800 }}>Demo Credentials</h3>
-                <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 12px' }}>Use these to explore the platform:</p>
+            {showDemo && (
+              <div style={{marginTop:8,background:'#f8fafc',borderRadius:10,padding:12,border:'1px solid #e2e8f0',textAlign:'left'}}>
+                <div style={{fontSize:10,fontWeight:700,color:'#94a3b8',marginBottom:8,letterSpacing:1}}>DEMO ACCESS</div>
                 {[
-                  { role: 'Admin',   email: 'admin@demo.com',   pass: 'Demo@2026' },
-                  { role: 'Teacher', email: 'teacher@demo.com', pass: 'Demo@2026' },
-                ].map(d => (
-                  <div key={d.role}
-                    style={{ padding: '8px 12px', background: '#f8fafc', borderRadius: 8, marginBottom: 6, cursor: 'pointer' }}
-                    onClick={() => { setForm({ email: d.email, password: d.pass }); setShowDemoModal(false); }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1B2F6E' }}>{d.role}</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>{d.email} / {d.pass}</div>
+                  {label:'🛡️ Admin', email:'addboost9@gmail.com', pass:'your-password'},
+                ].map(d=>(
+                  <div key={d.label} onClick={()=>setForm({email:d.email,password:d.pass})}
+                    style={{padding:'6px 8px',background:'white',borderRadius:6,marginBottom:4,cursor:'pointer',fontSize:12,border:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between'}}>
+                    <span style={{fontWeight:600,color:'#1B2F6E'}}>{d.label}</span>
+                    <span style={{color:'#64748b'}}>{d.email}</span>
                   </div>
                 ))}
-                <button onClick={() => setShowDemoModal(false)}
-                  style={{ marginTop: 12, width: '100%', padding: '8px', background: '#f1f5f9', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
-                  Close
-                </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Public separator */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 0 12px' }}>

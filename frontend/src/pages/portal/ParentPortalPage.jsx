@@ -346,21 +346,44 @@ export default function ParentPortalPage() {
             <div style={{ fontSize:32, marginBottom:8 }}>⏳</div>Loading your children's data…
           </div>
         ) : children.length === 0 ? (
-          <div style={{ background:'#fff', borderRadius:16, padding:'40px 24px', textAlign:'center' }}>
-            <div style={{ fontSize:64, marginBottom:16 }}>👨‍👩‍👧</div>
-            <h3 style={{ fontSize:18, fontWeight:700, color:'#1e3a5f', margin:'0 0 8px' }}>No Students Linked</h3>
-            <p style={{ color:'#64748b', fontSize:13, lineHeight:1.7, maxWidth:380, margin:'0 auto 20px' }}>
-              Your account isn't linked to any student yet. This usually happens when:
+          <div style={{
+            textAlign:'center', padding:'48px 24px',
+            background:'rgba(255,255,255,0.65)', backdropFilter:'blur(16px)',
+            borderRadius:20, border:'1px solid rgba(255,255,255,0.45)',
+            boxShadow:'0 4px 20px rgba(27,47,110,0.08)',
+            maxWidth:480, margin:'20px auto',
+          }}>
+            <div style={{fontSize:64, marginBottom:16}}>👨‍👩‍👧</div>
+            <h3 style={{fontSize:18, fontWeight:800, color:'#1e3a5f', margin:'0 0 8px'}}>
+              No Students Linked Yet
+            </h3>
+            <p style={{color:'#64748b', fontSize:13, lineHeight:1.7, margin:'0 0 20px'}}>
+              Your account needs to be linked to your child's admission record.
             </p>
-            <div style={{ textAlign:'left', maxWidth:360, margin:'0 auto', background:'#f8fafc', borderRadius:12, padding:16, fontSize:13, color:'#374151' }}>
-              <div style={{ marginBottom:8 }}>📱 Your phone number doesn't match the admission record</div>
-              <div style={{ marginBottom:8 }}>📋 Student hasn't been admitted yet</div>
-              <div>🔗 Account not linked by school admin</div>
+            <div style={{background:'#f8fafc', borderRadius:12, padding:'16px 20px', textAlign:'left', marginBottom:20}}>
+              <div style={{fontWeight:700, fontSize:12, color:'#374151', marginBottom:10}}>Possible reasons:</div>
+              {[
+                '📱 Phone number doesn\'t match admission record',
+                '📋 Student hasn\'t been admitted yet',
+                '🔗 Account not yet linked by school admin',
+              ].map(r => (
+                <div key={r} style={{fontSize:12, color:'#64748b', marginBottom:6}}>{r}</div>
+              ))}
             </div>
-            <div style={{ marginTop:20, padding:16, background:'#eff6ff', borderRadius:12, border:'1px solid #bfdbfe' }}>
-              <p style={{ fontSize:13, color:'#1e40af', margin:0, fontWeight:600 }}>Contact your school admin to link your account</p>
-              <a href="https://wa.me/923465146609" style={{ display:'inline-block', marginTop:8, fontSize:12, color:'#0073b7' }}>
-                WhatsApp: 0346-5146609
+            <div style={{
+              background:'linear-gradient(135deg,rgba(27,47,110,0.05),rgba(0,115,183,0.03))',
+              borderRadius:12, padding:'14px 18px',
+              border:'1px solid rgba(27,47,110,0.1)',
+            }}>
+              <div style={{fontWeight:700, fontSize:13, color:'#1B2F6E', marginBottom:6}}>
+                📞 Contact School Admin
+              </div>
+              <div style={{fontSize:12, color:'#64748b'}}>
+                Ask admin to link your phone number to your child's record
+              </div>
+              <a href="https://wa.me/923465146609"
+                style={{display:'inline-block', marginTop:8, fontSize:12, color:'#25d366', fontWeight:600, textDecoration:'none'}}>
+                💬 WhatsApp: 0346-5146609
               </a>
             </div>
           </div>

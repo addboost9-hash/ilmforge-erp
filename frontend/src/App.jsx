@@ -286,6 +286,22 @@ const Home = () => {
   const ok = useAuthStore(s => s.isAuthenticated);
   return ok ? <Navigate to="/dashboard" replace /> : <LandingPage />;
 };
+
+/* PortalRedirect — sends user to their role-specific portal */
+function PortalRedirect() {
+  const { user } = useAuthStore();
+  const rolePortals = {
+    parent:      '/parent-portal',
+    teacher:     '/teacher-portal',
+    student:     '/student-portal',
+    accountant:  '/accountant-portal',
+    gatekeeper:  '/gatekeeper-portal',
+    admin:       '/dashboard',
+    super_admin: '/dashboard',
+  };
+  const target = rolePortals[user?.role] || '/login';
+  return <Navigate to={target} replace />;
+}
 /**
  * SmartLogin — routes to BrandedLoginPage if ?slug= is present,
  * otherwise shows the generic LoginPage.
@@ -333,6 +349,9 @@ export default function App() {
           {/* Platform Owner Control — Hidden URL, key-protected */}
           <Route path="/platform-control"  element={<PlatformControlPage />} />
           <Route path="/suspended"         element={<SuspendedPage />} />
+
+          {/* ── Role-based portal redirect ── */}
+          <Route path="/portal"            element={<PortalRedirect />} />
 
           {/* ── Role-specific portals — auth required, NO admin layout ─ */}
           <Route path="/parent-portal"     element={<RoleRoute allow={['parent']}><ParentPortalPage /></RoleRoute>}/>
