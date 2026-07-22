@@ -384,7 +384,22 @@ const resendOTP = async ({ userId }) => {
 
 // Login
 const login = async ({ email, phone, password }) => {
-  const where = email ? { email } : { phone };
+  // Build OR conditions: support login by email (case-insensitive) or phone number
+  const identifier = email || phone;
+  const normalizedEmail = identifier ? identifier.trim().toLowerCase() : null;
+  const normalizedPhone = identifier ? identifier.trim().replace(/[^0-9+]/g, '') : null;
+  const orConditions = [];
+  if (normalizedEmail) orConditions.push({ email: normalizedEmail });
+  if (normalizedPhone && normalizedPhone.length >= 10) {
+    orConditions.push({ phone: normalizedPhone });
+    // Also try with leading zero variants
+    if (normalizedPhone.startsWith('92') && normalizedPhone.length === 12) {
+      orConditions.push({ phone: '0' + normalizedPhone.slice(2) });
+    } else if (normalizedPhone.startsWith('0') && normalizedPhone.length === 11) {
+      orConditions.push({ phone: '92' + normalizedPhone.slice(1) });
+    }
+  }
+  const where = orConditions.length > 1 ? { OR: orConditions } : (orConditions[0] || { email: '' });
   const user = await prisma.user.findFirst({ where: { ...where, deletedAt: null }, include: { school: true } });
 
   if (!user) throw { status: 401, message: 'Invalid credentials.' };

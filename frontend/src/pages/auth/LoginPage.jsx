@@ -17,8 +17,9 @@ import IlmForgeLogo from '../../components/brand/IlmForgeLogo';
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login, isLoading } = useAuthStore();
-  const [form, setForm] = useState({ email: 'admin@demo.com', password: 'Admin@123' });
+  const [form, setForm] = useState({ email: '', password: '' });
   const [showPw, setShowPw] = useState(false);
+  const [showDemoModal, setShowDemoModal] = useState(false);
 
   const schoolLogo = typeof window !== 'undefined' ? localStorage.getItem('schoolLogoPreview') : null;
   const schoolName = typeof window !== 'undefined' ? localStorage.getItem('registeredSchoolName') : null;
@@ -27,7 +28,13 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.email || !form.password) return toast.error('Please fill all fields');
-    const res = await login({ email: form.email, password: form.password });
+    // Support login by email or phone number
+    const identifier = form.email.trim();
+    const isPhone = /^[0-9+\-\s()]+$/.test(identifier) && identifier.replace(/\D/g,'').length >= 10;
+    const credentials = isPhone
+      ? { phone: identifier.replace(/[^0-9+]/g,''), password: form.password }
+      : { email: identifier.toLowerCase(), password: form.password };
+    const res = await login(credentials);
     if (res.success) {
       const role = res.data.user?.role;
       const name = res.data.user?.name?.split(' ')[0] || 'User';
@@ -44,13 +51,6 @@ export default function LoginPage() {
       } else toast.error(res.error || 'Invalid email or password');
     }
   };
-
-  const demos = [
-    { role: 'Admin', email: 'admin@demo.com', pw: 'Admin@123', color: '#1B2F6E' },
-    { role: 'Teacher', email: 'teacher1@demo.com', pw: 'teacher', color: '#047857' },
-    { role: 'Accountant', email: 'accountant@demo.com', pw: 'accountant', color: '#B45309' },
-    { role: 'Parent', email: 'parent1@demo.com', pw: 'parent', color: '#7C3AED' },
-  ];
 
   const features = [
     'Complete Exam Management',
@@ -151,12 +151,12 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit}>
             <div style={inputWrap}>
-              <label style={labelCss}>Email Address</label>
+              <label style={labelCss}>Email / Phone Number</label>
               <Mail size={17} style={iconCss} />
               <input
-                type="email" value={form.email}
+                type="text" value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                placeholder="you@school.com" style={inputCss}
+                placeholder="Email address or phone number (03XX-XXXXXXX)" style={inputCss}
                 onFocus={e => { e.target.style.borderColor = brandColor; e.target.style.boxShadow = `0 0 0 4px ${brandColor}1a`; }}
                 onBlur={e => { e.target.style.borderColor = '#E2E8F0'; e.target.style.boxShadow = 'none'; }}
               />
@@ -195,29 +195,41 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Demo separator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 0 12px' }}>
-            <div style={{ flex: 1, height: 1, background: '#E2E8F0' }} />
-            <span style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>Or try a demo account</span>
-            <div style={{ flex: 1, height: 1, background: '#E2E8F0' }} />
+          {/* Demo access subtle link */}
+          <div style={{ marginTop: 16, textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setShowDemoModal(true)}
+              style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              Demo access available
+            </button>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-            {demos.map(d => {
-              const active = form.email === d.email;
-              return (
-                <button key={d.role} type="button" onClick={() => setForm({ email: d.email, password: d.pw })}
-                  style={{
-                    fontSize: 11.5, fontWeight: 800, padding: '7px 14px', borderRadius: 999, cursor: 'pointer',
-                    border: `1.5px solid ${active ? d.color : '#E2E8F0'}`,
-                    background: active ? `${d.color}12` : '#fff',
-                    color: active ? d.color : '#64748B', transition: 'all .12s',
-                  }}>
-                  {d.role}
+          {/* Demo credentials modal */}
+          {showDemoModal && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ background: 'white', borderRadius: 16, padding: 28, maxWidth: 380, width: '100%' }}>
+                <h3 style={{ margin: '0 0 16px', color: '#1B2F6E', fontWeight: 800 }}>Demo Credentials</h3>
+                <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 12px' }}>Use these to explore the platform:</p>
+                {[
+                  { role: 'Admin',   email: 'admin@demo.com',   pass: 'Demo@2026' },
+                  { role: 'Teacher', email: 'teacher@demo.com', pass: 'Demo@2026' },
+                ].map(d => (
+                  <div key={d.role}
+                    style={{ padding: '8px 12px', background: '#f8fafc', borderRadius: 8, marginBottom: 6, cursor: 'pointer' }}
+                    onClick={() => { setForm({ email: d.email, password: d.pass }); setShowDemoModal(false); }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1B2F6E' }}>{d.role}</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>{d.email} / {d.pass}</div>
+                  </div>
+                ))}
+                <button onClick={() => setShowDemoModal(false)}
+                  style={{ marginTop: 12, width: '100%', padding: '8px', background: '#f1f5f9', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
+                  Close
                 </button>
-              );
-            })}
-          </div>
+              </div>
+            </div>
+          )}
 
           {/* Public separator */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 0 12px' }}>
@@ -228,10 +240,10 @@ export default function LoginPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <Link to="/apply" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 10, background: '#F0FDFA', border: '1.5px solid #99F6E4', color: '#0F766E', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>
-              <UserPlus size={14} /> Apply Admission
+              <UserPlus size={14} /> Apply for Admission
             </Link>
             <Link to="/fee-voucher" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 10, background: '#FFFBEB', border: '1.5px solid #FDE68A', color: '#B45309', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>
-              <FileDown size={14} /> Fee Voucher
+              <FileDown size={14} /> Download Fee Slip
             </Link>
           </div>
 

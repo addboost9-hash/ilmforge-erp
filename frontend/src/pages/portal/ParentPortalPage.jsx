@@ -347,13 +347,22 @@ export default function ParentPortalPage() {
           </div>
         ) : children.length === 0 ? (
           <div style={{ background:'#fff', borderRadius:16, padding:'40px 24px', textAlign:'center' }}>
-            <div style={{ fontSize:48, marginBottom:12 }}>👨‍👩‍👦</div>
-            <div style={{ fontWeight:700, fontSize:18, color:NAVY, marginBottom:8 }}>No Children Found</div>
-            <p style={{ color:'#6B7280', fontSize:14, lineHeight:1.6 }}>
-              Your children don't appear to be enrolled yet, or your phone number doesn't
-              match the emergency contact in the admission form.<br/><br/>
-              Please contact the school admin to link your account.
+            <div style={{ fontSize:64, marginBottom:16 }}>👨‍👩‍👧</div>
+            <h3 style={{ fontSize:18, fontWeight:700, color:'#1e3a5f', margin:'0 0 8px' }}>No Students Linked</h3>
+            <p style={{ color:'#64748b', fontSize:13, lineHeight:1.7, maxWidth:380, margin:'0 auto 20px' }}>
+              Your account isn't linked to any student yet. This usually happens when:
             </p>
+            <div style={{ textAlign:'left', maxWidth:360, margin:'0 auto', background:'#f8fafc', borderRadius:12, padding:16, fontSize:13, color:'#374151' }}>
+              <div style={{ marginBottom:8 }}>📱 Your phone number doesn't match the admission record</div>
+              <div style={{ marginBottom:8 }}>📋 Student hasn't been admitted yet</div>
+              <div>🔗 Account not linked by school admin</div>
+            </div>
+            <div style={{ marginTop:20, padding:16, background:'#eff6ff', borderRadius:12, border:'1px solid #bfdbfe' }}>
+              <p style={{ fontSize:13, color:'#1e40af', margin:0, fontWeight:600 }}>Contact your school admin to link your account</p>
+              <a href="https://wa.me/923465146609" style={{ display:'inline-block', marginTop:8, fontSize:12, color:'#0073b7' }}>
+                WhatsApp: 0346-5146609
+              </a>
+            </div>
           </div>
         ) : (
           <>

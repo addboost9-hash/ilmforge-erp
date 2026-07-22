@@ -38,6 +38,34 @@ router.get('/', wrap(async (req, res) => {
       }
     }
 
+    // Third fallback: find student by emergencyPhone matching user's phone, then create parent link
+    if (!parent && req.user.phone) {
+      const userPhone = req.user.phone.replace(/\D/g, '');
+      const studentWithParent = await prisma.student.findFirst({
+        where: {
+          schoolId,
+          deletedAt: null,
+          OR: [
+            { emergencyPhone: req.user.phone },
+            { emergencyPhone: userPhone },
+          ],
+        },
+      });
+      if (studentWithParent) {
+        // Create parent record and link to this user
+        parent = await prisma.parent.create({
+          data: { schoolId, userId: req.user.id },
+        }).catch(() => null);
+        if (parent) {
+          await prisma.parentStudent.upsert({
+            where: { parentId_studentId: { parentId: parent.id, studentId: studentWithParent.id } },
+            update: {},
+            create: { schoolId, parentId: parent.id, studentId: studentWithParent.id },
+          }).catch(() => {});
+        }
+      }
+    }
+
     if (!parent) return res.json({ success: true, data: [], total: 0, page: 1, pages: 0 });
     const links = await prisma.parentStudent.findMany({ where: { schoolId, parentId: parent.id }, select: { studentId: true } });
     parentStudentIds = links.map((l) => l.studentId);
@@ -185,8 +213,14 @@ router.post('/', wrap(async (req, res) => {
   const slug = school?.slug || 'school';
 
   // Generate credentials up-front
-  const studentPassword = genPassword();
-  const parentPassword  = genPassword();
+  // Parent password: last 5 digits of emergency phone + "123" (memorable for parents)
+  // e.g. phone 0346-5146609 → "46609123"
+  const parentPassword = emergencyPhone
+    ? emergencyPhone.replace(/[^0-9]/g, '').slice(-5) + '123'
+    : genPassword();
+  // Student password: roll number (computed after) — placeholder for now, overridden below
+  // We will set it after finalRollNo is determined
+  const studentPassword = finalRollNo.replace(/[^a-zA-Z0-9]/g, '') + '123';
 
   // Use rollNo in email — add short unique suffix to prevent collision on same name/rollNo
   const uniq = Date.now().toString(36).slice(-4); // 4-char base36 timestamp suffix
@@ -397,12 +431,15 @@ router.post('/', wrap(async (req, res) => {
   // Build credentials payload for frontend popup / print
   const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
   const portalLink = `${FRONTEND_URL}/login?slug=${slug}`;
+  const parentPasswordHint = emergencyPhone
+    ? `Last 5 digits of phone + 123 (e.g. ${emergencyPhone.replace(/[^0-9]/g,'').slice(-5)}123)`
+    : null;
   const credentials = createPortalAccounts ? {
     portalLink,
-    student: { email: safeStudentEmail, password: studentPassword, portal: 'Student Portal' },
+    student: { email: safeStudentEmail, password: studentPassword, portal: 'Student Portal', passwordHint: `Roll number + 123 (e.g. ${finalRollNo.replace(/[^a-zA-Z0-9]/g,'')}123)` },
     parent: result.parentIsExisting
       ? { email: result.parentUser.email, password: '(existing account — same as sibling)', portal: 'Parent Portal', existing: true }
-      : { email: result.parentUser?.email || finalParentEmail, password: parentPassword, portal: 'Parent Portal' },
+      : { email: result.parentUser?.email || finalParentEmail, password: parentPassword, portal: 'Parent Portal', passwordHint: parentPasswordHint },
   } : null;
 
   res.status(201).json({ success: true, data: result.student, credentials, invoice: result.invoice });
