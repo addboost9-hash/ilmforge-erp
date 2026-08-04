@@ -8,12 +8,29 @@ router.get('/', wrap(async (req, res) => {
   res.json({ success: true, data });
 }));
 
+// Look up the most recent certificate already issued for a holder+type —
+// used by the print flow to decide "first issue" vs. "reprint" so a reprint
+// always reuses the ORIGINAL serial number instead of minting a new one.
+// FIX: CertificatesPage.jsx never called this router at all (no api.post),
+// so every printed certificate previously had no serial number and no DB
+// record — unverifiable and unauditable despite the backend already
+// supporting it.
+router.get('/lookup', wrap(async (req, res) => {
+  const { holderType, holderId, certType } = req.query;
+  if (!holderId || !certType) return res.status(400).json({ success: false, message: 'holderId and certType required.' });
+  const cert = await prisma.certificate.findFirst({
+    where: { schoolId: req.schoolId, holderType: holderType || 'student', holderId: parseInt(holderId), certType },
+    orderBy: { issuedAt: 'asc' }, // the ORIGINAL issuance, not the latest reprint record
+  });
+  res.json({ success: true, data: cert || null });
+}));
+
 // Issue certificate — records serial for verification
 router.post('/', wrap(async (req, res) => {
   if (!['admin','super_admin'].includes(req.user.role)) return res.status(403).json({ success: false, message: 'Admins only.' });
   const { holderType, holderId, certType } = req.body;
   if (!holderId || !certType) return res.status(400).json({ success: false, message: 'Holder and type required.' });
-  const serialNo = `CERT-${req.schoolId}-${Date.now().toString(36).toUpperCase()}`;
+  const serialNo = `CERT-${req.schoolId}-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random()*1000)}`;
   const cert = await prisma.certificate.create({
     data: { schoolId: req.schoolId, holderType: holderType || 'student', holderId: parseInt(holderId), certType, serialNo, issuedBy: req.user.id }
   });

@@ -5,14 +5,26 @@ const ExcelJS = require('exceljs');
 const { sendAbsentNotification } = require('../services/whatsapp.service');
 const { sendSMS } = require('../services/sms.service');
 const { requireRole } = require('../middleware/auth.middleware');
+const { teacherCanAccessClass } = require('../utils/teacherScope');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
+// The mount in app.js is being broadened to let student/parent reach this
+// router at all (so /summary and /student/:id/history can serve their own
+// data) — every whole-class/whole-staff endpoint that has no per-row scoping
+// of its own must explicitly re-check the role itself.
+const staffOnly = (req, res, next) => {
+  if (!['super_admin', 'admin', 'teacher', 'gatekeeper', 'principal'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  next();
+};
 
 // ---------------------------------------------------------------------------
 // EXISTING ENDPOINTS
 // ---------------------------------------------------------------------------
 
 // GET /api/v1/attendance?classId=&date=
-router.get('/', wrap(async (req, res) => {
+router.get('/', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { classId, sectionId, date } = req.query;
   const targetDate = date ? new Date(date) : new Date();
@@ -50,23 +62,40 @@ router.post('/save', wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { classId, sectionId, date, records, notifyAbsent = true } = req.body;
   if (!classId || !records) return res.status(400).json({ success: false, message: 'classId and records required.' });
+  if (!(await teacherCanAccessClass(req, classId))) {
+    return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+  }
 
   const targetDate = date ? new Date(date) : new Date(); targetDate.setHours(0, 0, 0, 0);
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
 
-  // Build all upsert operations and collect absent student IDs in one pass
+  // Look up prior state for every record in this save BEFORE upserting, so a
+  // student already marked absent+notified today doesn't get re-texted every
+  // time the day's attendance is re-saved (e.g. fixing an unrelated typo).
+  const existingRecords = await prisma.attendance.findMany({
+    where: { studentId: { in: records.map(r => r.studentId) }, date: targetDate },
+    select: { studentId: true, status: true, notified: true },
+  });
+  const existingMap = new Map(existingRecords.map(r => [r.studentId, r]));
+
   const absentIds = [];
   const ops = records.map(record => {
-    if (record.status === 'absent' && notifyAbsent) {
-      absentIds.push(record.studentId);
-    }
+    const prior = existingMap.get(record.studentId);
+    const alreadyNotified = prior?.status === 'absent' && prior?.notified && record.status === 'absent';
+    const shouldNotify = record.status === 'absent' && notifyAbsent && !alreadyNotified;
+    if (shouldNotify) absentIds.push(record.studentId);
+
     return prisma.attendance.upsert({
       where: { studentId_date: { studentId: record.studentId, date: targetDate } },
-      update: { status: record.status, markedBy: req.user.id, method: record.method || 'manual' },
+      update: {
+        status: record.status, markedBy: req.user.id, method: record.method || 'manual',
+        ...(shouldNotify ? { notified: true } : record.status !== 'absent' ? { notified: false } : {}),
+      },
       create: {
         schoolId, campusId: campusId || null, studentId: record.studentId,
         classId: parseInt(classId), sectionId: sectionId ? parseInt(sectionId) : null,
         date: targetDate, status: record.status, markedBy: req.user.id, method: record.method || 'manual',
+        notified: shouldNotify,
       },
     });
   });
@@ -75,9 +104,10 @@ router.post('/save', wrap(async (req, res) => {
   await prisma.$transaction(ops);
   const saved = records.length;
 
-  // Fetch all absent students' phone numbers in ONE query
+  // Fetch all absent students' phone numbers in ONE query — only for those
+  // that actually need a fresh notification this save.
   let notified = 0;
-  if (notifyAbsent && absentIds.length > 0) {
+  if (absentIds.length > 0) {
     const absentStudents = await prisma.student.findMany({
       where: { id: { in: absentIds } },
       select: { id: true, name: true, emergencyPhone: true },
@@ -100,7 +130,37 @@ router.post('/save', wrap(async (req, res) => {
 
 // POST /api/v1/attendance/staff — Save staff attendance records
 // Body: { date, records: [{staffId, status, timeIn, timeOut}] }
-router.post('/staff', wrap(async (req, res) => {
+// GET /api/v1/attendance/staff?date= — was entirely missing; the Staff
+// Attendance page calls this to pre-populate the form for the selected date,
+// and its .catch(() => []) silently hid the 404, so a re-opened date always
+// looked blank even after a successful save.
+router.get('/staff', staffOnly, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const { date } = req.query;
+  const targetDate = date ? new Date(date) : new Date();
+  targetDate.setHours(0, 0, 0, 0);
+
+  const records = await prisma.staffAttendance.findMany({
+    where: { schoolId, date: targetDate },
+  });
+
+  const toTimeStr = (d) => {
+    if (!d) return null;
+    const dt = new Date(d);
+    return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const data = records.map(r => ({
+    staffId: r.staffId,
+    status: r.status,
+    timeIn: toTimeStr(r.checkIn),
+    timeOut: toTimeStr(r.checkOut),
+  }));
+
+  res.json({ success: true, data });
+}));
+
+router.post('/staff', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const { date, records } = req.body;
   if (!Array.isArray(records) || records.length === 0) {
@@ -110,33 +170,37 @@ router.post('/staff', wrap(async (req, res) => {
   const targetDate = date ? new Date(date) : new Date();
   targetDate.setHours(0, 0, 0, 0);
 
-  // Store in StaffAttendance table if it exists, otherwise skip gracefully
+  // FIX: the StaffAttendance model has checkIn/checkOut columns, not
+  // timeIn/timeOut — every upsert here previously threw a Prisma unknown-field
+  // error on every record (silently swallowed by the per-record .catch and
+  // the outer try/catch, which both reported fake success), so staff
+  // attendance never actually persisted despite the "saved" message.
   let saved = 0;
-  try {
-    for (const rec of records) {
-      await prisma.staffAttendance.upsert({
-        where: { staffId_date: { staffId: rec.staffId, date: targetDate } },
-        update: {
-          status: rec.status || 'present',
-          timeIn:  rec.timeIn  || null,
-          timeOut: rec.timeOut || null,
-          markedBy: req.user?.id || null,
-        },
-        create: {
-          schoolId,
-          staffId: rec.staffId,
-          date: targetDate,
-          status: rec.status || 'present',
-          timeIn:  rec.timeIn  || null,
-          timeOut: rec.timeOut || null,
-          markedBy: req.user?.id || null,
-        },
-      }).catch(() => null); // skip if individual record fails
-      saved++;
-    }
-  } catch (_) {
-    // StaffAttendance model may not exist yet — return success anyway
-    saved = records.length;
+  for (const rec of records) {
+    const toDateTime = (t) => {
+      if (!t) return null;
+      const d = new Date(`${targetDate.toISOString().split('T')[0]}T${t}`);
+      return isNaN(d.getTime()) ? null : d;
+    };
+    await prisma.staffAttendance.upsert({
+      where: { staffId_date: { staffId: parseInt(rec.staffId), date: targetDate } },
+      update: {
+        status: rec.status || 'present',
+        checkIn:  toDateTime(rec.timeIn),
+        checkOut: toDateTime(rec.timeOut),
+        markedBy: req.user?.id || null,
+      },
+      create: {
+        schoolId,
+        staffId: parseInt(rec.staffId),
+        date: targetDate,
+        status: rec.status || 'present',
+        checkIn:  toDateTime(rec.timeIn),
+        checkOut: toDateTime(rec.timeOut),
+        markedBy: req.user?.id || null,
+      },
+    });
+    saved++;
   }
 
   res.json({ success: true, message: `${saved} staff attendance records saved.` });
@@ -145,7 +209,7 @@ router.post('/staff', wrap(async (req, res) => {
 // GET /api/v1/attendance/period
 // Compatibility endpoint for period attendance UI.
 // Since schema stores one daily status per student, this returns a single pseudo-period row per student.
-router.get('/period', wrap(async (req, res) => {
+router.get('/period', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const { classId, date } = req.query;
   if (!classId) return res.status(400).json({ success: false, message: 'classId is required.' });
@@ -171,7 +235,7 @@ router.get('/period', wrap(async (req, res) => {
 // POST /api/v1/attendance/period
 // Compatibility endpoint for period attendance UI.
 // Reduces period-wise statuses into one daily status and persists in Attendance.
-router.post('/period', wrap(async (req, res) => {
+router.post('/period', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { classId, sectionId, date, records } = req.body;
 
@@ -221,7 +285,7 @@ router.post('/period', wrap(async (req, res) => {
 }));
 
 // POST /api/v1/attendance/barcode-scan
-router.post('/barcode-scan', wrap(async (req, res) => {
+router.post('/barcode-scan', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { barcode, date } = req.body;
   if (!barcode) return res.status(400).json({ success: false, message: 'barcode required.' });
@@ -248,7 +312,7 @@ router.post('/barcode-scan', wrap(async (req, res) => {
 }));
 
 // GET /api/v1/attendance/report
-router.get('/report', wrap(async (req, res) => {
+router.get('/report', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { classId, sectionId, month, year } = req.query;
 
@@ -274,12 +338,40 @@ router.get('/report', wrap(async (req, res) => {
 // date range, then aggregated in JavaScript keyed by studentId.
 router.get('/summary', wrap(async (req, res) => {
   const { schoolId } = req;
-  const { classId, month, year } = req.query;
+  const { classId, month, year, studentId } = req.query;
   const startDate = new Date(parseInt(year) || new Date().getFullYear(), (parseInt(month) || new Date().getMonth() + 1) - 1, 1);
   const endDate = new Date(startDate); endDate.setMonth(endDate.getMonth() + 1);
 
+  // FIX: this endpoint previously ignored a `studentId` query param entirely
+  // (the Student Portal calls it with exactly that param to get its own
+  // attendance %), so it always ran unfiltered and returned the WHOLE
+  // school's summary array to any caller — the frontend's `.percentage`
+  // access on that array was always undefined, and every role could pull
+  // every other student's attendance counts. Students/parents are now
+  // hard-restricted to their own (or their linked children's) record;
+  // an explicit studentId is honored for staff roles.
+  let effectiveStudentId = studentId ? parseInt(studentId) : null;
+  if (req.user?.role === 'student') {
+    const self = await prisma.student.findFirst({ where: { schoolId, userId: req.user.id, deletedAt: null }, select: { id: true } });
+    effectiveStudentId = self?.id || -1;
+  } else if (req.user?.role === 'parent') {
+    if (effectiveStudentId) {
+      const parent = await prisma.parent.findFirst({ where: { schoolId, userId: req.user.id } });
+      const link = parent ? await prisma.parentStudent.findFirst({ where: { schoolId, parentId: parent.id, studentId: effectiveStudentId } }) : null;
+      if (!link) return res.status(403).json({ success: false, message: 'Access denied for this student.' });
+    } else {
+      const parent = await prisma.parent.findFirst({ where: { schoolId, userId: req.user.id } });
+      const links = parent ? await prisma.parentStudent.findMany({ where: { schoolId, parentId: parent.id }, select: { studentId: true } }) : [];
+      if (links.length === 1) effectiveStudentId = links[0].studentId;
+    }
+  }
+
   const students = await prisma.student.findMany({
-    where: { schoolId, status: 'active', deletedAt: null, ...(classId && { classId: parseInt(classId) }) },
+    where: {
+      schoolId, status: 'active', deletedAt: null,
+      ...(classId && { classId: parseInt(classId) }),
+      ...(effectiveStudentId && { id: effectiveStudentId }),
+    },
   });
 
   // ONE query for all attendance records in the range
@@ -288,6 +380,7 @@ router.get('/summary', wrap(async (req, res) => {
       schoolId,
       date: { gte: startDate, lt: endDate },
       ...(classId && { classId: parseInt(classId) }),
+      ...(effectiveStudentId && { studentId: effectiveStudentId }),
     },
     select: { studentId: true, status: true },
   });
@@ -322,7 +415,7 @@ router.get('/summary', wrap(async (req, res) => {
 
 // GET /api/v1/attendance/excel — monthly attendance sheet download
 // Query: classId, sectionId, month(1-12), year
-router.get('/excel', wrap(async (req, res) => {
+router.get('/excel', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { classId, sectionId, month, year } = req.query;
 
@@ -440,7 +533,7 @@ router.get('/excel', wrap(async (req, res) => {
 
 // GET /api/v1/attendance/date-range — attendance grouped by student for a date range
 // Query: classId, sectionId, from(ISO date), to(ISO date)
-router.get('/date-range', wrap(async (req, res) => {
+router.get('/date-range', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { classId, sectionId, from, to } = req.query;
 
@@ -490,7 +583,7 @@ router.get('/date-range', wrap(async (req, res) => {
 // Query: classId, minPct(default 75), month, year
 // FIX: replaced per-student COUNT queries with a single findMany, then
 // aggregated per-student in JavaScript.
-router.get('/deficit', wrap(async (req, res) => {
+router.get('/deficit', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { classId, sectionId, month, year } = req.query;
   const minPct = parseFloat(req.query.minPct) || 75;
@@ -569,40 +662,29 @@ router.get('/student/:studentId/history', requireRole('student', 'parent', 'teac
   });
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
 
-  /* -- Ownership check -- */
+  /* -- Ownership check --
+     FIX: this previously read req.user.studentId / req.user.rollNo /
+     req.user.phone / req.user.contactPhone — NONE of which exist on the JWT
+     payload ({id, schoolId, campusId, role, email}), so isOwn/isChild were
+     always false and every real student/parent got a 403 trying to view
+     their own (or their child's) attendance history. Also
+     prisma.parentStudentLink doesn't exist — the actual model is
+     ParentStudent. Resolved via the same Student.userId / Parent.userId +
+     ParentStudent join used elsewhere in the app. */
   const role = req.user?.role;
 
   if (role === 'student') {
-    // Students may only access their own record.
-    // The student's linked user is identified by matching rollNo or a studentId on the user record.
-    const linkedStudentId = req.user?.studentId || null;
-    const linkedRollNo    = req.user?.rollNo || req.user?.username || null;
-    const isOwn =
-      (linkedStudentId && linkedStudentId === requestedId) ||
-      (linkedRollNo && linkedRollNo === student.rollNo);
-    if (!isOwn) {
+    const self = await prisma.student.findFirst({ where: { schoolId, userId: req.user.id, deletedAt: null }, select: { id: true } });
+    if (!self || self.id !== requestedId) {
       return res.status(403).json({ success: false, message: 'Access denied. Students can only view their own attendance.' });
     }
   }
 
   if (role === 'parent') {
-    // Parents may only access records of their own children.
-    // Children are students whose emergencyPhone matches the parent's phone.
-    const parentPhone = req.user?.phone || req.user?.contactPhone || null;
-    const isChild = parentPhone && student.emergencyPhone === parentPhone;
-    if (!isChild) {
-      // Secondary check: explicit parent-student link table if it exists
-      let linked = false;
-      try {
-        const link = await prisma.parentStudentLink?.findFirst({
-          where: { parentId: req.user.id, studentId: requestedId },
-        });
-        linked = !!link;
-      } catch (_) { /* model may not exist */ }
-
-      if (!linked) {
-        return res.status(403).json({ success: false, message: 'Access denied. Parents can only view their children\'s attendance.' });
-      }
+    const parent = await prisma.parent.findFirst({ where: { schoolId, userId: req.user.id }, select: { id: true } });
+    const link = parent ? await prisma.parentStudent.findFirst({ where: { schoolId, parentId: parent.id, studentId: requestedId } }) : null;
+    if (!link) {
+      return res.status(403).json({ success: false, message: 'Access denied. Parents can only view their children\'s attendance.' });
     }
   }
 
@@ -649,7 +731,7 @@ router.get('/student/:studentId/history', requireRole('student', 'parent', 'teac
 }));
 
 // PUT /api/v1/attendance/:id — update a single attendance record (status change)
-router.put('/:id', wrap(async (req, res) => {
+router.put('/:id', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const { id } = req.params;
   const { status, remarks } = req.body;
@@ -667,23 +749,20 @@ router.put('/:id', wrap(async (req, res) => {
     data: { status, markedBy: req.user.id },
   });
 
-  // Log in AuditLog if model exists
-  try {
-    await prisma.auditLog.create({
-      data: {
-        schoolId,
-        userId: req.user.id,
-        action: 'UPDATE_ATTENDANCE',
-        entity: 'Attendance',
-        entityId: String(updated.id),
-        oldValue: JSON.stringify({ status: existing.status }),
-        newValue: JSON.stringify({ status: updated.status }),
-        ip: req.ip || null,
-      },
-    });
-  } catch (_) {
-    // AuditLog model may not exist; silently skip
-  }
+  // FIX: AuditLog has resource/resourceId/ipAddress columns, not
+  // entity/entityId/oldValue/newValue/ip — this call previously threw an
+  // unknown-field error on every single edit, silently swallowed by the
+  // catch, so attendance corrections were never actually audit-logged.
+  await prisma.auditLog.create({
+    data: {
+      schoolId,
+      userId: req.user.id,
+      action: 'UPDATE_ATTENDANCE',
+      resource: 'Attendance',
+      resourceId: updated.id,
+      ipAddress: req.ip || null,
+    },
+  }).catch(() => {});
 
   res.json({ success: true, data: updated, message: 'Attendance record updated.' });
 }));
@@ -719,7 +798,7 @@ router.post('/correction-request', wrap(async (req, res) => {
 
 // GET /api/v1/attendance/corrections — list correction requests
 // Admin sees all for school; teacher sees own requests; filter by status
-router.get('/corrections', wrap(async (req, res) => {
+router.get('/corrections', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const { status } = req.query;
   const isAdmin = ['admin', 'super_admin', 'principal'].includes(req.user?.role);
@@ -816,7 +895,7 @@ router.put('/corrections/:id/reject', requireRole('admin', 'super_admin', 'princ
 
 // GET /api/v1/attendance/staff/report — staff attendance summary for a month
 // Query: month, year, department(optional)
-router.get('/staff/report', wrap(async (req, res) => {
+router.get('/staff/report', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { month, year, department } = req.query;
 
@@ -874,7 +953,7 @@ router.get('/staff/report', wrap(async (req, res) => {
 
 // GET /api/v1/attendance/staff/excel — staff attendance XLSX download
 // Query: month, year, department(optional)
-router.get('/staff/excel', wrap(async (req, res) => {
+router.get('/staff/excel', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { month, year, department } = req.query;
 
@@ -978,7 +1057,7 @@ router.get('/staff/excel', wrap(async (req, res) => {
 // Query: days(default 3)
 // FIX: replaced per-student prisma.attendance.findMany calls with a single batch
 // query for all students, then grouped and processed in JavaScript.
-router.get('/alerts/multi-day-absent', wrap(async (req, res) => {
+router.get('/alerts/multi-day-absent', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const days = parseInt(req.query.days) || 3;
 

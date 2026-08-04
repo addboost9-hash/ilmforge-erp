@@ -15,6 +15,7 @@ import RegisterPage from './pages/auth/RegisterPage';
 import VerifyPhonePage from './pages/auth/VerifyPhonePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import ForcePasswordChangePage from './pages/auth/ForcePasswordChangePage';
 import OnboardingPage from './pages/auth/OnboardingPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import StudentsPage from './pages/students/StudentsPage';
@@ -255,6 +256,10 @@ const ROLE_PORTALS = {
 const RoleRoute = ({ allow, children }) => {
   const { isAuthenticated, user } = useAuthStore();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  // Default-password / admin-reset accounts must change their password
+  // before reaching any portal — the backend has tracked this flag all
+  // along (mustChangePassword), but nothing on the frontend ever checked it.
+  if (user?.mustChangePassword) return <Navigate to="/change-password-required" replace />;
   if (allow.includes(user?.role)) return children;
   // Wrong portal → send user to their own home
   const home = ROLE_PORTALS[user?.role] || '/dashboard';
@@ -272,6 +277,7 @@ const AuthedAny = ({ children }) => {
 const Protected = ({ children }) => {
   const { isAuthenticated, user } = useAuthStore();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.mustChangePassword) return <Navigate to="/change-password-required" replace />;
   // Non-admin roles → redirect to their dedicated portal
   const portal = ROLE_PORTALS[user?.role];
   if (portal) return <Navigate to={portal} replace />;
@@ -344,6 +350,7 @@ export default function App() {
           <Route path="/forgot-password" element={<Public><ForgotPasswordPage /></Public>} />
           <Route path="/reset-password"  element={<Public><ResetPasswordPage /></Public>} />
           <Route path="/setup"             element={<Protected><OnboardingPage /></Protected>} />
+          <Route path="/change-password-required" element={<AuthedAny><ForcePasswordChangePage /></AuthedAny>} />
           <Route path="/apply-admission"   element={<PublicAdmissionPage />} />
           <Route path="/fee-voucher"       element={<PublicFeeVoucherPage />} />
           {/* Platform Owner Control — Hidden URL, key-protected */}

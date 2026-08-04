@@ -3,6 +3,17 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
+// Mounted with only `protect` in app.js (no role gate, no PM check) — GETs
+// are meant to be visible school-wide, but every mutation here was reachable
+// by ANY authenticated role, including students/parents, who could create,
+// edit, or delete school holidays/events. Restrict writes to admin roles.
+const adminOnly = (req, res, next) => {
+  if (!['admin', 'super_admin', 'principal'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Admins only.' });
+  }
+  next();
+};
+
 // GET /events - combined events + holidays in date range
 router.get('/events', wrap(async (req, res) => {
   const { schoolId } = req;
@@ -70,7 +81,7 @@ router.get('/events', wrap(async (req, res) => {
 }));
 
 // POST /events - create SchoolEvent
-router.post('/events', wrap(async (req, res) => {
+router.post('/events', adminOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const { title, type, date, endDate, venue, description, status } = req.body;
   if (!title || !date) return res.status(400).json({ success: false, message: 'title and date required.' });
@@ -91,7 +102,7 @@ router.post('/events', wrap(async (req, res) => {
 }));
 
 // POST /holidays - create HolidayEvent
-router.post('/holidays', wrap(async (req, res) => {
+router.post('/holidays', adminOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const { title, eventType, startDate, endDate, color, notes } = req.body;
   if (!title || !startDate) return res.status(400).json({ success: false, message: 'title and startDate required.' });
@@ -111,7 +122,7 @@ router.post('/holidays', wrap(async (req, res) => {
 }));
 
 // PUT /events/:id - update SchoolEvent
-router.put('/events/:id', wrap(async (req, res) => {
+router.put('/events/:id', adminOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const existing = await prisma.schoolEvent.findFirst({ where: { id: parseInt(req.params.id), schoolId } });
   if (!existing) return res.status(404).json({ success: false, message: 'Event not found.' });
@@ -133,7 +144,7 @@ router.put('/events/:id', wrap(async (req, res) => {
 }));
 
 // PUT /holidays/:id - update HolidayEvent
-router.put('/holidays/:id', wrap(async (req, res) => {
+router.put('/holidays/:id', adminOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const existing = await prisma.holidayEvent.findFirst({ where: { id: parseInt(req.params.id), schoolId } });
   if (!existing) return res.status(404).json({ success: false, message: 'Holiday not found.' });
@@ -154,7 +165,7 @@ router.put('/holidays/:id', wrap(async (req, res) => {
 }));
 
 // DELETE /events/:id
-router.delete('/events/:id', wrap(async (req, res) => {
+router.delete('/events/:id', adminOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const existing = await prisma.schoolEvent.findFirst({ where: { id: parseInt(req.params.id), schoolId } });
   if (!existing) return res.status(404).json({ success: false, message: 'Event not found.' });
@@ -163,7 +174,7 @@ router.delete('/events/:id', wrap(async (req, res) => {
 }));
 
 // DELETE /holidays/:id
-router.delete('/holidays/:id', wrap(async (req, res) => {
+router.delete('/holidays/:id', adminOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const existing = await prisma.holidayEvent.findFirst({ where: { id: parseInt(req.params.id), schoolId } });
   if (!existing) return res.status(404).json({ success: false, message: 'Holiday not found.' });

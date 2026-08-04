@@ -47,7 +47,18 @@ const getCertHTML = (type, person, school, extras = {}) => {
       <span>${sName}</span>
     </div>`;
 
+  // Serial number is issued by the backend (POST /certificates) before this
+  // HTML is ever built — printing without a real, DB-recorded serial defeats
+  // the point of a "verifiable" certificate. A reprint reuses the ORIGINAL
+  // serial (never mints a new one) and is visibly stamped as a duplicate.
+  const serialLine = extras.serialNo ? `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <span style="font-size:10.5px;color:#6B7280;">Serial No.: <strong style="font-family:monospace;color:#111827;">${extras.serialNo}</strong></span>
+      ${extras.isReprint ? `<span style="font-size:10px;font-weight:800;color:#B91C1C;background:#FEE2E2;padding:2px 10px;border-radius:20px;letter-spacing:1px;">DUPLICATE COPY</span>` : ''}
+    </div>` : '';
+
   const header = (accentColor) => `
+    ${serialLine}
     <div style="display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:3px solid ${accentColor};margin-bottom:18px;">
       ${logoHtml}
       <div>
@@ -534,12 +545,38 @@ export default function CertificatesPage() {
     return { twoPerPage };
   };
 
-  const generate = (person, twoPerPage = false) => {
-    const html = getCertHTML(certType, person, school, buildExtras(twoPerPage));
-    const win  = window.open('', '_blank');
+  // Official record-type certificates get a real, backend-issued, unique
+  // serial number tied to a Certificate row (for later verification).
+  // Admit cards / birthday cards are not compliance documents, so they print
+  // without one.
+  const OFFICIAL_CERT_TYPES = ['leaving', 'character', 'bonafide', 'dob', 'experience'];
+
+  const issueOrReuseCertificate = async (person, type) => {
+    const holderType = forStaff ? 'staff' : 'student';
+    try {
+      const existing = await api.get('/certificates/lookup', { params: { holderType, holderId: person.id, certType: type } });
+      if (existing.data?.data) return { serialNo: existing.data.data.serialNo, isReprint: true };
+    } catch { /* no existing record — fall through to issue a new one */ }
+    const created = await api.post('/certificates', { holderType, holderId: person.id, certType: type });
+    return { serialNo: created.data.serialNo, isReprint: false };
+  };
+
+  const generate = async (person, twoPerPage = false) => {
+    let certInfo = null;
+    if (OFFICIAL_CERT_TYPES.includes(certType)) {
+      try {
+        certInfo = await issueOrReuseCertificate(person, certType);
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Could not issue a certificate serial number — printing blocked.');
+        return;
+      }
+    }
+    const html = getCertHTML(certType, person, school, { ...buildExtras(twoPerPage), serialNo: certInfo?.serialNo, isReprint: certInfo?.isReprint });
+    const win = window.open('', '_blank');
+    if (!win) { toast.error('Pop-up blocked — please allow pop-ups to print.'); return; }
     win.document.write(html);
     win.document.close();
-    toast.success(`${activeCert?.label} opened for printing!`);
+    toast.success(`${activeCert?.label} opened for printing!${certInfo?.isReprint ? ' (duplicate — original serial reused)' : ''}`);
   };
 
   const filteredCerts = CERT_TYPES.filter(c =>

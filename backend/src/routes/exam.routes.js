@@ -18,6 +18,7 @@ const validate = (req, res, next) => {
 };
 
 const canManageExams = (role) => ['super_admin', 'admin', 'teacher'].includes(role);
+const { teacherCanAccessClass } = require('../utils/teacherScope');
 
 // ---------------------------------------------------------------------------
 // Grade calculation helpers
@@ -745,6 +746,12 @@ router.get('/:id/marks', wrap(async (req, res) => {
 
   const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
   if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  // A teacher may only view marks for an exam belonging to a class they're
+  // actually assigned to — previously any teacher could pull marks for any
+  // class in the school just by knowing the exam id.
+  if (!(await teacherCanAccessClass(req, exam.classId))) {
+    return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+  }
 
   const where = { examId };
   if (classId) {
@@ -790,6 +797,9 @@ router.post(
   // Ownership check: verify exam belongs to this school
   const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
   if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  if (!(await teacherCanAccessClass(req, exam.classId))) {
+    return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+  }
 
   const thresholds = await loadThresholds(req.schoolId);
   const results = [];

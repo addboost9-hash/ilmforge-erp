@@ -62,10 +62,17 @@ router.post('/generate', requireFinanceRole, wrap(async (req, res) => {
 
   const results = { generated: 0, skipped: 0, students: [] };
 
+  // FIX: FeeInvoice.month is a String column (elsewhere read back via
+  // parseInt(invoice.month)), but this call was passing a raw JS number for
+  // both the dedup lookup and the create — Prisma Client rejects a Int value
+  // for a String field, so every single fee-generation request threw a
+  // validation error before this fix.
+  const monthStr = String(monthInt);
+
   for (const student of students) {
     // Check if invoice already exists for this month/year
     const existing = await prisma.feeInvoice.findFirst({
-      where: { schoolId, studentId: student.id, month: monthInt, year: yearInt },
+      where: { schoolId, studentId: student.id, month: monthStr, year: yearInt },
     });
     if (existing) {
       results.skipped++;
@@ -85,7 +92,7 @@ router.post('/generate', requireFinanceRole, wrap(async (req, res) => {
         totalAmount: baseAmount,
         dueAmount:   baseAmount,
         paidAmount:  0,
-        month:   monthInt,
+        month:   monthStr,
         year:    yearInt,
         dueDate: dueDate ? new Date(dueDate) : null,
         status:  'unpaid',
@@ -167,7 +174,20 @@ router.get('/student/:studentId', wrap(async (req, res) => {
 router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
   const { schoolId } = req;
   const { invoiceId, amountPaid, discount = 0, method = 'cash', notifyVia = 'whatsapp_sms' } = req.body;
-  if (!invoiceId || !amountPaid) return res.status(400).json({ success: false, message: 'invoiceId and amountPaid required.' });
+  const paidNum = parseInt(amountPaid);
+  const discountNum = parseInt(discount) || 0;
+  // FIX: !amountPaid is truthy-falsy only — a negative number passes it — and
+  // there was no cap on discount vs. remaining due, so a payment could mark
+  // an invoice "paid" without covering the actual balance, or apply an
+  // unbounded discount. There was also no row locking: paidAmount/dueAmount
+  // were read once, computed in JS, then written as absolute values, so two
+  // concurrent payments on the same invoice could silently lose one update.
+  if (!invoiceId || !Number.isFinite(paidNum) || paidNum <= 0) {
+    return res.status(400).json({ success: false, message: 'invoiceId and a positive amountPaid are required.' });
+  }
+  if (discountNum < 0) {
+    return res.status(400).json({ success: false, message: 'discount cannot be negative.' });
+  }
 
   const invoice = await prisma.feeInvoice.findFirst({
     where: { id: parseInt(invoiceId), schoolId },
@@ -176,21 +196,33 @@ router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice not found.' });
 
   const receiptNo = `RCP-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-  const newPaid = invoice.paidAmount + parseInt(amountPaid);
-  const newDue = Math.max(0, invoice.totalAmount - newPaid - parseInt(discount));
-  const newStatus = newDue === 0 ? 'paid' : 'partial';
 
-  const [payment] = await prisma.$transaction([
-    prisma.feePayment.create({
-      data: { schoolId, invoiceId: parseInt(invoiceId), studentId: invoice.studentId,
-        amountPaid: parseInt(amountPaid), discount: parseInt(discount), method, receivedBy: req.user.id,
-        notifiedVia: notifyVia, receiptNo }
-    }),
-    prisma.feeInvoice.update({
-      where: { id: parseInt(invoiceId) },
-      data: { paidAmount: newPaid, dueAmount: newDue, discount: invoice.discount + parseInt(discount), status: newStatus }
-    }),
-  ]);
+  let payment, newDue, newStatus;
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const current = await tx.feeInvoice.findUniqueOrThrow({ where: { id: parseInt(invoiceId) } });
+      if (paidNum + discountNum > current.dueAmount) {
+        throw Object.assign(new Error(`Payment plus discount (Rs ${paidNum + discountNum}) exceeds the remaining due amount (Rs ${current.dueAmount}).`), { status: 400 });
+      }
+      const due = Math.max(0, current.dueAmount - paidNum - discountNum);
+      const status = due === 0 ? 'paid' : 'partial';
+
+      const pay = await tx.feePayment.create({
+        data: { schoolId, invoiceId: parseInt(invoiceId), studentId: invoice.studentId,
+          amountPaid: paidNum, discount: discountNum, method, receivedBy: req.user.id,
+          notifiedVia: notifyVia, receiptNo }
+      });
+      await tx.feeInvoice.update({
+        where: { id: parseInt(invoiceId) },
+        data: { paidAmount: { increment: paidNum }, discount: { increment: discountNum }, dueAmount: due, status }
+      });
+      return { pay, due, status };
+    });
+    payment = result.pay; newDue = result.due; newStatus = result.status;
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ success: false, message: err.message });
+    throw err;
+  }
 
   // Send notification to parent (WhatsApp/SMS + Email)
   if (notifyVia !== 'none') {

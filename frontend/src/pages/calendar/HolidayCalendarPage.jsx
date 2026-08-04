@@ -19,16 +19,6 @@ const TYPES  = [
 ];
 const typeInfo = t => TYPES.find(x => x.value === t) || TYPES[0];
 
-const SEED_HOLIDAYS = [
-  { id:1, title:'Independence Day',      date:'2025-08-14', type:'holiday', desc:'Pakistan Independence Day — National Holiday' },
-  { id:2, title:'Eid ul Adha',           date:'2025-06-07', type:'holiday', desc:'Eid ul Adha — 3 Days Holiday'                  },
-  { id:3, title:'Mid-Term Break',        date:'2025-10-13', endDate:'2025-10-17', type:'break',   desc:'One week mid-term break'  },
-  { id:4, title:'Annual Sports Day',     date:'2025-11-05', type:'event',   desc:'Annual Sports Day & Prize Distribution'        },
-  { id:5, title:'Final Exams Begin',     date:'2025-11-20', endDate:'2025-12-05', type:'exam',    desc:'Annual Examination'       },
-  { id:6, title:'Winter Break',          date:'2025-12-20', endDate:'2026-01-03', type:'break',   desc:'Winter Vacation'          },
-  { id:7, title:'Parent-Teacher Meeting',date:'2025-09-15', type:'meeting', desc:'Progress report sharing with parents'          },
-];
-
 export default function HolidayCalendarPage() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -38,44 +28,37 @@ export default function HolidayCalendarPage() {
   const [currentYear,  setCurrentYear]  = useState(new Date().getFullYear());
   const [form, setForm] = useState({ title:'', date:'', endDate:'', type:'holiday', desc:'' });
 
-  /* Use localStorage for holidays (no backend schema yet) */
-  const storageKey = 'ilmforge_holidays';
-
-  const { data: holidays = SEED_HOLIDAYS, refetch } = useQuery({
+  // Backed by the real /calendar API (HolidayEvent model, already built on
+  // the backend) — previously this page only wrote to localStorage despite
+  // a working backend already existing, so a holiday declared by one admin
+  // was invisible on any other device/session or to attendance calculations.
+  const { data: combined = [] } = useQuery({
     queryKey: ['holidays'],
-    queryFn: () => {
-      const stored = localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) : SEED_HOLIDAYS;
-    },
-    staleTime: 0,
+    queryFn: () => api.get('/calendar/events').then(r => r.data.data || []),
   });
-
-  const saveToStorage = (list) => {
-    localStorage.setItem(storageKey, JSON.stringify(list));
-    qc.invalidateQueries(['holidays']);
-  };
+  const holidays = combined
+    .filter(item => item.source === 'holiday')
+    .map(h => ({ id: h.rawId, title: h.title, date: h.date, endDate: h.endDate, type: h.type, desc: h.description }));
 
   const addHoliday = useMutation({
-    mutationFn: async (data) => {
-      const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      if (!existing.length) existing.push(...SEED_HOLIDAYS);
-      const newItem = { ...data, id: Date.now() };
-      saveToStorage([...existing, newItem]);
-      return newItem;
-    },
+    mutationFn: (data) => api.post('/calendar/holidays', {
+      title: data.title, eventType: data.type,
+      startDate: data.date, endDate: data.endDate || undefined,
+      color: typeInfo(data.type).color, notes: data.desc || undefined,
+    }),
     onSuccess: () => {
       toast.success('Holiday / event added!');
       setShowForm(false);
       setForm({ title:'', date:'', endDate:'', type:'holiday', desc:'' });
+      qc.invalidateQueries(['holidays']);
     },
+    onError: (err) => toast.error(err.response?.data?.message || 'Could not add holiday'),
   });
 
   const deleteHoliday = useMutation({
-    mutationFn: async (id) => {
-      const existing = JSON.parse(localStorage.getItem(storageKey) || JSON.stringify(SEED_HOLIDAYS));
-      saveToStorage(existing.filter(h => h.id !== id));
-    },
-    onSuccess: () => toast.success('Removed'),
+    mutationFn: (id) => api.delete(`/calendar/holidays/${id}`),
+    onSuccess: () => { toast.success('Removed'); qc.invalidateQueries(['holidays']); },
+    onError: (err) => toast.error(err.response?.data?.message || 'Could not remove holiday'),
   });
 
   const filtered = (holidays || [])

@@ -43,7 +43,12 @@ const useAuthStore = create((set) => ({
     set({ isLoading: true, error: null });
     try {
       const { data } = await api.post('/auth/login', credentials);
-      const { accessToken, refreshToken, user, school } = data.data;
+      const { accessToken, refreshToken, user: loggedInUser, school, mustChangePassword } = data.data;
+      // mustChangePassword travels as a top-level login response field (not
+      // nested in the user object) — fold it into the stored user so route
+      // guards can gate on it. The backend has tracked/returned this flag
+      // correctly all along; nothing in the frontend ever read it.
+      const user = { ...loggedInUser, mustChangePassword: !!mustChangePassword };
       localStorage.setItem('accessToken',  accessToken);
       localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('user',   JSON.stringify(user));

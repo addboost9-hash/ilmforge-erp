@@ -203,6 +203,12 @@ const ADMIN_ONLY  = requireRole('super_admin', 'admin');
 const FINANCE     = requireRole('super_admin', 'admin', 'accountant');
 const ACADEMIC    = requireRole('super_admin', 'admin', 'teacher');
 const ATTENDANCE_ROLES = requireRole('super_admin', 'admin', 'teacher', 'gatekeeper');
+// Separate (broader) set for the attendance router specifically — it has its
+// own row-level scoping for /summary and /student/:id/history so students and
+// parents can read their own attendance. biometric/face routers below keep
+// the stricter ATTENDANCE_ROLES since they haven't been audited for
+// per-role scoping.
+const ATTENDANCE_PORTAL_ROLES = requireRole('super_admin', 'admin', 'teacher', 'gatekeeper', 'student', 'parent');
 const PM = (moduleKey) => requireModulePermission(moduleKey);
 
 /* ═══ Route mounts WITH role-based access control ═══
@@ -212,7 +218,7 @@ app.use('/api/v1/dashboard',       protect, PM('dashboard'), require('./routes/d
 app.use('/api/v1/students',        protect, PM('students'), require('./routes/student.routes'));          // row-level scoping inside
 app.use('/api/v1/admissions',      protect, FINANCE, PM('admissions'), require('./routes/admission.routes'));
 app.use('/api/v1/fees',            protect, PM('fees'), require('./routes/fee.routes'));              // parents read own via /student/:id
-app.use('/api/v1/attendance',      protect, ATTENDANCE_ROLES, PM('attendance'), require('./routes/attendance.routes'));
+app.use('/api/v1/attendance',      protect, ATTENDANCE_PORTAL_ROLES, PM('attendance'), require('./routes/attendance.routes'));
 app.use('/api/v1/staff',           protect, ADMIN_ONLY, PM('staff'), require('./routes/staff.routes'));
 app.use('/api/v1/exams',           protect, PM('exams'), require('./routes/exam.routes'));             // students/parents read results
 app.use('/api/v1/settings',        protect, ADMIN_ONLY, PM('settings'), require('./routes/settings.routes'));
