@@ -1,6 +1,6 @@
-import { useState, useRef, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useState, useRef, useMemo, useEffect } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { Save, ArrowLeft, UserPlus, Camera, Upload, X, Hash, ChevronDown, ChevronUp, User, Briefcase, Shield } from 'lucide-react';
@@ -70,6 +70,9 @@ function SectionCard({ title, subtitle, icon: Icon, accentColor, defaultOpen = t
 /* ── Main form ──────────────────────────────────────────────────────── */
 export default function StaffFormPage() {
   const nav = useNavigate();
+  const qc = useQueryClient();
+  const { id } = useParams();
+  const isEdit = !!id;
   const photoRef = useRef();
 
   const [form, setForm] = useState({
@@ -79,6 +82,32 @@ export default function StaffFormPage() {
   });
   const [createAccount, setCreateAccount] = useState(true);
   const [photoPreview, setPhotoPreview] = useState(null);
+
+  // FIX: this form previously had no edit mode at all — /staff/:id/edit
+  // rendered a blank "Add Staff" form that always POSTed a brand new
+  // record, silently duplicating the staff+user instead of updating them.
+  const { data: existingStaff } = useQuery({
+    queryKey: ['staff', id],
+    queryFn: () => api.get(`/staff/${id}`).then(r => r.data.data),
+    enabled: isEdit,
+  });
+
+  useEffect(() => {
+    if (!existingStaff) return;
+    setForm({
+      name: existingStaff.name || '',
+      email: existingStaff.email || '',
+      phone: existingStaff.phone || '',
+      designation: existingStaff.designation || 'Teacher',
+      joiningDate: existingStaff.joiningDate ? existingStaff.joiningDate.slice(0, 10) : '',
+      basicSalary: existingStaff.basicSalary ? String(existingStaff.basicSalary / 100) : '',
+      salaryType: existingStaff.salaryType || 'monthly',
+      gender: existingStaff.gender || 'male',
+      cnic: existingStaff.cnic || '',
+      departmentId: existingStaff.departmentId ? String(existingStaff.departmentId) : '',
+      dob: existingStaff.dob ? existingStaff.dob.slice(0, 10) : '',
+    });
+  }, [existingStaff]);
 
   const empCodePreview = useMemo(() => previewEmpCode(form.designation), [form.designation]);
 
@@ -95,13 +124,14 @@ export default function StaffFormPage() {
   };
 
   const save = useMutation({
-    mutationFn: d => api.post('/staff', d),
+    mutationFn: d => isEdit ? api.put(`/staff/${id}`, d) : api.post('/staff', d),
     onSuccess: (r) => {
-      const staffId = r?.data?.data?.id;
+      const staffId = isEdit ? id : r?.data?.data?.id;
       if (photoPreview && staffId) {
         try { localStorage.setItem(`photo_staff_${staffId}`, photoPreview); } catch {}
       }
-      toast.success('Staff member saved successfully!');
+      toast.success(isEdit ? 'Staff member updated successfully!' : 'Staff member saved successfully!');
+      qc.invalidateQueries({ queryKey: ['staff'] });
       nav('/staff');
     },
     onError: err => toast.error('Failed to save staff: ' + (err.response?.data?.message || err.message || 'Unknown error')),
@@ -122,7 +152,7 @@ export default function StaffFormPage() {
       <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
         <Link to="/staff" className="btn btn-outline btn-sm btn-icon"><ArrowLeft size={15}/></Link>
         <div>
-          <h1 className="page-title">Add New Staff Member</h1>
+          <h1 className="page-title">{isEdit ? 'Edit Staff Member' : 'Add New Staff Member'}</h1>
           <p style={{ color:'#64748B', fontSize:13, marginTop:2 }}>Teacher, accountant, or support staff</p>
         </div>
       </div>
@@ -265,67 +295,76 @@ export default function StaffFormPage() {
       {/* ── Section 3: Portal Access ─────────────────────────────────── */}
       <SectionCard
         title="Portal Access"
-        subtitle="Create a login account for this staff member"
+        subtitle={isEdit ? 'Login account details' : 'Create a login account for this staff member'}
         icon={Shield}
         accentColor="#059669"
         defaultOpen={true}
       >
-        {/* Toggle */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 12, marginBottom: createAccount ? 16 : 0,
-          padding: '12px 14px', background: createAccount ? '#f0fdf4' : '#f8fafc',
-          borderRadius: 10, border: `1px solid ${createAccount ? '#bbf7d0' : '#e2e8f0'}`,
-          transition: 'background 0.2s',
-        }}>
-          <button
-            type="button"
-            onClick={() => setCreateAccount(v => !v)}
-            style={{
-              width: 40, height: 22, borderRadius: 99, border: 'none', cursor: 'pointer',
-              background: createAccount ? '#059669' : '#cbd5e1',
-              position: 'relative', transition: 'background 0.2s', flexShrink: 0,
-            }}
-          >
+        {isEdit ? (
+          <div className="form-group" style={{ margin: 0, maxWidth: 320 }}>
+            <label className="form-label">Email Address *</label>
+            <input className="form-input" type="email" placeholder="teacher@school.com" value={form.email} onChange={set('email')}/>
+          </div>
+        ) : (
+          <>
+            {/* Toggle */}
             <div style={{
-              position: 'absolute', top: 3, left: createAccount ? 20 : 3,
-              width: 16, height: 16, borderRadius: '50%', background: '#fff',
-              transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-            }}/>
-          </button>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#1e3a5f' }}>Create portal account</div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>
-              {createAccount ? 'Staff will receive login credentials' : 'No account — staff will not have portal access'}
+              display: 'flex', alignItems: 'center', gap: 12, marginBottom: createAccount ? 16 : 0,
+              padding: '12px 14px', background: createAccount ? '#f0fdf4' : '#f8fafc',
+              borderRadius: 10, border: `1px solid ${createAccount ? '#bbf7d0' : '#e2e8f0'}`,
+              transition: 'background 0.2s',
+            }}>
+              <button
+                type="button"
+                onClick={() => setCreateAccount(v => !v)}
+                style={{
+                  width: 40, height: 22, borderRadius: 99, border: 'none', cursor: 'pointer',
+                  background: createAccount ? '#059669' : '#cbd5e1',
+                  position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 3, left: createAccount ? 20 : 3,
+                  width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                  transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                }}/>
+              </button>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#1e3a5f' }}>Create portal account</div>
+                <div style={{ fontSize: 12, color: '#64748b' }}>
+                  {createAccount ? 'Staff will receive login credentials' : 'No account — staff will not have portal access'}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {createAccount && (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:14 }}>
-            <div className="form-group" style={{ margin:0 }}>
-              <label className="form-label">Email Address *</label>
-              <input className="form-input" type="email" placeholder="teacher@school.com" value={form.email} onChange={set('email')}/>
-            </div>
-            <div className="form-group" style={{ margin:0 }}>
-              <label className="form-label">Temporary Password</label>
-              <input className="form-input" value="teacher" disabled style={{ color:'#94a3b8', background:'#f8fafc' }}/>
-              <div style={{ fontSize:11, color:'#94a3b8', marginTop:4 }}>Staff must change this on first login</div>
-            </div>
-          </div>
-        )}
+            {createAccount && (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:14 }}>
+                <div className="form-group" style={{ margin:0 }}>
+                  <label className="form-label">Email Address *</label>
+                  <input className="form-input" type="email" placeholder="teacher@school.com" value={form.email} onChange={set('email')}/>
+                </div>
+                <div className="form-group" style={{ margin:0 }}>
+                  <label className="form-label">Temporary Password</label>
+                  <input className="form-input" value="teacher" disabled style={{ color:'#94a3b8', background:'#f8fafc' }}/>
+                  <div style={{ fontSize:11, color:'#94a3b8', marginTop:4 }}>Staff must change this on first login</div>
+                </div>
+              </div>
+            )}
 
-        {!createAccount && (
-          <div className="alert alert-info" style={{ marginTop:12, marginBottom:0 }}>
-            <span>ℹ️</span>
-            <span style={{ fontSize:12.5 }}>You can always enable portal access later from the staff edit page.</span>
-          </div>
+            {!createAccount && (
+              <div className="alert alert-info" style={{ marginTop:12, marginBottom:0 }}>
+                <span>ℹ️</span>
+                <span style={{ fontSize:12.5 }}>You can always enable portal access later from the staff edit page.</span>
+              </div>
+            )}
+          </>
         )}
       </SectionCard>
 
       {/* ── Action buttons ───────────────────────────────────────────── */}
       <div style={{ display:'flex', gap:10, marginTop:4 }}>
         <button className="btn btn-teal btn-lg" onClick={handleSubmit} disabled={save.isPending}>
-          <Save size={16}/> {save.isPending ? 'Saving...' : 'Save Staff Member'}
+          <Save size={16}/> {save.isPending ? 'Saving...' : (isEdit ? 'Update Staff Member' : 'Save Staff Member')}
         </button>
         <Link to="/staff" className="btn btn-outline btn-lg">Cancel</Link>
       </div>

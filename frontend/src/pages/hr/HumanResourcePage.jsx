@@ -201,7 +201,7 @@ function AppraisalsTab() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
         <QuickLinkCard title="Staff Appraisals"  desc="Performance review management"  to="/staff/appraisals"     icon={Award}     color="#1B2F6E" />
-        <QuickLinkCard title="New Appraisal"     desc="Start a performance review"      to="/staff/appraisals-new" icon={UserPlus}  color="#0d9488" />
+        <QuickLinkCard title="New Appraisal"     desc="Start a performance review"      to="/staff/appraisals" icon={UserPlus}  color="#0d9488" />
         <QuickLinkCard title="Appraisal Reports" desc="View all review results"          to="/staff/appraisals"     icon={BarChart2} color="#6366f1" />
         <QuickLinkCard title="KPI Settings"      desc="Configure appraisal criteria"    to="/staff/appraisals"     icon={FileText}  color="#f59e0b" />
       </div>

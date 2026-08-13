@@ -93,6 +93,61 @@ router.get('/stats', wrap(async (req, res) => {
   res.json({ success: true, data: { total, presentToday: present, absentToday: absent } });
 }));
 
+// GET /api/v1/staff/:id — fetch a single staff record
+// FIX: this endpoint never existed — StaffFormPage's "Edit" route
+// (/staff/:id/edit) had no way to load the record it was supposed to edit.
+router.get('/:id', wrap(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const staff = await prisma.staff.findFirst({
+    where: { id, schoolId: req.schoolId },
+    include: { department: true, user: { select: { email: true, phone: true } } },
+  });
+  if (!staff) return res.status(404).json({ success: false, message: 'Staff not found.' });
+  res.json({ success: true, data: { ...staff, email: staff.user?.email, phone: staff.user?.phone } });
+}));
+
+// PUT /api/v1/staff/:id — update a staff record
+// FIX: no update endpoint existed at all — every "Edit Staff" submission
+// actually had nowhere to go (the frontend always POSTed to / instead,
+// silently creating a duplicate staff+user record on every "edit").
+router.put('/:id', wrap(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { name, email, phone, departmentId, designation, joiningDate, basicSalary, salaryType, cnic, gender, dob } = req.body;
+
+  const existing = await prisma.staff.findFirst({ where: { id, schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Staff not found.' });
+
+  const updated = await prisma.$transaction(async (tx) => {
+    if (existing.userId && (name !== undefined || email !== undefined || phone !== undefined)) {
+      await tx.user.update({
+        where: { id: existing.userId },
+        data: {
+          ...(name  !== undefined && { name }),
+          ...(email !== undefined && { email }),
+          ...(phone !== undefined && { phone }),
+        },
+      });
+    }
+    return tx.staff.update({
+      where: { id },
+      data: {
+        ...(name         !== undefined && { name }),
+        ...(cnic         !== undefined && { cnic }),
+        ...(gender       !== undefined && { gender }),
+        ...(dob          !== undefined && { dob: dob ? new Date(dob) : null }),
+        ...(departmentId !== undefined && { departmentId: departmentId ? parseInt(departmentId) : null }),
+        ...(designation  !== undefined && { designation }),
+        ...(joiningDate  !== undefined && { joiningDate: joiningDate ? new Date(joiningDate) : null }),
+        ...(basicSalary  !== undefined && { basicSalary: basicSalary ? parseInt(basicSalary) : 0 }),
+        ...(salaryType   !== undefined && { salaryType }),
+      },
+      include: { department: true },
+    });
+  });
+
+  res.json({ success: true, data: updated, message: 'Staff updated.' });
+}));
+
 /* ── Per-staff module permissions ── */
 router.put('/:id/permissions', wrap(async (req, res) => {
   const id = parseInt(req.params.id);

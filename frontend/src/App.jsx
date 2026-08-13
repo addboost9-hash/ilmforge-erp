@@ -177,7 +177,6 @@ import QuestionPaperPage        from './pages/exams/QuestionPaperPage';
 import LessonPlanPage           from './pages/academics/LessonPlanPage';
 import SchemeOfStudiesPage      from './pages/academics/SchemeOfStudiesPage';
 import AcademicCalendarNewPage  from './pages/academics/AcademicCalendarPage';
-import AppraisalPage            from './pages/staff/AppraisalPage';
 import PayrollPage              from './pages/staff/PayrollPage';
 // v3.8 new modules
 import WorksheetGeneratorPage   from './pages/academics/WorksheetGeneratorPage';
@@ -647,7 +646,11 @@ export default function App() {
             <Route path="/academics/lesson-plans"     element={<LessonPlanPage />} />
             <Route path="/academics/scheme"           element={<SchemeOfStudiesPage />} />
             <Route path="/academics/calendar"         element={<AcademicCalendarNewPage />} />
-            <Route path="/staff/appraisals-new"       element={<AppraisalPage />} />
+            {/* AppraisalPage was a duplicate subset of StaffAppraisalsPage
+                (same /appraisals backend, no unique functionality — that
+                page already has its own "Create Appraisal" form) — redirect
+                the old URL instead of rendering two competing UIs. */}
+            <Route path="/staff/appraisals-new"       element={<Navigate to="/staff/appraisals" replace />} />
             <Route path="/payroll"                    element={<PayrollPage />} />
             {/* ── v3.8: Worksheets / MCQ Generator / Syllabus ── */}
             <Route path="/academics/worksheets"       element={<WorksheetGeneratorPage />} />
