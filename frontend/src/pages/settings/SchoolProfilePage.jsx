@@ -84,6 +84,7 @@ export default function SchoolProfilePage() {
         city:    form.city,
         phone:   form.phone,
         email:   form.email,
+        ...(logoPreview && { logoUrl: logoPreview }),
       });
     },
     onSuccess: () => {
@@ -94,7 +95,7 @@ export default function SchoolProfilePage() {
         motto:        form.motto,
         ...(logoPreview && { logo: logoPreview }),
       });
-      updateSchool({ ...school, name:form.name, address:form.address, city:form.city, phone:form.phone, email:form.email });
+      updateSchool({ ...school, name:form.name, address:form.address, city:form.city, phone:form.phone, email:form.email, ...(logoPreview && { logoUrl: logoPreview }) });
       /* Apply CSS var immediately */
       document.documentElement.style.setProperty('--teal', selectedColor);
       toast.success('School profile saved! 🎉');
