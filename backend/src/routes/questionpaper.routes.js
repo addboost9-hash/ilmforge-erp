@@ -184,7 +184,9 @@ For MCQ, include 4 options and the correct answer. For short/long questions omit
 router.get('/', wrap(async (req, res) => {
   const { schoolId } = req;
   const { classId, subjectId } = req.query;
-  const where = { schoolId };
+  // Exclude the internal '__BANK_CUSTOMIZE__' sentinel row (see
+  // bank-customize below) — it's a settings record, not a real paper.
+  const where = { schoolId, title: { notIn: ['__BANK_CUSTOMIZE__'] } };
   if (classId) where.classId = parseInt(classId);
   if (subjectId) where.subjectId = parseInt(subjectId);
 

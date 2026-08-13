@@ -47,6 +47,14 @@ router.get('/', wrap(async (req, res) => {
       schoolId: req.schoolId,
       ...(classId && { classId: parseInt(classId) }),
       ...(sectionId && { sectionId: parseInt(sectionId) }),
+      // FIX: the Question Bank feature (questionpaper.routes.js) piggybacks
+      // on this same Test table to store generated papers (title prefixed
+      // "[BANK] ...") and a per-class settings sentinel row
+      // (title === '__BANK_CUSTOMIZE__'). Without this exclusion every
+      // generated question-bank paper and that internal settings row shows
+      // up in the real Test Management list as if it were an actual quiz.
+      title: { notIn: ['__BANK_CUSTOMIZE__'] },
+      NOT: { title: { startsWith: '[BANK]' } },
     },
     orderBy: { date: 'desc' },
     include: {
