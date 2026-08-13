@@ -20,13 +20,14 @@ export default function CampusesPage() {
   const campuses = data || [];
 
   const add = useMutation({
-    mutationFn: d => api.post('/settings/campuses', d).catch(() => Promise.resolve({ data: { data: {...d, id:Date.now()} } })),
+    mutationFn: d => api.post('/settings/campuses', d),
     onSuccess: () => {
       toast.success('Campus added!');
       qc.invalidateQueries(['campuses']);
       setShowForm(false);
       setForm({ name:'', city:'', address:'', phone:'', isMain:false });
     },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to add campus'),
   });
 
   return (

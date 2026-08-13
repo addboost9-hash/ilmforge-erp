@@ -4,14 +4,28 @@ const { sendSMS, sendBulkSMS, testSmsCredentials, normalizePKPhone } = require('
 const { sendWhatsApp, sendBulkWhatsApp, testWhatsAppCredentials } = require('../services/whatsapp.service');
 const { sendEmail, sendTeamAlertEmail, verifySmtpConnection } = require('../services/email.service');
 const prisma = require('../config/prisma');
-const path = require('path');
-const fs   = require('fs/promises');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
-/* ─── Channel settings helpers ───────────────────────────────── */
-const SETTINGS_PATH = path.join(__dirname, '../../data/school-settings.json');
-const readSettings  = async () => { try { return JSON.parse(await fs.readFile(SETTINGS_PATH, 'utf8') || '{}'); } catch { return {}; } };
-const getChannelCfg = async (schoolId) => { const s = await readSettings(); return s[String(schoolId)]?.channels || {}; };
+/* ─── Channel settings helpers ───────────────────────────────────────────
+   DB-based store — uses School.settingsJson column (schoolId-scoped).
+   Previously this read/wrote a JSON file on local disk, which is wiped on
+   every deploy/restart on Render (ephemeral filesystem) — so SMS/WhatsApp/
+   SMTP credentials silently vanished. Mirrors the pattern already used in
+   settings.routes.js for the same reason.
+──────────────────────────────────────────────────────────────────────── */
+const readSchoolSettings = async (schoolId) => {
+  try {
+    const school = await prisma.school.findUnique({ where: { id: schoolId }, select: { settingsJson: true } });
+    if (!school?.settingsJson) return {};
+    return JSON.parse(school.settingsJson);
+  } catch {
+    return {};
+  }
+};
+const getChannelCfg = async (schoolId) => {
+  const s = await readSchoolSettings(schoolId);
+  return s.channels || {};
+};
 
 router.post('/sms', wrap(async (req, res) => {
   const { phones, message } = req.body;
@@ -45,9 +59,8 @@ router.get('/channel-settings', wrap(async (req, res) => {
 }));
 
 router.put('/channel-settings', wrap(async (req, res) => {
-  const settings = await readSettings();
-  const key = String(req.schoolId);
-  const existing = settings[key]?.channels || {};
+  const settings = await readSchoolSettings(req.schoolId);
+  const existing = settings.channels || {};
   // Don't overwrite masked values
   const patch = {};
   const body = req.body || {};
@@ -67,10 +80,8 @@ router.put('/channel-settings', wrap(async (req, res) => {
   if (body.smtpFromName)              patch.smtpFromName   = body.smtpFromName;
   if (body.smtpSecure !== undefined)  patch.smtpSecure     = body.smtpSecure;
 
-  settings[key] = { ...(settings[key] || {}), channels: { ...existing, ...patch }, updatedAt: new Date().toISOString() };
-  const dir = path.dirname(SETTINGS_PATH);
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(SETTINGS_PATH, JSON.stringify(settings, null, 2));
+  const merged = { ...settings, channels: { ...existing, ...patch }, updatedAt: new Date().toISOString() };
+  await prisma.school.update({ where: { id: req.schoolId }, data: { settingsJson: JSON.stringify(merged) } });
   res.json({ success: true, message: 'Channel settings saved.' });
 }));
 

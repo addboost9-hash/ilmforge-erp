@@ -30,6 +30,21 @@ const setSchoolSettings = async (schoolId, patch) => {
   return merged;
 };
 
+// ---------------------------------------------------------------------------
+// Generic settings bag — arbitrary keys merged into School.settingsJson.
+// Used by pages that store a single named blob (e.g. smsTemplates) that
+// doesn't warrant its own dedicated sub-route.
+// ---------------------------------------------------------------------------
+router.get('/', wrap(async (req, res) => {
+  const settings = await getSchoolSettings(req.schoolId);
+  res.json({ success: true, data: settings });
+}));
+
+router.put('/', wrap(async (req, res) => {
+  const settings = await setSchoolSettings(req.schoolId, req.body || {});
+  res.json({ success: true, data: settings });
+}));
+
 router.get('/school', wrap(async (req, res) => {
   const school = await prisma.school.findUnique({ where: { id: req.schoolId }, include: { campuses: true } });
   res.json({ success: true, data: school });
@@ -53,6 +68,23 @@ router.post('/sessions', wrap(async (req, res) => {
   if (isActive) await prisma.academicSession.updateMany({ where: { schoolId: req.schoolId }, data: { isActive: false } });
   const session = await prisma.academicSession.create({ data: { schoolId: req.schoolId, name, startDate: new Date(startDate), endDate: new Date(endDate), isActive: isActive || false } });
   res.status(201).json({ success: true, data: session });
+}));
+
+// ---------------------------------------------------------------------------
+// Campuses — real Campus rows (schoolId-scoped), used by CampusesPage.
+// ---------------------------------------------------------------------------
+router.post('/campuses', wrap(async (req, res) => {
+  const { name, city, address, phone, isMain } = req.body;
+  if (!name) return res.status(400).json({ success: false, message: 'Campus name is required.' });
+
+  if (isMain) {
+    await prisma.campus.updateMany({ where: { schoolId: req.schoolId }, data: { isMain: false } });
+  }
+
+  const campus = await prisma.campus.create({
+    data: { schoolId: req.schoolId, name, city: city || null, address: address || null, phone: phone || null, isMain: !!isMain },
+  });
+  res.status(201).json({ success: true, data: campus });
 }));
 
 // ---------------------------------------------------------------------------
@@ -237,7 +269,12 @@ router.get('/website', wrap(async (req, res) => {
 }));
 
 router.put('/website', wrap(async (req, res) => {
-  const website = { ...DEFAULT_WEBSITE_SETTINGS, ...(req.body || {}) };
+  // Two different frontend pages (WebsiteSettingsPage + WebsiteManagementPage)
+  // both write partial, differently-shaped payloads into this same bag. Merge
+  // onto the previously-saved value (not just the defaults) so saving from
+  // one page doesn't wipe out fields only the other page knows about.
+  const existing = await getSchoolSettings(req.schoolId);
+  const website = { ...DEFAULT_WEBSITE_SETTINGS, ...(existing.website || {}), ...(req.body || {}) };
   const settings = await setSchoolSettings(req.schoolId, { website });
   res.json({ success: true, data: settings.website });
 }));
@@ -331,7 +368,11 @@ router.get('/general', wrap(async (req, res) => {
 }));
 
 router.put('/general', wrap(async (req, res) => {
-  const { name, address, city, phone, email, currency, session, smsSignature } = req.body;
+  const {
+    name, address, city, phone, email,
+    currency, session, runningSession, smsSignature,
+    timezone, institutionType, rollIdSequence, barcodeAttMsg, showClassOnDash,
+  } = req.body;
   const schoolData = {};
   if (name)    schoolData.name    = name;
   if (address) schoolData.address = address;
@@ -341,9 +382,21 @@ router.put('/general', wrap(async (req, res) => {
   if (Object.keys(schoolData).length) {
     await prisma.school.update({ where: { id: req.schoolId }, data: schoolData });
   }
-  if (currency || session || smsSignature) {
-    await setSchoolSettings(req.schoolId, { general: { currency, session, smsSignature } });
-  }
+
+  const existing = await getSchoolSettings(req.schoolId);
+  const general = {
+    ...existing.general,
+    ...(currency !== undefined && { currency }),
+    ...((session !== undefined || runningSession !== undefined) && { session: runningSession ?? session }),
+    ...(smsSignature !== undefined && { smsSignature }),
+    ...(timezone !== undefined && { timezone }),
+    ...(institutionType !== undefined && { institutionType }),
+    ...(rollIdSequence !== undefined && { rollIdSequence }),
+    ...(barcodeAttMsg !== undefined && { barcodeAttMsg }),
+    ...(showClassOnDash !== undefined && { showClassOnDash }),
+  };
+  await setSchoolSettings(req.schoolId, { general });
+
   res.json({ success: true, message: 'General settings saved.' });
 }));
 

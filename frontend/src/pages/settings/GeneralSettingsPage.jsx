@@ -22,8 +22,8 @@ export default function GeneralSettingsPage() {
   const [saved, setSaved] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['school-settings'],
-    queryFn: () => api.get('/settings/school').then(r => r.data.data),
+    queryKey: ['general-settings'],
+    queryFn: () => api.get('/settings/general').then(r => r.data.data),
   });
 
   const [form, setForm] = useState({
@@ -47,28 +47,44 @@ export default function GeneralSettingsPage() {
     if (data) {
       setForm(f => ({
         ...f,
-        name:    data.name    || '',
-        address: data.address || '',
-        phone:   data.phone   || '',
-        email:   data.email   || '',
-        city:    data.city    || '',
+        name:            data.name             || '',
+        address:         data.address          || '',
+        phone:           data.phone            || '',
+        email:           data.email            || '',
+        city:            data.city             || '',
+        smsSignature:    data.smsSignature     || f.smsSignature,
+        currency:        data.currency         || f.currency,
+        timezone:        data.timezone         || f.timezone,
+        runningSession:  data.session          || f.runningSession,
+        showClassOnDash: data.showClassOnDash  || f.showClassOnDash,
+        institutionType: data.institutionType  || f.institutionType,
+        rollIdSequence:  data.rollIdSequence   || f.rollIdSequence,
+        barcodeAttMsg:   data.barcodeAttMsg    || f.barcodeAttMsg,
       }));
     }
   }, [data]);
 
   const save = useMutation({
-    mutationFn: () => api.put('/settings/school', {
-      name:    form.name,
-      address: form.address,
-      phone:   form.phone,
-      email:   form.email,
-      city:    form.city,
+    mutationFn: () => api.put('/settings/general', {
+      name:            form.name,
+      address:         form.address,
+      phone:           form.phone,
+      email:           form.email,
+      city:            form.city,
+      smsSignature:    form.smsSignature,
+      currency:        form.currency,
+      timezone:        form.timezone,
+      runningSession:  form.runningSession,
+      showClassOnDash: form.showClassOnDash,
+      institutionType: form.institutionType,
+      rollIdSequence:  form.rollIdSequence,
+      barcodeAttMsg:   form.barcodeAttMsg,
     }),
     onSuccess: () => {
       setSaved(true);
       toast.success('General settings saved successfully!');
       setTimeout(() => setSaved(false), 3000);
-      if (updateSchool) updateSchool({ ...school, ...form });
+      if (updateSchool) updateSchool({ ...school, name: form.name, address: form.address, phone: form.phone, email: form.email, city: form.city });
       try { localStorage.setItem('registeredSchoolName', form.name); } catch {}
     },
     onError: (err) => toast.error(err?.response?.data?.message || 'Failed to save settings'),

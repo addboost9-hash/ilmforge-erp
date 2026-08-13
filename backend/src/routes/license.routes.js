@@ -59,7 +59,7 @@ router.get('/status', authMiddleware, (req, res) => {
 });
 
 // POST /api/v1/license/renew — school enters new key to renew
-router.post('/renew', authMiddleware, requireRole('admin'), (req, res) => {
+router.post('/renew', authMiddleware, requireRole('super_admin', 'admin'), (req, res) => {
   const { key, expiry } = req.body;
 
   if (!key || !expiry) {
