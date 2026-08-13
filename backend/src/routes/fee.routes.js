@@ -329,29 +329,41 @@ router.post('/structures', requireFinanceRole, wrap(async (req, res) => {
 
 /* ═══ v3.3 CRUD: manual invoice insert / update / delete ═══ */
 // INSERT — custom invoice with multiple heads (admission, annual, stationary...)
+// FIX: this handler wrote `balance` and `remarks` to FeeInvoice.create(), but
+// neither field exists on the FeeInvoice model (it uses `dueAmount`, and has
+// no free-text remarks column) — every call threw a Prisma "unknown
+// argument" validation error. It also never set the required `feeTitle`
+// column, which would have failed on its own. Rewritten to use only real
+// columns: dueAmount instead of balance, status 'unpaid' (matches the rest
+// of the module's status values), and feeTitle summarised from the heads.
 router.post('/invoices', requireFinanceRole, wrap(async (req, res) => {
   const { studentId, month, year, heads = [], dueDate, remarks } = req.body;
   if (!studentId || !heads.length) return res.status(400).json({ success: false, message: 'Student aur kam az kam ek head required.' });
   const student = await prisma.student.findFirst({ where: { id: parseInt(studentId), schoolId: req.schoolId } });
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
   const total = heads.reduce((a, h) => a + (parseInt(h.amount) || 0), 0);
+  const feeTitle = heads.length > 1 ? `Custom Fee (${heads.length} heads)` : (heads[0]?.name || 'Custom Fee');
   const inv = await prisma.feeInvoice.create({
     data: {
       schoolId: req.schoolId, campusId: student.campusId, studentId: student.id,
-      month: month || new Date().toLocaleString('default', { month: 'long' }),
+      classId: student.classId,
+      feeTitle,
+      month: month ? String(month) : new Date().toLocaleString('default', { month: 'long' }),
       year: parseInt(year) || new Date().getFullYear(),
-      totalAmount: total, paidAmount: 0, balance: total, status: 'pending',
+      totalAmount: total, paidAmount: 0, dueAmount: total, status: 'unpaid',
       dueDate: dueDate ? new Date(dueDate) : new Date(Date.now() + 10 * 864e5),
-      remarks: remarks || JSON.stringify(heads),
     }
   });
-  await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_CREATED', entity: 'fee_invoice', entityId: inv.id, details: JSON.stringify({ total, heads: heads.length }) } }).catch(() => null);
+  await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_CREATED', entity: 'fee_invoice', entityId: inv.id, details: JSON.stringify({ total, heads }) } }).catch(() => null);
   res.status(201).json({ success: true, data: inv });
 }));
 
 // UPDATE — amount / due date / status adjust
+// FIX: wrote `balance` (not a FeeInvoice column — the column is `dueAmount`)
+// and `remarks` (doesn't exist on FeeInvoice at all); both threw a Prisma
+// validation error on every call, so editing an invoice always failed.
 router.put('/invoices/:id', requireFinanceRole, wrap(async (req, res) => {
-  const { totalAmount, dueDate, status, remarks } = req.body;
+  const { totalAmount, dueDate, status } = req.body;
   const inv = await prisma.feeInvoice.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
   if (!inv) return res.status(404).json({ success: false, message: 'Invoice not found.' });
   const newTotal = totalAmount !== undefined ? parseInt(totalAmount) : inv.totalAmount;
@@ -359,10 +371,9 @@ router.put('/invoices/:id', requireFinanceRole, wrap(async (req, res) => {
     where: { id: inv.id },
     data: {
       totalAmount: newTotal,
-      balance: Math.max(0, newTotal - inv.paidAmount),
+      dueAmount: Math.max(0, newTotal - inv.paidAmount),
       ...(dueDate && { dueDate: new Date(dueDate) }),
       ...(status && { status }),
-      ...(remarks !== undefined && { remarks }),
     }
   });
   await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_UPDATED', entity: 'fee_invoice', entityId: inv.id } }).catch(() => null);
@@ -731,13 +742,13 @@ router.put('/student-discount/:studentId', requireFinanceRole, wrap(async (req, 
     const newDiscount = Math.min(totalDiscount, inv.totalAmount);
     const newDue = Math.max(0, inv.totalAmount - inv.paidAmount - newDiscount);
 
+    // FIX: this used to also set `updateData.remarks = ...`, but FeeInvoice
+    // has no `remarks` column — every call threw a Prisma "unknown argument"
+    // error, so applying a per-head discount always failed with a 500.
+    // The per-head breakdown (feeHeadDiscounts/comments) is still returned
+    // in this response and logged to the audit trail below; only the real
+    // discount/dueAmount totals are persisted on the invoice itself.
     const updateData = { discount: newDiscount, dueAmount: newDue };
-    // Store discount breakdown in remarks if the field exists (schema v3.3+)
-    try {
-      let existingRemarks = {};
-      if (inv.remarks) { try { existingRemarks = JSON.parse(inv.remarks); } catch { /* ignore */ } }
-      updateData.remarks = JSON.stringify({ ...existingRemarks, feeHeadDiscounts, comments });
-    } catch { /* remarks field may not exist — skip gracefully */ }
 
     await prisma.feeInvoice.update({ where: { id: inv.id }, data: updateData });
     updated++;

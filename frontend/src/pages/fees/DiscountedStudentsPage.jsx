@@ -63,10 +63,16 @@ export default function DiscountedStudentsPage() {
     if (!form.reason.trim()) return toast.error('Please provide a reason');
     if (form.discountType === 'Percentage' && Number(form.discountValue) > 100)
       return toast.error('Percentage cannot exceed 100');
+    // FIX: money fields on FeeInvoice (totalAmount/discount/dueAmount) are stored in
+    // paisa everywhere else in this module (see FeeStructurePage.jsx, FeeCollectionPage.jsx).
+    // The "Fixed Amount (Rs.)" input here was sent as-is, so a Rs. 500 discount was
+    // being applied as 500 paisa (Rs. 5) — 100x too small. Percentage values need no
+    // conversion since the backend computes them off totalAmount directly.
+    const isPercent = form.discountType === 'Percentage';
     addMut.mutate({
       studentId: selectedStudent.id,
-      discountType: form.discountType === 'Percentage' ? 'percent' : 'flat',
-      discountValue: Number(form.discountValue),
+      discountType: isPercent ? 'percent' : 'flat',
+      discountValue: isPercent ? Number(form.discountValue) : Math.round(Number(form.discountValue) * 100),
       reason: form.reason,
     });
   };

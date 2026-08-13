@@ -353,6 +353,8 @@ function CustomFeeTab({ classes }) {
   const [campus, setCampus]       = useState('Main Campus');
   const [classId, setClassId]     = useState('');
   const [sectionId, setSectionId] = useState('');
+  const [month, setMonth]         = useState(DEFAULT_MONTH);
+  const [year, setYear]           = useState(DEFAULT_YEAR);
   const [feeType, setFeeType]     = useState('');
   const [amount, setAmount]       = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -387,13 +389,22 @@ function CustomFeeTab({ classes }) {
     if (!classId)  return toast.error('Please select a class');
     if (!feeType)  return toast.error('Please select a fee type');
     if (!amount || parseFloat(amount) <= 0) return toast.error('Please enter a valid amount');
+    const monthNum = MONTHS.indexOf(month) + 1;
+    // FIX: POST /fees/generate requires { classId, month, year } and reads the amount
+    // from `customAmount` / title from `feeTitle` (see fee.routes.js) — this used to
+    // send { feeType, amount } with no month/year at all, so every "Generate Custom
+    // Fee" submission failed with 400 "classId, month, year required." Money fields
+    // are stored in paisa across this module, so the Rupee input is scaled by 100.
     mutation.mutate({
       type: 'custom',
-      campus,
+      campusId: campus || undefined,
       classId: parseInt(classId, 10),
       sectionId: sectionId ? parseInt(sectionId, 10) : undefined,
-      feeType,
-      amount: parseFloat(amount),
+      month: monthNum,
+      year: parseInt(year, 10),
+      dueDate: getDefaultDueDate(month, year),
+      feeTitle: feeType,
+      customAmount: Math.round(parseFloat(amount) * 100),
     });
   };
 
@@ -407,6 +418,19 @@ function CustomFeeTab({ classes }) {
         onChange={setSectionId}
         disabled={!classId}
       />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <FormGroup label="Fee Month">
+          <select className="form-select" value={month} onChange={e => setMonth(e.target.value)}>
+            {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </FormGroup>
+        <FormGroup label="Fee Year">
+          <select className="form-select" value={year} onChange={e => setYear(e.target.value)}>
+            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </FormGroup>
+      </div>
 
       <FormGroup label="Fee Type">
         <select className="form-select" value={feeType} onChange={e => setFeeType(e.target.value)}>

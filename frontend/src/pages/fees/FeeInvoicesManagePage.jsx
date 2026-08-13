@@ -114,7 +114,10 @@ export default function FeeInvoicesManagePage() {
   };
 
   const input = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-teal-500';
-  const sc = { paid: 'bg-teal-50 text-teal-700', partial: 'bg-amber-50 text-amber-700', pending: 'bg-slate-100 text-slate-500', overdue: 'bg-red-50 text-red-600' };
+  // NOTE: FeeInvoice.status is only ever 'unpaid'|'partial'|'paid' in the backend
+  // (see fee.routes.js /generate, /invoices, /payments) — 'pending' kept only as
+  // the display fallback for older/unset values.
+  const sc = { paid: 'bg-teal-50 text-teal-700', partial: 'bg-amber-50 text-amber-700', unpaid: 'bg-slate-100 text-slate-500', pending: 'bg-slate-100 text-slate-500', overdue: 'bg-red-50 text-red-600' };
 
   return (
     <div className="space-y-4">
@@ -141,7 +144,7 @@ export default function FeeInvoicesManagePage() {
                 <td className="px-4 py-2.5 text-slate-600">{inv.month} {inv.year}</td>
                 <td className="px-4 py-2.5 font-bold">Rs {Number(inv.totalAmount).toLocaleString()}</td>
                 <td className="px-4 py-2.5 text-teal-700">Rs {Number(inv.paidAmount).toLocaleString()}</td>
-                <td className="px-4 py-2.5 text-red-600 font-bold">Rs {Number(inv.balance).toLocaleString()}</td>
+                <td className="px-4 py-2.5 text-red-600 font-bold">Rs {Number(inv.dueAmount).toLocaleString()}</td>
                 <td className="px-4 py-2.5"><span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${sc[inv.status] || sc.pending}`}>{inv.status?.toUpperCase()}</span></td>
                 <td className="px-4 py-2.5">
                   <div className="flex gap-1.5">
@@ -207,7 +210,10 @@ export default function FeeInvoicesManagePage() {
               <input className={input + ' mb-2'} type="date" value={editVals.dueDate || ''} onChange={e => setEditVals(v => ({ ...v, dueDate: e.target.value }))} />
               <label className="text-[10px] font-extrabold text-slate-400 uppercase">Status</label>
               <select className={input + ' mb-3'} value={editVals.status} onChange={e => setEditVals(v => ({ ...v, status: e.target.value }))}>
-                {['pending', 'partial', 'paid', 'overdue', 'cancelled'].map(s => <option key={s}>{s}</option>)}
+                {/* FIX: backend only ever recognises unpaid|partial|paid (see fee.routes.js) —
+                    'overdue'/'cancelled'/'pending' silently excluded this invoice from defaulter
+                    lists and reports since they filter on status IN ('unpaid','partial'). */}
+                {['unpaid', 'partial', 'paid'].map(s => <option key={s}>{s}</option>)}
               </select>
               <button onClick={() => updateInv.mutate()} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-sm">Save Changes</button>
             </>)}
