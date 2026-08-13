@@ -26,15 +26,21 @@ router.post('/leads', wrap(async (req, res) => {
 }));
 
 router.put('/leads/:id/stage', wrap(async (req, res) => {
-  const lead = await prisma.admissionLead.update({ where: { id: parseInt(req.params.id) }, data: { stage: req.body.stage } });
+  const leadId = parseInt(req.params.id);
+  const existing = await prisma.admissionLead.findFirst({ where: { id: leadId, schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Lead not found.' });
+  const lead = await prisma.admissionLead.update({ where: { id: leadId }, data: { stage: req.body.stage } });
   res.json({ success: true, data: lead });
 }));
 
 router.post('/leads/:id/followup', wrap(async (req, res) => {
+  const leadId = parseInt(req.params.id);
+  const existing = await prisma.admissionLead.findFirst({ where: { id: leadId, schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Lead not found.' });
   const fu = await prisma.leadFollowUp.create({
-    data: { leadId: parseInt(req.params.id), note: req.body.note, outcome: req.body.outcome, byUserId: req.user.id }
+    data: { leadId, note: req.body.note, outcome: req.body.outcome, byUserId: req.user.id }
   });
-  await prisma.admissionLead.update({ where: { id: parseInt(req.params.id) }, data: { stage: req.body.newStage || 'contacted', nextFollowUp: req.body.nextFollowUp ? new Date(req.body.nextFollowUp) : null } });
+  await prisma.admissionLead.update({ where: { id: leadId }, data: { stage: req.body.newStage || 'contacted', nextFollowUp: req.body.nextFollowUp ? new Date(req.body.nextFollowUp) : null } });
   res.status(201).json({ success: true, data: fu });
 }));
 

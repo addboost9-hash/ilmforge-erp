@@ -14,7 +14,10 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json({ success: true, data: route });
 }));
 router.delete('/:id', wrap(async (req, res) => {
-  await prisma.transportRoute.delete({ where: { id: parseInt(req.params.id) } });
+  const routeId = parseInt(req.params.id);
+  const existing = await prisma.transportRoute.findFirst({ where: { id: routeId, schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Route not found.' });
+  await prisma.transportRoute.delete({ where: { id: routeId } });
   res.json({ success: true, message: 'Route deleted.' });
 }));
 module.exports = router;
