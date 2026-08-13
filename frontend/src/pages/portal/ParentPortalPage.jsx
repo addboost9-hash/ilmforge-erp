@@ -1286,13 +1286,13 @@ function printResultCard({ exam, studentId, studentMarks, studentName, rollNo, c
 
   const rows = studentMarks.map(s => {
     const pct = s.obtained !== null && s.total > 0 ? Math.round((s.obtained / s.total) * 100) : null;
-    const fail = s.obtained !== null && s.obtained < s.passing;
+    const fail = s.grade === 'F';
     return `
       <tr>
         <td>${s.subject}</td>
         <td style="text-align:center">${s.total}</td>
         <td style="text-align:center;color:${fail?'#dc2626':'#15803d'};font-weight:700">${s.obtained !== null ? s.obtained : '—'}</td>
-        <td style="text-align:center">${s.passing}</td>
+        <td style="text-align:center">${s.grade || '—'}</td>
         <td style="text-align:center;font-weight:700;color:${fail?'#dc2626':'#0d9488'}">${pct !== null ? pct+'%' : '—'}</td>
         <td style="text-align:center;font-weight:700;color:${fail?'#dc2626':'#15803d'}">${fail ? 'Fail' : 'Pass'}</td>
       </tr>`;
@@ -1338,7 +1338,7 @@ function printResultCard({ exam, studentId, studentMarks, studentName, rollNo, c
         <div class="info-item"><div class="info-label">Total Marks</div><strong>${overallObtained} / ${overallTotal}</strong></div>
       </div>
       <table>
-        <thead><tr><th>Subject</th><th style="text-align:center">Total</th><th style="text-align:center">Obtained</th><th style="text-align:center">Passing</th><th style="text-align:center">%</th><th style="text-align:center">Result</th></tr></thead>
+        <thead><tr><th>Subject</th><th style="text-align:center">Total</th><th style="text-align:center">Obtained</th><th style="text-align:center">Grade</th><th style="text-align:center">%</th><th style="text-align:center">Result</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <div class="summary">
@@ -1364,27 +1364,35 @@ function printResultCard({ exam, studentId, studentMarks, studentName, rollNo, c
 }
 
 /* ── Exam Result Card ───────────────────────────────────── */
+// FIX: this used to read `exam.subjects || exam.results` off the exam object
+// itself — but GET /exams (the list this is fed from) returns bare Exam rows
+// with no such nested fields at all, so studentMarks was always empty and
+// every published exam permanently showed "Marks not entered yet." for
+// parents, regardless of whether the school had actually entered and
+// published results. Every ExamMark-returning endpoint on the backend was
+// also staff-only (admin/teacher), so there was no way for a parent/student
+// to fetch their own child's marks at all — see the new
+// GET /exams/:id/my-results route added in exam.routes.js, used here.
 function ExamCard({ exam, studentId, student }) {
-  const subjects = exam.subjects || exam.results || [];
+  const { data: marksRaw = [], isLoading: marksLoading } = useQuery({
+    queryKey: ['exam-my-results', exam.id, studentId],
+    queryFn: () => api.get(`/exams/${exam.id}/my-results`, { params: { studentId } }).then(r => r.data.data || []).catch(() => []),
+    enabled: !!exam.id && !!studentId,
+    staleTime: 5 * 60_000,
+  });
 
-  const studentMarks = useMemo(() => {
-    return subjects.map(subj => {
-      const marks = subj.marks || subj.studentMarks || [];
-      const found = marks.find(m => m.studentId === studentId || m.student?.id === studentId);
-      return {
-        subject:   subj.subject?.name || subj.subjectName || subj.name || '—',
-        obtained:  found?.obtained ?? found?.marksObtained ?? found?.marks ?? null,
-        total:     subj.totalMarks || subj.total || 100,
-        passing:   subj.passingMarks || subj.passing || 40,
-      };
-    });
-  }, [subjects, studentId]);
+  const studentMarks = useMemo(() => marksRaw.map(m => ({
+    subject:  m.subject?.name || 'Subject',
+    obtained: m.isAbsent ? null : m.obtainedMarks,
+    total:    m.totalMarks || 100,
+    grade:    m.isAbsent ? 'ABS' : (m.grade || null),
+  })), [marksRaw]);
 
   const overallObtained = studentMarks.reduce((s,m) => s + (m.obtained ?? 0), 0);
   const overallTotal    = studentMarks.reduce((s,m) => s + m.total, 0);
   const overallPct      = overallTotal > 0 ? Math.round((overallObtained / overallTotal) * 100) : null;
   const grade           = overallPct !== null ? gradeLabel(overallPct) : null;
-  const passed          = studentMarks.every(m => m.obtained === null || m.obtained >= m.passing);
+  const passed          = studentMarks.length === 0 ? true : studentMarks.every(m => m.grade !== 'F');
 
   const handleDownloadResultCard = () => {
     printResultCard({
@@ -1447,7 +1455,7 @@ function ExamCard({ exam, studentId, student }) {
           </div>
           {studentMarks.map((s, i) => {
             const pct  = s.obtained !== null && s.total > 0 ? Math.round((s.obtained/s.total)*100) : null;
-            const fail = s.obtained !== null && s.obtained < s.passing;
+            const fail = s.grade === 'F';
             return (
               <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr auto auto auto', padding:'10px 18px', borderBottom:'1px solid #F1F5F9', alignItems:'center' }}>
                 <span style={{ fontSize:13, color:NAVY, fontWeight:600 }}>{s.subject}</span>
@@ -1466,7 +1474,7 @@ function ExamCard({ exam, studentId, student }) {
 
       {studentMarks.length === 0 && (
         <div style={{ padding:'20px 18px', color:'#94A3B8', fontSize:13, textAlign:'center' }}>
-          Marks not entered yet.
+          {marksLoading ? 'Loading marks…' : 'Marks not entered yet.'}
         </div>
       )}
     </div>

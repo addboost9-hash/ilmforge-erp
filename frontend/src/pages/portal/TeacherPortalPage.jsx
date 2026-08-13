@@ -2,7 +2,7 @@
  * IlmForge — Teacher Portal  (Enterprise Theme)
  * Dark navy #1B2F6E sidebar + stat cards with enterprise color presets
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -1200,20 +1200,44 @@ function ClassReportTab({ classes, exams, user }) {
   const cls = classes.find(c => c.id === parseInt(classId));
   const sections = cls?.sections || [];
 
-  /* Today's attendance for the selected class */
+  /* Today's attendance for the selected class.
+     FIX: GET /attendance returns every active student in the class with a
+     nested `.attendance` record (or null) for the day — not a flat list of
+     attendance rows (see attendance.routes.js GET '/'). Reading `.status`
+     directly off each entry (as this used to) always came back undefined,
+     so presentCount/absentCount/attPct were permanently 0 regardless of
+     what had actually been marked, and the "no attendance marked yet" empty
+     state was unreachable since the raw list always has every student. */
   const { data: attToday = [], isLoading: attLoading } = useQuery({
     queryKey: ['class-att-today', classId, sectionId],
-    queryFn: () => api.get('/attendance', { params: { classId, sectionId: sectionId || undefined, date: todayStr() } }).then(r => r.data.data || []).catch(() => []),
+    queryFn: () => api.get('/attendance', { params: { classId, sectionId: sectionId || undefined, date: todayStr() } })
+      .then(r => (r.data.data || [])
+        .filter(s => s.attendance)
+        .map(s => ({ id: s.attendance.id, status: s.attendance.status, student: { rollNo: s.rollNo, name: s.name } })))
+      .catch(() => []),
     enabled: !!classId,
     staleTime: 60_000,
     retry: false,
   });
 
-  /* Recent exam marks for this class */
+  /* Recent exam marks for this class — most recent exam created for it.
+     FIX: this previously called GET /marks, which is not a route that exists
+     anywhere on the backend (marks are scoped under /exams/:id/marks) — the
+     request always 404'd (silently swallowed by .catch(()=>[])), so this
+     section permanently showed "No exam marks found for this class." even
+     when a teacher had entered and saved marks. */
+  const classExams = useMemo(
+    () => exams
+      .filter(e => e.classId === parseInt(classId))
+      .sort((a, b) => new Date(b.dateStart || b.createdAt) - new Date(a.dateStart || a.createdAt)),
+    [exams, classId]
+  );
+  const latestExam = classExams[0];
+
   const { data: recentMarks = [], isLoading: marksLoading } = useQuery({
-    queryKey: ['class-recent-marks', classId],
-    queryFn: () => api.get('/marks', { params: { classId, limit: 50, sort: '-createdAt' } }).then(r => r.data.data || []).catch(() => []),
-    enabled: !!classId,
+    queryKey: ['class-recent-marks', classId, latestExam?.id],
+    queryFn: () => api.get(`/exams/${latestExam.id}/marks`, { params: { classId } }).then(r => r.data.data || []).catch(() => []),
+    enabled: !!classId && !!latestExam?.id,
     staleTime: 120_000,
     retry: false,
   });
@@ -1328,11 +1352,13 @@ function ClassReportTab({ classes, exams, user }) {
 
           {/* Section 2: Recent Exam Marks */}
           <div className="card" style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px' }}>
-            <SectionTitle>Recent Exam Marks</SectionTitle>
-            {marksLoading ? (
+            <SectionTitle>Recent Exam Marks{latestExam ? ` — ${latestExam.title || latestExam.name}` : ''}</SectionTitle>
+            {!latestExam ? (
+              <div style={{ textAlign: 'center', padding: '28px', color: '#94A3B8' }}>No exams created for this class yet.</div>
+            ) : marksLoading ? (
               <div style={{ textAlign: 'center', padding: '28px', color: '#94A3B8' }}>Loading marks…</div>
             ) : recentMarks.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '28px', color: '#94A3B8' }}>No exam marks found for this class.</div>
+              <div style={{ textAlign: 'center', padding: '28px', color: '#94A3B8' }}>No marks entered yet for {latestExam.title || latestExam.name}.</div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -1739,8 +1765,14 @@ function ResultPublishTab({ classes, exams }) {
     staleTime: 60_000,
   });
 
+  // FIX: PUT /exams/:id only accepts { title, type, dateStart, dateEnd,
+  // classId, classIds, term } — it silently ignores `isPublished`/`status`,
+  // so this button never actually published anything. Results stayed
+  // invisible to the Parent/Student Portal ("Results not announced yet")
+  // even after a teacher clicked "Publish". The real endpoint is
+  // POST /exams/:id/publish.
   const publishMut = useMutation({
-    mutationFn: () => api.put(`/exams/${selectedExam}`, { isPublished: true, status: 'results_published' }),
+    mutationFn: () => api.post(`/exams/${selectedExam}/publish`),
     onSuccess: () => { qc.invalidateQueries(['exams']); toast.success('Results published! Students and parents can now view them.'); },
     onError: err => toast.error(err.response?.data?.message || 'Failed to publish'),
   });

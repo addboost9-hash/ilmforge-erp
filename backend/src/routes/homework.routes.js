@@ -3,8 +3,12 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
+// FIX: the Teacher Portal's "My Homework" list calls this with `createdBy`
+// to see only the homework it posted, but that param was silently ignored —
+// every teacher saw every teacher's homework merged together with no way to
+// tell whose was whose.
 router.get('/', wrap(async (req, res) => {
-  const { classId, date, from, to } = req.query;
+  const { classId, date, from, to, createdBy } = req.query;
 
   let dateFilter;
 
@@ -36,6 +40,7 @@ router.get('/', wrap(async (req, res) => {
     where: {
       schoolId: req.schoolId,
       ...(classId && { classId: parseInt(classId) }),
+      ...(createdBy && { teacherId: parseInt(createdBy) }),
       date: dateFilter,
     },
     orderBy: { date: 'desc' },

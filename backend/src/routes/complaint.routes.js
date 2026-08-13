@@ -40,12 +40,20 @@ router.post('/', wrap(async (req, res) => {
     return res.status(400).json({ success: false, message: 'subject and description are required.' });
   }
 
-  // Parents can only file complaints attributed to their own parent record —
-  // never on behalf of another parent (prevents spoofed parentId in the body).
-  let resolvedParentId = parentId ? parseInt(parentId) : null;
-  if (req.user.role === 'parent') {
-    const own = await prisma.parent.findFirst({ where: { userId: req.user.id, schoolId: req.schoolId } });
-    resolvedParentId = own ? own.id : null;
+  // FIX: this trusted a body-supplied `parentId` — the Parent Portal actually
+  // sends the logged-in user's User.id (req.user.id) in that field, not the
+  // Parent table's own id, so every complaint was saved under the wrong (or a
+  // non-existent) parentId. GET / self-resolves the caller's Parent row via
+  // req.user.id when listing "your complaints", so a complaint created this
+  // way never matched and silently vanished from the parent's own list.
+  // Self-resolve the same way here for parent callers; only trust an explicit
+  // body parentId for staff roles creating a complaint on a parent's behalf.
+  let resolvedParentId = null;
+  if (req.user?.role === 'parent') {
+    const parentRecord = await prisma.parent.findFirst({ where: { userId: req.user.id, schoolId: req.schoolId } });
+    resolvedParentId = parentRecord?.id || null;
+  } else if (parentId) {
+    resolvedParentId = parseInt(parentId);
   }
 
   const complaint = await prisma.parentComplaint.create({

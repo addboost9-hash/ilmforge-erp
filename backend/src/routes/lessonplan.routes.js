@@ -143,6 +143,21 @@ router.get('/', wrap(async (req, res) => {
       planData,
       className:   p.classId   ? classMap[p.classId]   : null,
       subjectName: p.subjectId ? subjectMap[p.subjectId] : null,
+      // Convenience aliases for the Teacher Portal's lesson-plan workflow UI,
+      // which reads plan.class?.name / plan.status / plan.unit / plan.content
+      // etc. directly rather than through the nested `planData` blob that the
+      // Academics admin page (above) uses. Purely additive — className/
+      // subjectName/planData are unchanged for existing consumers.
+      class:       p.classId   ? { id: p.classId, name: classMap[p.classId] } : null,
+      subject:     p.subjectId ? { id: p.subjectId, name: subjectMap[p.subjectId] } : null,
+      unit:        planData.topic || p.title,
+      week:        planData.week,
+      objectives:  planData.objectives,
+      content:     planData.mainActivity,
+      activities:  planData.practice,
+      assessment:  planData.assessment,
+      status:      planData.status || 'draft',
+      adminNotes:  planData.adminNotes,
     };
   });
 
@@ -150,13 +165,32 @@ router.get('/', wrap(async (req, res) => {
 }));
 
 // POST / - create lesson plan
+// FIX: the Teacher Portal's "Create Lesson Plan" form doesn't send `title` at
+// all — it sends `unit` (and `content`/`activities`/`week`/`status` instead
+// of `mainActivity`/`practice`) — so this always returned 400 "title
+// required" and the Teacher Portal could never save a lesson plan. Now
+// accepts both vocabularies; `title` still wins when a caller (e.g. the
+// Academics admin page) sends it directly.
 router.post('/', wrap(async (req, res) => {
   const { schoolId } = req;
-  const { classId, subjectId, title, objectives, warmUp, mainActivity, practice, assessment, homework, resources, topic, duration } = req.body;
+  const {
+    classId, subjectId, title, objectives, warmUp, mainActivity, practice,
+    assessment, homework, resources, topic, duration,
+    unit, week, content, activities, status,
+  } = req.body;
 
-  if (!title) return res.status(400).json({ success: false, message: 'title required.' });
+  const effectiveTitle = title || unit || topic;
+  if (!effectiveTitle) return res.status(400).json({ success: false, message: 'title required.' });
 
-  const planData = { objectives, warmUp, mainActivity, practice, assessment, homework, resources, topic, duration };
+  const planData = {
+    objectives, warmUp,
+    mainActivity: mainActivity !== undefined ? mainActivity : content,
+    practice:     practice     !== undefined ? practice     : activities,
+    assessment, homework, resources,
+    topic: topic !== undefined ? topic : unit,
+    duration, week,
+    status: status || 'draft',
+  };
 
   const plan = await prisma.studyMaterial.create({
     data: {
@@ -164,7 +198,7 @@ router.post('/', wrap(async (req, res) => {
       classId:    classId    ? parseInt(classId)    : null,
       subjectId:  subjectId  ? parseInt(subjectId)  : null,
       teacherId:  req.user?.id || null,
-      title,
+      title: effectiveTitle,
       fileType:    'lesson_plan',
       fileUrl:     'lesson_plan',
       description: JSON.stringify(planData),
@@ -190,13 +224,49 @@ router.get('/:id', wrap(async (req, res) => {
 }));
 
 // PUT /:id - update
+// FIX: this rebuilt planData from scratch on every call using only the
+// fields present in THIS request body. The Teacher Portal's "submit for
+// approval" action calls PUT with just `{ status: 'submitted' }` — every
+// other field (objectives, activities, etc.) came through as `undefined`,
+// JSON.stringify dropped them, and the update wiped out the entire lesson
+// plan content it was supposed to just flag as submitted. Now merges onto
+// the existing saved planData and only overwrites keys actually supplied,
+// accepting both the admin (mainActivity/practice/topic) and Teacher Portal
+// (content/activities/unit/status/adminNotes) vocabularies.
 router.put('/:id', wrap(async (req, res) => {
   const { schoolId } = req;
   const existing = await prisma.studyMaterial.findFirst({ where: { id: parseInt(req.params.id), schoolId, fileType: 'lesson_plan' } });
   if (!existing) return res.status(404).json({ success: false, message: 'Not found.' });
 
-  const { classId, subjectId, title, objectives, warmUp, mainActivity, practice, assessment, homework, resources, topic, duration } = req.body;
-  const planData = { objectives, warmUp, mainActivity, practice, assessment, homework, resources, topic, duration };
+  let existingPlanData = {};
+  if (existing.description) {
+    try { existingPlanData = JSON.parse(existing.description); } catch { existingPlanData = {}; }
+  }
+
+  const {
+    classId, subjectId, title, objectives, warmUp, mainActivity, practice,
+    assessment, homework, resources, topic, duration,
+    unit, week, content, activities, status, adminNotes,
+  } = req.body;
+
+  const planData = {
+    ...existingPlanData,
+    ...(objectives    !== undefined && { objectives }),
+    ...(warmUp        !== undefined && { warmUp }),
+    ...(mainActivity  !== undefined && { mainActivity }),
+    ...(content       !== undefined && { mainActivity: content }),
+    ...(practice      !== undefined && { practice }),
+    ...(activities    !== undefined && { practice: activities }),
+    ...(assessment    !== undefined && { assessment }),
+    ...(homework      !== undefined && { homework }),
+    ...(resources     !== undefined && { resources }),
+    ...(topic         !== undefined && { topic }),
+    ...(unit          !== undefined && { topic: unit }),
+    ...(duration      !== undefined && { duration }),
+    ...(week          !== undefined && { week }),
+    ...(status        !== undefined && { status }),
+    ...(adminNotes    !== undefined && { adminNotes }),
+  };
 
   const updated = await prisma.studyMaterial.update({
     where: { id: parseInt(req.params.id) },
@@ -207,7 +277,7 @@ router.put('/:id', wrap(async (req, res) => {
       description: JSON.stringify(planData),
     },
   });
-  res.json({ success: true, data: updated });
+  res.json({ success: true, data: { ...updated, planData } });
 }));
 
 // DELETE /:id
