@@ -128,34 +128,10 @@ function MakePaperModal({ classItem, sectionItem, allSubjects, onClose, onGenera
   const [unitInput, setUnitInput] = useState('');
   const [unitDropdownOpen, setUnitDropdownOpen] = useState(false);
 
-  /* ── Fetch syllabus units when subject changes ── */
-  const { data: syllabusUnits = [] } = useQuery({
-    queryKey: ['syllabus-units', classItem?.id, form.subjectId],
-    queryFn: async () => {
-      if (!form.subjectId) return [];
-      try {
-        const r = await api.get(`/schemes?classId=${classItem?.id}&subjectId=${form.subjectId}`);
-        const schemes = r.data.data || [];
-        // Collect all units from all matching schemes
-        const units = [];
-        schemes.forEach(s => {
-          if (Array.isArray(s.units)) {
-            s.units.forEach(u => { if (u.title) units.push(u.title); });
-          }
-          // Also try syllabi
-          if (Array.isArray(s.months)) {
-            s.months.forEach(m => { if (m && typeof m === 'string') units.push(m); });
-          }
-        });
-        return [...new Set(units)];
-      } catch {
-        return [];
-      }
-    },
-    enabled: !!(classItem?.id && form.subjectId),
-  });
-
-  /* Also try to fetch from /syllabus endpoint */
+  /* Fetch syllabus units for the selected class/subject.
+     FIX: this used to also query /schemes (plural — no such route, always
+     404'd and silently returned []) as a duplicate of the query below.
+     /syllabus is the real, working endpoint for unit data. */
   const { data: syllabusData = [] } = useQuery({
     queryKey: ['syllabus-for-paper', classItem?.id, form.subjectId],
     queryFn: async () => {
@@ -177,7 +153,7 @@ function MakePaperModal({ classItem, sectionItem, allSubjects, onClose, onGenera
     enabled: !!(classItem?.id && form.subjectId),
   });
 
-  const allFetchedUnits = [...new Set([...syllabusUnits, ...syllabusData])];
+  const allFetchedUnits = [...new Set(syllabusData)];
   const showFallbackInput = allFetchedUnits.length === 0;
 
   const toggleUnit = (unit) => {

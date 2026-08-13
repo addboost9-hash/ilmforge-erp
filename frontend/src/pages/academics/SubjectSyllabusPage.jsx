@@ -210,17 +210,24 @@ export default function SubjectSyllabusPage() {
   /* ── Active subject ── */
   const activeSubject = subjects[activeSubjectIdx];
 
-  /* ── Fetch existing syllabus/scheme content for each subject ── */
+  /* ── Fetch existing syllabus content for each subject ──
+     FIX: this previously called /schemes (plural — 404, no such route)
+     and read/wrote a bare HTML string into a `months` field that actually
+     belongs to the unrelated Scheme-of-Studies feature (an array of
+     {name, topics, hours, tests} rows) — writing here would have silently
+     corrupted that other feature's data for the same class/subject.
+     /syllabus already exists for exactly this purpose and stores an
+     array of `units`; a single-unit array holds this page's one HTML blob. */
   const { data: schemesData = [] } = useQuery({
-    queryKey: ['schemes-for-class', classId],
-    queryFn: () => api.get(`/schemes?classId=${classId}`).then(r => r.data.data || []).catch(() => []),
+    queryKey: ['syllabus-for-class', classId],
+    queryFn: () => api.get('/syllabus', { params: { classId } }).then(r => r.data.data || []).catch(() => []),
     enabled: !!classId,
     onSuccess: (data) => {
       const newContents = {};
       const newIds = {};
       data.forEach(s => {
         if (s.subjectId) {
-          newContents[s.subjectId] = s.content || s.months || '';
+          newContents[s.subjectId] = s.units?.[0]?.content || '';
           newIds[s.subjectId] = s.id;
         }
       });
@@ -229,14 +236,14 @@ export default function SubjectSyllabusPage() {
     },
   });
 
-  /* Populate contents from schemes on load */
+  /* Populate contents from syllabus records on load */
   useEffect(() => {
     if (schemesData && schemesData.length > 0) {
       const newContents = {};
       const newIds = {};
       schemesData.forEach(s => {
         if (s.subjectId) {
-          newContents[s.subjectId] = s.content || s.months || '';
+          newContents[s.subjectId] = s.units?.[0]?.content || '';
           newIds[s.subjectId] = s.id;
         }
       });
@@ -254,14 +261,14 @@ export default function SubjectSyllabusPage() {
   const saveMutation = useMutation({
     mutationFn: ({ subjectId, html }) => {
       const schemeId = schemeIds[subjectId];
+      const units = [{ unitNo: 1, title: 'Full Syllabus', content: html, completed: false }];
       if (schemeId) {
-        return api.put(`/schemes/${schemeId}`, { content: html, months: html }).then(r => r.data);
+        return api.put(`/syllabus/${schemeId}`, { classId: parseInt(classId), subjectId: parseInt(subjectId), units }).then(r => r.data);
       } else {
-        return api.post('/schemes', {
+        return api.post('/syllabus', {
           classId: parseInt(classId),
           subjectId: parseInt(subjectId),
-          content: html,
-          months: html,
+          units,
           title: `${classInfo?.name || 'Class'} Syllabus`,
         }).then(r => r.data);
       }
@@ -271,7 +278,7 @@ export default function SubjectSyllabusPage() {
       if (data?.data?.id) {
         setSchemeIds(prev => ({ ...prev, [variables.subjectId]: data.data.id }));
       }
-      qc.invalidateQueries(['schemes-for-class', classId]);
+      qc.invalidateQueries(['syllabus-for-class', classId]);
     },
     onError: () => toast.error('Save failed'),
   });
