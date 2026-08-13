@@ -14,13 +14,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  redis:
-    image: redis:7-alpine
-    container_name: edumanage_redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-
   backend:
     build:
       context: ./backend
@@ -29,10 +22,8 @@ services:
     restart: unless-stopped
     depends_on:
       - postgres
-      - redis
     environment:
       DATABASE_URL: postgresql://edumanage:edumanage123@postgres:5432/edumanage
-      REDIS_URL: redis://redis:6379
       JWT_SECRET: change-this-secret-in-production
       JWT_REFRESH_SECRET: change-this-refresh-secret
       NODE_ENV: production
