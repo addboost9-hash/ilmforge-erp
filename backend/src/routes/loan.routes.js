@@ -24,8 +24,11 @@ router.post('/', wrap(async (req, res) => {
 }));
 
 // Record installment payment (called during salary generation)
+// FIX: was looked up by id only with no schoolId check — any finance user on
+// any school could pay off / mutate another school's loan record by guessing
+// the numeric id (cross-tenant data leak/manipulation).
 router.post('/:id/pay-installment', wrap(async (req, res) => {
-  const loan = await prisma.staffLoan.findUnique({ where: { id: parseInt(req.params.id) } });
+  const loan = await prisma.staffLoan.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
   if (!loan) return res.status(404).json({ success: false });
   const newPaid = loan.paidAmount + loan.monthlyInstallment;
   const newRemaining = Math.max(0, loan.loanAmount - newPaid);

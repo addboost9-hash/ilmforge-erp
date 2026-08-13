@@ -56,12 +56,20 @@ export default function FeeIncrementPage() {
 
   const mutation = useMutation({
     mutationFn: (payload) => {
+      // FIX: backend expects { classId, mode: 'pct'|'flat', value, reason } on both
+      // /fees/increment and /fees/decrement (see fee.routes.js) — this used to send
+      // { percentage } or { amount } instead, so the server always saw `value`
+      // undefined and rejected every request with 400 "Value required". The
+      // `.catch(() => ({ data: { success: true, fallback: true } }))` below then
+      // swallowed that error and reported success to the user even though nothing
+      // was ever applied. Both are fixed: field names now match the route, and
+      // failures propagate to onError instead of being hidden.
       const endpoint = tab.kind === 'increment' ? '/fees/increment' : '/fees/decrement';
-      return api.post(endpoint, payload).catch(() => ({ data: { success: true, fallback: true } }));
+      return api.post(endpoint, payload);
     },
     onSuccess: (res, payload) => {
       const label = tab.kind === 'increment' ? 'Increment' : 'Decrement';
-      const valLabel = tab.mode === 'pct' ? `${payload.percentage}%` : `Rs. ${payload.amount / 100}`;
+      const valLabel = tab.mode === 'pct' ? `${payload.value}%` : `Rs. ${payload.value / 100}`;
       toast.success(`${label} of ${valLabel} applied successfully!`);
       setHistory(prev => [
         {
@@ -91,15 +99,13 @@ export default function FeeIncrementPage() {
       return toast.error(tab.mode === 'pct' ? 'Please select a percentage' : 'Please enter a valid amount');
 
     const payload = {
-      campus: form.campus,
       classId: parseInt(form.classId),
-      section: form.section || null,
+      mode: tab.mode === 'pct' ? 'pct' : 'flat',
+      // FeeStructure.amount is stored in paisa (see FeeStructurePage.jsx), so a flat
+      // adjustment must be converted the same way before it reaches the backend.
+      value: tab.mode === 'pct' ? parseFloat(form.value) : Math.round(parseFloat(form.value) * 100),
+      reason: `${tab.kind} via Fee Increment page — campus: ${form.campus}${form.section ? `, section: ${form.section}` : ''}`,
     };
-    if (tab.mode === 'pct') {
-      payload.percentage = parseFloat(form.value);
-    } else {
-      payload.amount = Math.round(parseFloat(form.value) * 100);
-    }
     mutation.mutate(payload);
   };
 
