@@ -11,6 +11,16 @@ const router  = express.Router();
 const prisma  = require('../config/prisma');
 const wrap    = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
+// Mounted with only `protect` in app.js (no role gate, no PM check).
+// Alumni CRM (listing, profiles, bulk invitations) is an admin-facing
+// management tool with no student/parent use case.
+router.use((req, res, next) => {
+  if (!['admin', 'super_admin', 'principal'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Admins only.' });
+  }
+  next();
+});
+
 /* ─────────────────────────────────────────────────────────────
    GET /api/v1/alumni
    Query: year, classId, city, search, page, limit

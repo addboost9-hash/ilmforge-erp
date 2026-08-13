@@ -3,8 +3,18 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
+// Mounted with only `protect` in app.js (no role gate, no PM check).
+// Whole-school task lists/creation/editing are staff-only; any authenticated
+// user may still view and complete their OWN assigned tasks (see below).
+const staffOnly = (req, res, next) => {
+  if (!['admin', 'super_admin', 'principal', 'teacher'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Staff only.' });
+  }
+  next();
+};
+
 // GET /api/v1/tasks — list SchoolTask for schoolId
-router.get('/', wrap(async (req, res) => {
+router.get('/', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const { assignedTo, status, priority } = req.query;
 
@@ -51,7 +61,7 @@ router.get('/my-tasks', wrap(async (req, res) => {
 }));
 
 // POST /api/v1/tasks — create task
-router.post('/', wrap(async (req, res) => {
+router.post('/', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const { title, description, assignedTo, priority, dueDate } = req.body;
   if (!title) return res.status(400).json({ success: false, message: 'title is required.' });
@@ -73,7 +83,7 @@ router.post('/', wrap(async (req, res) => {
 }));
 
 // PUT /api/v1/tasks/:id — update task
-router.put('/:id', wrap(async (req, res) => {
+router.put('/:id', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const id = parseInt(req.params.id);
   const { title, description, status, priority, dueDate, assignedTo } = req.body;
@@ -104,6 +114,12 @@ router.put('/:id/complete', wrap(async (req, res) => {
   const existing = await prisma.schoolTask.findFirst({ where: { id, schoolId } });
   if (!existing) return res.status(404).json({ success: false, message: 'Task not found.' });
 
+  const isOwner = existing.assignedTo === req.user?.id;
+  const isStaff = ['admin', 'super_admin', 'principal', 'teacher'].includes(req.user?.role);
+  if (!isOwner && !isStaff) {
+    return res.status(403).json({ success: false, message: 'You can only complete your own tasks.' });
+  }
+
   const updated = await prisma.schoolTask.update({
     where: { id },
     data: {
@@ -115,7 +131,7 @@ router.put('/:id/complete', wrap(async (req, res) => {
 }));
 
 // DELETE /api/v1/tasks/:id
-router.delete('/:id', wrap(async (req, res) => {
+router.delete('/:id', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const id = parseInt(req.params.id);
 

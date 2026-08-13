@@ -3,13 +3,52 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
+// Mounted with only `protect` in app.js (no role gate, no PM check).
+// Recording/editing/deleting disciplinary records is a staff-only action.
+const staffOnly = (req, res, next) => {
+  if (!['admin', 'super_admin', 'principal', 'teacher'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Staff only.' });
+  }
+  next();
+};
+
+// Resolve which studentId a student/parent caller is allowed to see;
+// returns { studentId, denied } — mirrors the ownership pattern already
+// used in attendance.routes.js (Student.userId / Parent.userId + ParentStudent).
+async function resolveViewableStudentId(req, requestedStudentId) {
+  const { schoolId } = req;
+  const role = req.user?.role;
+  if (!['student', 'parent'].includes(role)) {
+    return { studentId: requestedStudentId ? parseInt(requestedStudentId) : undefined, denied: false };
+  }
+  if (role === 'student') {
+    const self = await prisma.student.findFirst({ where: { schoolId, userId: req.user.id, deletedAt: null }, select: { id: true } });
+    if (!self) return { studentId: -1, denied: false };
+    if (requestedStudentId && parseInt(requestedStudentId) !== self.id) return { studentId: null, denied: true };
+    return { studentId: self.id, denied: false };
+  }
+  // parent
+  const parent = await prisma.parent.findFirst({ where: { schoolId, userId: req.user.id }, select: { id: true } });
+  const links = parent ? await prisma.parentStudent.findMany({ where: { schoolId, parentId: parent.id }, select: { studentId: true } }) : [];
+  const allowedIds = links.map((l) => l.studentId);
+  if (requestedStudentId) {
+    const rid = parseInt(requestedStudentId);
+    if (!allowedIds.includes(rid)) return { studentId: null, denied: true };
+    return { studentId: rid, denied: false };
+  }
+  return { studentId: allowedIds.length === 1 ? allowedIds[0] : { in: allowedIds.length ? allowedIds : [-1] }, denied: false };
+}
+
 // GET /api/v1/behaviour — list BehaviorRecord for schoolId
 router.get('/', wrap(async (req, res) => {
   const { schoolId } = req;
   const { studentId, type, from, to, severity } = req.query;
 
+  const resolved = await resolveViewableStudentId(req, studentId);
+  if (resolved.denied) return res.status(403).json({ success: false, message: 'Access denied for this student.' });
+
   const where = { schoolId };
-  if (studentId) where.studentId = parseInt(studentId);
+  if (resolved.studentId !== undefined) where.studentId = resolved.studentId;
   if (type)      where.category = type;
   if (severity)  where.notes = { contains: `severity:${severity}` };
 
@@ -33,7 +72,7 @@ router.get('/', wrap(async (req, res) => {
 }));
 
 // POST /api/v1/behaviour — create record
-router.post('/', wrap(async (req, res) => {
+router.post('/', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const { studentId, type, description, severity, action, reportedBy, date } = req.body;
   if (!studentId) return res.status(400).json({ success: false, message: 'studentId is required.' });
@@ -66,7 +105,7 @@ router.post('/', wrap(async (req, res) => {
 }));
 
 // PUT /api/v1/behaviour/:id — update
-router.put('/:id', wrap(async (req, res) => {
+router.put('/:id', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const id = parseInt(req.params.id);
   const { type, description, severity, action, reportedBy, date } = req.body;
@@ -97,7 +136,7 @@ router.put('/:id', wrap(async (req, res) => {
 }));
 
 // DELETE /api/v1/behaviour/:id
-router.delete('/:id', wrap(async (req, res) => {
+router.delete('/:id', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const id = parseInt(req.params.id);
 
@@ -112,6 +151,9 @@ router.delete('/:id', wrap(async (req, res) => {
 router.get('/summary/:studentId', wrap(async (req, res) => {
   const { schoolId } = req;
   const studentId = parseInt(req.params.studentId);
+
+  const resolved = await resolveViewableStudentId(req, studentId);
+  if (resolved.denied) return res.status(403).json({ success: false, message: 'Access denied for this student.' });
 
   const records = await prisma.behaviorRecord.findMany({
     where: { schoolId, studentId },

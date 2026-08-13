@@ -3,6 +3,21 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
+// Mounted with only `protect` in app.js (no role gate, no PM check).
+// SOPs are internal staff procedure documents — no student/parent use case.
+const staffOnly = (req, res, next) => {
+  if (!['admin', 'super_admin', 'principal', 'teacher'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Staff only.' });
+  }
+  next();
+};
+const adminOnly = (req, res, next) => {
+  if (!['admin', 'super_admin'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Admins only.' });
+  }
+  next();
+};
+
 const DEFAULT_SOPS = [
   { title: 'Morning Assembly SOP', category: 'Daily Operations', content: '1. Gate opens 7:15 AM\n2. Assembly 7:45 sharp — line-wise class order\n3. Tilawat → National Anthem → announcements\n4. Class dismissal grade-wise' },
   { title: 'Fee Collection SOP', category: 'Finance', content: '1. Sirf receipt ke against cash lein\n2. Har payment turant ERP mein enter karein\n3. Din ke end pe cash count + ERP total match karein\n4. Discrepancy usi din report karein' },
@@ -11,7 +26,7 @@ const DEFAULT_SOPS = [
   { title: 'Parent Complaint Handling SOP', category: 'Relations', content: '1. Complaint ERP mein log karein\n2. 24h ke andar first response\n3. Resolution 3 din mein\n4. Parent ko written response' },
 ];
 
-router.get('/', wrap(async (req, res) => {
+router.get('/', staffOnly, wrap(async (req, res) => {
   let data = await prisma.sopDocument.findMany({ where: { OR: [{ schoolId: null }, { schoolId: req.schoolId }] }, orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }] });
   if (!data.length) {
     await prisma.sopDocument.createMany({ data: DEFAULT_SOPS.map((s, i) => ({ ...s, schoolId: req.schoolId, sortOrder: i })) });
@@ -20,7 +35,7 @@ router.get('/', wrap(async (req, res) => {
   res.json({ success: true, data });
 }));
 
-router.post('/', wrap(async (req, res) => {
+router.post('/', adminOnly, wrap(async (req, res) => {
   const { title, category, content } = req.body;
   if (!title || !content) return res.status(400).json({ success: false, message: 'Title and content required.' });
   const sop = await prisma.sopDocument.create({ data: { schoolId: req.schoolId, title, category: category || 'General', content } });

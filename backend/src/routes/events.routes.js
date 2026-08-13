@@ -16,6 +16,17 @@ const router  = express.Router();
 const prisma  = require('../config/prisma');
 const wrap    = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
+// Mounted with only `protect` in app.js (no role gate, no PM check) — every
+// mutation here was reachable by ANY authenticated role, including
+// students/parents, who could create/edit/delete school events or record
+// results. Restrict writes to staff/admin roles (mirrors calendar.routes.js).
+const staffOnly = (req, res, next) => {
+  if (!['admin', 'super_admin', 'principal', 'teacher'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Staff only.' });
+  }
+  next();
+};
+
 /* ─────────────────────────────────────────────────────────────
    GET /api/v1/events
    Query: type, status, month, year, search, page, limit
@@ -92,7 +103,7 @@ router.get('/calendar', wrap(async (req, res) => {
    Body: { title, type, date, endDate, venue, description,
            classIds, status }
 ───────────────────────────────────────────────────────────── */
-router.post('/', wrap(async (req, res) => {
+router.post('/', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const { title, type = 'general', date, endDate, venue, description, status = 'upcoming' } = req.body;
 
@@ -133,7 +144,7 @@ router.post('/', wrap(async (req, res) => {
    PUT /api/v1/events/:id
    Body: any subset of event fields
 ───────────────────────────────────────────────────────────── */
-router.put('/:id', wrap(async (req, res) => {
+router.put('/:id', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const eventId = parseInt(req.params.id);
 
@@ -158,7 +169,7 @@ router.put('/:id', wrap(async (req, res) => {
 /* ─────────────────────────────────────────────────────────────
    DELETE /api/v1/events/:id
 ───────────────────────────────────────────────────────────── */
-router.delete('/:id', wrap(async (req, res) => {
+router.delete('/:id', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const eventId = parseInt(req.params.id);
 
@@ -197,7 +208,7 @@ router.get('/:id/participants', wrap(async (req, res) => {
    Body: { participants: [{ studentId, teamName? }] }
    Adds/upserts participants for the event
 ───────────────────────────────────────────────────────────── */
-router.post('/:id/participants', wrap(async (req, res) => {
+router.post('/:id/participants', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const eventId  = parseInt(req.params.id);
   const { participants = [] } = req.body;
@@ -243,7 +254,7 @@ router.post('/:id/participants', wrap(async (req, res) => {
    Body: { results: [{ studentId, teamName, position, score }] }
    Records results / winners for the event
 ───────────────────────────────────────────────────────────── */
-router.post('/:id/results', wrap(async (req, res) => {
+router.post('/:id/results', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const eventId  = parseInt(req.params.id);
   const { results = [] } = req.body;

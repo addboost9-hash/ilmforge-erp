@@ -3,6 +3,16 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
+// Mounted with only `protect` in app.js (no role gate, no PM check) — every
+// endpoint here (issuing, verifying, revoking, and viewing gate passes) is a
+// staff/gatekeeper action with no legitimate student/parent use case.
+router.use((req, res, next) => {
+  if (!['admin', 'super_admin', 'principal', 'teacher', 'gatekeeper'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Staff/gatekeeper only.' });
+  }
+  next();
+});
+
 const writeGatePassAudit = async (req, action, passId, details = null) => {
   await prisma.auditLog.create({
     data: {

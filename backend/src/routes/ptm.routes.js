@@ -3,6 +3,20 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
+// Mounted with only `protect` in app.js (no role gate, no PM check).
+const adminOnly = (req, res, next) => {
+  if (!['admin', 'super_admin', 'principal'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Admins only.' });
+  }
+  next();
+};
+const staffOnly = (req, res, next) => {
+  if (!['admin', 'super_admin', 'principal', 'teacher'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Staff only.' });
+  }
+  next();
+};
+
 /* ──────────────────────────────────────────────────────────────
    Helpers
 ────────────────────────────────────────────────────────────── */
@@ -28,7 +42,7 @@ function generateSlots(startTime, endTime, slotDurationMinutes) {
    Body: { title, date, startTime, endTime, venue,
            slotDurationMinutes, classIds }
 ────────────────────────────────────────────────────────────── */
-router.post('/create', wrap(async (req, res) => {
+router.post('/create', adminOnly, wrap(async (req, res) => {
   const { title, date, startTime, endTime, venue, slotDurationMinutes = 10, classIds = [] } = req.body;
 
   if (!title || !date || !startTime || !endTime) {
@@ -177,7 +191,7 @@ router.post('/events/:id/book', wrap(async (req, res) => {
 /* ──────────────────────────────────────────────────────────────
    GET /ptm/events/:id/bookings  — All bookings for an event
 ────────────────────────────────────────────────────────────── */
-router.get('/events/:id/bookings', wrap(async (req, res) => {
+router.get('/events/:id/bookings', staffOnly, wrap(async (req, res) => {
   const eventId = parseInt(req.params.id, 10);
 
   const event = await prisma.pTMEvent.findFirst({
@@ -207,6 +221,12 @@ router.delete('/bookings/:id', wrap(async (req, res) => {
   });
   if (!booking) return res.status(404).json({ success: false, message: 'Booking not found.' });
 
+  const isStaff = ['admin', 'super_admin', 'principal', 'teacher'].includes(req.user?.role);
+  const isOwner = booking.parentId != null && booking.parentId === req.user?.id;
+  if (!isStaff && !isOwner) {
+    return res.status(403).json({ success: false, message: 'You can only cancel your own booking.' });
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.pTMBooking.delete({ where: { id: bookingId } });
     await tx.pTMSlot.update({
@@ -221,7 +241,7 @@ router.delete('/bookings/:id', wrap(async (req, res) => {
 /* ──────────────────────────────────────────────────────────────
    PATCH /ptm/events/:id  — Update event status (admin)
 ────────────────────────────────────────────────────────────── */
-router.patch('/events/:id', wrap(async (req, res) => {
+router.patch('/events/:id', adminOnly, wrap(async (req, res) => {
   const eventId = parseInt(req.params.id, 10);
   const { status } = req.body;
 
