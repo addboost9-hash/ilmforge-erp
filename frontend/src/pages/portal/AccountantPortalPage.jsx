@@ -204,9 +204,13 @@ function DashboardTab({ user, setActiveTab }) {
 
   const { data: todayPayments = [] } = useQuery({
     queryKey: ['today-payments', user?.id],
+    // FIX: GET /fees/payments only understands `from`/`to` range params (see
+    // fee.routes.js) — the `date` param sent here was silently ignored, so
+    // "Collection Today" was actually showing this accountant's ALL-TIME
+    // payment total, not today's.
     queryFn: () =>
       api
-        .get('/fees/payments', { params: { accountant: user?.id, date: todayISO(), limit: 200 } })
+        .get('/fees/payments', { params: { accountant: user?.id, from: todayISO(), to: todayISO(), limit: 200 } })
         .then((r) => r.data.data || []),
     staleTime: 30_000,
     retry: false,
@@ -229,12 +233,20 @@ function DashboardTab({ user, setActiveTab }) {
   });
 
   /* Staff salary — current month total */
+  // FIX: GET /salary returns a plain array of SalaryRecord rows under `data`
+  // — there is no `.summary` field. This previously fell back to that raw
+  // array and then read `.totalAmount`/`.total`/`.count` on it (none of
+  // which exist on an array), so the "Staff Salary" stat card always showed
+  // Rs. 0 with a blank staff count even when salary records existed.
   const { data: salaryData } = useQuery({
     queryKey: ['salary-this-month'],
     queryFn: () => {
       const now = new Date();
-      return api.get('/salary', { params: { month: now.getMonth() + 1, year: now.getFullYear(), limit: 1 } })
-        .then(r => r.data?.summary || r.data?.data || null).catch(() => null);
+      return api.get('/salary', { params: { month: now.getMonth() + 1, year: now.getFullYear() } })
+        .then(r => {
+          const records = r.data?.data || [];
+          return { totalAmount: records.reduce((s, rec) => s + (rec.netSalary || 0), 0), count: records.length };
+        }).catch(() => null);
     },
     staleTime: 5 * 60_000,
     retry: false,
@@ -501,9 +513,11 @@ function BalancesheetTab({ user }) {
 
   const { data: payments = [], isLoading: loadingPayments } = useQuery({
     queryKey: ['bs-payments', date, user?.id],
+    // FIX: backend only filters on `from`/`to`, not `date` — see the matching
+    // fix on the Dashboard tab's "today's payments" query above.
     queryFn: () =>
       api
-        .get('/fees/payments', { params: { accountant: user?.id, date, limit: 500 } })
+        .get('/fees/payments', { params: { accountant: user?.id, from: date, to: date, limit: 500 } })
         .then((r) => r.data.data || []),
     staleTime: 30_000,
     retry: false,
@@ -848,11 +862,15 @@ function FeeCollectionTab({ user }) {
   });
 
   const payMutation = useMutation({
+    // FIX: POST /fees/invoices/:id/pay does not exist on the backend — the
+    // real endpoint is POST /fees/payments with { invoiceId, amountPaid,
+    // ... } (see fee.routes.js). Every "Confirm Payment" click here 404'd,
+    // making the Accountant Portal's core "Collect Fee" feature a dead end.
     mutationFn: ({ invoiceId, amount, note }) => {
       const numAmount = Number(amount);
       if (!numAmount || numAmount <= 0) throw new Error('Enter a valid payment amount');
       if (numAmount > 1000000) throw new Error('Amount seems too high — please verify');
-      return api.post(`/fees/invoices/${invoiceId}/pay`, { amount: numAmount, note });
+      return api.post('/fees/payments', { invoiceId, amountPaid: numAmount, method: 'cash' });
     },
     onSuccess: (res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['student-invoices', selectedStudent?.id] });
@@ -1124,9 +1142,12 @@ function PaymentHistoryTab({ user }) {
 
   const { data: payments = [], isLoading } = useQuery({
     queryKey: ['payment-history', user?.id, fromDate, toDate],
+    // FIX: backend expects `from`/`to`, not `fromDate`/`toDate` — the date
+    // range filter here was a complete no-op, so changing the From/To pickers
+    // never actually narrowed the results.
     queryFn: () =>
       api.get('/fees/payments', {
-        params: { accountant: user?.id, fromDate: fromDate || undefined, toDate: toDate || undefined, limit: 200 },
+        params: { accountant: user?.id, from: fromDate || undefined, to: toDate || undefined, limit: 200 },
       }).then((r) => r.data.data || []),
     staleTime: 60_000,
     retry: false,

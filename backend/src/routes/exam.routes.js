@@ -870,6 +870,55 @@ router.post(
   res.json({ success: true, data: results, message: `Marks saved for ${results.length} students.` });
 }));
 
+// GET /exams/:id/my-results — a student's or parent's own (child's) marks for
+// a published exam.
+// FIX: every marks/results-returning route in this file (`/:id/marks`,
+// `/:id/results`, gazette/merit-list/etc.) is gated by canManageExams()
+// (admin/teacher/super_admin only), so a parent or student could never fetch
+// their own child's marks — the Parent Portal's Results tab called
+// GET /exams (list) and read a `.subjects`/`.results` field that doesn't
+// exist on that response, so it always rendered "Marks not entered yet."
+// even for a fully published, graded exam. This route is scoped to the
+// caller's own student record (or their linked child, via ?studentId=).
+router.get('/:id/my-results', wrap(async (req, res) => {
+  const examId = parseInt(req.params.id);
+  const { schoolId } = req;
+
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  if (!exam.isPublished) return res.status(403).json({ success: false, message: 'Results have not been published yet.' });
+
+  const role = req.user?.role;
+  let studentId = null;
+
+  if (role === 'student') {
+    const self = await prisma.student.findFirst({ where: { schoolId, userId: req.user.id, deletedAt: null }, select: { id: true } });
+    studentId = self?.id || null;
+  } else if (role === 'parent') {
+    const requestedId = req.query.studentId ? parseInt(req.query.studentId) : null;
+    const parent = await prisma.parent.findFirst({ where: { schoolId, userId: req.user.id } });
+    if (parent && requestedId) {
+      const link = await prisma.parentStudent.findFirst({ where: { schoolId, parentId: parent.id, studentId: requestedId } });
+      studentId = link ? requestedId : null;
+    } else if (parent) {
+      const links = await prisma.parentStudent.findMany({ where: { schoolId, parentId: parent.id }, select: { studentId: true } });
+      if (links.length === 1) studentId = links[0].studentId;
+    }
+  } else if (canManageExams(role) && req.query.studentId) {
+    studentId = parseInt(req.query.studentId);
+  }
+
+  if (!studentId) return res.status(403).json({ success: false, message: 'Access denied.' });
+
+  const marks = await prisma.examMark.findMany({
+    where: { examId, studentId },
+    include: { subject: { select: { id: true, name: true } } },
+    orderBy: { subjectId: 'asc' },
+  });
+
+  res.json({ success: true, data: marks });
+}));
+
 // POST /exams/:id/marks/excel-import — parse Excel and bulk upsert marks
 router.post('/:id/marks/excel-import', upload.single('file'), wrap(async (req, res) => {
   if (!canManageExams(req.user?.role)) {

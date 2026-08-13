@@ -38,8 +38,15 @@ export default function LoginScreen() {
       });
 
       const data = response.data;
-      const token = data.token || data.accessToken || data.data?.token;
-      const user = data.user || data.data?.user || data.data;
+      // FIX: the backend wraps the login payload as { success, data: { accessToken,
+      // refreshToken, user, ... } } (see backend/src/services/auth.service.js login()).
+      // This previously looked for `data.token` / `data.data?.token`, which never
+      // exist — the real field is `data.data.accessToken` — so a correct login
+      // always fell through to "Invalid credentials" and the app could never
+      // authenticate against the real backend.
+      const token = data.data?.accessToken || data.accessToken || data.token;
+      const user = data.data?.user || data.user;
+      const refreshToken = data.data?.refreshToken || data.refreshToken || '';
 
       if (!token) {
         Alert.alert('Login Failed', 'Invalid credentials. Please try again.');
@@ -48,7 +55,7 @@ export default function LoginScreen() {
 
       await saveAuth({
         accessToken: token,
-        refreshToken: data.refreshToken || '',
+        refreshToken,
         user: user,
       });
 

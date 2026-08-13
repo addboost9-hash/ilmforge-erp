@@ -304,20 +304,36 @@ export default function GatekeeperPortalPage() {
   const showToast = useCallback((msg, type = 'info') => setToast({ msg, type }), []);
 
   /* fetch today's entries */
+  // FIX: GET /attendance does not return a "scan log" — it returns every
+  // active student in the school/campus with a nested `.attendance` record
+  // (or null) for the day (see attendance.routes.js GET '/'), and the
+  // `method` query param is not supported/filtered by that endpoint at all.
+  // Treating the raw list as scan entries meant every non-scanned student
+  // defaulted to direction "IN" (since `.direction` never existed on the
+  // response), so presentCount effectively counted the ENTIRE active student
+  // body instead of just today's barcode scans. This normalizes the response
+  // into the { student, status, createdAt } shape the rest of this component
+  // already expects, keeping only students actually marked present via
+  // barcode today.
   const loadEntries = useCallback(async () => {
     setEntriesLoading(true);
     try {
       const res = await api.get('/attendance', {
-        params: { date: todayISO(), method: 'barcode' },
+        params: { date: todayISO() },
       });
-      const list = res.data?.data || res.data?.attendance || [];
+      const raw = res.data?.data || res.data?.attendance || [];
+      const list = raw
+        .filter(s => s.attendance && s.attendance.method === 'barcode')
+        .map(s => ({
+          id: s.attendance.id,
+          studentId: s.id,
+          student: { name: s.name, rollNo: s.rollNo, class: s.class, section: s.section },
+          status: s.attendance.status,
+          direction: 'IN', // backend does not persist scan direction (no such field on Attendance)
+          createdAt: s.attendance.createdAt,
+        }));
       setEntries(list);
-      // Count unique students who have checked IN (not both IN and OUT)
-      const inStudents  = new Set(list.filter(e => (e.direction || 'IN').toUpperCase() === 'IN').map(e => e.studentId || e.student?.id));
-      const outStudents = new Set(list.filter(e => (e.direction || '').toUpperCase() === 'OUT').map(e => e.studentId || e.student?.id));
-      // Present = IN but not OUT yet
-      const netPresent = [...inStudents].filter(id => !outStudents.has(id)).length;
-      setPresentCount(netPresent || inStudents.size);
+      setPresentCount(list.length);
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to load today\'s entries';
       showToast(msg, 'error');
@@ -408,6 +424,11 @@ export default function GatekeeperPortalPage() {
   };
 
   /* ═══ QR GATE PASS HANDLER ═══ */
+  // FIX: this called GET /gatepass/verify?qr=... — but the router is mounted
+  // at /api/v1/gatepasses (plural, see app.js), and /verify is a POST route
+  // that reads `passCode` from the body, not a `qr` query param (see
+  // gatepass.routes.js). Every scan 404'd, so the entire "Gate Pass" tab was
+  // a dead end regardless of what was typed/scanned.
   const handleQrScan = async () => {
     const val = qrValue.trim();
     if (!val) return;
@@ -416,10 +437,10 @@ export default function GatekeeperPortalPage() {
     setGatePass(null);
 
     try {
-      const res = await api.get('/gatepass/verify', { params: { qr: val } });
+      const res = await api.post('/gatepasses/verify', { passCode: val });
       const pass = res.data?.data || res.data || {};
       setGatePass(pass);
-      showToast(`Gate pass verified: ${pass.studentName || 'Student'}`, 'success');
+      showToast(`Gate pass verified: ${pass.student?.name || pass.studentName || 'Student'}`, 'success');
     } catch (err) {
       const status = err.response?.status;
       const msg    = err.response?.data?.message;
@@ -438,24 +459,16 @@ export default function GatekeeperPortalPage() {
     if (e.key === 'Enter') handleQrScan();
   };
 
-  const handleRelease = async () => {
+  // FIX: there is no POST /gatepasses/:id/release endpoint on the backend —
+  // only /verify (which immediately marks the pass "used", authorizing
+  // release in the same call) and /:id/revoke (for cancelling an unused
+  // pass). This button always 404'd; since verify() already performs the
+  // release, "release" here now just acknowledges/clears the panel instead
+  // of hitting a fake endpoint.
+  const handleRelease = () => {
     if (!gatePass) return;
-    const passId = gatePass._id || gatePass.id;
-    if (!passId) {
-      showToast('Gate pass ID missing', 'error');
-      return;
-    }
-    setReleasing(true);
-    try {
-      await api.post(`/gatepass/${passId}/release`);
-      showToast(`${gatePass.studentName || 'Student'} released successfully`, 'success');
-      setGatePass(null);
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Failed to release gate pass';
-      showToast(msg, 'error');
-    } finally {
-      setReleasing(false);
-    }
+    showToast(`${gatePass.student?.name || gatePass.studentName || 'Student'} released successfully`, 'success');
+    setGatePass(null);
   };
 
   const handleClose = () => {
