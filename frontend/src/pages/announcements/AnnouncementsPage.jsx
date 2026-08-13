@@ -1,61 +1,72 @@
 /**
  * IlmForge — Announcements Module
- * School-wide + classroom announcements
+ * School-wide + role-targeted announcements
+ * Wired to GET/POST/DELETE /api/v1/announcements (backend: title, message, targetRole, channel).
  */
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { Plus, X, Megaphone, Users, BookOpen, Bell, Trash2, Eye, Globe } from 'lucide-react';
+import { Plus, X, Megaphone, BookOpen, Trash2, Globe } from 'lucide-react';
 
-const DEMO_ANNOUNCEMENTS = [
-  { id:1, title:'Annual Sports Day – 15th July 2026', body:'All students must report to the ground by 8:00 AM in sports uniform. Parents are warmly invited.', audience:'all', classId:null, createdAt:'2026-06-25', priority:'high', pinned:true },
-  { id:2, title:'Class 5 Mathematics Test', body:'There will be a surprise mathematics test on Chapter 7 & 8 on Monday 29th June.', audience:'class', classId:3, createdAt:'2026-06-26', priority:'medium', pinned:false },
-  { id:3, title:'Holiday Notice – Eid ul Adha', body:'School will remain closed from 26th June to 1st July for Eid ul Adha holidays. School resumes on 2nd July.', audience:'all', createdAt:'2026-06-20', priority:'high', pinned:true },
-  { id:4, title:'Parent Teacher Meeting', body:'PTM will be held on 5th July 2026 from 9 AM to 1 PM. All parents are requested to attend.', audience:'all', createdAt:'2026-06-24', priority:'medium', pinned:false },
-  { id:5, title:'Science Project Submission', body:'All Class 6 students must submit their science project by 30th June. No extensions will be granted.', audience:'class', classId:5, createdAt:'2026-06-23', priority:'low', pinned:false },
+const AUDIENCE_OPTIONS = [
+  { value: 'all',     label: 'All Students & Parents' },
+  { value: 'parent',  label: 'Parents Only' },
+  { value: 'teacher', label: 'Teachers Only' },
+  { value: 'student', label: 'Students Only' },
 ];
 
-const PRIORITY_CONFIG = {
-  high:   { bg:'#FEE2E2', color:'#B91C1C', label:'High'   },
-  medium: { bg:'#FEF3C7', color:'#B45309', label:'Medium' },
-  low:    { bg:'#F0FDFA', color:'#0F766E', label:'Low'    },
-};
+const AUDIENCE_LABEL = Object.fromEntries(AUDIENCE_OPTIONS.map(a => [a.value, a.label]));
 
 export default function AnnouncementsPage() {
-  const [showForm,  setShowForm]  = useState(false);
-  const [audience,  setAudience]  = useState('all');
-  const [announcements, setAnnouncements] = useState(DEMO_ANNOUNCEMENTS);
-  const [form, setForm] = useState({ title:'', body:'', audience:'all', classId:'', priority:'medium', sendSMS:false });
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [audienceFilter, setAudienceFilter] = useState('');
+  const [form, setForm] = useState({ title: '', body: '', targetRole: 'all', sendSMS: false });
 
-  const { data:classes } = useQuery({ queryKey:['classes'], queryFn:()=>api.get('/classes').then(r=>r.data.data) });
+  const { data, isLoading } = useQuery({
+    queryKey: ['announcements'],
+    queryFn: () => api.get('/announcements').then(r => r.data.data),
+  });
 
-  const addAnn = () => {
-    if (!form.title||!form.body) return toast.error('Title and body are required');
-    setAnnouncements(prev => [{
-      ...form, id:Date.now(), createdAt:new Date().toISOString().split('T')[0], pinned:false,
-    }, ...prev]);
-    toast.success('Announcement posted!');
-    if (form.sendSMS) toast.success('SMS sent to parents!', { icon:'📱' });
-    setShowForm(false);
-    setForm({ title:'', body:'', audience:'all', classId:'', priority:'medium', sendSMS:false });
+  const announcements = data || [];
+
+  const addAnn = useMutation({
+    mutationFn: (payload) => api.post('/announcements', payload),
+    onSuccess: () => {
+      toast.success('Announcement posted!');
+      if (form.sendSMS) toast.success('Also queued via SMS channel', { icon: '📱' });
+      qc.invalidateQueries({ queryKey: ['announcements'] });
+      setShowForm(false);
+      setForm({ title: '', body: '', targetRole: 'all', sendSMS: false });
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to post announcement'),
+  });
+
+  const delAnn = useMutation({
+    mutationFn: (id) => api.delete(`/announcements/${id}`),
+    onSuccess: () => { toast.success('Deleted'); qc.invalidateQueries({ queryKey: ['announcements'] }); },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to delete'),
+  });
+
+  const submit = () => {
+    if (!form.title || !form.body) return toast.error('Title and body are required');
+    addAnn.mutate({
+      title: form.title,
+      message: form.body,
+      targetRole: form.targetRole,
+      channel: form.sendSMS ? 'sms' : 'app',
+    });
   };
 
-  const pin  = id => setAnnouncements(prev=>prev.map(a=>a.id===id?{...a,pinned:!a.pinned}:a));
-  const del  = id => { setAnnouncements(prev=>prev.filter(a=>a.id!==id)); toast.success('Deleted'); };
-
-  const filtered = audience==='all' ? announcements : announcements.filter(a=>a.audience===audience);
-  const pinned   = filtered.filter(a=>a.pinned);
-  const regular  = filtered.filter(a=>!a.pinned);
-
-  const className = id => (classes||[]).find(c=>c.id===parseInt(id))?.name||'—';
+  const filtered = audienceFilter ? announcements.filter(a => a.targetRole === audienceFilter) : announcements;
 
   return (
     <div className="page-content fade-up">
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:24 }}>
         <div>
           <h1 className="page-title">Announcements</h1>
-          <p className="page-subtitle">Post school-wide notices and class-specific announcements</p>
+          <p className="page-subtitle">Post school-wide notices and role-targeted announcements</p>
         </div>
         <button className="btn btn-teal" onClick={()=>setShowForm(s=>!s)}>
           {showForm?<><X size={14}/> Cancel</>:<><Plus size={14}/> New Announcement</>}
@@ -66,8 +77,8 @@ export default function AnnouncementsPage() {
       <div className="grid-3" style={{ marginBottom:16 }}>
         {[
           { label:'Total Announcements', val:announcements.length, icon:Megaphone, color:'#0F766E', bg:'#F0FDFA' },
-          { label:'School-wide',         val:announcements.filter(a=>a.audience==='all').length,   icon:Globe,     color:'#2563EB', bg:'#EFF6FF' },
-          { label:'Class-specific',      val:announcements.filter(a=>a.audience==='class').length, icon:BookOpen,  color:'#D97706', bg:'#FFFBEB' },
+          { label:'School-wide',         val:announcements.filter(a=>a.targetRole==='all').length,   icon:Globe,     color:'#2563EB', bg:'#EFF6FF' },
+          { label:'Role-targeted',       val:announcements.filter(a=>a.targetRole!=='all').length,   icon:BookOpen,  color:'#D97706', bg:'#FFFBEB' },
         ].map(s => {
           const Icon = s.icon;
           return (
@@ -88,74 +99,47 @@ export default function AnnouncementsPage() {
       {showForm && (
         <div className="card" style={{ marginBottom:16, borderTop:'3px solid #0F766E' }}>
           <h3 style={{ fontSize:14, fontWeight:700, color:'#111827', marginBottom:16 }}>Post New Announcement</h3>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
-            <div className="form-group" style={{ gridColumn:'span 3' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div className="form-group" style={{ gridColumn:'span 2' }}>
               <label className="form-label">Announcement Title *</label>
               <input className="form-input" placeholder="Enter announcement title" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))}/>
             </div>
-            <div className="form-group" style={{ gridColumn:'span 3' }}>
+            <div className="form-group" style={{ gridColumn:'span 2' }}>
               <label className="form-label">Message Body *</label>
               <textarea className="form-input form-textarea" rows={3} placeholder="Write the full announcement..." value={form.body} onChange={e=>setForm(f=>({...f,body:e.target.value}))}/>
             </div>
             <div className="form-group">
               <label className="form-label">Audience</label>
-              <select className="form-select" value={form.audience} onChange={e=>setForm(f=>({...f,audience:e.target.value}))}>
-                <option value="all">All Students & Parents</option>
-                <option value="class">Specific Class</option>
-                <option value="staff">Staff Only</option>
-              </select>
-            </div>
-            {form.audience==='class' && (
-              <div className="form-group">
-                <label className="form-label">Select Class</label>
-                <select className="form-select" value={form.classId} onChange={e=>setForm(f=>({...f,classId:e.target.value}))}>
-                  <option value="">Choose class...</option>
-                  {(classes||[]).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-            )}
-            <div className="form-group">
-              <label className="form-label">Priority</label>
-              <select className="form-select" value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))}>
-                <option value="high">🔴 High</option>
-                <option value="medium">🟡 Medium</option>
-                <option value="low">🟢 Low</option>
+              <select className="form-select" value={form.targetRole} onChange={e=>setForm(f=>({...f,targetRole:e.target.value}))}>
+                {AUDIENCE_OPTIONS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
               </select>
             </div>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:16, marginTop:4 }}>
             <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13, color:'#374151' }}>
               <input type="checkbox" checked={form.sendSMS} onChange={e=>setForm(f=>({...f,sendSMS:e.target.checked}))} style={{ width:15,height:15 }}/>
-              📱 Also send via SMS to parents
+              📱 Mark as SMS channel
             </label>
             <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
-              <button className="btn btn-teal" onClick={addAnn}><Megaphone size={14}/> Post Announcement</button>
+              <button className="btn btn-teal" onClick={submit} disabled={addAnn.isPending}>
+                <Megaphone size={14}/> {addAnn.isPending ? 'Posting…' : 'Post Announcement'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {/* Filter */}
-      <div style={{ display:'flex', gap:8, marginBottom:14 }}>
-        {[['all','All'],['class','Class-specific'],['staff','Staff Only']].map(([v,l])=>(
-          <button key={v} className={`btn btn-sm ${audience===v?'btn-teal':'btn-outline'}`} onClick={()=>setAudience(v)}>{l}</button>
+      <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+        <button className={`btn btn-sm ${audienceFilter===''?'btn-teal':'btn-outline'}`} onClick={()=>setAudienceFilter('')}>All</button>
+        {AUDIENCE_OPTIONS.map(a => (
+          <button key={a.value} className={`btn btn-sm ${audienceFilter===a.value?'btn-teal':'btn-outline'}`} onClick={()=>setAudienceFilter(a.value)}>{a.label}</button>
         ))}
       </div>
 
-      {/* Pinned */}
-      {pinned.length>0 && (
-        <div style={{ marginBottom:16 }}>
-          <div style={{ fontSize:12, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>
-            📌 Pinned Announcements
-          </div>
-          <div style={{ display:'grid', gap:12 }}>
-            {pinned.map((a,i) => <AnnCard key={a.id} a={a} index={i} onPin={pin} onDel={del} className={className}/>)}
-          </div>
-        </div>
-      )}
-
-      {/* Regular */}
-      {regular.length===0&&pinned.length===0 ? (
+      {isLoading ? (
+        <div className="loading-center"><div className="spinner"/></div>
+      ) : filtered.length === 0 ? (
         <div className="card" style={{ textAlign:'center', padding:48 }}>
           <div style={{ fontSize:48, marginBottom:12, opacity:.2 }}>📢</div>
           <div style={{ fontSize:15, fontWeight:600, color:'#374151' }}>No announcements yet</div>
@@ -163,20 +147,16 @@ export default function AnnouncementsPage() {
         </div>
       ) : (
         <div style={{ display:'grid', gap:12 }}>
-          {regular.map((a,i) => <AnnCard key={a.id} a={a} index={i} onPin={pin} onDel={del} className={className}/>)}
+          {filtered.map((a,i) => <AnnCard key={a.id} a={a} index={i} onDel={(id)=>delAnn.mutate(id)}/>)}
         </div>
       )}
     </div>
   );
 }
 
-function AnnCard({ a, index=0, onPin, onDel, className }) {
+function AnnCard({ a, index=0, onDel }) {
   const [expanded, setExpanded] = useState(false);
-  const pc = PRIORITY_CONFIG[a.priority]||PRIORITY_CONFIG.medium;
-  // Map priority to type-style colour logic for the new card border
-  const borderColor = a.priority==='high' ? '#DC2626' : a.priority==='low' ? '#059669' : '#0073b7';
-  const badgeBg    = a.priority==='high' ? '#fee2e2' : a.priority==='low' ? '#dcfce7' : '#dbeafe';
-  const badgeColor = a.priority==='high' ? '#DC2626' : a.priority==='low' ? '#059669' : '#0073b7';
+  const body = a.message || '';
 
   return (
     <div style={{
@@ -185,18 +165,15 @@ function AnnCard({ a, index=0, onPin, onDel, className }) {
       border:'1px solid rgba(255,255,255,0.45)',
       boxShadow:'0 2px 12px rgba(27,47,110,0.06)',
       animation:`ilm-fade-in 0.3s ease-out ${index*60}ms both`,
-      borderLeft:`4px solid ${borderColor}`,
+      borderLeft:'4px solid #0073b7',
     }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
         <div style={{ flex:1, minWidth:0, marginRight:12 }}>
-          <div style={{ fontWeight:700, fontSize:14, color:'#1e3a5f', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-            {a.title}
-            {a.pinned && <span style={{ fontSize:10, background:'#DBEAFE', color:'#1D4ED8', padding:'1px 7px', borderRadius:99, fontWeight:700 }}>📌 PINNED</span>}
-          </div>
+          <div style={{ fontWeight:700, fontSize:14, color:'#1e3a5f' }}>{a.title}</div>
           <div style={{ fontSize:12, color:'#64748b', marginTop:4 }}>
-            {expanded ? a.body : (a.body?.slice(0,100) + (a.body?.length > 100 ? '...' : ''))}
+            {expanded ? body : (body.slice(0,100) + (body.length > 100 ? '...' : ''))}
           </div>
-          {a.body?.length > 100 && (
+          {body.length > 100 && (
             <button onClick={()=>setExpanded(e=>!e)} style={{ fontSize:12, color:'#0F766E', background:'none', border:'none', cursor:'pointer', padding:'4px 0', fontWeight:600 }}>
               {expanded?'Show less ↑':'Read more ↓'}
             </button>
@@ -205,21 +182,16 @@ function AnnCard({ a, index=0, onPin, onDel, className }) {
         <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:6, flexShrink:0 }}>
           <span style={{
             fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:999,
-            background:badgeBg, color:badgeColor,
-          }}>{pc.label.toUpperCase()}</span>
-          <div style={{ display:'flex', gap:6 }}>
-            <button className="btn btn-ghost btn-icon btn-sm" title={a.pinned?'Unpin':'Pin'} onClick={()=>onPin(a.id)}>
-              <span style={{ fontSize:14 }}>{a.pinned?'📌':'📍'}</span>
-            </button>
-            <button className="btn btn-sm btn-icon" style={{ background:'#FEF2F2',border:'1px solid #FECACA',color:'#B91C1C' }} onClick={()=>onDel(a.id)}>
-              <Trash2 size={12}/>
-            </button>
-          </div>
+            background:'#dbeafe', color:'#0073b7',
+          }}>{(AUDIENCE_LABEL[a.targetRole] || a.targetRole || 'All').toUpperCase()}</span>
+          <button className="btn btn-sm btn-icon" style={{ background:'#FEF2F2',border:'1px solid #FECACA',color:'#B91C1C' }} onClick={()=>onDel(a.id)}>
+            <Trash2 size={12}/>
+          </button>
         </div>
       </div>
       <div style={{ marginTop:10, fontSize:11, color:'#94a3b8', display:'flex', gap:16 }}>
         <span>📅 {a.createdAt ? new Date(a.createdAt).toLocaleDateString('en-PK') : '—'}</span>
-        <span>👥 {a.audience==='all' ? 'All' : a.audience==='class' ? (a.classId ? className(a.classId) : 'Class') : 'Staff'}</span>
+        <span>👥 {a.sentCount ?? 0} recipient{a.sentCount === 1 ? '' : 's'}</span>
       </div>
     </div>
   );
