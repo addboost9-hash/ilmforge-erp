@@ -13,16 +13,12 @@ export default function StaffAttendanceReportPage() {
 
   const { data = [], isLoading } = useQuery({
     queryKey: ['staff-att-report', month, year],
-    queryFn: () => api.get('/attendance/staff-report', { params: { month, year } }).then(r => r.data.data || []).catch(() => []),
+    queryFn: () => api.get('/attendance/staff/report', { params: { month, year } }).then(r => r.data.data || []).catch(() => []),
   });
 
   const years = [now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
 
-  const getPct = r => {
-    const total = (r.presentDays || 0) + (r.absentDays || 0) + (r.lateDays || 0);
-    if (!total) return 0;
-    return Math.round(((r.presentDays || 0) / total) * 100);
-  };
+  const getPct = r => r.percentage || 0;
 
   return (
     <div className="page-content fade-in">
@@ -72,13 +68,13 @@ export default function StaffAttendanceReportPage() {
                 const pct = getPct(r);
                 const color = pct >= 90 ? '#10b981' : pct >= 75 ? '#f59e0b' : '#ef4444';
                 return (
-                  <tr key={r.id || i}>
-                    <td style={{ fontWeight: 600 }}>{r.staff?.name || r.name || '—'}</td>
-                    <td style={{ fontSize: 12, color: '#64748b' }}>{r.staff?.designation || r.designation || '—'}</td>
-                    <td style={{ textAlign: 'center', color: '#10b981', fontWeight: 700 }}>{r.presentDays || 0}</td>
-                    <td style={{ textAlign: 'center', color: '#ef4444', fontWeight: 700 }}>{r.absentDays || 0}</td>
-                    <td style={{ textAlign: 'center', color: '#f59e0b' }}>{r.lateDays || 0}</td>
-                    <td style={{ textAlign: 'center' }}>{r.leaveDays || 0}</td>
+                  <tr key={r.staffId || i}>
+                    <td style={{ fontWeight: 600 }}>{r.name || '—'}</td>
+                    <td style={{ fontSize: 12, color: '#64748b' }}>{r.designation || '—'}</td>
+                    <td style={{ textAlign: 'center', color: '#10b981', fontWeight: 700 }}>{r.present || 0}</td>
+                    <td style={{ textAlign: 'center', color: '#ef4444', fontWeight: 700 }}>{r.absent || 0}</td>
+                    <td style={{ textAlign: 'center', color: '#f59e0b' }}>{r.late || 0}</td>
+                    <td style={{ textAlign: 'center' }}>{r.leave || 0}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ flex: 1, height: 6, background: '#f1f5f9', borderRadius: 99 }}>

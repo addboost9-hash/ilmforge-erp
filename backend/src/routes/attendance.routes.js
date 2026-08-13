@@ -23,10 +23,12 @@ const staffOnly = (req, res, next) => {
 // EXISTING ENDPOINTS
 // ---------------------------------------------------------------------------
 
-// GET /api/v1/attendance?classId=&date=
+// GET /api/v1/attendance?classId=&date=&method=
+// method (optional): filter to only students with a matching Attendance.method
+// (e.g. 'barcode') — used by kiosk pages like BarcodeScanPage's "Recent Scans".
 router.get('/', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
-  const { classId, sectionId, date } = req.query;
+  const { classId, sectionId, date, method } = req.query;
   const targetDate = date ? new Date(date) : new Date();
   targetDate.setHours(0, 0, 0, 0);
   const nextDay = new Date(targetDate); nextDay.setDate(nextDay.getDate() + 1);
@@ -38,6 +40,7 @@ router.get('/', staffOnly, wrap(async (req, res) => {
       ...(classId && { classId: parseInt(classId) }),
       ...(sectionId && { sectionId: parseInt(sectionId) }),
     },
+    include: { class: { select: { name: true } } },
     orderBy: { rollNo: 'asc' },
   });
 
@@ -46,12 +49,14 @@ router.get('/', staffOnly, wrap(async (req, res) => {
       schoolId,
       date: { gte: targetDate, lt: nextDay },
       ...(classId && { classId: parseInt(classId) }),
+      ...(method && { method }),
     },
   });
   const recordMap = {};
   records.forEach(r => { recordMap[r.studentId] = r; });
 
-  const result = students.map(s => ({ ...s, attendance: recordMap[s.id] || null }));
+  let result = students.map(s => ({ ...s, attendance: recordMap[s.id] || null }));
+  if (method) result = result.filter(s => s.attendance);
   res.json({ success: true, data: result, date: targetDate.toISOString() });
 }));
 
@@ -282,6 +287,107 @@ router.post('/period', staffOnly, wrap(async (req, res) => {
   }
 
   res.json({ success: true, message: `${saved} period attendance records processed.` });
+}));
+
+// GET /api/v1/attendance/period/summary
+// Monthly attendance summary per student for the Period Attendance report
+// tab. The schema stores one daily status per student (no per-period rows —
+// see the /period compatibility endpoints above), so this aggregates the
+// existing daily Attendance records for the month rather than true
+// per-period data. subjectId is accepted but not filterable (attendance
+// isn't stored per-subject) and is echoed back as "All".
+router.get('/period/summary', staffOnly, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const { classId, sectionId, month, year } = req.query;
+  if (!classId) return res.status(400).json({ success: false, message: 'classId is required.' });
+
+  const m = parseInt(month) || (new Date().getMonth() + 1);
+  const y = parseInt(year) || new Date().getFullYear();
+  const startDate = new Date(y, m - 1, 1);
+  const endDate = new Date(y, m, 1);
+
+  const students = await prisma.student.findMany({
+    where: {
+      schoolId, status: 'active', deletedAt: null,
+      classId: parseInt(classId),
+      ...(sectionId && { sectionId: parseInt(sectionId) }),
+    },
+    select: { id: true, name: true, rollNo: true },
+    orderBy: { rollNo: 'asc' },
+  });
+
+  const data = await Promise.all(students.map(async (s) => {
+    const records = await prisma.attendance.findMany({
+      where: { schoolId, studentId: s.id, date: { gte: startDate, lt: endDate } },
+      select: { status: true },
+    });
+    const present = records.filter(r => r.status === 'present').length;
+    const absent  = records.filter(r => r.status === 'absent').length;
+    const leave   = records.filter(r => r.status === 'leave').length;
+    const late    = records.filter(r => r.status === 'late').length;
+    const total   = records.length;
+    return {
+      studentId: s.id,
+      studentName: s.name,
+      rollNo: s.rollNo,
+      subjectName: 'All',
+      total, present, absent, leave, late,
+      percentage: total > 0 ? Math.round((present / total) * 100) : 0,
+    };
+  }));
+
+  res.json({ success: true, data, month: m, year: y });
+}));
+
+// POST /api/v1/attendance/bulk-import
+// Body: { records: [{ date, rollNo?, studentName?, status, remarks? }] }
+// CSV-driven bulk attendance import (AttendanceExcelPage). Resolves each row
+// to a student by rollNo (preferred) or exact studentName within the school.
+router.post('/bulk-import', staffOnly, wrap(async (req, res) => {
+  const { schoolId, campusId } = req;
+  const { records } = req.body;
+  if (!Array.isArray(records) || !records.length) {
+    return res.status(400).json({ success: false, message: 'records array is required.' });
+  }
+
+  const rollNos = [...new Set(records.map(r => r.rollNo).filter(Boolean))];
+  const names   = [...new Set(records.map(r => r.studentName).filter(Boolean))];
+
+  const students = await prisma.student.findMany({
+    where: {
+      schoolId, deletedAt: null,
+      OR: [
+        ...(rollNos.length ? [{ rollNo: { in: rollNos } }] : []),
+        ...(names.length ? [{ name: { in: names } }] : []),
+      ],
+    },
+    select: { id: true, rollNo: true, name: true, classId: true, sectionId: true },
+  });
+  const byRoll = new Map(students.filter(s => s.rollNo).map(s => [s.rollNo, s]));
+  const byName = new Map(students.filter(s => s.name).map(s => [s.name, s]));
+
+  let imported = 0;
+  const failed = [];
+  for (const r of records) {
+    const student = (r.rollNo && byRoll.get(r.rollNo)) || (r.studentName && byName.get(r.studentName));
+    if (!student) { failed.push({ ...r, reason: 'Student not found' }); continue; }
+    const targetDate = new Date(r.date); targetDate.setHours(0, 0, 0, 0);
+    if (isNaN(targetDate.getTime())) { failed.push({ ...r, reason: 'Invalid date' }); continue; }
+
+    await prisma.attendance.upsert({
+      where: { studentId_date: { studentId: student.id, date: targetDate } },
+      update: { status: r.status, remarks: r.remarks || null, markedBy: req.user.id, method: 'import' },
+      create: {
+        schoolId, campusId: campusId || null,
+        studentId: student.id, classId: student.classId, sectionId: student.sectionId,
+        date: targetDate, status: r.status, remarks: r.remarks || null,
+        markedBy: req.user.id, method: 'import',
+      },
+    });
+    imported++;
+  }
+
+  res.json({ success: true, data: { imported, failed: failed.length, failedRows: failed }, message: `${imported} record(s) imported.` });
 }));
 
 // POST /api/v1/attendance/barcode-scan

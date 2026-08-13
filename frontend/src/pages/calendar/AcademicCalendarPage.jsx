@@ -40,9 +40,15 @@ export default function AcademicCalendarPage() {
   const [filterType, setFilter]= useState('');
   const [form, setForm]        = useState({ title:'', type:'event', date:'', endDate:'', description:'', isHoliday:false });
 
+  // FIX: this page used to read only /events (SchoolEvent table), so
+  // holidays added via the Holiday Calendar page (which writes to the
+  // separate HolidayEvent table) never showed up here. /calendar/events
+  // already returns both tables merged — use that combined feed instead.
   const { data: events = [], isLoading } = useQuery({
     queryKey: ['academic-events', year],
-    queryFn: () => api.get('/events', { params: { year, limit: 200 } }).then(r => r.data.data || []).catch(() => []),
+    queryFn: () => api.get('/calendar/events', {
+      params: { from: `${year}-01-01`, to: `${year}-12-31` },
+    }).then(r => r.data.data || []).catch(() => []),
     staleTime: 5 * 60_000,
   });
 
@@ -52,8 +58,11 @@ export default function AcademicCalendarPage() {
     onError: err => toast.error(err.response?.data?.message || 'Failed'),
   });
 
+  // Holidays (source: 'holiday') live in a different table/endpoint
+  // (/calendar/holidays/:id) — only school events created here are
+  // deletable from this view.
   const delEvent = useMutation({
-    mutationFn: id => api.delete(`/events/${id}`),
+    mutationFn: e => api.delete(`/events/${e.rawId}`),
     onSuccess: () => { qc.invalidateQueries(['academic-events']); setSelected(null); toast.success('Event deleted'); },
   });
 
@@ -215,10 +224,12 @@ export default function AcademicCalendarPage() {
                         {e.description && <div style={{ fontSize:12, color:'#374151', marginTop:2 }}>{e.description}</div>}
                         <div style={{ fontSize:11, color:'#64748b', marginTop:4 }}>{ti.label}{e.isHoliday ? ' · Holiday' : ''}</div>
                       </div>
-                      <button onClick={() => { if(window.confirm('Delete this event?')) delEvent.mutate(e.id); }}
-                        style={{ background:'none', border:'none', cursor:'pointer', color:'#dc2626', padding:4 }}>
-                        <Trash2 size={14}/>
-                      </button>
+                      {e.source !== 'holiday' && (
+                        <button onClick={() => { if(window.confirm('Delete this event?')) delEvent.mutate(e); }}
+                          style={{ background:'none', border:'none', cursor:'pointer', color:'#dc2626', padding:4 }}>
+                          <Trash2 size={14}/>
+                        </button>
+                      )}
                     </div>
                   );
                 })

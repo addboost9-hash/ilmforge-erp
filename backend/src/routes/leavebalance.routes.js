@@ -7,20 +7,52 @@ const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 const canManage = (role) => ['super_admin', 'admin'].includes(role);
 
 // ---------------------------------------------------------------------------
-// GET /leave-balance?personType=&classId=&sessionId= — list balances
+// GET /leave-balance?personType=&classId=&sessionId=&search=&year= — list balances
+// FIX: previously returned raw LeaveBalance rows with no staff/student join,
+// so LeaveBalancePage.jsx's r.staff?.name / r.staff?.designation always
+// rendered blank, and the search/year query params it sends were ignored.
 // ---------------------------------------------------------------------------
 router.get('/', wrap(async (req, res) => {
-  const { personType, classId, sessionId } = req.query;
-  const balances = await prisma.leaveBalance.findMany({
-    where: {
-      schoolId: req.schoolId,
-      ...(personType && { personType }),
-      ...(classId && { classId: parseInt(classId) }),
-      ...(sessionId && { sessionId: parseInt(sessionId) }),
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json({ success: true, data: balances });
+  const { personType, classId, sessionId, search, year } = req.query;
+
+  const where = {
+    schoolId: req.schoolId,
+    ...(personType && { personType }),
+    ...(classId && { classId: parseInt(classId) }),
+    ...(sessionId && { sessionId: parseInt(sessionId) }),
+  };
+
+  if (year && !sessionId) {
+    const sessions = await prisma.session.findMany({
+      where: { schoolId: req.schoolId, startDate: { gte: new Date(parseInt(year), 0, 1), lt: new Date(parseInt(year) + 1, 0, 1) } },
+      select: { id: true },
+    });
+    where.sessionId = { in: sessions.map(s => s.id) };
+  }
+
+  const balances = await prisma.leaveBalance.findMany({ where, orderBy: { createdAt: 'desc' } });
+
+  const staffIds   = balances.filter(b => ['staff', 'teacher'].includes(b.personType)).map(b => b.personId);
+  const studentIds = balances.filter(b => b.personType === 'student').map(b => b.personId);
+
+  const [staffRows, studentRows] = await Promise.all([
+    staffIds.length ? prisma.staff.findMany({ where: { id: { in: staffIds } }, select: { id: true, name: true, designation: true } }) : [],
+    studentIds.length ? prisma.student.findMany({ where: { id: { in: studentIds } }, select: { id: true, name: true, rollNo: true } }) : [],
+  ]);
+  const staffMap   = Object.fromEntries(staffRows.map(s => [s.id, s]));
+  const studentMap = Object.fromEntries(studentRows.map(s => [s.id, s]));
+
+  let data = balances.map(b => ({
+    ...b,
+    staff: ['staff', 'teacher'].includes(b.personType) ? staffMap[b.personId] || null : studentMap[b.personId] || null,
+  }));
+
+  if (search) {
+    const q = search.toLowerCase();
+    data = data.filter(b => b.staff?.name?.toLowerCase().includes(q));
+  }
+
+  res.json({ success: true, data });
 }));
 
 // ---------------------------------------------------------------------------

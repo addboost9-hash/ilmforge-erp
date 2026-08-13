@@ -68,17 +68,17 @@ export default function LeaveBalancePage() {
             </thead>
             <tbody>
               {data.map(r => {
-                const pct = getBar(r.usedDays || 0, r.entitledDays || 0);
+                const pct = getBar(r.consumed || 0, r.totalAllowed || 0);
                 const color = getColor(pct);
                 return (
                   <tr key={r.id}>
                     <td style={{ fontWeight: 600 }}>{r.staff?.name || '—'}</td>
                     <td style={{ fontSize: 12, color: '#64748b' }}>{r.staff?.designation || '—'}</td>
-                    <td><span className="chip chip-blue">{r.leaveType || 'Annual'}</span></td>
-                    <td style={{ textAlign: 'center', fontWeight: 700 }}>{r.entitledDays || 0}</td>
-                    <td style={{ textAlign: 'center', color: r.usedDays > 0 ? '#ef4444' : '#64748b' }}>{r.usedDays || 0}</td>
+                    <td><span className="chip chip-blue">{r.personType === 'student' ? 'Student' : 'Annual'}</span></td>
+                    <td style={{ textAlign: 'center', fontWeight: 700 }}>{r.totalAllowed || 0}</td>
+                    <td style={{ textAlign: 'center', color: r.consumed > 0 ? '#ef4444' : '#64748b' }}>{r.consumed || 0}</td>
                     <td style={{ textAlign: 'center', fontWeight: 700, color: '#10b981' }}>
-                      {Math.max(0, (r.entitledDays || 0) - (r.usedDays || 0))}
+                      {Math.max(0, r.remaining ?? ((r.totalAllowed || 0) - (r.consumed || 0)))}
                     </td>
                     <td style={{ minWidth: 100 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -889,9 +889,22 @@ function ReportsTab() {
         </button>
         <button
           style={{ ...btnOutline, alignSelf: 'flex-end' }}
-          onClick={() => {
-            const p = new URLSearchParams({ classId: classId || '', sectionId: sectionId || '', date });
-            window.open(`/api/v1/reports/attendance/excel?${p}`, '_blank');
+          onClick={async () => {
+            try {
+              const d = date ? new Date(date) : new Date();
+              const resp = await api.get('/attendance/excel', {
+                params: { classId: classId || undefined, sectionId: sectionId || undefined, month: d.getMonth() + 1, year: d.getFullYear() },
+                responseType: 'blob',
+              });
+              const url = URL.createObjectURL(new Blob([resp.data]));
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `attendance-${d.getFullYear()}-${d.getMonth() + 1}.xlsx`;
+              link.click();
+              URL.revokeObjectURL(url);
+            } catch (err) {
+              toast.error(err.response?.data?.message || 'Download failed');
+            }
           }}
         >
           <Download size={14} />

@@ -106,27 +106,23 @@ export default function BarcodeScanPage() {
       const res = await api.get('/attendance', {
         params: { date: todayDate, method: 'barcode' },
       });
-      const raw =
-        res.data?.data?.attendances ||
-        res.data?.data?.records ||
-        res.data?.data ||
-        res.data ||
-        [];
+      // GET /attendance returns students (with a matching Attendance
+      // record nested under `.attendance` once method= is applied), not
+      // raw attendance rows with a nested student.
+      const raw = res.data?.data || [];
       const normalised = Array.isArray(raw)
         ? raw
             .slice(-10)           // keep only last 10
             .reverse()            // newest first
             .map((r) => ({
-              id:        r.id || r._id,
-              name:      r.student?.name || r.studentName || r.name || '—',
-              rollNo:    r.student?.rollNo || r.student?.admissionNo || r.rollNo || r.admissionNo || '—',
-              className: r.student?.class?.name || r.student?.className || r.className || '—',
-              photo:     r.student?.photo || r.student?.photoUrl || r.photoUrl || null,
-              status:    r.status || 'Present',
-              time:      r.time
-                ? r.time
-                : r.createdAt || r.timestamp
-                ? new Date(r.createdAt || r.timestamp).toLocaleTimeString('en-PK', {
+              id:        r.attendance?.id || r.id,
+              name:      r.name || '—',
+              rollNo:    r.rollNo || r.admissionNo || '—',
+              className: r.class?.name || '—',
+              photo:     r.photo || r.photoUrl || null,
+              status:    r.attendance?.status || 'present',
+              time:      r.attendance?.createdAt
+                ? new Date(r.attendance.createdAt).toLocaleTimeString('en-PK', {
                     hour: '2-digit', minute: '2-digit', second: '2-digit',
                   })
                 : '—',

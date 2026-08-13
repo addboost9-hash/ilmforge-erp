@@ -43,7 +43,7 @@ export default function AttendanceCorrectionPage() {
     sectionId: '',
     date: today,
     studentId: '',
-    newStatus: '',
+    requestedStatus: '',
     reason: '',
   });
   const [search, setSearch] = useState('');
@@ -74,30 +74,34 @@ export default function AttendanceCorrectionPage() {
     : students;
 
   // --- Fetch existing attendance for selected student + date ---
-  const { data: existingAtt } = useQuery({
-    queryKey: ['att-for-correction', form.studentId, form.date],
-    enabled: !!form.studentId && !!form.date,
+  // The backend has no single-day lookup — pull the student's full-year
+  // history and filter to the selected date client-side.
+  const { data: historyData } = useQuery({
+    queryKey: ['att-for-correction', form.studentId],
+    enabled: !!form.studentId,
     queryFn: () =>
-      api.get('/attendance/student', { params: { studentId: form.studentId, date: form.date } })
-        .then(r => r.data.data)
+      api.get(`/attendance/student/${form.studentId}/history`)
+        .then(r => r.data)
         .catch(() => null),
   });
+  const existingAtt = (historyData?.records || []).find(
+    r => r.date?.slice(0, 10) === form.date
+  ) || null;
 
   // --- Submit correction request ---
   const submitCorrection = useMutation({
     mutationFn: () =>
-      api.post('/attendance/corrections', {
-        attendanceId: existingAtt?.id,
+      api.post('/attendance/correction-request', {
         studentId: parseInt(form.studentId),
         date: form.date,
         currentStatus: existingAtt?.status || 'unknown',
-        newStatus: form.newStatus,
+        requestedStatus: form.requestedStatus,
         reason: form.reason,
       }),
     onSuccess: () => {
       toast.success('Correction request submitted');
       qc.invalidateQueries({ queryKey: ['att-corrections-pending'] });
-      setForm(f => ({ ...f, studentId: '', newStatus: '', reason: '' }));
+      setForm(f => ({ ...f, studentId: '', requestedStatus: '', reason: '' }));
       setSearch('');
     },
     onError: err => toast.error(err.response?.data?.message || 'Failed to submit correction'),
@@ -115,7 +119,7 @@ export default function AttendanceCorrectionPage() {
   // --- Admin: approve/reject ---
   const decide = useMutation({
     mutationFn: ({ id, decision, adminNote }) =>
-      api.patch(`/attendance/corrections/${id}`, { decision, adminNote }),
+      api.put(`/attendance/corrections/${id}/${decision === 'approved' ? 'approve' : 'reject'}`, { remarks: adminNote }),
     onSuccess: (_, vars) => {
       toast.success(`Correction ${vars.decision}`);
       qc.invalidateQueries({ queryKey: ['att-corrections-pending'] });
@@ -302,8 +306,8 @@ export default function AttendanceCorrectionPage() {
                   <select
                     className="form-select"
                     style={{ width: 180 }}
-                    value={form.newStatus}
-                    onChange={e => setForm({ ...form, newStatus: e.target.value })}
+                    value={form.requestedStatus}
+                    onChange={e => setForm({ ...form, requestedStatus: e.target.value })}
                   >
                     <option value="">Select correct status</option>
                     {STATUS_OPTIONS.map(s => (
@@ -327,17 +331,17 @@ export default function AttendanceCorrectionPage() {
                 <button
                   className="btn btn-primary"
                   onClick={() => submitCorrection.mutate()}
-                  disabled={!form.newStatus || !form.reason.trim() || submitCorrection.isPending}
+                  disabled={!form.requestedStatus || !form.reason.trim() || submitCorrection.isPending}
                 >
                   {submitCorrection.isPending ? 'Submitting...' : 'Submit Correction Request'}
                 </button>
                 <button
                   className="btn btn-outline"
-                  onClick={() => setForm(f => ({ ...f, studentId: '', newStatus: '', reason: '' }))}
+                  onClick={() => setForm(f => ({ ...f, studentId: '', requestedStatus: '', reason: '' }))}
                 >
                   Clear
                 </button>
-                {!form.reason.trim() && form.newStatus && (
+                {!form.reason.trim() && form.requestedStatus && (
                   <span style={{ fontSize: 12, color: '#DC2626' }}>Reason is required</span>
                 )}
               </div>
@@ -386,8 +390,8 @@ export default function AttendanceCorrectionPage() {
                         {r.student?.class?.name || r.className || '—'}
                       </td>
                       <td style={{ fontSize: 12.5, color: '#64748B' }}>{r.date || '—'}</td>
-                      <td><StatusBadge status={r.currentStatus || r.fromStatus} /></td>
-                      <td><StatusBadge status={r.newStatus || r.toStatus} /></td>
+                      <td><StatusBadge status={r.currentStatus} /></td>
+                      <td><StatusBadge status={r.requestedStatus} /></td>
                       <td style={{ maxWidth: 200, fontSize: 12.5, color: '#64748B' }}>
                         <span title={r.reason}>{r.reason?.slice(0, 60)}{r.reason?.length > 60 ? '…' : ''}</span>
                       </td>
