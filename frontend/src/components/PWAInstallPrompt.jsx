@@ -83,9 +83,9 @@ export default function PWAInstallPrompt() {
 
         {/* Text */}
         <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ fontWeight: 800, fontSize: 15 }}>IlmForge App Install Karein!</div>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>Install the IlmForge App!</div>
           <div style={{ fontSize: 12.5, opacity: 0.85, marginTop: 2 }}>
-            Home screen pe add karein — offline bhi kaam karega · No app store needed
+            Add it to your home screen — works offline too · No app store needed
           </div>
           {/* Features */}
           <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
@@ -128,7 +128,7 @@ export default function PWAInstallPrompt() {
         animation: 'slideUp .3s ease',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={{ fontWeight: 800, fontSize: 16 }}>📱 iPhone pe Install Karein</div>
+          <div style={{ fontWeight: 800, fontSize: 16 }}>📱 Install on iPhone</div>
           <button onClick={handleDismiss} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, padding: '6px 10px', color: 'white', cursor: 'pointer' }}>
             <X size={16} />
           </button>
@@ -136,10 +136,10 @@ export default function PWAInstallPrompt() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[
-            { step: 1, icon: '1️⃣', text: 'Safari browser mein IlmForge khola raho' },
-            { step: 2, icon: '2️⃣', text: 'Neeche Share button dabao (□ with arrow ↑)' },
-            { step: 3, icon: '3️⃣', text: '"Add to Home Screen" select karo' },
-            { step: 4, icon: '4️⃣', text: '"Add" button dabao — done! 🎉' },
+            { step: 1, icon: '1️⃣', text: 'Keep IlmForge open in Safari' },
+            { step: 2, icon: '2️⃣', text: 'Tap the Share button below (□ with arrow ↑)' },
+            { step: 3, icon: '3️⃣', text: 'Select "Add to Home Screen"' },
+            { step: 4, icon: '4️⃣', text: 'Tap "Add" — done! 🎉' },
           ].map(s => (
             <div key={s.step} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.1)', borderRadius: 10 }}>
               <span style={{ fontSize: 20 }}>{s.icon}</span>
@@ -149,7 +149,7 @@ export default function PWAInstallPrompt() {
         </div>
 
         <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7, textAlign: 'center' }}>
-          IlmForge home screen pe app ki tarah kaam karega — offline bhi ✅
+          IlmForge will work like a native app from your home screen — offline too ✅
         </div>
       </div>
     );

@@ -47,13 +47,13 @@ export default function PWAUpdatePrompt() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <RefreshCw size={16} />
             <span style={{ fontSize: 13.5, fontWeight: 600 }}>
-              🆕 IlmForge ka naya version available hai!
+              🆕 A new version of IlmForge is available!
             </span>
           </div>
           <button
             onClick={() => updateServiceWorker(true)}
             style={{ padding: '6px 16px', background: '#f5c518', border: 'none', borderRadius: 8, color: '#1B2F6E', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
-            Update Karein ↻
+            Update ↻
           </button>
         </div>
       )}
@@ -70,7 +70,7 @@ export default function PWAUpdatePrompt() {
           animation: 'fadeIn .3s ease',
         }}>
           <WifiOff size={14} color="#fca5a5" />
-          Internet nahi hai — Cached data dikh raha hai
+          No internet connection — showing cached data
         </div>
       )}
 

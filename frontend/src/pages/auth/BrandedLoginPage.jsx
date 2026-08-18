@@ -64,7 +64,7 @@ export default function BrandedLoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.email || !form.password) return toast.error('Email aur password darj karein');
+    if (!form.email || !form.password) return toast.error('Please enter your email and password');
     const res = await login({ email: form.email, password: form.password });
     if (res.success) {
       navigate('/dashboard');
@@ -72,7 +72,7 @@ export default function BrandedLoginPage() {
       if (res.data?.code === 'PHONE_UNVERIFIED') {
         navigate('/verify-phone', { state: { userId: res.data.userId, email: form.email, schoolName: school?.name || '' } });
       } else {
-        toast.error(res.error || 'Invalid email ya password');
+        toast.error(res.error || 'Invalid email or password');
       }
     }
   };
@@ -87,7 +87,7 @@ export default function BrandedLoginPage() {
     <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'linear-gradient(135deg,#1B2F6E,#0073b7)' }}>
       <div style={{ textAlign:'center' }}>
         <div style={{ width:52,height:52,border:'4px solid rgba(255,255,255,0.2)',borderTopColor:'white',borderRadius:'50%',animation:'spin .8s linear infinite',margin:'0 auto 16px' }}/>
-        <p style={{ color:'rgba(255,255,255,0.8)', fontWeight:600, fontSize:14 }}>School portal load ho raha hai…</p>
+        <p style={{ color:'rgba(255,255,255,0.8)', fontWeight:600, fontSize:14 }}>Loading school portal…</p>
       </div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
@@ -187,7 +187,7 @@ export default function BrandedLoginPage() {
               <CheckCircle size={18} color="#16a34a"/>
               <div>
                 <div style={{ fontSize:13.5, fontWeight:700, color:'#15803d' }}>Email Verified! 🎉</div>
-                <div style={{ fontSize:12, color:'#166534' }}>Account ready. Neeche sign in karein.</div>
+                <div style={{ fontSize:12, color:'#166534' }}>Your account is ready. Sign in below.</div>
               </div>
             </div>
           )}
@@ -195,17 +195,17 @@ export default function BrandedLoginPage() {
           {/* Heading */}
           <div style={{ marginBottom:28 }}>
             <h2 style={{ fontSize:26, fontWeight:900, color:'#1e3a5f', margin:'0 0 6px' }}>
-              Khush Aamdeed! 👋
+              Welcome! 👋
             </h2>
             <p style={{ color:'#64748b', fontSize:14, margin:0 }}>
-              <strong style={{ color:'#1B2F6E' }}>{schoolName}</strong> portal mein sign in karein
+              Sign in to the <strong style={{ color:'#1B2F6E' }}>{schoolName}</strong> portal
             </p>
           </div>
 
           {/* Error */}
           {schoolError && (
             <div style={{ background:'#fef2f2', border:'1px solid #fecaca', color:'#b91c1c', borderRadius:10, padding:'10px 14px', fontSize:13, marginBottom:18 }}>
-              ⚠️ School link invalid hai. Registration email se naya link use karein.
+              ⚠️ This school link is invalid. Use the new link from your registration email.
             </div>
           )}
 
@@ -243,7 +243,7 @@ export default function BrandedLoginPage() {
             {/* Forgot */}
             <div style={{ textAlign:'right', marginBottom:22 }}>
               <Link to="/forgot-password" style={{ fontSize:12.5, color:'#1B2F6E', fontWeight:600, textDecoration:'none' }}>
-                Password bhool gaye?
+                Forgot password?
               </Link>
             </div>
 
@@ -252,7 +252,7 @@ export default function BrandedLoginPage() {
               style={{ width:'100%', padding:'13px', borderRadius:10, border:'none', background:`linear-gradient(135deg,${clr.from},${clr.to})`, color:'white', fontSize:15, fontWeight:700, cursor: isLoading ? 'not-allowed' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, fontFamily:'inherit', boxShadow:`0 4px 16px rgba(0,0,0,0.25)`, transition:'all .15s', opacity: isLoading ? 0.8 : 1 }}>
               {isLoading
                 ? <><Loader2 size={17} style={{ animation:'spin .8s linear infinite' }}/> Logging in…</>
-                : <><ArrowRight size={17}/> Login Karein</>
+                : <><ArrowRight size={17}/> Log In</>
               }
             </button>
           </form>
@@ -260,7 +260,7 @@ export default function BrandedLoginPage() {
           {/* Divider */}
           <div style={{ display:'flex', alignItems:'center', gap:12, margin:'20px 0' }}>
             <div style={{ flex:1, height:1, background:'#f1f5f9' }}/>
-            <span style={{ fontSize:11.5, color:'#94a3b8', fontWeight:600 }}>YA</span>
+            <span style={{ fontSize:11.5, color:'#94a3b8', fontWeight:600 }}>OR</span>
             <div style={{ flex:1, height:1, background:'#f1f5f9' }}/>
           </div>
 
@@ -268,7 +268,7 @@ export default function BrandedLoginPage() {
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             <Link to="/apply-admission" className="link-btn"
               style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, background:'#f0f4ff', color:'#1B2F6E', padding:'11px 20px', borderRadius:10, textDecoration:'none', fontSize:13.5, fontWeight:700, transition:'all .15s', border:'1px solid #dbeafe' }}>
-              🎓 Admission Apply Karein
+              🎓 Apply for Admission
             </Link>
             <Link to="/fee-voucher" className="link-btn"
               style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, background:'#fffbeb', color:'#92400e', padding:'11px 20px', borderRadius:10, textDecoration:'none', fontSize:13.5, fontWeight:700, transition:'all .15s', border:'1px solid #fde68a' }}>

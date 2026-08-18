@@ -1,7 +1,7 @@
 /**
  * IlmForge — Biometric (Thumb) Attendance
  * Device management (ZKTeco-style) + live punch feed + manual punch kiosk.
- * 🔗 LINKED: har punch se attendance AUTO mark hoti hai (first IN = present).
+ * 🔗 LINKED: every punch AUTO-marks attendance (first IN = present).
  */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -44,7 +44,7 @@ export default function BiometricAttendancePage() {
         <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 text-white relative overflow-hidden">
           <div className="absolute w-40 h-40 rounded-full bg-teal-500/10 -top-10 -right-10" />
           <div className="flex items-center gap-2 mb-4"><Fingerprint className="w-5 h-5 text-teal-400" /><span className="font-bold text-sm">Thumb Punch Kiosk</span></div>
-          <p className="text-xs text-slate-300 mb-4">Roll number enter karke punch simulate karein (real device isi endpoint pe POST karta hai). Pehla IN punch = attendance PRESENT auto.</p>
+          <p className="text-xs text-slate-300 mb-4">Enter a roll number to simulate a punch (a real device POSTs to this same endpoint). The first IN punch automatically marks attendance as PRESENT.</p>
           <div className="flex gap-2">
             <input value={punchRoll} onChange={e => setPunchRoll(e.target.value)} placeholder="Roll No (e.g. C5-001)"
               className="flex-1 px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-sm placeholder:text-slate-400 outline-none focus:border-teal-400" 
@@ -100,7 +100,7 @@ export default function BiometricAttendancePage() {
                 <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${d.isActive ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-500'}`}>{d.isActive ? 'ONLINE' : 'OFF'}</span>
               </div>
             ))}
-            {!devices.length && !showAdd && <p className="text-xs text-slate-400 text-center py-6">Koi device nahi — "Add Device" se ZKTeco/thumb device register karein</p>}
+            {!devices.length && !showAdd && <p className="text-xs text-slate-400 text-center py-6">No devices yet — use "Add Device" to register a ZKTeco/thumb device</p>}
           </div>
         </div>
       </div>
@@ -126,7 +126,7 @@ export default function BiometricAttendancePage() {
               <span className="text-[11px] text-slate-400 font-mono">{new Date(p.punchTime).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           ))}
-          {!punches.length && <p className="text-xs text-slate-400 text-center py-8">Aaj koi punch nahi hui</p>}
+          {!punches.length && <p className="text-xs text-slate-400 text-center py-8">No punches recorded today</p>}
         </div>
       </div>
     </div>

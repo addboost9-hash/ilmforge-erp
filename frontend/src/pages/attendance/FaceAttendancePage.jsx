@@ -1,8 +1,8 @@
 /**
  * IlmForge — Face Recognition Attendance (Webcam Kiosk)
  * ═══════════════════════════════════════════════════════
- * Mode 1: ENROLL — student select → webcam photo capture → save
- * Mode 2: KIOSK  — camera on → student apna face dikhata hai →
+ * Mode 1: ENROLL — select student → webcam photo capture → save
+ * Mode 2: KIOSK  — camera on → student shows their face →
  *          operator/auto match → confirm → attendance PRESENT auto
  * 🔗 LINKED: recognize-mark → punch record → attendance auto (first IN)
  */
@@ -39,7 +39,7 @@ export default function FaceAttendancePage() {
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       setCamOn(true);
-    } catch { setFlash({ ok: false, msg: 'Camera access denied — browser permission dein' }); }
+    } catch { setFlash({ ok: false, msg: 'Camera access denied — please allow browser permission' }); }
   };
   const stopCam = () => { streamRef.current?.getTracks().forEach(t => t.stop()); setCamOn(false); };
   useEffect(() => () => stopCam(), []);
@@ -104,7 +104,7 @@ export default function FaceAttendancePage() {
           </div>
           <div className="relative rounded-xl overflow-hidden bg-black/40 aspect-[4/3] flex items-center justify-center">
             <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${camOn ? '' : 'hidden'}`} />
-            {!camOn && <div className="text-center text-slate-400 text-xs"><ScanFace className="w-10 h-10 mx-auto mb-2 opacity-40" />Camera off — Start dabayein</div>}
+            {!camOn && <div className="text-center text-slate-400 text-xs"><ScanFace className="w-10 h-10 mx-auto mb-2 opacity-40" />Camera off — tap Start</div>}
             {camOn && <div className="absolute inset-8 border-2 border-violet-400/60 rounded-2xl pointer-events-none" style={{ boxShadow: '0 0 0 999px rgba(0,0,0,0.25)' }} />}
           </div>
           {mode === 'enroll' && camOn && (
@@ -113,7 +113,7 @@ export default function FaceAttendancePage() {
           {captured && mode === 'enroll' && (
             <div className="mt-3 flex items-center gap-3 bg-white/10 rounded-xl p-2.5">
               <img src={captured} alt="captured" className="w-16 h-12 rounded-lg object-cover" />
-              <span className="text-xs text-slate-300 flex-1">Photo captured — ab student select karke Enroll dabayein</span>
+              <span className="text-xs text-slate-300 flex-1">Photo captured — now select the student and tap Enroll</span>
               <button onClick={() => setCaptured(null)} className="text-slate-400 hover:text-white"><RefreshCw className="w-4 h-4" /></button>
             </div>
           )}
@@ -122,10 +122,10 @@ export default function FaceAttendancePage() {
         {/* ── Right panel ── */}
         {mode === 'enroll' ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-5">
-            <h3 className="font-bold text-slate-800 text-sm mb-3">Student Select karein</h3>
+            <h3 className="font-bold text-slate-800 text-sm mb-3">Select Student</h3>
             <div className="relative mb-3">
               <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Naam ya roll no…"
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Name or roll no…"
                 className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500 outline-none" />
             </div>
             <div className="space-y-1.5 max-h-52 overflow-y-auto mb-4">
@@ -137,18 +137,18 @@ export default function FaceAttendancePage() {
                   {enrollments.some(e => e.personId === s.id) && <span className="ml-auto text-[9px] font-bold bg-teal-50 text-teal-600 px-2 py-0.5 rounded-full">ENROLLED</span>}
                 </button>
               ))}
-              {search.length >= 2 && !students.length && <p className="text-xs text-slate-400 text-center py-4">Koi student nahi mila</p>}
+              {search.length >= 2 && !students.length && <p className="text-xs text-slate-400 text-center py-4">No student found</p>}
             </div>
             <button onClick={() => enroll.mutate()} disabled={!selStudent || !captured || enroll.isPending}
               className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm py-3 rounded-xl disabled:opacity-40 transition">
               {enroll.isPending ? 'Saving…' : `✓ Enroll ${selStudent?.name || 'Student'}`}
             </button>
-            <p className="text-[10px] text-slate-400 mt-2">Photo + face data save hoga. face-api.js descriptors optional plug-in ready hain.</p>
+            <p className="text-[10px] text-slate-400 mt-2">The photo and face data will be saved. face-api.js descriptors are ready as an optional plug-in.</p>
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 p-5">
             <h3 className="font-bold text-slate-800 text-sm mb-1">Enrolled Students — tap to mark</h3>
-            <p className="text-[11px] text-slate-400 mb-3">Camera mein face dekh kar student pe tap karein → attendance PRESENT auto. (Auto-match ke liye face-api.js models add ho sakte hain)</p>
+            <p className="text-[11px] text-slate-400 mb-3">Have the student look at the camera and tap their name → attendance marks PRESENT automatically. (face-api.js models can be added for auto-match)</p>
             <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto">
               {enrolledStudents.map(e => (
                 <button key={e.personId} onClick={() => recognizeMark.mutate(e.personId)}
@@ -159,7 +159,7 @@ export default function FaceAttendancePage() {
                   <div className="min-w-0"><div className="text-xs font-bold text-slate-700 truncate">{e.person.name}</div><div className="text-[10px] text-slate-400">{e.person.rollNo}</div></div>
                 </button>
               ))}
-              {!enrolledStudents.length && <p className="col-span-2 text-xs text-slate-400 text-center py-8">Pehle "Enroll Faces" mode se students enroll karein</p>}
+              {!enrolledStudents.length && <p className="col-span-2 text-xs text-slate-400 text-center py-8">First enroll students using "Enroll Faces" mode</p>}
             </div>
           </div>
         )}

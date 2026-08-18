@@ -23,7 +23,7 @@ export default function LicenseRenewalPage() {
       setKey('ILM-');
       setExpiry('');
     },
-    onError: (err) => toast.error(err.response?.data?.message || 'Renewal fail hui'),
+    onError: (err) => toast.error(err.response?.data?.message || 'Renewal failed'),
   });
 
   const isOffline = status?.mode === 'offline';
@@ -34,7 +34,7 @@ export default function LicenseRenewalPage() {
         <Shield size={28} color="#1B2F6E" />
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1e3a5f' }}>License Management</h1>
-          <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>Offline license status aur renewal</p>
+          <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>Offline license status and renewal</p>
         </div>
       </div>
 
@@ -48,7 +48,7 @@ export default function LicenseRenewalPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <CheckCircle size={18} color={status.valid ? '#16a34a' : '#dc2626'} />
             <span style={{ fontWeight: 700, color: status.valid ? '#15803d' : '#dc2626', fontSize: 15 }}>
-              {status.mode === 'cloud' ? 'Cloud Mode — License Required Nahi' :
+              {status.mode === 'cloud' ? 'Cloud Mode — No License Required' :
                status.valid ? 'License Active' : 'License Expired/Invalid'}
             </span>
           </div>
@@ -57,7 +57,7 @@ export default function LicenseRenewalPage() {
               <div><span style={{ color: '#64748b' }}>Expiry Date:</span><br /><strong>{status.expiry || '—'}</strong></div>
               <div><span style={{ color: '#64748b' }}>Days Remaining:</span><br />
                 <strong style={{ color: status.daysLeft <= 7 ? '#dc2626' : status.daysLeft <= 30 ? '#d97706' : '#16a34a' }}>
-                  {status.daysLeft !== null ? `${status.daysLeft} din` : '—'}
+                  {status.daysLeft !== null ? `${status.daysLeft} days` : '—'}
                 </strong>
               </div>
               <div><span style={{ color: '#64748b' }}>License Key:</span><br /><code style={{ fontSize: 12 }}>{status.key || '—'}</code></div>
@@ -71,16 +71,16 @@ export default function LicenseRenewalPage() {
       {isOffline && (
         <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24 }}>
           <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: '#1e3a5f' }}>
-            License Renew Karein
+            Renew License
           </h3>
           <p style={{ margin: '0 0 20px', fontSize: 13, color: '#64748b' }}>
-            IlmForge support se nayi license key aur expiry date mangwayein:<br />
+            Request a new license key and expiry date from IlmForge support:<br />
             <strong>WhatsApp: 0346-5146609</strong>
           </p>
 
           <div style={{ marginBottom: 16 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
-              Nayi License Key
+              New License Key
             </label>
             <input
               value={key}
@@ -96,7 +96,7 @@ export default function LicenseRenewalPage() {
 
           <div style={{ marginBottom: 20 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
-              Nayi Expiry Date
+              New Expiry Date
             </label>
             <input
               type="date"
@@ -121,7 +121,7 @@ export default function LicenseRenewalPage() {
               opacity: renewMut.isPending ? 0.7 : 1,
             }}
           >
-            {renewMut.isPending ? <><RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Renewing...</> : <><Key size={16} /> License Renew Karo</>}
+            {renewMut.isPending ? <><RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Renewing...</> : <><Key size={16} /> Renew License</>}
           </button>
         </div>
       )}
@@ -129,7 +129,7 @@ export default function LicenseRenewalPage() {
       {/* Contact box */}
       <div style={{ marginTop: 20, padding: 16, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0', textAlign: 'center' }}>
         <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
-          License ke liye IlmForge support se rabta karein
+          Contact IlmForge support for your license
         </p>
         <a href="https://wa.me/923465146609" target="_blank" rel="noreferrer"
           style={{ display: 'inline-block', marginTop: 8, padding: '8px 20px', background: '#25d366', color: 'white', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>

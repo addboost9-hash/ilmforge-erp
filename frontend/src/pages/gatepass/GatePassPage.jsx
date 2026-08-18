@@ -63,7 +63,7 @@ export default function GatePassPage() {
     .body{padding:16px}.code{font-family:monospace;font-weight:800;font-size:13px;background:#F0FDFA;border:1px dashed #5EEAD4;border-radius:8px;padding:6px;margin:10px 0}
     .row{display:flex;justify-content:space-between;font-size:11px;padding:5px 0;border-bottom:1px dashed #F1F5F9}.k{color:#94A3B8}.v{font-weight:700}
     .qr{margin:8px auto}</style></head><body><div class="pass">
-    <div class="hd"><h2>🎫 STUDENT GATE PASS</h2><p>Sirf is pass ke saath release hoga</p></div>
+    <div class="hd"><h2>🎫 STUDENT GATE PASS</h2><p>Release only permitted with this pass</p></div>
     <div class="body"><img class="qr" src="${document.getElementById('gp-qr-' + p.id)?.toDataURL?.() || ''}" width="140"/>
     <div class="code">${p.passCode}</div>
     <div class="row"><span class="k">Student</span><span class="v">${p.student?.name || ''}</span></div>
@@ -151,7 +151,7 @@ export default function GatePassPage() {
               )}
             </div>
           ))}
-          {!passes.length && <p className="text-xs text-slate-400 text-center py-4">Koi pass issue nahi hua</p>}
+          {!passes.length && <p className="text-xs text-slate-400 text-center py-4">No passes have been issued</p>}
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 p-5 max-h-72 overflow-y-auto">

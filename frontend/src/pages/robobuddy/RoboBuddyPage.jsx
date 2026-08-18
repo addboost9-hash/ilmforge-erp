@@ -58,10 +58,10 @@ export default function RoboBuddyPage() {
           <textarea className={input + ' h-20'} value={cfg.welcomeMessage || ''} onChange={e => setCfg({ ...cfg, welcomeMessage: e.target.value })} /></div>
 
         <div className="space-y-2">
-          <Toggle k="isEnabled" label="Bot Enable karo" desc="Master switch — WhatsApp integration active" />
-          <Toggle k="autoFeeReminder" label="Auto Fee Reminders" desc="Due date se 3 din pehle parents ko WhatsApp reminder" />
-          <Toggle k="autoAbsentAlert" label="Auto Absent Alerts" desc="Attendance absent → parent ko turant message" />
-          <Toggle k="autoResultShare" label="Auto Result Share" desc="Result publish hote hi parent ko marks card" />
+          <Toggle k="isEnabled" label="Enable Bot" desc="Master switch — WhatsApp integration active" />
+          <Toggle k="autoFeeReminder" label="Auto Fee Reminders" desc="WhatsApp reminder to parents 3 days before the due date" />
+          <Toggle k="autoAbsentAlert" label="Auto Absent Alerts" desc="Instant message to parent when attendance is marked absent" />
+          <Toggle k="autoResultShare" label="Auto Result Share" desc="Marks card sent to parent as soon as results are published" />
         </div>
 
         <div className="flex items-center gap-3">
@@ -74,7 +74,7 @@ export default function RoboBuddyPage() {
 
         <div className="bg-slate-50 rounded-xl p-3.5 text-[11px] text-slate-500 leading-relaxed">
           <MessageCircle className="w-3.5 h-3.5 inline mr-1 text-teal-600" />
-          <b>Integration note:</b> WhatsApp Business API key Settings Hub → WhatsApp API mein add karein. RoboBuddy wahan se messages bhejta hai — yeh page uske behaviors control karta hai.
+          <b>Integration note:</b> Add your WhatsApp Business API key under Settings Hub → WhatsApp API. RoboBuddy sends messages from there — this page controls its behaviors.
         </div>
       </div>
     </div>

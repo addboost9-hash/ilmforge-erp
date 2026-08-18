@@ -28,8 +28,8 @@ export default function LicenseBanner() {
   const color   = isExpired ? '#dc2626' : isCritical ? '#c2410c' : '#92400e';
   const icon    = isExpired ? '❌' : isCritical ? '🔴' : '⚠️';
   const msg     = isExpired
-    ? 'License expire ho gayi! App kaam nahi karega. IlmForge se rabta karein.'
-    : `License ${daysLeft} din mein expire ho rahi hai (${data.expiry})`;
+    ? 'Your license has expired! The app will stop working. Please contact IlmForge.'
+    : `License expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${data.expiry})`;
 
   return (
     <div style={{
@@ -41,7 +41,7 @@ export default function LicenseBanner() {
       <span style={{ fontSize: 16 }}>{icon}</span>
       <span style={{ flex: 1, fontWeight: 600 }}>{msg}</span>
       <a
-        href="https://wa.me/923465146609?text=IlmForge+license+renew+karni+hai"
+        href="https://wa.me/923465146609?text=I+need+to+renew+my+IlmForge+license"
         target="_blank" rel="noreferrer"
         style={{
           background: color, color: 'white', padding: '5px 12px',

@@ -130,12 +130,12 @@ export default function PlatformControlPage() {
           <h1 style={{ fontSize:22, fontWeight:900, color:'#1e3a5f', marginBottom:6 }}>Platform Control</h1>
           <p style={{ fontSize:13.5, color:'#64748b', marginBottom:24 }}>
             IlmForge Master Admin Panel<br/>
-            <strong>Sirf Platform Owner ke liye</strong>
+            <strong>For Platform Owner Only</strong>
           </p>
           <div style={{ marginBottom:16 }}>
             <input
               type="password"
-              placeholder="Platform Owner Key enter karein..."
+              placeholder="Enter Platform Owner Key..."
               value={platformKey}
               onChange={e => setPlatformKey(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAuth()}
@@ -247,7 +247,7 @@ export default function PlatformControlPage() {
         <div style={{ background:'white', borderRadius:12, border:'1px solid #e2e8f0', overflow:'hidden' }}>
           <div style={{ padding:'14px 18px', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <h3 style={{ margin:0, fontSize:15, fontWeight:700, color:'#1e3a5f' }}>All Registered Schools ({schools.length})</h3>
-            <span style={{ fontSize:12, color:'#94a3b8' }}>Aap kisi bhi school ko control kar sakte hain</span>
+            <span style={{ fontSize:12, color:'#94a3b8' }}>You can control any school from here</span>
           </div>
 
           {isLoading ? (
@@ -375,7 +375,7 @@ export default function PlatformControlPage() {
                   Plan: <strong>{generatedLicense.plan}</strong>
                 </div>
                 <div style={{ marginTop:10, padding:'8px 12px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:7, fontSize:12, color:'#92400e' }}>
-                  📋 Yeh key school admin ko dain — App → Settings → License mein enter karein
+                  📋 Give this key to the school admin — enter it under App → Settings → License
                 </div>
                 <button onClick={() => { navigator.clipboard?.writeText(generatedLicense.licenseKey); toast.success('Key copied!'); }}
                   style={{ marginTop:10, padding:'7px 14px', background:'#1B2F6E', color:'white', border:'none', borderRadius:7, cursor:'pointer', fontSize:12, fontWeight:700 }}>
@@ -387,12 +387,12 @@ export default function PlatformControlPage() {
                 <div style={{ marginBottom:12 }}>
                   <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>License Duration</label>
                   <select id="lic-days" style={{ width:'100%', padding:'9px 12px', border:'1px solid #e2e8f0', borderRadius:8, fontSize:13 }}>
-                    <option value="30">30 Din (1 Mahina)</option>
-                    <option value="90">90 Din (3 Mahine)</option>
-                    <option value="180">180 Din (6 Mahine)</option>
-                    <option value="365" selected>365 Din (1 Saal)</option>
-                    <option value="730">730 Din (2 Saal)</option>
-                    <option value="3650">3650 Din (10 Saal — Permanent)</option>
+                    <option value="30">30 Days (1 Month)</option>
+                    <option value="90">90 Days (3 Months)</option>
+                    <option value="180">180 Days (6 Months)</option>
+                    <option value="365" selected>365 Days (1 Year)</option>
+                    <option value="730">730 Days (2 Years)</option>
+                    <option value="3650">3650 Days (10 Years — Permanent)</option>
                   </select>
                 </div>
                 <div style={{ marginBottom:14 }}>
@@ -414,7 +414,7 @@ export default function PlatformControlPage() {
                     {licenseMut.isPending ? 'Generating...' : '🔑 Generate License Key'}
                   </button>
                   {licenseModal.licenseKey && (
-                    <button onClick={() => { if(window.confirm('License revoke karein? School offline nahi chalegi.')) revokeLicenseMut.mutate(licenseModal.id); }}
+                    <button onClick={() => { if(window.confirm('Revoke this license? The school will no longer be able to run offline.')) revokeLicenseMut.mutate(licenseModal.id); }}
                       style={{ padding:'10px 16px', background:'#fee2e2', border:'1px solid #fca5a5', borderRadius:9, color:'#dc2626', fontWeight:700, fontSize:12, cursor:'pointer' }}>
                       ❌ Revoke
                     </button>

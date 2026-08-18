@@ -151,7 +151,7 @@ export default function FeeInvoicesManagePage() {
                     <button title="Print voucher" onClick={() => printInvoice(inv)} className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-teal-600 hover:border-teal-300"><Printer className="w-3.5 h-3.5" /></button>
                     <button title="Edit" onClick={() => { setModal({ mode: 'edit', inv }); setEditVals({ totalAmount: inv.totalAmount, status: inv.status, dueDate: inv.dueDate?.slice(0, 10) }); }}
                       className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300"><Pencil className="w-3.5 h-3.5" /></button>
-                    <button title="Delete (unpaid only)" onClick={() => confirm('Invoice delete karein?') && deleteInv.mutate(inv.id)}
+                    <button title="Delete (unpaid only)" onClick={() => confirm('Delete this invoice?') && deleteInv.mutate(inv.id)}
                       className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-300"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 </td>
@@ -159,7 +159,7 @@ export default function FeeInvoicesManagePage() {
             ))}
           </tbody>
         </table>
-        {!invoices.length && <p className="text-center text-xs text-slate-400 py-10">Koi invoice nahi mili</p>}
+        {!invoices.length && <p className="text-center text-xs text-slate-400 py-10">No invoices found</p>}
       </div>
 
       {/* ═══ Insert / Edit modal ═══ */}
@@ -173,7 +173,7 @@ export default function FeeInvoicesManagePage() {
 
             {modal.mode === 'insert' ? (<>
               {!selStudent ? (<>
-                <input className={input + ' mb-2'} placeholder="Student search karein…" value={studentQ} onChange={e => setStudentQ(e.target.value)} />
+                <input className={input + ' mb-2'} placeholder="Search students…" value={studentQ} onChange={e => setStudentQ(e.target.value)} />
                 <div className="space-y-1 mb-3 max-h-36 overflow-y-auto">
                   {students.map(s => (
                     <button key={s.id} onClick={() => setSelStudent(s)} className="w-full text-left p-2.5 rounded-xl border border-slate-100 hover:border-teal-300 text-sm">
@@ -201,7 +201,7 @@ export default function FeeInvoicesManagePage() {
               </div>
               <button onClick={() => insertInv.mutate()} disabled={!selStudent || !heads.some(h => h.name && h.amount) || insertInv.isPending}
                 className="w-full bg-teal-600 text-white font-bold py-3 rounded-xl text-sm disabled:opacity-40">
-                {insertInv.isPending ? 'Creating…' : 'Create Invoice → phir Print karein'}
+                {insertInv.isPending ? 'Creating…' : 'Create Invoice → then Print'}
               </button>
             </>) : (<>
               <label className="text-[10px] font-extrabold text-slate-400 uppercase">Total Amount</label>

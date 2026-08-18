@@ -77,7 +77,7 @@ export default function AttendanceFlowPage() {
         for (const s of absentees.slice(0, 50)) {
           await api.post('/notifications/sms', {
             phone: s.emergencyPhone,
-            message: `Dear Parent, aapka bachcha ${s.name} (${s.rollNo}) aaj ${date} ko school se ABSENT hai. — ${''}School`,
+            message: `Dear Parent, your child ${s.name} (${s.rollNo}) is marked ABSENT from school today, ${date}. — ${''}School`,
           }).then(() => notified++).catch(() => {});
         }
       }
@@ -129,8 +129,8 @@ export default function AttendanceFlowPage() {
             <div>✅ Dashboard attendance stats updated</div>
             <div>✅ Student portals — attendance visible</div>
             <div>✅ Parent portals — attendance visible</div>
-            {saved.notified > 0 && <div>✅ {saved.notified} absent parents ko SMS gaya</div>}
-            <div>✅ Attendance reports mein counted</div>
+            {saved.notified > 0 && <div>✅ SMS sent to {saved.notified} absent students' parents</div>}
+            <div>✅ Counted in attendance reports</div>
           </div>
         </div>
 
@@ -152,7 +152,7 @@ export default function AttendanceFlowPage() {
     <div className="max-w-3xl mx-auto py-6 px-4">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-800">Mark Attendance</h1>
-        <p className="text-sm text-slate-500">Class select karo → students auto → mark → absent parents auto-notify</p>
+        <p className="text-sm text-slate-500">Select a class → students load automatically → mark → absent parents get auto-notified</p>
       </div>
 
       {/* Mini stepper */}
@@ -268,8 +268,8 @@ export default function AttendanceFlowPage() {
             <input type="checkbox" checked={notifyAbsent} onChange={e => setNotifyAbsent(e.target.checked)} className="w-5 h-5 accent-teal-600" />
             <MessageSquare className="w-4 h-4 text-teal-600" />
             <div>
-              <div className="text-sm font-bold text-slate-800">🔗 Absent students ke parents ko auto SMS bhejo</div>
-              <div className="text-xs text-slate-500">Save karte hi absent bachon ke parents ko notification chali jayegi</div>
+              <div className="text-sm font-bold text-slate-800">🔗 Automatically SMS parents of absent students</div>
+              <div className="text-xs text-slate-500">As soon as you save, absent students' parents will receive a notification</div>
             </div>
           </label>
 

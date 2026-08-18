@@ -52,13 +52,13 @@ export default function BulkImportPage() {
     <div className="space-y-4">
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
         <h3 className="font-bold text-slate-800 text-sm mb-1 flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-teal-600" /> Bulk Student Import (CSV)</h3>
-        <p className="text-[11px] text-slate-400 mb-3">Columns: <code className="bg-slate-100 px-1 rounded">name, father, gender, dob, class, phone</code> — Excel se "Save as CSV" karein. Max 500 rows.</p>
+        <p className="text-[11px] text-slate-400 mb-3">Columns: <code className="bg-slate-100 px-1 rounded">name, father, gender, dob, class, phone</code> — use "Save as CSV" from Excel. Max 500 rows.</p>
         <div className="flex gap-2 mb-3">
           <label className="flex items-center gap-1.5 border-2 border-dashed border-teal-300 bg-teal-50/50 rounded-xl px-4 py-2.5 text-xs font-bold text-teal-700 cursor-pointer hover:bg-teal-50">
             <Upload className="w-4 h-4" /> Upload CSV file
             <input type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} />
           </label>
-          <span className="text-[11px] text-slate-400 self-center">ya neeche paste karein:</span>
+          <span className="text-[11px] text-slate-400 self-center">or paste below:</span>
         </div>
         <textarea value={raw} onChange={e => { setRaw(e.target.value); setRows(parseCSV(e.target.value)); }}
           placeholder={"name,father,gender,dob,class,phone\nAhmed Ali,Muhammad Ali,Male,2015-03-10,Class 5,0300-1234567"}
