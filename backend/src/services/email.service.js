@@ -221,40 +221,40 @@ const sendOTPEmail = async ({ to, otp, name, schoolName, password, loginUrl }) =
         </div>
         <!-- Content -->
         <div style="padding:32px;">
-          <h2 style="color:#1e3a5f;margin:0 0 8px;font-size:20px;">Email Verify Karein</h2>
+          <h2 style="color:#1e3a5f;margin:0 0 8px;font-size:20px;">Verify Your Email</h2>
           <p style="color:#64748b;font-size:14px;line-height:1.6;margin:0 0 24px;">
-            Assalam-o-Alaikum <strong>${name || 'Admin'}</strong>! 👋<br>
-            Aapke school <strong>${schoolName || ''}</strong> ka account bana diya gaya hai.<br>
-            Neecha apna verification code hai:
+            Hello <strong>${name || 'Admin'}</strong>! 👋<br>
+            An account has been created for your school, <strong>${schoolName || ''}</strong>.<br>
+            Your verification code is below:
           </p>
 
           <!-- OTP Box -->
           <div style="background:linear-gradient(135deg,#1B2F6E,#0073b7);border-radius:12px;padding:24px;text-align:center;margin:24px 0;">
             <p style="color:rgba(255,255,255,0.8);font-size:13px;margin:0 0 8px;text-transform:uppercase;letter-spacing:1px;">Verification Code</p>
             <div style="font-size:48px;font-weight:900;color:#f5c518;letter-spacing:12px;font-family:'Courier New',monospace;">${otp}</div>
-            <p style="color:rgba(255,255,255,0.7);font-size:12px;margin:8px 0 0;">10 minute mein expire ho jaayega</p>
+            <p style="color:rgba(255,255,255,0.7);font-size:12px;margin:8px 0 0;">Expires in 10 minutes</p>
           </div>
 
           <!-- Instructions -->
           <div style="background:#f8f9fa;border-radius:10px;padding:16px;margin:16px 0;">
             <p style="color:#374151;font-size:13px;margin:0;line-height:1.7;">
-              1️⃣ App mein waapas jayen<br>
-              2️⃣ Yeh 6-digit code enter karein<br>
-              3️⃣ "Verify" button dabayein<br>
-              4️⃣ School dashboard khul jaayega ✅
+              1️⃣ Go back to the app<br>
+              2️⃣ Enter this 6-digit code<br>
+              3️⃣ Tap the "Verify" button<br>
+              4️⃣ Your school dashboard will open ✅
             </p>
           </div>
 
           ${password ? `
           <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:16px;margin:16px 0;">
-            <p style="color:#92400e;font-size:13px;margin:0;font-weight:600;">🔑 Aapka Password (save karein!):</p>
+            <p style="color:#92400e;font-size:13px;margin:0;font-weight:600;">🔑 Your Password (please save it!):</p>
             <p style="color:#1e3a5f;font-size:20px;font-weight:900;font-family:monospace;margin:6px 0 0;">${password}</p>
           </div>
           ` : ''}
 
           <p style="color:#94a3b8;font-size:12px;margin:24px 0 0;text-align:center;">
-            Agar aapne register nahi kiya to is email ko ignore karein.<br>
-            Madad ke liye: WhatsApp 0346-5146609
+            If you did not register for this account, please ignore this email.<br>
+            For help: WhatsApp 0346-5146609
           </p>
         </div>
         <!-- Footer -->
@@ -274,7 +274,7 @@ const sendOTPEmail = async ({ to, otp, name, schoolName, password, loginUrl }) =
    WELCOME EMAIL — After successful registration
 ══════════════════════════════════════════════════════════ */
 const sendWelcomeEmail = async ({ to, name, schoolName, email, schoolSlug, password, loginUrl }) => {
-  const subject = `🎉 ${schoolName} — IlmForge pe Khush Aamdeed!`;
+  const subject = `🎉 Welcome to IlmForge, ${schoolName}!`;
   const schoolLink = `${loginUrl || 'https://ilmforge-erp.vercel.app'}/login?slug=${schoolSlug}`;
   const html = `
     <!DOCTYPE html>
@@ -283,44 +283,44 @@ const sendWelcomeEmail = async ({ to, name, schoolName, email, schoolSlug, passw
       <div style="max-width:560px;margin:32px auto;background:white;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
         <div style="background:linear-gradient(135deg,#1B2F6E,#0073b7);padding:32px;text-align:center;">
           <div style="font-size:48px;">🎉</div>
-          <h1 style="color:white;margin:8px 0 4px;font-size:24px;font-weight:900;">Mubarak Ho!</h1>
-          <p style="color:rgba(255,255,255,0.85);margin:0;font-size:15px;">${schoolName} IlmForge pe register ho gaya!</p>
+          <h1 style="color:white;margin:8px 0 4px;font-size:24px;font-weight:900;">Congratulations!</h1>
+          <p style="color:rgba(255,255,255,0.85);margin:0;font-size:15px;">${schoolName} has been registered on IlmForge!</p>
         </div>
         <div style="padding:32px;">
-          <p style="color:#374151;font-size:15px;line-height:1.7;">Assalam-o-Alaikum <strong>${name}</strong>!<br>Aapka school <strong>${schoolName}</strong> tayyar hai. Neechay login details hain:</p>
+          <p style="color:#374151;font-size:15px;line-height:1.7;">Hello <strong>${name}</strong>!<br>Your school <strong>${schoolName}</strong> is all set up. Your login details are below:</p>
 
           <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:20px;margin:20px 0;">
             <table style="width:100%;font-size:14px;">
               <tr><td style="color:#64748b;padding:5px 0;width:120px;">🌐 Login URL:</td><td><a href="${schoolLink}" style="color:#0073b7;font-weight:700;">${schoolLink}</a></td></tr>
               <tr><td style="color:#64748b;padding:5px 0;">📧 Email:</td><td style="font-weight:700;color:#1e3a5f;">${email}</td></tr>
-              <tr><td style="color:#64748b;padding:5px 0;">🔑 Password:</td><td style="font-family:monospace;font-size:16px;font-weight:900;color:#dc2626;">${password || '(Email se check karein)'}</td></tr>
+              <tr><td style="color:#64748b;padding:5px 0;">🔑 Password:</td><td style="font-family:monospace;font-size:16px;font-weight:900;color:#dc2626;">${password || '(Check your email)'}</td></tr>
             </table>
           </div>
 
           <div style="background:#fff7ed;border-radius:10px;padding:16px;margin:16px 0;">
-            <p style="color:#92400e;font-size:13px;margin:0;font-weight:600;">⚠️ Password save karein!</p>
-            <p style="color:#78350f;font-size:12px;margin:6px 0 0;">Pehli baar login ke baad apna password Settings → Profile se zaroor tabdeel karein.</p>
+            <p style="color:#92400e;font-size:13px;margin:0;font-weight:600;">⚠️ Save your password!</p>
+            <p style="color:#78350f;font-size:12px;margin:6px 0 0;">After your first login, be sure to change your password from Settings → Profile.</p>
           </div>
 
           <div style="text-align:center;margin:24px 0;">
             <a href="${schoolLink}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#1B2F6E,#0073b7);color:white;text-decoration:none;border-radius:10px;font-weight:800;font-size:15px;">
-              Dashboard Kholein →
+              Open Dashboard →
             </a>
           </div>
 
           <div style="background:#f8f9fa;border-radius:10px;padding:16px;margin-top:16px;">
-            <p style="color:#374151;font-size:13px;margin:0;font-weight:700;">Agle Steps:</p>
+            <p style="color:#374151;font-size:13px;margin:0;font-weight:700;">Next Steps:</p>
             <ul style="color:#64748b;font-size:13px;margin:8px 0 0;padding-left:20px;line-height:1.8;">
-              <li>Classes aur sections banayein</li>
-              <li>Students admit karein</li>
-              <li>Fee structure set karein</li>
-              <li>Staff add karein</li>
+              <li>Create classes and sections</li>
+              <li>Admit students</li>
+              <li>Set up fee structure</li>
+              <li>Add staff members</li>
             </ul>
           </div>
         </div>
         <div style="background:#f8f9fa;padding:16px 32px;text-align:center;border-top:1px solid #e2e8f0;">
           <p style="color:#94a3b8;font-size:12px;margin:0;">
-            Madad chahiye? WhatsApp: <strong>0346-5146609</strong><br>
+            Need help? WhatsApp: <strong>0346-5146609</strong><br>
             IlmForge — اِلم کو آسان بنائے 🇵🇰
           </p>
         </div>
@@ -344,14 +344,14 @@ const sendFeeReceiptEmail = async ({ to, parentName, studentName, amount, month,
       </div>
       <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-radius:0 0 12px 12px;">
         <p style="color:#374151;">Dear <strong>${parentName}</strong>,</p>
-        <p style="color:#374151;">Aapke bachay <strong>${studentName}</strong> ki fee payment receive ho gayi hai.</p>
+        <p style="color:#374151;">We have received the fee payment for your child <strong>${studentName}</strong>.</p>
         <table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;">
           <tr style="background:#f0fdf4;"><td style="padding:10px;color:#64748b;border:1px solid #e2e8f0;">Receipt No.</td><td style="padding:10px;font-weight:700;border:1px solid #e2e8f0;color:#1e3a5f;">${receiptNo || 'Auto-generated'}</td></tr>
           <tr><td style="padding:10px;color:#64748b;border:1px solid #e2e8f0;">Student</td><td style="padding:10px;font-weight:700;border:1px solid #e2e8f0;">${studentName}</td></tr>
           <tr style="background:#f0fdf4;"><td style="padding:10px;color:#64748b;border:1px solid #e2e8f0;">Fee Month</td><td style="padding:10px;border:1px solid #e2e8f0;">${month}</td></tr>
           <tr><td style="padding:10px;color:#64748b;border:1px solid #e2e8f0;">Amount Paid</td><td style="padding:10px;font-size:18px;font-weight:900;color:#15803d;border:1px solid #e2e8f0;">Rs. ${Number(amount).toLocaleString('en-PK')}</td></tr>
         </table>
-        <p style="color:#94a3b8;font-size:12px;text-align:center;">Shukriya! — ${schoolName}</p>
+        <p style="color:#94a3b8;font-size:12px;text-align:center;">Thank you! — ${schoolName}</p>
       </div>
     </div>
   `;
@@ -371,16 +371,16 @@ const sendAbsentAlertEmail = async ({ to, parentName, studentName, date, schoolN
       </div>
       <div style="padding:24px;">
         <p style="color:#374151;">Dear <strong>${parentName}</strong>,</p>
-        <p style="color:#374151;line-height:1.7;">Aapka bacha <strong>${studentName}</strong> aaj <strong>${date}</strong> ko school se <span style="color:#dc2626;font-weight:800;">ABSENT</span> raha.</p>
-        <p style="color:#374151;">Baraaye meherbani regular attendance ensure karein.</p>
+        <p style="color:#374151;line-height:1.7;">Your child <strong>${studentName}</strong> was marked <span style="color:#dc2626;font-weight:800;">ABSENT</span> from school today, <strong>${date}</strong>.</p>
+        <p style="color:#374151;">Please ensure regular attendance.</p>
         <div style="background:#fef2f2;border-radius:8px;padding:12px;margin-top:16px;">
-          <p style="color:#91180b;font-size:13px;margin:0;">Koi masla ho to school se rabta zaroor karein.</p>
+          <p style="color:#91180b;font-size:13px;margin:0;">If there is any issue, please be sure to contact the school.</p>
         </div>
         <p style="color:#94a3b8;font-size:12px;margin-top:16px;text-align:center;">— ${schoolName}</p>
       </div>
     </div>
   `;
-  return sendEmail({ to, subject, html, text: `${studentName} aaj absent hai (${date}) — ${schoolName}` });
+  return sendEmail({ to, subject, html, text: `${studentName} is absent today (${date}) — ${schoolName}` });
 };
 
 /* ══════════════════════════════════════════════════════════
@@ -396,13 +396,13 @@ const sendFeeReminderEmail = async ({ to, parentName, studentName, amount, month
       </div>
       <div style="padding:24px;">
         <p>Dear <strong>${parentName}</strong>,</p>
-        <p style="line-height:1.7;">Aapke bachay <strong>${studentName}</strong> ki <strong>${month}</strong> ki fee pending hai.</p>
+        <p style="line-height:1.7;">The fee for <strong>${studentName}</strong> for <strong>${month}</strong> is still pending.</p>
         <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:16px;margin:16px 0;text-align:center;">
           <p style="color:#92400e;font-size:13px;margin:0;">Amount Due</p>
           <p style="color:#1e3a5f;font-size:28px;font-weight:900;margin:4px 0;">Rs. ${Number(amount).toLocaleString('en-PK')}</p>
           ${dueDate ? `<p style="color:#dc2626;font-size:13px;margin:0;">Due Date: <strong>${dueDate}</strong></p>` : ''}
         </div>
-        <p style="color:#94a3b8;font-size:12px;text-align:center;">Baraaye meherbani jald payment karein — ${schoolName}</p>
+        <p style="color:#94a3b8;font-size:12px;text-align:center;">Please make the payment at your earliest convenience — ${schoolName}</p>
       </div>
     </div>
   `;
@@ -433,7 +433,7 @@ const sendDailyCollectionEmail = async ({ to, schoolName, date, totalAmount, pay
           </div>
         </div>
         <div style="background:#f8f9fa;border-radius:8px;padding:12px;text-align:center;">
-          <p style="color:#94a3b8;font-size:12px;margin:0;">Detailed report ke liye: <a href="https://ilmforge-erp.vercel.app/accounting/balancesheet" style="color:#0073b7;">Balance Sheet</a></p>
+          <p style="color:#94a3b8;font-size:12px;margin:0;">For the detailed report: <a href="https://ilmforge-erp.vercel.app/accounting/balancesheet" style="color:#0073b7;">Balance Sheet</a></p>
         </div>
       </div>
     </div>
@@ -454,17 +454,17 @@ const sendResultPublishedEmail = async ({ to, parentName, studentName, examName,
       </div>
       <div style="padding:24px;">
         <p>Dear <strong>${parentName}</strong>,</p>
-        <p><strong>${studentName}</strong> ka <strong>${examName}</strong> ka result publish ho gaya hai.</p>
+        <p>The result for <strong>${studentName}</strong>'s <strong>${examName}</strong> has been published.</p>
         <div style="text-align:center;margin:24px 0;">
           <a href="${portalUrl || 'https://ilmforge-erp.vercel.app'}" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:white;text-decoration:none;border-radius:10px;font-weight:800;">
-            Result Dekhein →
+            View Result →
           </a>
         </div>
         <p style="color:#94a3b8;font-size:12px;text-align:center;">— ${schoolName}</p>
       </div>
     </div>
   `;
-  return sendEmail({ to, subject, html, text: `${studentName} ka ${examName} result ready hai. Portal pe dekhayn.` });
+  return sendEmail({ to, subject, html, text: `${studentName}'s ${examName} result is ready. View it on the portal.` });
 };
 
 /* ══════════════════════════════════════════════════════════
