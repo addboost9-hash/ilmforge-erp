@@ -547,12 +547,12 @@ const getWelcomeEmailHtml = ({ name, schoolName, verifyUrl }) => `
 <!DOCTYPE html><html><body style="font-family:Arial,sans-serif;background:#f8fafc;padding:40px 0">
 <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
   <div style="background:#1E3A5F;padding:32px;text-align:center">
-    <h1 style="color:#fff;margin:0;font-size:28px">EduManage Pro</h1>
+    <h1 style="color:#fff;margin:0;font-size:28px">IlmForge</h1>
     <p style="color:#93C5FD;margin:8px 0 0">School Management Platform</p>
   </div>
   <div style="padding:40px">
-    <h2 style="color:#1E3A5F">Assalam O Alaikum, ${name}! 🎉</h2>
-    <p style="color:#475569;font-size:16px">Your school <strong>${schoolName}</strong> has been successfully registered on EduManage Pro.</p>
+    <h2 style="color:#1E3A5F">Welcome, ${name}! 🎉</h2>
+    <p style="color:#475569;font-size:16px">Your school <strong>${schoolName}</strong> has been successfully registered on IlmForge.</p>
     <p style="color:#475569">Please verify your email address to secure your account:</p>
     <div style="text-align:center;margin:32px 0">
       <a href="${verifyUrl}" style="background:#2563EB;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px">✅ Verify My Email Address</a>

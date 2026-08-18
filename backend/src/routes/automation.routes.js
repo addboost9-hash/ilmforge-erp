@@ -21,7 +21,7 @@ const DEFAULT_TEMPLATES = [
     name:     'Fee Reminder — Gentle',
     type:     'sms',
     category: 'fee_reminder',
-    body:     'Assalam-o-Alaikum {{parent_name}},\nYour child {{student_name}} (Class {{class}}) has pending fee of Rs. {{amount}} for {{month}}.\nPlease pay at earliest.\nThank you — IlmForge',
+    body:     'Dear {{parent_name}},\nYour child {{student_name}} (Class {{class}}) has a pending fee of Rs. {{amount}} for {{month}}.\nPlease pay at your earliest convenience.\nThank you — IlmForge',
     isDefault: true,
   },
   {

@@ -75,7 +75,7 @@ async function runFeeReminders() {
         : null;
 
       const defaultBody =
-        'Assalam-o-Alaikum {{parent_name}},\nYour child {{student_name}} (Class {{class}}) has pending fee of Rs. {{amount}} for {{month}}.\nPlease pay at earliest to avoid late fee.\n\nThank you — IlmForge';
+        'Dear {{parent_name}},\nYour child {{student_name}} (Class {{class}}) has a pending fee of Rs. {{amount}} for {{month}}.\nPlease pay at your earliest convenience to avoid a late fee.\n\nThank you — IlmForge';
 
       const bodyTemplate = tpl?.body || defaultBody;
 
