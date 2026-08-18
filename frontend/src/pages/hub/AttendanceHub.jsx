@@ -21,7 +21,7 @@ export default function AttendanceHub() {
   return (
     <HubShell
       title="Attendance Hub"
-      subtitle="One-tap marking, barcode scan, reports — absent parents ko auto SMS"
+      subtitle="One-tap marking, barcode scan, reports — automatic SMS to parents of absent students"
       accent="#00a65a"
       quickActions={[
         { label: 'Mark Now (3-step)', tab: 'flow', icon: UserCheck },

@@ -52,7 +52,7 @@ export default function AcademicsHub() {
             Academics Hub
           </div>
           <div className="hub-subtitle">
-            Classes, subjects, timetable, homework, LMS — academic setup ek jagah
+            Classes, subjects, timetable, homework, LMS — all academic setup in one place
           </div>
         </div>
         <div className="hub-actions">

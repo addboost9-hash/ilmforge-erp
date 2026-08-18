@@ -270,7 +270,7 @@ export default function DashboardPage() {
             <div>
               <div style={{ color: 'white', fontWeight: 800, fontSize: 15 }}>Smart Workflow Hub</div>
               <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 2 }}>
-                New admission → Daily ops → Exams → Promotion → Leaving — ek jagah, poora cycle
+                New admission → Daily ops → Exams → Promotion → Leaving — the full cycle in one place
               </div>
             </div>
             <div style={{ marginLeft: 8, display: 'flex', gap: 6 }}>

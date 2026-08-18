@@ -143,7 +143,7 @@ export default function SettingsHub() {
             <div>
               <div style={{ fontSize:20, fontWeight:800, letterSpacing:-0.3 }}>Settings Hub</div>
               <div style={{ fontSize:12.5, opacity:0.8, marginTop:2 }}>
-                School profile, sessions, integrations, theme — poori configuration ek jagah &nbsp;({totalItems} settings)
+                School profile, sessions, integrations, theme — the complete configuration in one place &nbsp;({totalItems} settings)
               </div>
             </div>
           </div>

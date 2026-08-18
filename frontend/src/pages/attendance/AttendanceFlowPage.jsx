@@ -4,7 +4,7 @@
  * Step 1: Select Class + Date  →  Step 2: Mark (one-tap per student)
  * →  Step 3: Save & Auto-notify absent parents
  * Everything linked: class → students auto-load → absent → parent SMS
- * → dashboard stats → student portal → parent portal (sab jagah reflect).
+ * → dashboard stats → student portal → parent portal (reflected everywhere).
  */
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

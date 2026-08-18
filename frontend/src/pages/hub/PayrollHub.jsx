@@ -16,7 +16,7 @@ export default function PayrollHub() {
   return (
     <HubShell
       title="🏦 Salary & Expenses Hub"
-      subtitle="Payroll, loans, expenses, financial reports — school finance ek jagah"
+      subtitle="Payroll, loans, expenses, financial reports — all school finance in one place"
       accent="#4F46E5"
       quickActions={[
         { label: 'Generate Salary', tab: 'salary', icon: Landmark },

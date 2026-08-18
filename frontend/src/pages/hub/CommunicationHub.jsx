@@ -48,7 +48,7 @@ export default function CommunicationHub() {
             Communication Hub
           </div>
           <div className="hub-subtitle">
-            SMS, WhatsApp, noticeboard, announcements — parents/staff se rabta ek jagah
+            SMS, WhatsApp, noticeboard, announcements — all parent/staff communication in one place
           </div>
         </div>
         <div className="hub-actions">

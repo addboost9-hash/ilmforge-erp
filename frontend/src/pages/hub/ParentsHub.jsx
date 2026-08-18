@@ -15,7 +15,7 @@ export default function ParentsHub() {
   return (
     <HubShell
       title="👨‍👩‍👧 Parents & Portals Hub"
-      subtitle="Parent accounts, portal credentials, password resets, complaints — sab yahan"
+      subtitle="Parent accounts, portal credentials, password resets, and complaints — all in one place"
       accent="#F59E0B"
       quickActions={[
         { label: 'Portal Credentials', tab: 'portals', icon: KeyRound },

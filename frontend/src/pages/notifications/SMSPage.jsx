@@ -25,7 +25,7 @@ const TAGS = [
 ];
 
 const QUICK_TEMPLATES = [
-  { name: 'Fee Reminder',    msg: 'Assalam-o-Alaikum {{parent_name}},\nYour child {{student_name}} (Class {{class}}) has outstanding fee of Rs. {{amount}} for {{month}}. Please pay at earliest.\n— IlmForge' },
+  { name: 'Fee Reminder',    msg: 'Dear {{parent_name}},\nYour child {{student_name}} (Class {{class}}) has an outstanding fee of Rs. {{amount}} for {{month}}. Please pay at your earliest convenience.\n— IlmForge' },
   { name: 'Absent Alert',    msg: 'Dear {{parent_name}},\n{{student_name}} was ABSENT today. Please ensure regular attendance.\n— IlmForge' },
   { name: 'Fee Received ✅', msg: 'Dear {{parent_name}},\nFee payment of Rs. {{amount}} received for {{student_name}} ({{month}}). Thank you!\n— IlmForge' },
   { name: 'Exam Reminder',   msg: 'Dear {{parent_name}},\nExams of {{student_name}} ({{class}}) begin soon. Please ensure preparation.\n— IlmForge' },

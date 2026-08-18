@@ -41,7 +41,7 @@ export default function StaffHub() {
             <Briefcase size={24} style={{color:ACCENT}}/> Staff &amp; Teachers Hub
           </div>
           <div style={{fontSize:13, color:'#999', marginTop:3}}>
-            Hiring, attendance, salary, loans — staff ka sab kuch ek jagah
+            Hiring, attendance, salary, and loans — everything staff-related in one place
           </div>
         </div>
         <div style={{display:'flex', gap:8}}>

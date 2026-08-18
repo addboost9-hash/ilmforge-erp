@@ -57,7 +57,7 @@ export default function HeadOfficeSupportPage() {
         <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, padding: 12 }}>
           <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10 }}>Support Channels</div>
 
-          <a href="https://wa.me/923700036867?text=Assalam%20o%20Alaikum%2C%20we%20need%20support%20for%20our%20school%20operations." target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', textDecoration: 'none', color: '#0F172A', border: '1px solid #DCFCE7', background: '#F0FDF4', borderRadius: 10, padding: 10, marginBottom: 8 }}>
+          <a href="https://wa.me/923700036867?text=Hello%2C%20we%20need%20support%20for%20our%20school%20operations." target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', textDecoration: 'none', color: '#0F172A', border: '1px solid #DCFCE7', background: '#F0FDF4', borderRadius: 10, padding: 10, marginBottom: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <MessageCircle size={16} color="#15803D" />
               <div>

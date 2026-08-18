@@ -26,7 +26,7 @@ export default function ExamsHub() {
   return (
     <HubShell
       title="Exams & Tests Hub"
-      subtitle="Exam schedule, marks, results, merit list, gazette, annual report cards — sab ek jagah"
+      subtitle="Exam schedule, marks, results, merit list, gazette, and annual report cards — all in one place"
       accent="#dc2626"
       quickActions={[
         { label: 'Exams & Marks',    tab: 'exams',        icon: Award },

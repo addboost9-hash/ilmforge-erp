@@ -101,7 +101,7 @@ export default function StudentsHub() {
             <div style={{ width:46, height:46, borderRadius:12, background:'rgba(255,255,255,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22 }}>👨‍🎓</div>
             <div>
               <div style={{ fontSize:21, fontWeight:800, letterSpacing:-0.3 }}>Students Hub</div>
-              <div style={{ fontSize:12.5, opacity:0.8, marginTop:2 }}>Admission se alumni tak — poora student lifecycle ek jagah</div>
+              <div style={{ fontSize:12.5, opacity:0.8, marginTop:2 }}>From admission to alumni — the full student lifecycle in one place</div>
             </div>
           </div>
           <div style={{ display:'flex', gap:8 }}>
