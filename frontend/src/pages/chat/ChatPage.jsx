@@ -221,7 +221,7 @@ export default function ChatPage() {
 
             {/* Composer */}
             {isBroadcastLocked ? (
-              <div className="px-4 py-3 border-t border-slate-100 text-center text-[11px] text-slate-400 font-semibold bg-slate-50">📢 Broadcast — sirf teacher/admin messages bhej sakte hain</div>
+              <div className="px-4 py-3 border-t border-slate-100 text-center text-[11px] text-slate-400 font-semibold bg-slate-50">📢 Broadcast — only teachers/admins can send messages</div>
             ) : (
               <div className="border-t border-slate-100 p-3">
                 {attach && (
@@ -236,7 +236,7 @@ export default function ChatPage() {
                     <Paperclip className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
                   </button>
                   <input ref={fileRef} type="file" className="hidden" onChange={handleFile} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" />
-                  <textarea value={text} onChange={e => setText(e.target.value)} rows={1} placeholder="Message likhein…"
+                  <textarea value={text} onChange={e => setText(e.target.value)} rows={1} placeholder="Type a message…"
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (text || attach) send.mutate(); } }}
                     className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-teal-500 resize-none max-h-28" />
                   <button onClick={() => send.mutate()} disabled={(!text && !attach) || send.isPending}
@@ -250,7 +250,7 @@ export default function ChatPage() {
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
               <div className="w-16 h-16 rounded-full bg-teal-50 flex items-center justify-center mb-3"><MessageCircle className="w-8 h-8 text-teal-500" /></div>
               <h3 className="font-extrabold text-slate-700">IlmForge Messenger</h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-xs">Parents, teachers, students aur admin — sab role-wise securely connected. Documents bhi share kar sakte hain.</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-xs">Parents, teachers, students, and admins — all securely connected by role. You can share documents too.</p>
             </div>
           )}
         </div>

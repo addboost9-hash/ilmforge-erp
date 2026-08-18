@@ -16,7 +16,7 @@ const PRESETS = [
     host: 'smtp-relay.brevo.com',
     port: '587',
     secure: false,
-    note: 'Free plan mein 300 emails/day. signup.brevo.com pe register karein.',
+    note: 'Free plan gives 300 emails/day. Sign up at signup.brevo.com.',
   },
   {
     id: 'gmail',
@@ -24,7 +24,7 @@ const PRESETS = [
     host: 'smtp.gmail.com',
     port: '587',
     secure: false,
-    note: 'Gmail → Google Account → Security → 2FA ON → App Password banana hoga.',
+    note: 'Gmail → Google Account → Security → turn on 2FA → generate an App Password.',
   },
   {
     id: 'office365',
@@ -32,7 +32,7 @@ const PRESETS = [
     host: 'smtp.office365.com',
     port: '587',
     secure: false,
-    note: 'Office 365 business account chahiye. Password directly use hoga.',
+    note: 'Requires an Office 365 business account. The password is used directly.',
   },
   {
     id: 'custom',
@@ -40,19 +40,19 @@ const PRESETS = [
     host: '',
     port: '587',
     secure: false,
-    note: 'Koi bhi SMTP server — hosting provider ka bhi use kar saktay hain.',
+    note: 'Any SMTP server — you can also use your hosting provider\'s.',
   },
 ];
 
 const EMAIL_TYPES = [
-  { icon: '🔐', label: 'OTP / Verification', desc: 'Registration pe 6-digit code email hoga' },
-  { icon: '🎉', label: 'Welcome Email', desc: 'School register hone pe welcome + credentials' },
-  { icon: '✅', label: 'Fee Receipt', desc: 'Payment receive hone pe parent ko receipt' },
-  { icon: '⚠️', label: 'Absent Alert', desc: 'Student absent ho to parent ko alert' },
-  { icon: '🔔', label: 'Fee Reminder', desc: 'Unpaid fees pe reminder email' },
-  { icon: '📊', label: 'Daily Report', desc: 'Roz collection report admin ko' },
-  { icon: '🏆', label: 'Result Published', desc: 'Exam result publish hone pe parent' },
-  { icon: '🔑', label: 'Password Reset', desc: 'Forgot password request pe link' },
+  { icon: '🔐', label: 'OTP / Verification', desc: 'A 6-digit code is emailed on registration' },
+  { icon: '🎉', label: 'Welcome Email', desc: 'Welcome message and credentials when a school registers' },
+  { icon: '✅', label: 'Fee Receipt', desc: 'Receipt emailed to parent when a payment is received' },
+  { icon: '⚠️', label: 'Absent Alert', desc: 'Alert emailed to parent when a student is absent' },
+  { icon: '🔔', label: 'Fee Reminder', desc: 'Reminder email for unpaid fees' },
+  { icon: '📊', label: 'Daily Report', desc: 'Daily collection report sent to admin' },
+  { icon: '🏆', label: 'Result Published', desc: 'Emailed to parent when exam results are published' },
+  { icon: '🔑', label: 'Password Reset', desc: 'Link emailed on a forgot-password request' },
 ];
 
 export default function EmailSettingsPage() {
@@ -78,18 +78,18 @@ export default function EmailSettingsPage() {
   };
 
   const testConnection = async () => {
-    if (!testEmail) return toast.error('Test email address enter karein');
+    if (!testEmail) return toast.error('Please enter a test email address');
     setTestStatus('testing');
     setTestMsg('');
     try {
       const res = await api.post('/settings/smtp-test', { testEmail });
       if (res.data.success) {
         setTestStatus('success');
-        setTestMsg(`✅ Email sent to ${testEmail}! Inbox check karein (spam bhi dekhayn).`);
+        setTestMsg(`✅ Email sent to ${testEmail}! Check your inbox (and spam folder too).`);
         toast.success('Test email sent successfully!');
       } else {
         setTestStatus('fail');
-        setTestMsg(res.data.message || 'Email send fail hua');
+        setTestMsg(res.data.message || 'Email send failed');
         toast.error(res.data.message || 'Email send failed');
       }
     } catch (err) {
@@ -109,14 +109,14 @@ export default function EmailSettingsPage() {
           <Mail size={20} color="#0073b7" /> Email Settings
         </h1>
         <p style={{ color: '#64748b', fontSize: 13, marginTop: 2 }}>
-          OTP verification, fee receipts, absent alerts, daily reports — sab email se bhejhain
+          OTP verification, fee receipts, absent alerts, daily reports — all sent by email
         </p>
       </div>
 
       {/* What emails are sent */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <h3>📧 IlmForge Kaunse Emails Bhejhta Hai?</h3>
+          <h3>📧 Which Emails Does IlmForge Send?</h3>
         </div>
         <div className="card-body">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 10 }}>
@@ -185,7 +185,7 @@ export default function EmailSettingsPage() {
             <div className="form-group">
               <label className="form-label">From Email Address</label>
               <input className="form-input" value={form.fromEmail} onChange={e => setForm({...form, fromEmail: e.target.value})} placeholder="noreply@yourschool.com" />
-              <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 4 }}>Yeh email parents/students ko dikhe ga as sender</div>
+              <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 4 }}>This email will be shown to parents/students as the sender</div>
             </div>
 
             {/* Important Note for Brevo */}
@@ -193,11 +193,11 @@ export default function EmailSettingsPage() {
               <div style={{ padding: '12px 14px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, marginBottom: 14 }}>
                 <div style={{ fontWeight: 700, fontSize: 12.5, color: '#15803d', marginBottom: 4 }}>💡 Brevo Setup Guide:</div>
                 <ol style={{ fontSize: 12, color: '#374151', margin: 0, paddingLeft: 16, lineHeight: 1.8 }}>
-                  <li>brevo.com pe free account banayein</li>
+                  <li>Create a free account at brevo.com</li>
                   <li>SMTP & API → SMTP → "Generate new SMTP key"</li>
                   <li>Username: SMTP Username (email format)</li>
-                  <li>Password: Generated SMTP key paste karein</li>
-                  <li>From Email mein apna verified email dalein</li>
+                  <li>Password: paste the generated SMTP key</li>
+                  <li>Enter your verified email in From Email</li>
                 </ol>
               </div>
             )}
@@ -205,14 +205,14 @@ export default function EmailSettingsPage() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-primary" onClick={() => {
                 // Save to Render .env via API (if configured)
-                toast.success('Settings saved! Render pe SMTP_HOST, SMTP_USER, SMTP_PASS, FROM_EMAIL environment variables set karein.');
+                toast.success('Settings saved! Set the SMTP_HOST, SMTP_USER, SMTP_PASS, FROM_EMAIL environment variables on Render.');
               }}>
                 <Save size={14} /> Save Settings
               </button>
             </div>
 
             <div style={{ marginTop: 12, padding: '10px 12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
-              <strong>⚠️ Important:</strong> Yeh settings Render ke environment variables mein set karni hain:<br/>
+              <strong>⚠️ Important:</strong> These settings need to be set as environment variables on Render:<br/>
               <code style={{ fontFamily: 'monospace', fontSize: 11 }}>SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FROM_EMAIL, FROM_NAME</code>
             </div>
           </div>
@@ -221,18 +221,18 @@ export default function EmailSettingsPage() {
         {/* Right — Test */}
         <div>
           <div className="card" style={{ marginBottom: 14 }}>
-            <div className="card-header"><h3>🧪 Email Test Karein</h3></div>
+            <div className="card-header"><h3>🧪 Test Email</h3></div>
             <div className="card-body">
               <p style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>
-                Pehle Render pe SMTP variables set karein, phir yahan test karein.
+                First set the SMTP variables on Render, then test here.
               </p>
               <div className="form-group">
                 <label className="form-label">Test Email Address</label>
-                <input className="form-input" type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)} placeholder="apna-email@gmail.com" />
+                <input className="form-input" type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)} placeholder="your-email@gmail.com" />
               </div>
               <button onClick={testConnection} disabled={testStatus === 'testing'}
                 className="btn btn-primary w-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-                {testStatus === 'testing' ? <><Loader2 size={14} style={{ animation: 'spin .7s linear infinite' }} /> Testing…</> : <><Send size={14} /> Test Email Bhejayn</>}
+                {testStatus === 'testing' ? <><Loader2 size={14} style={{ animation: 'spin .7s linear infinite' }} /> Testing…</> : <><Send size={14} /> Send Test Email</>}
               </button>
 
               {testStatus && testStatus !== 'testing' && (
@@ -249,7 +249,7 @@ export default function EmailSettingsPage() {
             <div className="card-header"><h3>📋 Render Env Variables</h3></div>
             <div className="card-body">
               <p style={{ fontSize: 12.5, color: '#64748b', marginBottom: 12 }}>
-                Render Dashboard → ilmforge-erp → Environment mein yeh add karein:
+                Add these under Render Dashboard → ilmforge-erp → Environment:
               </p>
               <div style={{ background: '#1e293b', borderRadius: 10, padding: 16, fontFamily: 'monospace', fontSize: 12 }}>
                 {[

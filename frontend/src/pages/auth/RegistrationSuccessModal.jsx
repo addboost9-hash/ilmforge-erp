@@ -45,8 +45,8 @@ export default function RegistrationSuccessModal({ onboarding, onClose, onGoToLo
       <div class="row"><span class="k">Admin Email</span><span class="v">${onboarding.adminEmail}</span></div>
       <div class="row"><span class="k">Admin Password</span><span class="v">${onboarding.adminPassword}</span></div>
       <div class="row"><span class="k">School ID (slug)</span><span class="v">${onboarding.schoolSlug}</span></div>
-      <div class="warn">⚠️ IMPORTANT: Yeh password sirf ek dafa dikhaya gaya hai. Isse safe jagah save karein. Email verification ke baad isi link se login karein. Yeh link sirf aapke school ke liye unique hai — bookmark kar lein.</div>
-      <div class="ft">Printed: ${new Date().toLocaleString('en-PK')} · Ek copy email par bhi bheji gayi hai: ${onboarding.emailSentTo}</div>
+      <div class="warn">⚠️ IMPORTANT: This password is shown only once. Save it somewhere safe. After email verification, log in using this same link. This link is unique to your school — please bookmark it.</div>
+      <div class="ft">Printed: ${new Date().toLocaleString('en-PK')} · A copy has also been emailed to: ${onboarding.emailSentTo}</div>
     </body></html>`);
     w.document.close();
     setTimeout(() => w.print(), 400);
@@ -75,7 +75,7 @@ export default function RegistrationSuccessModal({ onboarding, onClose, onGoToLo
             <Mail className="w-4.5 h-4.5 text-teal-600 shrink-0" style={{width:18,height:18}} />
             <p className="text-xs text-slate-600">
               {deliveryOk
-                ? <>Credentials + verification OTP email bheja gaya: <strong className="text-slate-800">{onboarding.emailSentTo}</strong></>
+                ? <>Credentials and verification OTP have been emailed to: <strong className="text-slate-800">{onboarding.emailSentTo}</strong></>
                 : <>Email delivery failed for now. Continue with OTP screen and ask admin to verify SMTP settings.</>}
             </p>
           </div>
@@ -84,8 +84,8 @@ export default function RegistrationSuccessModal({ onboarding, onClose, onGoToLo
           <div>
             <div className="flex items-center gap-1.5 mb-2">
               <Link2 className="w-4 h-4 text-teal-600" />
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Aapka Unique School Link</span>
-              <span className="text-[10px] bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-bold">Sirf aapke school ka</span>
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Your Unique School Link</span>
+              <span className="text-[10px] bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-bold">Unique to your school</span>
             </div>
             <div className="flex items-center gap-2 bg-slate-50 border-2 border-teal-200 rounded-xl p-3">
               <code className="flex-1 text-xs font-mono text-slate-700 break-all">{onboarding.schoolLink}</code>
@@ -98,7 +98,7 @@ export default function RegistrationSuccessModal({ onboarding, onClose, onGoToLo
                 <ExternalLink className="w-4 h-4" />
               </a>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1.5">↗ Open karke verify karein — yahan aapke school ka branded login page dikhega</p>
+            <p className="text-[11px] text-slate-400 mt-1.5">↗ Open and verify it — this is your school's branded login page</p>
           </div>
 
           {/* Credentials */}
@@ -133,7 +133,7 @@ export default function RegistrationSuccessModal({ onboarding, onClose, onGoToLo
           <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
             <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <p className="text-[11px] text-amber-800 leading-relaxed">
-              <strong>Password sirf ek dafa dikhaya ja raha hai.</strong> Print ya copy kar lein. Email mein bhi bheja gaya hai. Login ke baad settings se change kar sakte hain.
+              <strong>This password is shown only once.</strong> Print or copy it now. It has also been sent by email. You can change it from settings after logging in.
             </p>
           </div>
 

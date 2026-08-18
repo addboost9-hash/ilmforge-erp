@@ -60,7 +60,7 @@ export default function BackupPage() {
     <div className="space-y-4 max-w-2xl">
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white">
         <div className="flex items-center gap-2 mb-2"><Database className="w-5 h-5 text-teal-400" /><span className="font-bold">Full Data Backup</span></div>
-        <p className="text-xs text-slate-300 mb-4">Students, staff, classes, fees, attendance, exams — sab kuch ek JSON file mein download hoga. Har week backup lena best practice hai.</p>
+        <p className="text-xs text-slate-300 mb-4">Students, staff, classes, fees, attendance, exams — everything downloads as one JSON file. Taking a backup every week is best practice.</p>
         <button onClick={() => create.mutate()} disabled={create.isPending}
           className="flex items-center gap-2 bg-teal-500 hover:bg-teal-400 font-bold text-sm px-5 py-2.5 rounded-xl disabled:opacity-50 transition">
           <Download className="w-4 h-4" /> {create.isPending ? 'Exporting…' : 'Create & Download Backup'}
@@ -112,7 +112,7 @@ export default function BackupPage() {
             </div>
           );
         })}
-        {!backups.length && <p className="text-xs text-slate-400 text-center py-6">Abhi koi backup nahi liya gaya</p>}
+        {!backups.length && <p className="text-xs text-slate-400 text-center py-6">No backup has been taken yet</p>}
       </div>
     </div>
   );
