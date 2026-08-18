@@ -380,11 +380,11 @@ router.put('/invoices/:id', requireFinanceRole, wrap(async (req, res) => {
   res.json({ success: true, data: updated });
 }));
 
-// DELETE — sirf unpaid invoices (audit-logged)
+// DELETE — unpaid invoices only (audit-logged)
 router.delete('/invoices/:id', requireFinanceRole, wrap(async (req, res) => {
   const inv = await prisma.feeInvoice.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
   if (!inv) return res.status(404).json({ success: false, message: 'Invoice not found.' });
-  if (inv.paidAmount > 0) return res.status(400).json({ success: false, message: 'Paid invoice delete nahi ho sakti — pehle payment reverse karein.' });
+  if (inv.paidAmount > 0) return res.status(400).json({ success: false, message: 'A paid invoice cannot be deleted — please reverse the payment first.' });
   await prisma.feeInvoice.delete({ where: { id: inv.id } });
   await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_DELETED', entity: 'fee_invoice', entityId: inv.id, details: JSON.stringify({ amount: inv.totalAmount, month: inv.month }) } }).catch(() => null);
   res.json({ success: true, message: 'Invoice deleted.' });

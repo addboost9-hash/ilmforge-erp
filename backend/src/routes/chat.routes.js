@@ -93,7 +93,7 @@ router.post('/conversations/direct', wrap(async (req, res) => {
     ['admin', 'super_admin'].includes(myRole) ? true :
     myRole === 'teacher' ? ['admin', 'super_admin', 'student', 'parent'].includes(other.role) :
     ['admin', 'super_admin', 'teacher'].includes(other.role);
-  if (!allowed) return res.status(403).json({ success: false, message: 'Is role se chat allowed nahi.' });
+  if (!allowed) return res.status(403).json({ success: false, message: 'Chat is not allowed for this role.' });
 
   // Reuse existing direct convo
   const mine = await prisma.conversationParticipant.findMany({ where: { userId: req.user.id }, select: { conversationId: true } });
@@ -114,7 +114,7 @@ router.post('/conversations/direct', wrap(async (req, res) => {
 /* ── Class broadcast (teacher/admin → all students+parents of a class) ── */
 router.post('/conversations/broadcast', wrap(async (req, res) => {
   if (!['teacher', 'admin', 'super_admin'].includes(req.user.role))
-    return res.status(403).json({ success: false, message: 'Sirf teacher/admin broadcast kar sakte hain.' });
+    return res.status(403).json({ success: false, message: 'Only teachers/admins can send broadcasts.' });
   const classId = parseInt(req.body.classId);
   const cls = await prisma.class.findFirst({ where: { id: classId, schoolId: req.schoolId } });
   if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
@@ -161,7 +161,7 @@ router.get('/conversations/:id/messages', wrap(async (req, res) => {
 router.post('/conversations/:id/messages', wrap(async (req, res) => {
   const convoId = parseInt(req.params.id);
   const { body, attachmentName, attachmentType, attachmentData } = req.body;
-  if (!body && !attachmentData) return res.status(400).json({ success: false, message: 'Message ya attachment required.' });
+  if (!body && !attachmentData) return res.status(400).json({ success: false, message: 'A message or attachment is required.' });
   if (attachmentData && attachmentData.length > MAX_ATTACH) return res.status(400).json({ success: false, message: 'Attachment max 2MB.' });
   const isPart = await prisma.conversationParticipant.findFirst({ where: { conversationId: convoId, userId: req.user.id } });
   if (!isPart) return res.status(403).json({ success: false, message: 'Not a participant.' });
@@ -169,7 +169,7 @@ router.post('/conversations/:id/messages', wrap(async (req, res) => {
   const convo = await prisma.conversation.findUnique({ where: { id: convoId } });
   // Broadcast: only creator (teacher/admin) can send
   if (convo.type === 'class_broadcast' && convo.createdBy !== req.user.id && !['admin', 'super_admin'].includes(req.user.role))
-    return res.status(403).json({ success: false, message: 'Broadcast mein sirf teacher/admin bhej sakte hain.' });
+    return res.status(403).json({ success: false, message: 'Only teachers/admins can send broadcast messages.' });
 
   const msg = await prisma.chatMessage.create({
     data: {

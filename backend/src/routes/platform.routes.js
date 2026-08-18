@@ -224,7 +224,7 @@ router.post('/schools/:id/license', wrap(async (req, res) => {
       expiryDate: expiryDate.toLocaleDateString('en-PK'),
       daysValid: days,
       plan,
-      instructions: `School admin ko yeh key dain. App → Settings → License mein enter karein.`,
+      instructions: `Give this key to the school admin. Enter it in App → Settings → License.`,
     }
   });
 }));
@@ -489,7 +489,7 @@ router.delete('/cleanup-email', wrap(async (req, res) => {
 
   res.json({
     success: true,
-    message: `✅ Email "${email}" cleared! Aap ab is email se nayi school register kar saktay hain.`,
+    message: `✅ Email "${email}" cleared! You can now register a new school with this email.`,
     archived: { schools: archivedSchools.length, users: users.length },
     details: archivedSchools,
   });

@@ -312,7 +312,7 @@ router.post('/smtp-test', wrap(async (req, res) => {
           <h2 style="margin:6px 0 0;">Email Test Successful!</h2>
         </div>
         <div style="padding:24px;">
-          <p>Mubarak! IlmForge ka email system bilkul sahi kaam kar raha hai.</p>
+          <p>Congratulations! Your IlmForge email system is working perfectly.</p>
           <p><strong>Provider:</strong> ${process.env.SMTP_HOST}</p>
           <p><strong>From:</strong> ${process.env.FROM_EMAIL || process.env.SMTP_USER}</p>
           <p style="color:#94a3b8;font-size:12px;">— IlmForge Team</p>

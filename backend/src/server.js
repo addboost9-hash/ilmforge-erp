@@ -132,10 +132,10 @@ app.listen(PORT, '0.0.0.0', () => {  // 0.0.0.0 = accept connections from all ne
 
 /* ── Graceful shutdown ── */
 const shutdown = (signal) => {
-  console.log(`\n[${signal}] IlmForge server band ho raha hai...`);
+  console.log(`\n[${signal}] IlmForge server is shutting down...`);
   prisma.$disconnect()
     .then(() => {
-      console.log('Database disconnect ho gaya. Khuda Hafiz!');
+      console.log('Database disconnected. Goodbye!');
       process.exit(0);
     })
     .catch((err) => {

@@ -52,7 +52,7 @@ const authMiddleware = async (req, res, next) => {
         return res.status(403).json({
           success: false,
           code: 'SCHOOL_INACTIVE',
-          message: 'School account inactive hai. IlmForge se rabta karein.',
+          message: 'School account is inactive. Please contact IlmForge support.',
           contact: 'WhatsApp: 0346-5146609',
         });
       }
@@ -62,9 +62,9 @@ const authMiddleware = async (req, res, next) => {
         return res.status(403).json({
           success: false,
           code: 'TRIAL_EXPIRED',
-          message: 'Aapka free trial khatam ho gaya hai.',
-          detail: `Trial ${new Date(school.trialEndsAt).toLocaleDateString('en-PK')} ko expire hua.`,
-          upgrade: 'Plan upgrade karne ke liye: WhatsApp 0346-5146609',
+          message: 'Your free trial has ended.',
+          detail: `Trial expired on ${new Date(school.trialEndsAt).toLocaleDateString('en-PK')}.`,
+          upgrade: 'To upgrade your plan: WhatsApp 0346-5146609',
         });
       }
 
@@ -73,9 +73,9 @@ const authMiddleware = async (req, res, next) => {
         return res.status(403).json({
           success: false,
           code: 'LICENSE_EXPIRED',
-          message: 'Aapka offline license expire ho gaya hai.',
+          message: 'Your offline license has expired.',
           expiredOn: school.licenseExpiry,
-          renew: 'License renew karne ke liye: WhatsApp 0346-5146609',
+          renew: 'To renew your license: WhatsApp 0346-5146609',
         });
       }
 

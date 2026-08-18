@@ -20,10 +20,10 @@ const adminOnly = (req, res, next) => {
 
 const DEFAULT_SOPS = [
   { title: 'Morning Assembly SOP', category: 'Daily Operations', content: '1. Gate opens 7:15 AM\n2. Assembly 7:45 sharp — line-wise class order\n3. Tilawat → National Anthem → announcements\n4. Class dismissal grade-wise' },
-  { title: 'Fee Collection SOP', category: 'Finance', content: '1. Sirf receipt ke against cash lein\n2. Har payment turant ERP mein enter karein\n3. Din ke end pe cash count + ERP total match karein\n4. Discrepancy usi din report karein' },
-  { title: 'Student Late Arrival SOP', category: 'Discipline', content: '1. 8:00 ke baad gate entry register mein likhein\n2. 3 late = parent ko SMS\n3. 5 late = principal meeting' },
-  { title: 'Exam Conduct SOP', category: 'Academics', content: '1. Paper seal exam se 15 min pehle open\n2. Seating plan roll-number-wise\n3. Invigilator mobile off\n4. Marks entry 48 ghante ke andar ERP mein' },
-  { title: 'Parent Complaint Handling SOP', category: 'Relations', content: '1. Complaint ERP mein log karein\n2. 24h ke andar first response\n3. Resolution 3 din mein\n4. Parent ko written response' },
+  { title: 'Fee Collection SOP', category: 'Finance', content: '1. Only accept cash against a receipt\n2. Enter every payment into the ERP immediately\n3. Match the cash count with the ERP total at the end of the day\n4. Report any discrepancy the same day' },
+  { title: 'Student Late Arrival SOP', category: 'Discipline', content: '1. Record gate entry in the register for arrivals after 8:00 AM\n2. 3 late arrivals = SMS sent to parent\n3. 5 late arrivals = meeting with the principal' },
+  { title: 'Exam Conduct SOP', category: 'Academics', content: '1. Open the sealed paper 15 minutes before the exam\n2. Seating plan arranged by roll number\n3. Invigilators must switch off mobile phones\n4. Enter marks into the ERP within 48 hours' },
+  { title: 'Parent Complaint Handling SOP', category: 'Relations', content: '1. Log the complaint in the ERP\n2. Provide a first response within 24 hours\n3. Resolve within 3 days\n4. Send the parent a written response' },
 ];
 
 router.get('/', staffOnly, wrap(async (req, res) => {

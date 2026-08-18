@@ -63,16 +63,16 @@ router.post('/renew', authMiddleware, requireRole('super_admin', 'admin'), (req,
   const { key, expiry } = req.body;
 
   if (!key || !expiry) {
-    return res.status(400).json({ success: false, message: 'key aur expiry date dono zaruri hain' });
+    return res.status(400).json({ success: false, message: 'Both key and expiry date are required' });
   }
 
   if (!validateKeyFormat(key)) {
-    return res.status(400).json({ success: false, message: 'Invalid license key format. ILM-XXXX-XXXX-XXXXXXXXXXXX hona chahiye' });
+    return res.status(400).json({ success: false, message: 'Invalid license key format. It should be in the format ILM-XXXX-XXXX-XXXXXXXXXXXX' });
   }
 
   const expiryDate = new Date(expiry);
   if (isNaN(expiryDate.getTime()) || expiryDate < new Date()) {
-    return res.status(400).json({ success: false, message: 'Expiry date invalid ya past mein hai' });
+    return res.status(400).json({ success: false, message: 'Expiry date is invalid or in the past' });
   }
 
   try {
@@ -90,11 +90,11 @@ router.post('/renew', authMiddleware, requireRole('super_admin', 'admin'), (req,
 
     res.json({
       success: true,
-      message: `License renew ho gayi! ${daysLeft} din ki validity. App restart karne ki zarurat nahi.`,
+      message: `License renewed successfully! Valid for ${daysLeft} days. No need to restart the app.`,
       data: { expiry: newLic.expiry, daysLeft }
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: `License save nahi hui: ${err.message}` });
+    res.status(500).json({ success: false, message: `Failed to save license: ${err.message}` });
   }
 });
 
