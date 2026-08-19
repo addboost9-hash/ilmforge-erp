@@ -60,10 +60,10 @@ const NAV = [
   {
     group: 'FINANCES',
     items: [
-      { to: '/fee-management', icon: DollarSign,   label: 'Invoicing Hub',     shortcut: 'Ctrl+F',  roles: ['super_admin','admin','accountant'] },
+      { to: '/hub/fees',       icon: DollarSign,   label: 'Invoicing Hub',     shortcut: 'Ctrl+F',  roles: ['super_admin','admin','accountant'] },
       { to: '/accounts',       icon: Landmark,     label: 'Accounts Ledger',   roles: ['super_admin','admin','accountant'] },
       { to: '/payroll',        icon: Wallet,        label: 'Payroll Manager',   roles: ['super_admin','admin','accountant'] },
-      { to: '/expense-management', icon: Receipt,  label: 'Expense Tracker',   roles: ['super_admin','admin','accountant'] },
+      { to: '/expenses',       icon: Receipt,      label: 'Expense Tracker',   roles: ['super_admin','admin','accountant'] },
     ],
   },
   {
@@ -248,7 +248,7 @@ function FloatingActionButton() {
   const [open, setOpen] = useState(false);
   const actions = [
     { label:'Mark Attendance', icon:'📋', to:'/attendance-hub', color:'#1B2F6E' },
-    { label:'Collect Fee', icon:'💰', to:'/fee-management', color:'#059669' },
+    { label:'Collect Fee', icon:'💰', to:'/hub/fees?tab=collect', color:'#059669' },
     { label:'Admit Student', icon:'➕', to:'/admissions/wizard', color:'#0073b7' },
     { label:'New Exam', icon:'📝', to:'/examination', color:'#7c3aed' },
   ];
@@ -301,7 +301,7 @@ export default function AdminLayout() {
       '/dashboard': 'Dashboard',
       '/examination': 'Examination',
       '/attendance-hub': 'Attendance',
-      '/fee-management': 'Fee Management',
+      '/hub/fees': 'Fee Management',
       '/academics': 'Academics',
       '/students': 'Students',
       '/staff': 'Staff',
@@ -320,7 +320,7 @@ export default function AdminLayout() {
     const handleKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
         const key = e.key.toLowerCase();
-        const map = { d:'/dashboard', a:'/attendance-hub', f:'/fee-management', s:'/hub/students' };
+        const map = { d:'/dashboard', a:'/attendance-hub', f:'/hub/fees', s:'/hub/students' };
         if (map[key] && document.activeElement.tagName !== 'INPUT') {
           e.preventDefault();
           navigate(map[key]);
@@ -511,7 +511,7 @@ export default function AdminLayout() {
     // Payroll
     { label: 'Staff Salary', desc: 'Generate monthly salaries', path: '/salary', icon: '💵', group: 'Payroll' },
     { label: 'Loan Management', desc: 'Staff loans & advances', path: '/salary/loans', icon: '🏦', group: 'Payroll' },
-    { label: 'Expense Management', desc: 'Track school expenses', path: '/expense-management', icon: '💸', group: 'Payroll' },
+    { label: 'Expense Management', desc: 'Track school expenses', path: '/expenses', icon: '💸', group: 'Payroll' },
     { label: 'Accounting', desc: 'Income & expense tracking', path: '/accounting', icon: '📒', group: 'Payroll' },
   ], []);
 

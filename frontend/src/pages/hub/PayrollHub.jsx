@@ -6,7 +6,6 @@ import { Landmark, Receipt } from 'lucide-react';
 const SalaryPage  = lazy(() => import('../salary/SalaryPage'));
 const LoanPage    = lazy(() => import('../salary/LoanManagementPage'));
 const ExpensesPage = lazy(() => import('../expenses/ExpensesPage'));
-const ExpenseMgmt = lazy(() => import('../expenses/ExpenseManagementPage'));
 const ReportsPage = lazy(() => import('../reports/ReportsPage'));
 const ReportingArea = lazy(() => import('../reports/ReportingAreaPage'));
 
@@ -26,7 +25,6 @@ export default function PayrollHub() {
         { id: 'salary',    label: 'Salary',        hint: 'Generate + slips',      render: L(SalaryPage) },
         { id: 'loans',     label: 'Staff Loans',   hint: 'Auto-deduction',        render: L(LoanPage) },
         { id: 'expenses',  label: 'Expenses',      hint: 'Daily entries',         render: L(ExpensesPage) },
-        { id: 'expmgmt',   label: 'Expense Mgmt',  hint: 'Categories + analysis', render: L(ExpenseMgmt) },
         { id: 'reports',   label: 'Reports',       hint: 'Income & expense',      render: L(ReportsPage) },
         { id: 'reporting', label: 'Reporting Area', hint: 'All report types',     render: L(ReportingArea) },
       ]}

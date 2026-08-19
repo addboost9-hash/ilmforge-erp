@@ -9,7 +9,7 @@ import {
   Settings, Palette, School, Globe, Mail, MessageSquare,
   Fingerprint, Printer, CreditCard, Shield, FileText,
   Bell, BookOpen, Sliders, Building2,
-  Calendar, Layers, Bot, Zap, Users, Key, ClipboardList,
+  Calendar, Layers, Zap, Users, Key, ClipboardList,
   ChevronRight, Database, Smartphone, Search,
 } from 'lucide-react';
 
@@ -20,8 +20,7 @@ const SessionsPage      = lazy(() => import('../settings/SessionsPage'));
 const CampusesPage      = lazy(() => import('../settings/CampusesPage'));
 const AdminsPage        = lazy(() => import('../settings/AdminsPage'));
 const SMSTemplates      = lazy(() => import('../settings/SMSTemplatesPage'));
-const EmailSettings     = lazy(() => import('../settings/EmailSettingsPage'));
-const WhatsAppSettings  = lazy(() => import('../settings/WhatsAppSettingsPage'));
+const ChannelSettings   = lazy(() => import('../settings/ChannelSettingsPage'));
 const ThemeSettings     = lazy(() => import('../settings/ThemeSettingsPage'));
 const ExamSettings      = lazy(() => import('../settings/ExamSettingsPage'));
 const PaymentSettings   = lazy(() => import('../settings/PaymentSettingsPage'));
@@ -65,9 +64,8 @@ const GROUPS = [
     icon: Globe,
     color: '#7C3AED',
     items: [
-      { id: 'email',      label: 'Email (SMTP)',      icon: Mail,          hint: 'Brevo/Gmail config',  render: L(EmailSettings) },
+      { id: 'channels',   label: 'Email/SMS/WhatsApp', icon: Mail,        hint: 'SMTP + SMS + WA config', render: L(ChannelSettings) },
       { id: 'smstpl',     label: 'SMS Templates',    icon: MessageSquare, hint: '15 auto templates',   render: L(SMSTemplates) },
-      { id: 'whatsapp',   label: 'WhatsApp',         icon: Bot,           hint: 'WA Business API',     render: L(WhatsAppSettings) },
       { id: 'automation', label: 'Automation Rules', icon: Zap,           hint: 'Auto triggers',       render: L(AutomationPage) },
       { id: 'website',    label: 'Website Mgmt.',    icon: Globe,         hint: 'School website',      render: L(WebsiteSettings) },
       { id: 'notifconfig',label: 'Notif. Config',    icon: Bell,          hint: 'Alert preferences',   render: L(NotificationConfig) },

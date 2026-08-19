@@ -185,7 +185,7 @@ function BalanceSheetTab() {
         <QuickLinkCard title="Daily Balance Sheet"   desc="View today's financial balance"  to="/accounting/balancesheet"  icon={Scale}       color="#1B2F6E" />
         <QuickLinkCard title="Accounting Overview"   desc="Income & expense tracking"        to="/accounting"               icon={BarChart2}   color="#0d9488" />
         <QuickLinkCard title="Fee Collection"        desc="Today's fee income"               to="/fees/collect"             icon={DollarSign}  color="#6366f1" />
-        <QuickLinkCard title="Expense Management"    desc="Operational expenses"             to="/expense-management"       icon={Receipt}     color="#f59e0b" />
+        <QuickLinkCard title="Expense Management"    desc="Operational expenses"             to="/expenses"                 icon={Receipt}     color="#f59e0b" />
       </div>
     </div>
   );

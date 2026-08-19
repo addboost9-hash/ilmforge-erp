@@ -65,13 +65,10 @@ import SMSPage from './pages/notifications/SMSPage';
 import WhatsAppPage from './pages/notifications/WhatsAppPage';
 import ReportsPage from './pages/reports/ReportsPage';
 import ComplaintsPage from './pages/complaints/ComplaintsPage';
-import SettingsPage from './pages/settings/SettingsPage';
 import ClassesPage from './pages/settings/ClassesPage';
 import SessionsPage from './pages/settings/SessionsPage';
 import SMSTemplatesPage from './pages/settings/SMSTemplatesPage';
-import EmailSettingsPage from './pages/settings/EmailSettingsPage';
 import ChannelSettingsPage from './pages/settings/ChannelSettingsPage';
-import WhatsAppSettingsPage from './pages/settings/WhatsAppSettingsPage';
 import AutomationPage from './pages/settings/AutomationPage';
 import CampusesPage from './pages/settings/CampusesPage';
 import AdminsPage from './pages/settings/AdminsPage';
@@ -112,7 +109,6 @@ import TaskManagementPage from './pages/tasks/TaskManagementPage';
 import TestManagementPage from './pages/exams/TestManagementPage';
 import ReportingAreaPage from './pages/reports/ReportingAreaPage';
 import ParentAccountsPage from './pages/students/ParentAccountsPage';
-import ExpenseManagementPage from './pages/expenses/ExpenseManagementPage';
 import FeeTypesPage from './pages/fees/FeeTypesPage';
 import DiscountedStudentsPage from './pages/fees/DiscountedStudentsPage';
 import FeeIncrementPage from './pages/fees/FeeIncrementPage';
@@ -170,7 +166,6 @@ import SOPsPage                from './pages/sops/SOPsPage';
 import BulkImportPage          from './pages/students/BulkImportPage';
 import RoboBuddyPage           from './pages/robobuddy/RoboBuddyPage';
 import FeeInvoicesManagePage   from './pages/fees/FeeInvoicesManagePage';
-const FeeManagementPage = React.lazy(() => import('./pages/fees/FeeManagementPage'));
 
 // v3.7 new modules
 import QuestionPaperPage        from './pages/exams/QuestionPaperPage';
@@ -463,9 +458,14 @@ export default function App() {
             <Route path="/settings/classes"           element={<ClassesPage />} />
             <Route path="/settings/sessions"          element={<SessionsPage />} />
             <Route path="/settings/sms-templates"     element={<SMSTemplatesPage />} />
-            <Route path="/settings/email"             element={<EmailSettingsPage />} />
+            {/* EmailSettingsPage and WhatsAppSettingsPage were dead-end forms
+                (Email's Save didn't call any API; WhatsApp posted to a
+                nonexistent endpoint) — ChannelSettingsPage is the real,
+                database-backed SMTP/SMS/WhatsApp settings page. Redirect
+                both old URLs instead of rendering the broken forms. */}
+            <Route path="/settings/email"             element={<Navigate to="/settings/channels" replace />} />
             <Route path="/settings/channels"          element={<ChannelSettingsPage />} />
-            <Route path="/settings/whatsapp"          element={<WhatsAppSettingsPage />} />
+            <Route path="/settings/whatsapp"          element={<Navigate to="/settings/channels" replace />} />
             <Route path="/settings/automation"        element={<AutomationPage />} />
             <Route path="/settings/campuses"          element={<CampusesPage />} />
             <Route path="/settings/admins"            element={<AdminsPage />} />
@@ -504,7 +504,11 @@ export default function App() {
             <Route path="/parents/requests"           element={<ParentAccountsPage />} />
             <Route path="/parents/gate-passes"        element={<ParentAccountsPage />} />
             <Route path="/parents/dues-report"        element={<ParentAccountsPage />} />
-            <Route path="/expense-management"         element={<ExpenseManagementPage />} />
+            {/* ExpenseManagementPage was a localStorage-backed fake-data UI
+                (seeded demo rows, nothing persisted to the server) — ExpensesPage
+                is the real, API-wired expense tracker. Redirect instead of
+                rendering the fake one. */}
+            <Route path="/expense-management"         element={<Navigate to="/expenses" replace />} />
             <Route path="/admissions/bulk"            element={<AdmissionsPage />} />
             <Route path="/admissions/reports"         element={<AdmissionInquiriesPage />} />
             <Route path="/students/transfer"          element={<StudentsPage />} />
@@ -579,7 +583,14 @@ export default function App() {
             <Route path="/students/bulk-import"       element={<BulkImportPage />} />
             <Route path="/robobuddy"                  element={<RoboBuddyPage />} />
             <Route path="/fees/invoices"              element={<FeeInvoicesManagePage />} />
-            <Route path="/fee-management"             element={<React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}><FeeManagementPage /></React.Suspense>} />
+            {/* FeeManagementPage duplicated FeeStructurePage/FeeDefaultersPage/
+                FeeCollectionReportPage and most of its tabs called nonexistent
+                backend endpoints (/fees/challans-summary, /fees/challans/generate,
+                /fees/challans-bulk/*, /fees/receiving-summary, /fees/history/:id,
+                PUT /fees/structures/:id) — FeesHub is the real, working fee
+                workspace (collect, generate, defaulters, structure, etc).
+                Redirect instead of rendering the broken aggregator. */}
+            <Route path="/fee-management"             element={<Navigate to="/hub/fees" replace />} />
             <Route path="/settings/notifications-config" element={
               <React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}>
                 <NotificationConfigPage />
