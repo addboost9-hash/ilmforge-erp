@@ -199,7 +199,7 @@ export default function DashboardPage() {
     { label:'TOTAL STUDENTS', value:totalStudents, icon:'👥', gradient:'var(--ilm-gradient-primary)', href:'/students' },
     { label:'PRESENT TODAY', value:presentToday, icon:'✅', gradient:'var(--ilm-gradient-success)', href:'/attendance-hub' },
     { label:'TOTAL STAFF', value:totalStaff, icon:'👨‍🏫', gradient:'linear-gradient(135deg,#6366f1,#8b5cf6)', href:'/staff' },
-    { label:'FEE TODAY', value:`Rs.${Number(feeToday).toLocaleString()}`, icon:'💰', gradient:'var(--ilm-gradient-gold)', href:'/fee-management' },
+    { label:'FEE TODAY', value:`Rs.${Number(feeToday).toLocaleString()}`, icon:'💰', gradient:'var(--ilm-gradient-gold)', href:'/hub/fees' },
     { label:'PENDING FEES', value:feeDefaulters, icon:'📋', gradient:'var(--ilm-gradient-danger)', href:'/fees/defaulters' },
   ];
 
@@ -373,7 +373,7 @@ export default function DashboardPage() {
         <div className="card-body">
           <div className="grid-4" style={{ gap: 12 }}>
             <ActionTile label="Attendance Tracker"  to="/attendance-hub"            Icon={ClipboardList} bg="#f0fdf4" color="#00a65a" />
-            <ActionTile label="Invoicing Hub"      to="/fee-management"            Icon={CreditCard}    bg="#eff6ff" color="#0073b7" />
+            <ActionTile label="Invoicing Hub"      to="/hub/fees"                  Icon={CreditCard}    bg="#eff6ff" color="#0073b7" />
             <ActionTile label="Add Student"        to="/admissions/wizard"         Icon={UserPlus}      bg="#ecfeff" color="#00c0ef" />
             <ActionTile label="Insights Hub"       to="/reports-hub"               Icon={BarChart2}     bg="#f5f3ff" color="#605ca8" />
             <ActionTile label="Exam Vault"         to="/exams"                     Icon={FileText}      bg="#fef2f2" color="#dd4b39" />
