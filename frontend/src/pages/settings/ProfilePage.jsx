@@ -3,10 +3,10 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import useAuthStore from '../../store/auth.store';
-import { Save, User, Lock, Eye, EyeOff, Camera } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, Camera } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAuthStore();
+  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState('profile');
   const [form, setForm] = useState({ name:'', email:'', phone:'' });
   const [pwForm, setPwForm] = useState({ currentPassword:'', newPassword:'', confirmPassword:'' });
@@ -16,10 +16,9 @@ export default function ProfilePage() {
     if (user) setForm({ name:user.name||'', email:user.email||'', phone:user.phone||'' });
   }, [user]);
 
-  const saveProfile = useMutation({
-    mutationFn: () => api.put('/auth/profile', form).catch(() => Promise.resolve()),
-    onSuccess: () => { toast.success('Profile updated!'); updateUser({...user, ...form}); },
-  });
+  // NOTE: there is no backend endpoint to update profile fields yet (no PUT /auth/profile
+  // route exists). Rather than silently pretending a save succeeded, the "Manage Profile"
+  // tab below is shown read-only with an honest notice until that endpoint is built.
 
   const changePassword = useMutation({
     mutationFn: () => api.post('/auth/change-password', { currentPassword:pwForm.currentPassword, newPassword:pwForm.newPassword }),
@@ -84,23 +83,26 @@ export default function ProfilePage() {
           {activeTab === 'profile' && (
             <div className="card">
               <h3 style={{ fontSize:14, fontWeight:700, color:'#1E3A5F', marginBottom:16 }}>Personal Information</h3>
+              <div className="alert alert-info" style={{ marginBottom:16 }}>
+                <span>
+                  Editing profile details from this page isn't available yet — please ask your
+                  school admin to update your name, email or phone if they've changed.
+                </span>
+              </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
                 <div className="form-group">
                   <label className="form-label">Full Name</label>
-                  <input className="form-input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Your full name"/>
+                  <input className="form-input" value={form.name} readOnly disabled placeholder="Your full name"/>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email Address</label>
-                  <input className="form-input" type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="email@example.com"/>
+                  <input className="form-input" type="email" value={form.email} readOnly disabled placeholder="email@example.com"/>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Phone Number</label>
-                  <input className="form-input" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="03001234567"/>
+                  <input className="form-input" value={form.phone} readOnly disabled placeholder="03001234567"/>
                 </div>
               </div>
-              <button className="btn btn-teal btn-lg" style={{ marginTop:8 }} onClick={() => saveProfile.mutate()} disabled={saveProfile.isPending}>
-                <Save size={15}/> {saveProfile.isPending ? 'Saving...' : 'Update Profile'}
-              </button>
             </div>
           )}
 

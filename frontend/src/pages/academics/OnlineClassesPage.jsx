@@ -16,8 +16,9 @@ export default function OnlineClassesPage() {
   });
 
   const add = useMutation({
-    mutationFn: d => api.post('/online-classes', d).catch(()=>Promise.resolve({ data:{ data:{...d,id:Date.now()} } })),
+    mutationFn: d => api.post('/online-classes', { ...d, meetingLink: d.meetingUrl }),
     onSuccess: () => { toast.success('Class created!'); qc.invalidateQueries(['online-classes']); setShowForm(false); setForm({ title:'',classId:'',meetingUrl:'',scheduledAt:'',description:'' }); },
+    onError: err => toast.error(err.response?.data?.message || 'Failed to create class'),
   });
 
   // Demo classes for when no real data
@@ -120,15 +121,15 @@ export default function OnlineClassesPage() {
                     {new Date(cls.scheduledAt).toLocaleString('en-PK',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
                   </div>
                 )}
-                {cls.meetingUrl && (
+                {(cls.meetingUrl || cls.meetingLink) && (
                   <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                     <Link2 size={12}/>
-                    <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{cls.meetingUrl}</span>
+                    <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{cls.meetingUrl || cls.meetingLink}</span>
                   </div>
                 )}
               </div>
               <div style={{ display:'flex', gap:8 }}>
-                <a href={cls.meetingUrl||'#'} target="_blank" rel="noreferrer" className="btn btn-teal btn-sm" style={{ flex:1, justifyContent:'center', textDecoration:'none' }}>
+                <a href={cls.meetingUrl || cls.meetingLink || '#'} target="_blank" rel="noreferrer" className="btn btn-teal btn-sm" style={{ flex:1, justifyContent:'center', textDecoration:'none' }}>
                   <Play size={13}/> {cls.status==='live'?'Join Now':'Open Link'}
                 </a>
                 <button className="btn btn-outline btn-sm" style={{ flex:1 }}>

@@ -20,8 +20,9 @@ export default function StudyMaterialsPage() {
   });
 
   const add = useMutation({
-    mutationFn: d => api.post('/study-materials', d).catch(()=>Promise.resolve({ data:{ data:{...d,id:Date.now()} } })),
+    mutationFn: d => api.post('/study-materials', { ...d, fileUrl: d.url, fileType: d.type }),
     onSuccess: () => { toast.success('Material added!'); qc.invalidateQueries(['study-materials']); setShowForm(false); setForm({ title:'',type:'link',url:'',classId:'',subjectId:'',description:'' }); },
+    onError: err => toast.error(err.response?.data?.message || 'Failed to add material'),
   });
 
   // Demo materials
@@ -95,8 +96,10 @@ export default function StudyMaterialsPage() {
       {/* Materials grid */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))', gap:14 }}>
         {materials.map(m => {
-          const Icon = TYPE_ICONS[m.type]||FileText;
-          const color = TYPE_COLORS[m.type]||'#64748B';
+          const mType = m.type || m.fileType || 'link';
+          const mUrl  = m.url || m.fileUrl || '#';
+          const Icon = TYPE_ICONS[mType]||FileText;
+          const color = TYPE_COLORS[mType]||'#64748B';
           return (
             <div key={m.id} className="card" style={{ display:'flex', flexDirection:'column', gap:12 }}>
               <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
@@ -107,7 +110,7 @@ export default function StudyMaterialsPage() {
                   <div style={{ fontSize:13.5, fontWeight:700, color:'#1E3A5F', marginBottom:3 }}>{m.title}</div>
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                     <span style={{ fontSize:11, fontWeight:600, padding:'2px 7px', borderRadius:99, background:color+'15', color }}>
-                      {m.type.toUpperCase()}
+                      {mType.toUpperCase()}
                     </span>
                     {m.classId && <span className="badge badge-blue">{(classes||[]).find(c=>c.id===parseInt(m.classId))?.name||'Class'}</span>}
                   </div>
@@ -115,9 +118,9 @@ export default function StudyMaterialsPage() {
               </div>
               {m.description && <p style={{ fontSize:12.5, color:'#64748B', margin:0, lineHeight:1.5 }}>{m.description}</p>}
               <div style={{ display:'flex', gap:8, marginTop:'auto' }}>
-                <a href={m.url||'#'} target="_blank" rel="noreferrer" className="btn btn-sm btn-teal" style={{ flex:1, justifyContent:'center', textDecoration:'none' }}>
-                  {m.type==='pdf'?<Download size={12}/>:m.type==='video'?<Video size={12}/>:<Eye size={12}/>}
-                  {m.type==='pdf'?'Download':m.type==='video'?'Watch':'Open'}
+                <a href={mUrl} target="_blank" rel="noreferrer" className="btn btn-sm btn-teal" style={{ flex:1, justifyContent:'center', textDecoration:'none' }}>
+                  {mType==='pdf'?<Download size={12}/>:mType==='video'?<Video size={12}/>:<Eye size={12}/>}
+                  {mType==='pdf'?'Download':mType==='video'?'Watch':'Open'}
                 </a>
               </div>
             </div>
