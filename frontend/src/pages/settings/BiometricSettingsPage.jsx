@@ -155,6 +155,19 @@ export default function BiometricSettingsPage() {
         <p className="page-subtitle">Connect ZKTeco fingerprint devices to IlmForge for automatic attendance</p>
       </div>
 
+      {/* Placeholder-credential warning */}
+      <div className="alert alert-warning" style={{ marginBottom:16 }}>
+        <AlertCircle size={15} style={{ flexShrink:0, marginTop:1 }}/>
+        <span>
+          <strong>Bio Token is a placeholder, not a live credential.</strong> It is generated and
+          stored only in this browser and is <strong>not verified by the server</strong> — the
+          backend has no endpoint yet that checks or accepts this token. Until the BioSync device
+          bridge is actually wired up server-side, pasting this token into a device or app will
+          not authenticate anything. Treat the setup steps below as a preview of the planned
+          integration, not a working connection.
+        </span>
+      </div>
+
       {/* Connection status bar */}
       <div style={{ display:'flex', gap:10, marginBottom:18, flexWrap:'wrap' }}>
         <div className="card" style={{ flex:1, minWidth:200, padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
@@ -183,7 +196,7 @@ export default function BiometricSettingsPage() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Bio Token <span style={{color:'#94A3B8',fontWeight:400,fontSize:11}}>(keep secret)</span></label>
+              <label className="form-label">Bio Token <span style={{color:'#94A3B8',fontWeight:400,fontSize:11}}>(placeholder — not yet verified server-side)</span></label>
               <div style={{ display:'flex', gap:6 }}>
                 <input className="form-input" value={token} readOnly
                   style={{ flex:1, fontFamily:'monospace', fontSize:11.5, letterSpacing:0.5 }}/>
