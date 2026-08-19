@@ -46,12 +46,15 @@ export default function AttendanceReportPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['att-report', activeFilters],
     enabled: !!activeFilters,
+    // NOTE: /attendance/report returns raw per-day Attendance rows (id, studentId,
+    // date, status, student:{name,rollNo}) — not the per-student aggregate this
+    // table renders (name, total, present, absent, leave, percentage). It used to
+    // be called first with a .catch() fallback to /attendance/summary, but /report
+    // resolves 200 OK so the fallback never actually ran and every row rendered
+    // blank/0%. /attendance/summary is the endpoint that matches this table's
+    // columns, so call it directly.
     queryFn: () =>
-      api.get('/attendance/report', { params: activeFilters })
-        .then(r => r.data.data)
-        .catch(() =>
-          api.get('/attendance/summary', { params: activeFilters }).then(r => r.data.data)
-        ),
+      api.get('/attendance/summary', { params: activeFilters }).then(r => r.data.data),
   });
 
   function handleLoad() {

@@ -88,24 +88,76 @@ router.post('/campuses', wrap(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------------------
-// Exam settings — grade thresholds and pass percentage stored per school
+// Exam settings — grading, division thresholds and marksheet layout options,
+// stored per-school on the ExamSettings model.
+//
+// FIX: this previously read/wrote a fictional field set (passPercentage,
+// gradeThresholds, showGradeOnResult, showPositionOnResult, allowGraceMarks,
+// maxGraceMarksPerSubject) that exists on NEITHER the ExamSettings Prisma
+// model (schema.prisma: passingMarks, gradeAPlus/A/B/C/D, firstDivision/
+// secondDivision/thirdDivision, showRankOnMarksheet, showPercentage,
+// showGrade, showAttendance, ...) NOR the ExamSettingsPage.jsx form fields
+// (passingMarks, gradeAPlus.., firstDivisionPercent, showPercentageOnMarksheet,
+// ...). Since the body keys the frontend actually sends never matched
+// `passPercentage`/`gradeThresholds`/etc., PUT always silently produced an
+// empty update — the admin's "Saved!" toast was a lie, nothing persisted, and
+// exam.routes.js's own grade calculator (calcGradeFromThresholds/
+// loadThresholds) could never see a school's configured grade boundaries.
+// Field names below map 1:1 to the real schema columns; a handful differ
+// only in their frontend form-state key spelling (see FIELD_MAP).
 // ---------------------------------------------------------------------------
 
-// Default exam settings returned when no record exists
+// frontend form field -> ExamSettings column (only where the names differ)
+const EXAM_SETTINGS_FIELD_MAP = {
+  showPercentageOnMarksheet: 'showPercentage',
+  showGradeOnMarksheet: 'showGrade',
+  showAttendanceOnMarksheet: 'showAttendance',
+  firstDivisionPercent: 'firstDivision',
+  secondDivisionPercent: 'secondDivision',
+  thirdDivisionPercent: 'thirdDivision',
+};
+const EXAM_SETTINGS_FIELD_MAP_REVERSE = Object.fromEntries(
+  Object.entries(EXAM_SETTINGS_FIELD_MAP).map(([fe, db]) => [db, fe])
+);
+const EXAM_SETTINGS_INT_FIELDS = new Set([
+  'passingMarks', 'gradeAPlus', 'gradeA', 'gradeB', 'gradeC', 'gradeD',
+  'firstDivision', 'secondDivision', 'thirdDivision',
+]);
+const EXAM_SETTINGS_BOOL_FIELDS = new Set([
+  'showRankOnMarksheet', 'showPercentage', 'showGrade', 'showAttendance',
+  'showTeacherSignature', 'showPrincipalSignature',
+]);
+const EXAM_SETTINGS_STRING_FIELDS = new Set([
+  'admitCardInstructions', 'resultCardHeader', 'failCriteria', 'gradingSystem',
+]);
+
+// Default exam settings returned when no record exists — keyed exactly like
+// ExamSettingsPage.jsx's own DEFAULTS so the form never sees an unrecognized shape.
 const DEFAULT_EXAM_SETTINGS = {
-  passPercentage: 40,
-  gradeThresholds: [
-    { minPercent: 90, grade: 'A+' },
-    { minPercent: 80, grade: 'A' },
-    { minPercent: 70, grade: 'B' },
-    { minPercent: 60, grade: 'C' },
-    { minPercent: 50, grade: 'D' },
-    { minPercent: 0,  grade: 'F' },
-  ],
-  showGradeOnResult: true,
-  showPositionOnResult: true,
-  allowGraceMarks: false,
-  maxGraceMarksPerSubject: 0,
+  admitCardInstructions: '',
+  failCriteria: 'less_than_passing',
+  passingMarks: 40,
+  gradingSystem: 'percentage',
+  gradeAPlus: 90, gradeA: 80, gradeB: 65, gradeC: 50, gradeD: 40,
+  showRankOnMarksheet: true,
+  showPercentageOnMarksheet: true,
+  showGradeOnMarksheet: true,
+  showAttendanceOnMarksheet: false,
+  showTeacherSignature: true,
+  showPrincipalSignature: true,
+  resultCardHeader: '',
+  firstDivisionPercent: 60,
+  secondDivisionPercent: 45,
+  thirdDivisionPercent: 33,
+};
+
+// Convert a raw ExamSettings row (DB column names) into the frontend's field-name shape
+const toFrontendExamSettings = (settings) => {
+  const out = {};
+  for (const [dbField, value] of Object.entries(settings)) {
+    out[EXAM_SETTINGS_FIELD_MAP_REVERSE[dbField] || dbField] = value;
+  }
+  return out;
 };
 
 // GET /settings/exam — find ExamSettings by schoolId; if not found return defaults
@@ -115,7 +167,7 @@ router.get('/exam', wrap(async (req, res) => {
     if (!settings) {
       return res.json({ success: true, data: { ...DEFAULT_EXAM_SETTINGS, schoolId: req.schoolId, isDefault: true } });
     }
-    res.json({ success: true, data: settings });
+    res.json({ success: true, data: toFrontendExamSettings(settings) });
   } catch (err) {
     // ExamSettings model may not exist in this schema version
     res.json({ success: true, data: { ...DEFAULT_EXAM_SETTINGS, schoolId: req.schoolId, isDefault: true }, warning: 'ExamSettings model not available; returning defaults.' });
@@ -124,23 +176,15 @@ router.get('/exam', wrap(async (req, res) => {
 
 // PUT /settings/exam — upsert ExamSettings for schoolId
 router.put('/exam', wrap(async (req, res) => {
-  const {
-    passPercentage,
-    gradeThresholds,
-    showGradeOnResult,
-    showPositionOnResult,
-    allowGraceMarks,
-    maxGraceMarksPerSubject,
-  } = req.body;
-
-  const data = {
-    ...(passPercentage !== undefined && { passPercentage: parseFloat(passPercentage) }),
-    ...(gradeThresholds !== undefined && { gradeThresholds }),
-    ...(showGradeOnResult !== undefined && { showGradeOnResult: Boolean(showGradeOnResult) }),
-    ...(showPositionOnResult !== undefined && { showPositionOnResult: Boolean(showPositionOnResult) }),
-    ...(allowGraceMarks !== undefined && { allowGraceMarks: Boolean(allowGraceMarks) }),
-    ...(maxGraceMarksPerSubject !== undefined && { maxGraceMarksPerSubject: parseInt(maxGraceMarksPerSubject) }),
-  };
+  const data = {};
+  for (const [feField, value] of Object.entries(req.body || {})) {
+    if (value === undefined) continue;
+    const dbField = EXAM_SETTINGS_FIELD_MAP[feField] || feField;
+    if (EXAM_SETTINGS_INT_FIELDS.has(dbField)) data[dbField] = parseInt(value) || 0;
+    else if (EXAM_SETTINGS_BOOL_FIELDS.has(dbField)) data[dbField] = Boolean(value);
+    else if (EXAM_SETTINGS_STRING_FIELDS.has(dbField)) data[dbField] = String(value);
+    // Any other key (e.g. isDefault, schoolId) is ignored — not a real column.
+  }
 
   try {
     const existing = await prisma.examSettings.findFirst({ where: { schoolId: req.schoolId } });
@@ -150,7 +194,7 @@ router.put('/exam', wrap(async (req, res) => {
     } else {
       settings = await prisma.examSettings.create({ data: { schoolId: req.schoolId, ...data } });
     }
-    res.json({ success: true, data: settings });
+    res.json({ success: true, data: toFrontendExamSettings(settings) });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Failed to save exam settings.', detail: err.message });
   }

@@ -8,7 +8,11 @@ import {
   ClipboardList, Award, GraduationCap, Camera, Tag, Edit2, Save, X
 } from 'lucide-react';
 
-const money = v => 'Rs. ' + ((v||0)/100).toLocaleString();
+// Fee amounts (FeeInvoice.totalAmount/paidAmount/dueAmount) are stored and
+// returned by the backend as plain rupee integers — no cents/paisa scaling
+// anywhere in fee.routes.js — so this must not divide by 100 (it previously
+// showed every amount 100x too small, e.g. Rs. 5000 rendered as "Rs. 50").
+const money = v => 'Rs. ' + (v||0).toLocaleString();
 const NAVY = '#1B2F6E';
 
 const TABS = [
