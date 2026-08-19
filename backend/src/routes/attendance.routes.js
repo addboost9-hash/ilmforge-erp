@@ -374,13 +374,16 @@ router.post('/bulk-import', staffOnly, wrap(async (req, res) => {
     const targetDate = new Date(r.date); targetDate.setHours(0, 0, 0, 0);
     if (isNaN(targetDate.getTime())) { failed.push({ ...r, reason: 'Invalid date' }); continue; }
 
+    // NOTE: Attendance model has no `remarks` column (see schema.prisma) — including
+    // it in the upsert data unconditionally made this throw a Prisma unknown-argument
+    // error on every single row, so bulk import always failed.
     await prisma.attendance.upsert({
       where: { studentId_date: { studentId: student.id, date: targetDate } },
-      update: { status: r.status, remarks: r.remarks || null, markedBy: req.user.id, method: 'import' },
+      update: { status: r.status, markedBy: req.user.id, method: 'import' },
       create: {
         schoolId, campusId: campusId || null,
         studentId: student.id, classId: student.classId, sectionId: student.sectionId,
-        date: targetDate, status: r.status, remarks: r.remarks || null,
+        date: targetDate, status: r.status,
         markedBy: req.user.id, method: 'import',
       },
     });
@@ -444,7 +447,7 @@ router.get('/report', staffOnly, wrap(async (req, res) => {
 // date range, then aggregated in JavaScript keyed by studentId.
 router.get('/summary', wrap(async (req, res) => {
   const { schoolId } = req;
-  const { classId, month, year, studentId } = req.query;
+  const { classId, sectionId, month, year, studentId } = req.query;
   const startDate = new Date(parseInt(year) || new Date().getFullYear(), (parseInt(month) || new Date().getMonth() + 1) - 1, 1);
   const endDate = new Date(startDate); endDate.setMonth(endDate.getMonth() + 1);
 
@@ -476,6 +479,7 @@ router.get('/summary', wrap(async (req, res) => {
     where: {
       schoolId, status: 'active', deletedAt: null,
       ...(classId && { classId: parseInt(classId) }),
+      ...(sectionId && { sectionId: parseInt(sectionId) }),
       ...(effectiveStudentId && { id: effectiveStudentId }),
     },
   });
@@ -486,6 +490,7 @@ router.get('/summary', wrap(async (req, res) => {
       schoolId,
       date: { gte: startDate, lt: endDate },
       ...(classId && { classId: parseInt(classId) }),
+      ...(sectionId && { sectionId: parseInt(sectionId) }),
       ...(effectiveStudentId && { studentId: effectiveStudentId }),
     },
     select: { studentId: true, status: true },
@@ -506,7 +511,7 @@ router.get('/summary', wrap(async (req, res) => {
     const c = counts[s.id] || { present: 0, absent: 0, leave: 0, late: 0 };
     const total = c.present + c.absent + c.leave + c.late;
     return {
-      studentId: s.id, name: s.name, rollNo: s.rollNo,
+      studentId: s.id, name: s.name, rollNo: s.rollNo, fatherName: s.fatherName,
       present: c.present, absent: c.absent, leave: c.leave, late: c.late,
       total, percentage: total > 0 ? Math.round((c.present / total) * 100) : 0,
     };
@@ -982,13 +987,16 @@ router.put('/corrections/:id/reject', requireRole('admin', 'super_admin', 'princ
   if (!correction) return res.status(404).json({ success: false, message: 'Correction request not found.' });
   if (correction.status !== 'pending') return res.status(400).json({ success: false, message: 'Only pending corrections can be rejected.' });
 
+  // NOTE: AttendanceCorrection has no `remarks` column (only `reason`, which holds
+  // the original requester's reason) — passing the admin's rejection note through
+  // as `remarks` made this throw a Prisma unknown-argument error on every reject,
+  // since the frontend (AttendanceCorrectionPage) always sends { remarks: adminNote }.
   const updated = await prisma.attendanceCorrection.update({
     where: { id: parseInt(id) },
     data: {
       status: 'rejected',
       reviewedBy: req.user.id,
       reviewedAt: new Date(),
-      ...(remarks !== undefined && { remarks }),
     },
   });
 

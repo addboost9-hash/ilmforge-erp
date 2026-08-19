@@ -151,8 +151,12 @@ export default function ParentPortalPage() {
   const { data: attendSummaryData, isLoading: attendSummaryLoading } = useQuery({
     queryKey: ['parent-attendance-summary', child?.id, attendMonth, attendYear],
     queryFn:  () =>
+      // Explicit studentId keeps a parent with multiple children in the same class
+      // scoped to just this child's record — without it the backend has no way to
+      // narrow down which linked child is being asked about and falls back to
+      // returning the whole class's summary.
       api.get('/attendance/summary', {
-        params: { classId: child.classId, month: attendMonth + 1, year: attendYear },
+        params: { studentId: child.id, classId: child.classId, month: attendMonth + 1, year: attendYear },
       }).then(r => r.data.data || r.data),
     enabled:  !!child?.classId && activeTab === 'attend',
     staleTime: 30_000,

@@ -440,6 +440,103 @@ function ProfilePanel({ open, onClose, student, rollNo, schoolName, studentPhoto
   );
 }
 
+/* ─── Student Exam Result Card ───────────────────────────────
+   Fetches this student's own marks for a published exam via the
+   scoped /exams/:id/my-results endpoint (role=student is resolved
+   server-side from the JWT — no studentId param needed). The list
+   endpoint GET /exams never includes a `marks` relation, so reading
+   exam.marks/exam.obtainedMarks off it was always undefined and no
+   results ever rendered on this tab.
+───────────────────────────────────────────────────────── */
+function StudentExamCard({ exam }) {
+  const { data: marksArr = [] } = useQuery({
+    queryKey: ['student-exam-my-results', exam.id],
+    queryFn: () => api.get(`/exams/${exam.id}/my-results`).then(r => r.data.data || []).catch(() => []),
+    enabled: !!exam.id,
+    staleTime: 5 * 60_000,
+  });
+
+  const hasBreakdown = Array.isArray(marksArr) && marksArr.length > 0;
+
+  const obtainedNum = hasBreakdown
+    ? marksArr.reduce((s, m) => s + (m.isAbsent ? 0 : (m.obtainedMarks ?? 0)), 0)
+    : null;
+  const totalNum = hasBreakdown
+    ? marksArr.reduce((s, m) => s + (m.totalMarks ?? 100), 0)
+    : null;
+
+  const pct  = obtainedNum != null && totalNum > 0
+    ? Math.round((obtainedNum / totalNum) * 100)
+    : null;
+  const gc   = pct != null ? gradeColor(pct) : { c: '#94A3B8', bg: '#F1F5F9', label: '—' };
+  const div  = pct != null ? divisionLabel(pct) : null;
+  const passed = pct != null ? pct >= 33 : null;
+
+  return (
+    <div style={{ ...card, padding: 0, overflow: 'hidden', marginBottom: 14 }}>
+      <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: hasBreakdown ? '1px solid #F1F5F9' : 'none' }}>
+        <div style={{ width: 48, height: 48, borderRadius: 12, background: gc.bg, color: gc.c, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 17, flexShrink: 0, border: `2px solid ${gc.c}30` }}>
+          {gc.label}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: NAVY, marginBottom: 2 }}>
+            {exam.title || exam.examTitle || 'Exam'}
+          </div>
+          <div style={{ fontSize: 12, color: '#6B7280' }}>
+            {fmtDate(exam.dateStart || exam.date || exam.examDate || exam.createdAt)}
+          </div>
+          {obtainedNum != null && (
+            <div style={{ fontSize: 12.5, marginTop: 3, fontWeight: 700 }}>
+              <span style={{ color: gc.c }}>{obtainedNum}</span>
+              <span style={{ color: '#94A3B8' }}>/{totalNum} &nbsp;({pct}%)</span>
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+          {passed != null && (
+            <span style={{ padding: '4px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 700, background: passed ? '#DCFCE7' : '#FEE2E2', color: passed ? '#15803D' : '#B91C1C' }}>
+              {passed ? 'Pass' : 'Fail'}
+            </span>
+          )}
+          {div && (
+            <span style={{ padding: '3px 8px', borderRadius: 99, fontSize: 10.5, fontWeight: 600, background: div.bg, color: div.c }}>
+              {div.text}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {hasBreakdown && (
+        <div style={{ background: '#F8FAFC' }}>
+          {marksArr.map((m, j) => {
+            const subObt   = m.isAbsent ? null : (m.obtainedMarks ?? null);
+            const subTotal = m.totalMarks ?? 100;
+            const subPct   = subObt != null ? Math.round((subObt / subTotal) * 100) : null;
+            const subGc    = subPct != null ? gradeColor(subPct) : { c: '#94A3B8', bg: '#F1F5F9', label: m.isAbsent ? 'ABS' : '—' };
+
+            return (
+              <div key={m.id || j} style={{ padding: '10px 16px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: '#374151' }}>
+                    {m.subject?.name || `Subject ${j + 1}`}
+                  </div>
+                </div>
+                <div style={{ fontSize: 12.5, color: NAVY, fontWeight: 700 }}>
+                  <span style={{ color: subGc.c }}>{subObt ?? '—'}</span>
+                  <span style={{ color: '#94A3B8', fontWeight: 400 }}>/{subTotal}</span>
+                </div>
+                <span style={{ background: subGc.bg, color: subGc.c, borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, minWidth: 28, textAlign: 'center' }}>
+                  {m.grade || subGc.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─────────────────────────────────────────────────────────
    MAIN COMPONENT
 ───────────────────────────────────────────────────────── */
@@ -509,7 +606,9 @@ export default function StudentPortalPage() {
 
   const { data: attendSummary } = useQuery({
     queryKey: ['portal-attend-summary', studentId],
-    queryFn:  () => api.get('/attendance/summary', { params: { studentId } }).then(r => r.data.data),
+    // Backend always returns { data: [ {studentId, percentage, ...} ] } — an array,
+    // even when scoped to a single student — so take the first (only) entry.
+    queryFn:  () => api.get('/attendance/summary', { params: { studentId } }).then(r => (r.data.data || [])[0] || null),
     enabled:   !!studentId,
     staleTime: 60_000,
   });
@@ -951,91 +1050,7 @@ export default function StudentPortalPage() {
                 <div style={{ fontSize: 12 }}>Your exam results will appear here once published by your teacher.</div>
               </div>
             ) : (
-              exams.map((exam, i) => {
-                const marksArr = exam.marks || exam.subjectMarks || [];
-                const hasBreakdown = Array.isArray(marksArr) && marksArr.length > 0;
-
-                const obtained = exam.obtainedMarks ?? exam.marks ?? null;
-                const total    = exam.totalMarks   ?? exam.total ?? 100;
-                const obtainedNum = hasBreakdown
-                  ? marksArr.reduce((s, m) => s + (m.obtainedMarks ?? m.obtained ?? 0), 0)
-                  : (typeof obtained === 'number' ? obtained : null);
-                const totalNum = hasBreakdown
-                  ? marksArr.reduce((s, m) => s + (m.totalMarks ?? m.total ?? 0), 0)
-                  : (typeof total === 'number' ? total : 100);
-
-                const pct  = obtainedNum != null && totalNum > 0
-                  ? Math.round((obtainedNum / totalNum) * 100)
-                  : null;
-                const gc   = pct != null ? gradeColor(pct) : { c: '#94A3B8', bg: '#F1F5F9', label: '—' };
-                const div  = pct != null ? divisionLabel(pct) : null;
-                const passed = pct != null ? pct >= 33 : null;
-
-                return (
-                  <div key={exam.id || i} style={{ ...card, padding: 0, overflow: 'hidden', marginBottom: 14 }}>
-                    <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: hasBreakdown ? '1px solid #F1F5F9' : 'none' }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 12, background: gc.bg, color: gc.c, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 17, flexShrink: 0, border: `2px solid ${gc.c}30` }}>
-                        {gc.label}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: NAVY, marginBottom: 2 }}>
-                          {exam.title || exam.examTitle || 'Exam'}
-                        </div>
-                        <div style={{ fontSize: 12, color: '#6B7280' }}>
-                          {exam.subject?.name || exam.subjectName || 'All Subjects'}
-                          {' · '}{fmtDate(exam.date || exam.examDate || exam.createdAt)}
-                        </div>
-                        {obtainedNum != null && (
-                          <div style={{ fontSize: 12.5, marginTop: 3, fontWeight: 700 }}>
-                            <span style={{ color: gc.c }}>{obtainedNum}</span>
-                            <span style={{ color: '#94A3B8' }}>/{totalNum} &nbsp;({pct}%)</span>
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                        {passed != null && (
-                          <span style={{ padding: '4px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 700, background: passed ? '#DCFCE7' : '#FEE2E2', color: passed ? '#15803D' : '#B91C1C' }}>
-                            {passed ? 'Pass' : 'Fail'}
-                          </span>
-                        )}
-                        {div && (
-                          <span style={{ padding: '3px 8px', borderRadius: 99, fontSize: 10.5, fontWeight: 600, background: div.bg, color: div.c }}>
-                            {div.text}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {hasBreakdown && (
-                      <div style={{ background: '#F8FAFC' }}>
-                        {marksArr.map((m, j) => {
-                          const subObt   = m.obtainedMarks ?? m.obtained ?? null;
-                          const subTotal = m.totalMarks    ?? m.total    ?? 100;
-                          const subPct   = subObt != null ? Math.round((subObt / subTotal) * 100) : null;
-                          const subGc    = subPct != null ? gradeColor(subPct) : { c: '#94A3B8', bg: '#F1F5F9', label: '—' };
-
-                          return (
-                            <div key={m.id || j} style={{ padding: '10px 16px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12.5, fontWeight: 600, color: '#374151' }}>
-                                  {m.subject?.name || m.subjectName || `Subject ${j + 1}`}
-                                </div>
-                              </div>
-                              <div style={{ fontSize: 12.5, color: NAVY, fontWeight: 700 }}>
-                                <span style={{ color: subGc.c }}>{subObt ?? '—'}</span>
-                                <span style={{ color: '#94A3B8', fontWeight: 400 }}>/{subTotal}</span>
-                              </div>
-                              <span style={{ background: subGc.bg, color: subGc.c, borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, minWidth: 28, textAlign: 'center' }}>
-                                {subGc.label}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+              exams.map((exam, i) => <StudentExamCard key={exam.id || i} exam={exam} />)
             )}
           </div>
         )}

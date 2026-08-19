@@ -56,12 +56,27 @@ const calcGradeFromThresholds = (obtained, total, thresholds) => {
 const calcGrade = (obtained, total) => calcGradeFromThresholds(obtained, total, null);
 
 /**
- * Load ExamSettings thresholds for the school, return null if model/row absent.
+ * Load the school's configured grade thresholds and build the
+ * {minPercent, grade} array calcGradeFromThresholds() expects.
+ *
+ * FIX: this used to read `settings.gradeThresholds`, a field that does not
+ * exist anywhere on the ExamSettings model (schema.prisma only has discrete
+ * gradeAPlus/gradeA/gradeB/gradeC/gradeD ints) — so it was always undefined
+ * and every mark was graded against the hard-coded 90/80/70/60/50 defaults
+ * below, completely ignoring whatever the school configured on the Exam
+ * Settings page. Build the thresholds from the real columns instead.
  */
 const loadThresholds = async (schoolId) => {
   try {
     const settings = await prisma.examSettings.findFirst({ where: { schoolId } });
-    if (settings && settings.gradeThresholds) return settings.gradeThresholds;
+    if (!settings) return null;
+    return [
+      { minPercent: settings.gradeAPlus, grade: 'A+' },
+      { minPercent: settings.gradeA,     grade: 'A'  },
+      { minPercent: settings.gradeB,     grade: 'B'  },
+      { minPercent: settings.gradeC,     grade: 'C'  },
+      { minPercent: settings.gradeD,     grade: 'D'  },
+    ];
   } catch (_) {
     // ExamSettings model may not exist in older schema versions
   }
