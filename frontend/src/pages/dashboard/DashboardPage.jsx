@@ -16,6 +16,7 @@ import {
   ChevronRight, ClipboardList, CreditCard, UserPlus,
   FileText, MessageSquare, BarChart2, Cake, Phone
 } from 'lucide-react';
+import { SkeletonCard } from '../../components/Skeleton';
 
 /* ── helpers ── */
 const Rs = v => 'Rs. ' + Number(v || 0).toLocaleString('en-PK');
@@ -286,7 +287,10 @@ export default function DashboardPage() {
 
       {/* ══ GRADIENT STAT CARDS ══ */}
       <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:14, marginBottom:20}}>
-        {STAT_CARDS.map((c, i) => <StatCard key={c.label} {...c} style={{animation:`ilm-fade-in 0.4s ease-out ${i*100}ms both`}} />)}
+        {isLoading
+          ? Array.from({ length: STAT_CARDS.length }).map((_, i) => <SkeletonCard key={i} />)
+          : STAT_CARDS.map((c, i) => <StatCard key={c.label} {...c} style={{animation:`ilm-fade-in 0.4s ease-out ${i*100}ms both`}} />)
+        }
       </div>
 
       {/* ══ UNIQUE ILMFORGE TODAY'S SNAPSHOT ══ */}

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import { UserPlus, Edit, Award, Users, UserCheck, UserX, Phone, Mail, LayoutGrid, Table, X, GraduationCap, ShieldCheck, Activity } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
+import { SkeletonRows, SkeletonCard } from '../../components/Skeleton';
 
 const money = v => 'Rs. ' + ((v||0)/100).toLocaleString();
 
@@ -224,15 +225,36 @@ export default function StaffPage() {
         <span>Staff app login: <strong>Email</strong> / Password: <strong>teacher</strong> (must change on first login). Teacher portal available on iOS &amp; Android.</span>
       </div>
 
-      {/* ── Loading ── */}
-      {isLoading && <div className="loading-center"><div className="spinner"/></div>}
+      {/* ── Loading — skeleton matches the active view mode ── */}
+      {isLoading && viewMode === 'card' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
+          {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      )}
+      {isLoading && viewMode === 'table' && (
+        <div className="card" style={{ padding:0, overflow:'hidden' }}>
+          <div className="table-wrap" style={{ borderRadius:0, border:'none' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>#</th><th>Code</th><th>Name</th><th>Department</th>
+                  <th>Designation</th><th>Joining Date</th><th>Basic Salary</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <SkeletonRows rows={8} cols={8} />
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ── Card Grid view ── */}
       {!isLoading && viewMode === 'card' && (
         staffList.length === 0
           ? <EmptyState type="staff" title="No staff members added" description="Add your teachers and staff to get started" action={() => window.location.href='/staff/new'} actionLabel="Add Staff Member"/>
           : (
-            <div style={{
+            <div className="skeleton-content-fade" style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))',
               gap: 16,
@@ -244,7 +266,7 @@ export default function StaffPage() {
 
       {/* ── Table view ── */}
       {!isLoading && viewMode === 'table' && (
-        <div className="card" style={{ padding:0, overflow:'hidden' }}>
+        <div className="card skeleton-content-fade" style={{ padding:0, overflow:'hidden' }}>
           <div className="table-wrap" style={{ borderRadius:0, border:'none' }}>
             <table className="data-table">
               <thead>

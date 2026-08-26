@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
 import { Printer, Search, BarChart2, FileDown, Users, AlertTriangle, List } from 'lucide-react';
 import { downloadExcel } from '../../utils/export';
+import { SkeletonRows } from '../../components/Skeleton';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -334,9 +335,27 @@ export default function AttendanceReportPage() {
             <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>Choose a report type above to get started</div>
           </div>
         ) : isLoading ? (
-          <div className="loading-center"><div className="spinner" /></div>
-        ) : (
           <div className="table-wrap" style={{ borderRadius: 0, border: 'none' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Reg No</th>
+                  <th>Name</th>
+                  <th>Father Name</th>
+                  <th style={{ textAlign: 'center' }}>Total Days</th>
+                  <th style={{ textAlign: 'center' }}>Present</th>
+                  <th style={{ textAlign: 'center' }}>Absent</th>
+                  <th style={{ textAlign: 'center' }}>Leave</th>
+                  <th style={{ minWidth: 140 }}>Percentage</th>
+                </tr>
+              </thead>
+              <tbody>
+                <SkeletonRows rows={8} cols={8} />
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="table-wrap skeleton-content-fade" style={{ borderRadius: 0, border: 'none' }}>
             <table className="data-table">
               <thead>
                 <tr>
