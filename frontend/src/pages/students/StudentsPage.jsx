@@ -6,6 +6,7 @@ import api from '../../api/client';
 import { ChevronDown, ChevronUp, X, FileText, Search } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
 import EmptyState from '../../components/ui/EmptyState';
+import { SkeletonRows } from '../../components/Skeleton';
 
 /* ─── helpers ─────────────────────────────────────────────────── */
 const TEAL = '#0D9488';
@@ -675,31 +676,31 @@ export default function StudentsPage() {
         )}
 
         {/* Table */}
-        {isLoading ? (
-          <div style={{ textAlign: 'center', padding: 48, color: '#9CA3AF' }}>
-            <div className="spinner" />
-          </div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-            <thead>
-              <tr style={{ background: TEAL }}>
-                <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>S.No.</th>
-                <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Class</th>
-                <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Section</th>
-                <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Strength</th>
-                <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Actions</th>
-                <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Details</th>
-              </tr>
-            </thead>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <thead>
+            <tr style={{ background: TEAL }}>
+              <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>S.No.</th>
+              <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Class</th>
+              <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Section</th>
+              <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Strength</th>
+              <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Actions</th>
+              <th style={{ padding: '11px 14px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Details</th>
+            </tr>
+          </thead>
+          {isLoading ? (
             <tbody>
-              {classSections.length === 0 && (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#9CA3AF' }}>
-                    No {activeTab} students found
-                  </td>
-                </tr>
-              )}
-              {classSections.map((row, idx) => {
+              <SkeletonRows rows={6} cols={6} />
+            </tbody>
+          ) : (
+          <tbody className="skeleton-content-fade">
+            {classSections.length === 0 && (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#9CA3AF' }}>
+                  No {activeTab} students found
+                </td>
+              </tr>
+            )}
+            {classSections.map((row, idx) => {
                 const rowKey = `${row.classId}-${row.sectionId}`;
                 const isExpanded = expandedRow === rowKey;
                 return (
@@ -814,8 +815,8 @@ export default function StudentsPage() {
                 );
               })}
             </tbody>
-          </table>
-        )}
+          )}
+        </table>
       </div>
 
       {/* Promote Modal */}

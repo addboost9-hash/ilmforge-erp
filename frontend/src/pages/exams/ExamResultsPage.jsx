@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
 import { ArrowLeft, Printer, Trophy, BarChart2 } from 'lucide-react';
+import { SkeletonRows } from '../../components/Skeleton';
 
 const gradeColor = g => {
   if (!g || g==='ABS') return {c:'#94a3b8', bg:'#F1F5F9'};
@@ -308,8 +309,28 @@ export default function ExamResultsPage() {
 
       {/* Marksheet table — hidden at print */}
       <div className="card no-print" style={{padding:0, overflow:'hidden'}}>
-        {isLoading ? <div className="loading-center"><div className="spinner"/></div> : (
+        {isLoading ? (
           <div className="table-wrap" style={{borderRadius:0, border:'none'}}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Student</th>
+                  <th>Subject</th>
+                  <th>Total</th>
+                  <th>Obtained</th>
+                  <th>%</th>
+                  <th>Grade</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <SkeletonRows rows={8} cols={8} />
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="table-wrap skeleton-content-fade" style={{borderRadius:0, border:'none'}}>
             <table className="data-table">
               <thead>
                 <tr>

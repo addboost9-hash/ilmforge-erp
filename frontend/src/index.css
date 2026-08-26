@@ -1641,3 +1641,24 @@ body.lang-ur .metric-value { font-family: 'Noto Nastaliq Urdu', serif; }
   [dir="rtl"] .sidebar.mobile-open { transform: translateX(0); }
   [dir="rtl"] .main-wrapper { margin-right: 0 !important; }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   SKELETON LOADER — layout wrappers for components/Skeleton.jsx
+   These are new, self-contained classes appended at the end of the
+   file; they only add layout/spacing and lean on the existing
+   `.skeleton` shimmer class + `fadeIn` keyframe defined above, so
+   nothing here overrides or duplicates prior rules.
+   ───────────────────────────────────────────────────────────── */
+.skeleton-card-box {
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.skeleton-text-block { display: flex; flex-direction: column; gap: 8px; }
+
+/* Fade the real content in once it replaces a skeleton placeholder */
+.skeleton-content-fade { animation: fadeIn .25s ease; }

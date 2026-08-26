@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
 import { BarChart2, FileDown, FileSpreadsheet } from 'lucide-react';
 import { downloadCSV, downloadExcel } from '../../utils/export';
+import { SkeletonRows } from '../../components/Skeleton';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -160,14 +161,27 @@ export default function FeeCollectionReportPage() {
             <div className="empty-state-text">Select month/year and click "Load Report"</div>
           </div>
         ) : isLoading ? (
-          <div className="loading-center"><div className="spinner" /></div>
+          <div className="table-wrap" style={{ borderRadius: 0, border: 'none' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {['Date', 'Student', 'Class', 'Amount', 'Method', 'Receipt No'].map(col => (
+                    <th key={col}>{col}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <SkeletonRows rows={7} cols={6} />
+              </tbody>
+            </table>
+          </div>
         ) : rows.length === 0 ? (
           <div className="empty-state" style={{ padding: 48 }}>
             <div className="empty-state-icon">📋</div>
             <div className="empty-state-text">No payments found for this period</div>
           </div>
         ) : (
-          <div className="table-wrap" style={{ borderRadius: 0, border: 'none' }}>
+          <div className="table-wrap skeleton-content-fade" style={{ borderRadius: 0, border: 'none' }}>
             <table className="data-table">
               <thead>
                 <tr>
