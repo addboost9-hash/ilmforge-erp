@@ -92,18 +92,18 @@ const ActionTile = React.memo(function ActionTile({ label, to, Icon, bg, color }
   );
 });
 
-/* ── build placeholder monthly chart data ── */
+/* ── build monthly fee chart data (real data; honest zeros when absent) ── */
 function buildFeeChartData(stats) {
   const thisYear = stats?.monthlyFeeThisYear || [];
   const lastYear = stats?.monthlyFeeLastYear || [];
   return MONTHS.map((m, i) => ({
     month: m,
-    thisYear: thisYear[i] ?? Math.floor(Math.random() * 80000 + 40000),
-    lastYear: lastYear[i] ?? Math.floor(Math.random() * 60000 + 30000),
+    thisYear: thisYear[i] ?? 0,
+    lastYear: lastYear[i] ?? 0,
   }));
 }
 
-/* ── build placeholder attendance chart data (last 6 months) ── */
+/* ── build attendance trend chart data (last 6 months; honest zeros when absent) ── */
 function buildAttChartData(stats) {
   const data = stats?.attendanceTrend || [];
   if (data.length) return data;
@@ -111,11 +111,7 @@ function buildAttChartData(stats) {
   return Array.from({ length: 6 }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
     const label = d.toLocaleString('en-PK', { month: 'short' });
-    return {
-      month: label,
-      present: Math.floor(Math.random() * 120 + 200),
-      absent: Math.floor(Math.random() * 40 + 10),
-    };
+    return { month: label, present: 0, absent: 0 };
   });
 }
 
@@ -183,7 +179,7 @@ export default function DashboardPage() {
   const presentToday  = s.students?.presentToday ?? s.presentToday ?? s.stats?.presentToday ?? 0;
   const pendingLeaves = s.pendingLeaves ?? s.stats?.pendingLeaves ?? 0;
 
-  const feeChartData = useMemo(() => buildFeeChartData(s), [s.monthlyChart]);
+  const feeChartData = useMemo(() => buildFeeChartData(s), [s.monthlyFeeThisYear, s.monthlyFeeLastYear]);
   const attChartData = useMemo(() => buildAttChartData(s), [s.attendanceTrend]);
 
   const admissions = Array.isArray(recentStudents) ? recentStudents

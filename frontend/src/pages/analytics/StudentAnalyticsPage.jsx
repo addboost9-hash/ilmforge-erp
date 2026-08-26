@@ -253,10 +253,10 @@ export default function StudentAnalyticsPage() {
         .sort((a, b) => b.rate - a.rate)
         .slice(0, 10);
     }
-    // Fallback: synthesise from enrollment (no real attendance data)
+    // No real attendance data available yet — show honest zeros, not fake numbers
     return classEnrollment.slice(0, 8).map(c => ({
       name: c.name,
-      rate: 70 + Math.floor(Math.random() * 25), // placeholder until real data
+      rate: 0,
     }));
   }, [attendanceReport, dashStats, classEnrollment]);
 

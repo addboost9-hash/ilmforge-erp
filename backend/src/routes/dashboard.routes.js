@@ -103,6 +103,47 @@ router.get('/stats', wrap(async (req, res) => {
   });
   const monthlyChart = Object.values(monthMap);
 
+  // ── 2b. Fee & attendance trend charts — 2 more queries, grouped in JS ────
+  const lastYearStart  = new Date(now.getFullYear() - 1, 0, 1);
+  const nextYearStart  = new Date(now.getFullYear() + 1, 0, 1);
+  const sixMonthsAgo   = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+  const [feePaymentsTwoYears, attendanceSixMonths] = await Promise.all([
+    prisma.feePayment.findMany({
+      where: { schoolId, paymentDate: { gte: lastYearStart, lt: nextYearStart } },
+      select: { amountPaid: true, paymentDate: true },
+    }),
+    prisma.attendance.findMany({
+      where: { schoolId, date: { gte: sixMonthsAgo, lt: tomorrow } },
+      select: { date: true, status: true },
+    }).catch(() => []),
+  ]);
+
+  const monthlyFeeThisYear = Array(12).fill(0);
+  const monthlyFeeLastYear = Array(12).fill(0);
+  feePaymentsTwoYears.forEach(p => {
+    const d = new Date(p.paymentDate);
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    if (y === now.getFullYear())       monthlyFeeThisYear[m] += p.amountPaid || 0;
+    else if (y === now.getFullYear() - 1) monthlyFeeLastYear[m] += p.amountPaid || 0;
+  });
+
+  const attMonthMap = {};
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    attMonthMap[key] = { month: MONTHS_SHORT[d.getMonth()], present: 0, absent: 0 };
+  }
+  (attendanceSixMonths || []).forEach(a => {
+    const d = new Date(a.date);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    if (!attMonthMap[key]) return;
+    if (a.status === 'present') attMonthMap[key].present += 1;
+    else if (a.status === 'absent') attMonthMap[key].absent += 1;
+  });
+  const attendanceTrend = Object.values(attMonthMap);
+
   // ── 3. Class-wise stats — 3 queries instead of 3N queries ────────────────
   const [classes, studentsByClass, attendanceByClass, feeByClass] = await Promise.all([
     prisma.class.findMany({ where: { schoolId, isActive: true }, orderBy: { orderNo: 'asc' }, select: { id: true, name: true } }),
@@ -143,6 +184,9 @@ router.get('/stats', wrap(async (req, res) => {
         incomeThisMonth: incomeMonthVal,
       },
       monthlyChart,
+      monthlyFeeThisYear,
+      monthlyFeeLastYear,
+      attendanceTrend,
       classStats,
       recentPayments,
       recentStudents,
