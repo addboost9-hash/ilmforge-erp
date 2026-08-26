@@ -172,6 +172,9 @@ function MarkAttendanceModal({ row, date, onClose, onSaved }) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mark-attendance-modal-title"
         style={{
           background: '#fff',
           borderRadius: 10,
@@ -195,10 +198,11 @@ function MarkAttendanceModal({ row, date, onClose, onSaved }) {
             justifyContent: 'space-between',
           }}
         >
-          <span style={{ fontWeight: 700, fontSize: 15 }}>
+          <span id="mark-attendance-modal-title" style={{ fontWeight: 700, fontSize: 15 }}>
             {row.className}{row.sectionName ? ` - ${row.sectionName}` : ''}
           </span>
           <button
+            aria-label="Close attendance dialog"
             onClick={onClose}
             style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex' }}
           >
@@ -1002,9 +1006,9 @@ export default function AttendanceHubPage() {
       {/* Hub Onboarding Modal */}
       {showHubOnboarding && (
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',backdropFilter:'blur(10px)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-          <div style={{background:'rgba(255,255,255,0.96)',backdropFilter:'blur(20px)',borderRadius:24,padding:'36px 32px',maxWidth:500,width:'100%',textAlign:'center',boxShadow:'0 25px 80px rgba(27,47,110,0.25)',animation:'scaleIn 0.3s ease-out'}}>
+          <div role="dialog" aria-modal="true" aria-labelledby="attendance-hub-onboarding-title" style={{background:'rgba(255,255,255,0.96)',backdropFilter:'blur(20px)',borderRadius:24,padding:'36px 32px',maxWidth:500,width:'100%',textAlign:'center',boxShadow:'0 25px 80px rgba(27,47,110,0.25)',animation:'scaleIn 0.3s ease-out'}}>
             <div style={{fontSize:64,marginBottom:12}}>🏫</div>
-            <h2 style={{fontSize:22,fontWeight:800,color:'#1B2F6E',margin:'0 0 8px'}}>Class Attendance Hub</h2>
+            <h2 id="attendance-hub-onboarding-title" style={{fontSize:22,fontWeight:800,color:'#1B2F6E',margin:'0 0 8px'}}>Class Attendance Hub</h2>
             <p style={{color:'#64748b',fontSize:14,lineHeight:1.7,margin:'0 0 24px'}}>Manage all attendance from one place. Switch between students, staff, and reports using the tabs below.</p>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:24,textAlign:'left'}}>
               {[

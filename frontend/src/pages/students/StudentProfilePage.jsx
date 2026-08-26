@@ -127,8 +127,9 @@ function FeeDetailsPanel({ studentId }) {
       </div>
 
       <div style={{ marginBottom: 14 }}>
-        <label style={{ fontWeight: 600, fontSize: 12, color: '#374151', display: 'block', marginBottom: 4 }}>Comments</label>
+        <label htmlFor="fee-discount-comments" style={{ fontWeight: 600, fontSize: 12, color: '#374151', display: 'block', marginBottom: 4 }}>Comments</label>
         <textarea
+          id="fee-discount-comments"
           rows={3}
           style={{ ...inpStyle, resize: 'vertical' }}
           placeholder="Reason for discount or additional notes…"
@@ -179,36 +180,41 @@ function EditStudentModal({ student, onClose }) {
     onError: (err) => toast.error(err.response?.data?.message || 'Update failed'),
   });
 
-  const inp = (label, key, type='text', opts=null) => (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#374151', marginBottom:4 }}>{label}</label>
-      {opts ? (
-        <select
-          value={form[key]}
-          onChange={e => setForm(p => ({...p, [key]: e.target.value}))}
-          style={{ width:'100%', padding:'8px 10px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13 }}
-        >
-          {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-        </select>
-      ) : (
-        <input
-          type={type}
-          value={form[key]}
-          onChange={e => setForm(p => ({...p, [key]: e.target.value}))}
-          style={{ width:'100%', padding:'8px 10px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13, boxSizing:'border-box' }}
-        />
-      )}
-    </div>
-  );
+  const inp = (label, key, type='text', opts=null) => {
+    const fieldId = `edit-student-${key}`;
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <label htmlFor={fieldId} style={{ display:'block', fontSize:12, fontWeight:700, color:'#374151', marginBottom:4 }}>{label}</label>
+        {opts ? (
+          <select
+            id={fieldId}
+            value={form[key]}
+            onChange={e => setForm(p => ({...p, [key]: e.target.value}))}
+            style={{ width:'100%', padding:'8px 10px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13 }}
+          >
+            {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+          </select>
+        ) : (
+          <input
+            id={fieldId}
+            type={type}
+            value={form[key]}
+            onChange={e => setForm(p => ({...p, [key]: e.target.value}))}
+            style={{ width:'100%', padding:'8px 10px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13, boxSizing:'border-box' }}
+          />
+        )}
+      </div>
+    );
+  };
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
       onClick={onClose}>
-      <div style={{ background:'#fff', borderRadius:10, width:'100%', maxWidth:560, maxHeight:'90vh', display:'flex', flexDirection:'column', overflow:'hidden' }}
+      <div role="dialog" aria-modal="true" aria-labelledby="edit-student-modal-title" style={{ background:'#fff', borderRadius:10, width:'100%', maxWidth:560, maxHeight:'90vh', display:'flex', flexDirection:'column', overflow:'hidden' }}
         onClick={e => e.stopPropagation()}>
         <div style={{ background:NAVY, color:'#fff', padding:'14px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <span style={{ fontWeight:700, fontSize:15 }}>Edit Student — {student.name}</span>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', cursor:'pointer' }}><X size={18}/></button>
+          <span id="edit-student-modal-title" style={{ fontWeight:700, fontSize:15 }}>Edit Student — {student.name}</span>
+          <button aria-label="Close edit student dialog" onClick={onClose} style={{ background:'none', border:'none', color:'#fff', cursor:'pointer' }}><X size={18}/></button>
         </div>
         <div style={{ flex:1, overflowY:'auto', padding:20 }}>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 16px' }}>
@@ -392,7 +398,7 @@ export default function StudentProfilePage() {
     <div className="page-content fade-up">
       {/* Header */}
       <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
-        <Link to="/students" className="btn btn-outline btn-sm btn-icon"><ArrowLeft size={15}/></Link>
+        <Link to="/students" className="btn btn-outline btn-sm btn-icon" aria-label="Back to students list"><ArrowLeft size={15}/></Link>
         <h1 className="page-title">{s.name}</h1>
         <span className={`badge ${s.status==='active'?'badge-teal':s.status==='passout'?'badge-gray':'badge-red'}`}>{s.status}</span>
         <div style={{marginLeft:'auto', display:'flex', gap:8}}>
@@ -421,7 +427,7 @@ export default function StudentProfilePage() {
           {savedPhoto
             ? <img src={savedPhoto} alt={s.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
             : (s.photoUrl
-                ? <img src={s.photoUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                ? <img src={s.photoUrl} alt={s.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
                 : '👤')
           }
         </div>
@@ -563,7 +569,7 @@ export default function StudentProfilePage() {
                         <td style={{color:inv.dueAmount>0?'#DC2626':'#059669',fontWeight:700}}>{money(inv.dueAmount)}</td>
                         <td><span className={`badge ${inv.status==='paid'?'badge-green':inv.status==='partial'?'badge-amber':'badge-red'}`}>{inv.status}</span></td>
                         <td>
-                          <a href={`/api/v1/pdf/voucher/${inv.id}`} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline btn-icon">
+                          <a href={`/api/v1/pdf/voucher/${inv.id}`} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline btn-icon" aria-label={`Print voucher for ${inv.feeTitle}`}>
                             <Printer size={12}/>
                           </a>
                         </td>

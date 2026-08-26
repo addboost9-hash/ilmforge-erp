@@ -272,6 +272,9 @@ function FloatingActionButton() {
         >{a.icon}</a>
       ))}
       <button onClick={() => setOpen(o => !o)}
+        aria-label={open ? 'Close quick actions' : 'Open quick actions'}
+        aria-expanded={open}
+        title="Quick actions"
         style={{
           width:52, height:52, borderRadius:'50%',
           background:'linear-gradient(135deg,#1B2F6E,#0073b7)',
@@ -1412,6 +1415,9 @@ export default function AdminLayout() {
           }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logout-confirm-title"
             onClick={e => e.stopPropagation()}
             style={{
               background: '#fff',
@@ -1438,7 +1444,7 @@ export default function AdminLayout() {
               <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#fef2f2', border: '2px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 26 }}>
                 🚪
               </div>
-              <h3 style={{ textAlign: 'center', fontSize: 20, fontWeight: 800, color: '#1e3a5f', margin: '0 0 8px' }}>
+              <h3 id="logout-confirm-title" style={{ textAlign: 'center', fontSize: 20, fontWeight: 800, color: '#1e3a5f', margin: '0 0 8px' }}>
                 Sign Out?
               </h3>
               <p style={{ textAlign: 'center', fontSize: 14, color: '#64748b', lineHeight: 1.6, margin: '0 0 6px' }}>

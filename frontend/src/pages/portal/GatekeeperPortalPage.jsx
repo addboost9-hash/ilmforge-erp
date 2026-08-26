@@ -220,13 +220,13 @@ function VisitorTab({ CYAN, NAVY }) {
             { label:'Vehicle No (optional)', key:'vehicleNo', ph:'ABC-123' },
           ].map(f => (
             <div key={f.key}>
-              <label style={{ fontSize:11, fontWeight:600, color:'#94a3b8', display:'block', marginBottom:4 }}>{f.label}</label>
-              <input style={inp} placeholder={f.ph} value={form[f.key]} onChange={e => setForm({...form,[f.key]:e.target.value})} />
+              <label htmlFor={`gk-${f.key}`} style={{ fontSize:11, fontWeight:600, color:'#94a3b8', display:'block', marginBottom:4 }}>{f.label}</label>
+              <input id={`gk-${f.key}`} style={inp} placeholder={f.ph} value={form[f.key]} onChange={e => setForm({...form,[f.key]:e.target.value})} />
             </div>
           ))}
           <div>
-            <label style={{ fontSize:11, fontWeight:600, color:'#94a3b8', display:'block', marginBottom:4 }}>Purpose of Visit</label>
-            <select style={inp} value={form.purpose} onChange={e => setForm({...form,purpose:e.target.value})}>
+            <label htmlFor="gk-purpose" style={{ fontSize:11, fontWeight:600, color:'#94a3b8', display:'block', marginBottom:4 }}>Purpose of Visit</label>
+            <select id="gk-purpose" style={inp} value={form.purpose} onChange={e => setForm({...form,purpose:e.target.value})}>
               {PURPOSES.map(p => <option key={p} value={p} style={{ background:'#1e3a5f' }}>{p}</option>)}
             </select>
           </div>

@@ -291,10 +291,10 @@ export default function ParentPortalPage() {
       {showWelcome && (
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',backdropFilter:'blur(8px)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}
           onClick={() => { localStorage.setItem('parent_portal_seen','1'); setShowWelcome(false); }}>
-          <div style={{background:'rgba(255,255,255,0.95)',borderRadius:24,padding:36,maxWidth:420,textAlign:'center',animation:'scaleIn 0.3s ease-out',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}
+          <div role="dialog" aria-modal="true" aria-labelledby="parent-welcome-title" style={{background:'rgba(255,255,255,0.95)',borderRadius:24,padding:36,maxWidth:420,textAlign:'center',animation:'scaleIn 0.3s ease-out',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}
             onClick={e => e.stopPropagation()}>
             <div style={{fontSize:64,marginBottom:12}}>👨‍👩‍👧</div>
-            <h2 style={{fontSize:20,fontWeight:800,color:'#1B2F6E',margin:'0 0 8px'}}>Welcome to Parent Portal</h2>
+            <h2 id="parent-welcome-title" style={{fontSize:20,fontWeight:800,color:'#1B2F6E',margin:'0 0 8px'}}>Welcome to Parent Portal</h2>
             <p style={{color:'#64748b',fontSize:13,lineHeight:1.7,margin:'0 0 20px'}}>Track your child's attendance, fees, and exam results — all in one place.</p>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:20}}>
               {['📋 Attendance','💰 Fee Status','📝 Results','🏠 Apply Leave'].map(f => (
@@ -942,10 +942,10 @@ export default function ParentPortalPage() {
       {payModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
           onClick={e => { if (e.target === e.currentTarget) { setPayModal(null); submitOnlinePayment.reset(); } }}>
-          <div style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:420, padding:'24px 22px', boxShadow:'0 20px 60px rgba(0,0,0,0.25)', maxHeight:'90vh', overflowY:'auto' }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="online-payment-title" style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:420, padding:'24px 22px', boxShadow:'0 20px 60px rgba(0,0,0,0.25)', maxHeight:'90vh', overflowY:'auto' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
-              <div style={{ fontWeight:800, fontSize:16, color:NAVY }}>💳 Online Payment</div>
-              <button onClick={() => { setPayModal(null); submitOnlinePayment.reset(); }}
+              <div id="online-payment-title" style={{ fontWeight:800, fontSize:16, color:NAVY }}>💳 Online Payment</div>
+              <button aria-label="Close online payment dialog" onClick={() => { setPayModal(null); submitOnlinePayment.reset(); }}
                 style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#94A3B8', lineHeight:1 }}>×</button>
             </div>
 

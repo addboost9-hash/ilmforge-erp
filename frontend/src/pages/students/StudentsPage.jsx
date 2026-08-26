@@ -142,6 +142,9 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="promote-modal-title"
         style={{
           background: '#fff',
           borderRadius: 10,
@@ -165,11 +168,12 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
             justifyContent: 'space-between',
           }}
         >
-          <span style={{ fontWeight: 700, fontSize: 15 }}>
+          <span id="promote-modal-title" style={{ fontWeight: 700, fontSize: 15 }}>
             Promote From {row.className}
             {row.sectionName ? ` - ${row.sectionName}` : ''} to
           </span>
           <button
+            aria-label="Close promote dialog"
             onClick={onClose}
             style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex' }}
           >
@@ -341,6 +345,9 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
           }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-promotion-title"
             style={{
               background: '#fff',
               borderRadius: 10,
@@ -350,7 +357,7 @@ function PromoteModal({ row, classes, onClose, onPromoted }) {
               boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
             }}
           >
-            <h3 style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 700, color: '#111827' }}>
+            <h3 id="confirm-promotion-title" style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 700, color: '#111827' }}>
               Confirm Promotion
             </h3>
             <p style={{ margin: '0 0 20px', fontSize: 14, color: '#374151', lineHeight: 1.6 }}>
@@ -480,7 +487,7 @@ export default function StudentsPage() {
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
         }} onClick={() => { setShowOnboarding(false); localStorage.setItem('students_visited', '1'); }}>
-          <div style={{
+          <div role="dialog" aria-modal="true" aria-labelledby="students-onboarding-title" style={{
             background: '#fff', borderRadius: 20, maxWidth: 560, width: '100%',
             overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
             animation: 'ilm-fade-in 0.3s ease-out',
@@ -490,7 +497,7 @@ export default function StudentsPage() {
               color: '#fff', textAlign: 'center',
             }}>
               <div style={{ fontSize: 48, marginBottom: 8 }}>👨‍🎓</div>
-              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Students Module</h2>
+              <h2 id="students-onboarding-title" style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Students Module</h2>
               <p style={{ margin: '6px 0 0', opacity: 0.85, fontSize: 14 }}>Everything you need to manage your students</p>
             </div>
             <div style={{ padding: '24px 28px' }}>
@@ -574,10 +581,11 @@ export default function StudentsPage() {
             <input
               value={searchInput} onChange={e=>handleSearchChange(e.target.value)}
               placeholder="Search by name, roll number, father name..."
+              aria-label="Search students by name, roll number, or father name"
               style={{paddingLeft:32, paddingRight:searchInput?32:14, padding:'8px 14px 8px 32px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13, width:240}}
             />
             {searchInput && (
-              <button onClick={()=>{ setSearchInput(''); }}
+              <button aria-label="Clear search" onClick={()=>{ setSearchInput(''); }}
                 style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',
                   background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:18,lineHeight:1}}>
                 ×
@@ -730,6 +738,8 @@ export default function StudentsPage() {
                       </td>
                       <td style={{ padding: '10px 14px' }}>
                         <button
+                          aria-label={isExpanded ? `Hide students in ${row.className}${row.sectionName ? ' - ' + row.sectionName : ''}` : `Show students in ${row.className}${row.sectionName ? ' - ' + row.sectionName : ''}`}
+                          aria-expanded={isExpanded}
                           style={{
                             background: 'none',
                             border: '1px solid #D1D5DB',

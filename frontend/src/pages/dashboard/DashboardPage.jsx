@@ -13,8 +13,7 @@ import api from '../../api/client';
 import useAuthStore from '../../store/auth.store';
 import { useTranslation } from '../../hooks/useTranslation';
 import {
-  Users, Briefcase, DollarSign, AlertTriangle, CheckCircle, Calendar,
-  ChevronRight, RefreshCw, ClipboardList, CreditCard, UserPlus,
+  ChevronRight, ClipboardList, CreditCard, UserPlus,
   FileText, MessageSquare, BarChart2, Cake, Phone
 } from 'lucide-react';
 
@@ -216,9 +215,9 @@ export default function DashboardPage() {
       {/* ══ WELCOME MODAL (first-time / empty school) ══ */}
       {isNewSchool && !isLoading && totalStudents === 0 && totalStaff === 0 && (
         <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center'}}>
-          <div style={{background:'white', borderRadius:20, padding:40, maxWidth:480, width:'90%', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.3)', animation:'welcomeSlideIn .35s ease'}}>
+          <div role="dialog" aria-modal="true" aria-labelledby="welcome-modal-title" style={{background:'white', borderRadius:20, padding:40, maxWidth:480, width:'90%', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.3)', animation:'welcomeSlideIn .35s ease'}}>
             <div style={{fontSize:60, marginBottom:16}}>🎓</div>
-            <h2 style={{color:'#1B2F6E', fontSize:22, fontWeight:800, margin:'0 0 10px'}}>Welcome to IlmForge!</h2>
+            <h2 id="welcome-modal-title" style={{color:'#1B2F6E', fontSize:22, fontWeight:800, margin:'0 0 10px'}}>Welcome to IlmForge!</h2>
             <p style={{color:'#64748b', fontSize:14, lineHeight:1.7, margin:0}}>
               Your school management system is ready. Let's set it up in just a few steps so you can start managing students, fees, attendance and more.
             </p>
