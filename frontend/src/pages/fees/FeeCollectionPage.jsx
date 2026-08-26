@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { printFeeVoucher } from '../../utils/printDesigns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { Search, DollarSign, Printer, X, CheckCircle, Receipt, CreditCard } from 'lucide-react';
+import { Search, DollarSign, Printer, X, CheckCircle, Receipt } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
 import EmptyState from '../../components/ui/EmptyState';
 
@@ -115,6 +114,7 @@ export default function FeeCollectionPage() {
             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
             <input
               className="form-control"
+              aria-label="Search student by name, roll number, or father name"
               style={{ paddingLeft: 34 }}
               placeholder="Type student name, roll no, or father name..."
               value={searchInput}
@@ -122,6 +122,7 @@ export default function FeeCollectionPage() {
             />
             {selected && (
               <button
+                aria-label="Clear selected student"
                 onClick={() => { setSelected(null); setSearchInput(''); }}
                 style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
                 <X size={15} />
@@ -303,17 +304,17 @@ export default function FeeCollectionPage() {
       {/* Payment Modal */}
       {showModal && activeInv && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal modal-sm" onClick={e => e.stopPropagation()} style={{ padding: 0 }}>
+          <div className="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="collect-payment-title" onClick={e => e.stopPropagation()} style={{ padding: 0 }}>
 
             {/* Modal Header */}
             <div className="card-header" style={{ borderRadius: '8px 8px 0 0' }}>
               <div>
-                <div className="modal-title">Collect Payment</div>
+                <div id="collect-payment-title" className="modal-title">Collect Payment</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                   {activeInv.feeTitle} — {activeInv.month} {activeInv.year}
                 </div>
               </div>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+              <button aria-label="Close collect payment dialog" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
                 <X size={18} />
               </button>
             </div>
@@ -338,18 +339,18 @@ export default function FeeCollectionPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Amount to Collect (Rs.) *</label>
-                <input className="form-control" type="number" step="1" min="1"
+                <label htmlFor="collect-amount" className="form-label">Amount to Collect (Rs.) *</label>
+                <input id="collect-amount" className="form-control" type="number" step="1" min="1"
                   value={payForm.amountPaid} onChange={e => setPayForm({ ...payForm, amountPaid: e.target.value })} />
               </div>
               <div className="form-group">
-                <label className="form-label">Discount (Rs.)</label>
-                <input className="form-control" type="number" step="1" min="0"
+                <label htmlFor="collect-discount" className="form-label">Discount (Rs.)</label>
+                <input id="collect-discount" className="form-control" type="number" step="1" min="0"
                   value={payForm.discount} onChange={e => setPayForm({ ...payForm, discount: e.target.value })} />
               </div>
               <div className="form-group">
-                <label className="form-label">Payment Method</label>
-                <select className="form-select" value={payForm.method} onChange={e => setPayForm({ ...payForm, method: e.target.value })}>
+                <label htmlFor="collect-method" className="form-label">Payment Method</label>
+                <select id="collect-method" className="form-select" value={payForm.method} onChange={e => setPayForm({ ...payForm, method: e.target.value })}>
                   <option value="cash">Cash</option>
                   <option value="card">Card</option>
                   <option value="online">Online Transfer</option>
@@ -359,8 +360,8 @@ export default function FeeCollectionPage() {
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Notify Parent</label>
-                <select className="form-select" value={payForm.notifyVia} onChange={e => setPayForm({ ...payForm, notifyVia: e.target.value })}>
+                <label htmlFor="collect-notify" className="form-label">Notify Parent</label>
+                <select id="collect-notify" className="form-select" value={payForm.notifyVia} onChange={e => setPayForm({ ...payForm, notifyVia: e.target.value })}>
                   <option value="whatsapp_sms">WhatsApp + SMS</option>
                   <option value="sms">SMS Only</option>
                   <option value="none">Do Not Notify</option>
@@ -381,16 +382,16 @@ export default function FeeCollectionPage() {
       {/* Receipt Success Modal — shown after successful payment */}
       {receiptData && (
         <div className="modal-overlay" onClick={() => setReceiptData(null)}>
-          <div className="modal modal-sm" onClick={e => e.stopPropagation()} style={{ padding: 0 }}>
+          <div className="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="payment-success-title" onClick={e => e.stopPropagation()} style={{ padding: 0 }}>
             <div className="card-header" style={{ borderRadius: '8px 8px 0 0', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <CheckCircle size={20} color="#fff" />
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>Payment Successful</div>
+                  <div id="payment-success-title" style={{ fontWeight: 700, fontSize: 15 }}>Payment Successful</div>
                   <div style={{ fontSize: 12, opacity: 0.85 }}>Receipt generated</div>
                 </div>
               </div>
-              <button onClick={() => setReceiptData(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center' }}>
+              <button aria-label="Close receipt dialog" onClick={() => setReceiptData(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center' }}>
                 <X size={18} />
               </button>
             </div>

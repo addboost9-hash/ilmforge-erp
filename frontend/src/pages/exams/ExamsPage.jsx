@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { Plus, ClipboardList, BarChart2, GraduationCap, X, ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react';
+import { Plus, ClipboardList, BarChart2, X, ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
 
 const TEAL = '#0D9488';
@@ -50,6 +50,7 @@ function ClassMultiSelect({ classes = [], selectedClasses, onChange }) {
           }}>
             {sc.className}
             <button
+              aria-label={`Remove ${sc.className}`}
               onMouseDown={e => { e.stopPropagation(); removeClass(sc.classId); }}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0F766E', padding: 0, fontSize: 13, lineHeight: 1 }}
             >×</button>
@@ -68,6 +69,7 @@ function ClassMultiSelect({ classes = [], selectedClasses, onChange }) {
           <div style={{ padding: '8px 10px', borderBottom: '1px solid #F3F4F6' }}>
             <input
               autoFocus
+              aria-label="Search classes"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search class..."
@@ -156,19 +158,19 @@ function ExamModal({ classes = [], initial = null, onClose, onSubmit, isSubmitti
 
   return (
     <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={modal}>
+      <div role="dialog" aria-modal="true" aria-labelledby="exam-modal-title" style={modal}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#1E3A5F' }}>
+          <h2 id="exam-modal-title" style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#1E3A5F' }}>
             {initial ? 'Edit Exam' : '+ Add Exam'}
           </h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 20 }}>
+          <button aria-label="Close exam dialog" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 20 }}>
             <X size={18} />
           </button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Select Classes</label>
+            <label id="exam-select-classes-label" className="form-label">Select Classes</label>
             <ClassMultiSelect
               classes={classes}
               selectedClasses={form.selectedClasses}
@@ -177,8 +179,9 @@ function ExamModal({ classes = [], initial = null, onClose, onSubmit, isSubmitti
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Exam Name *</label>
+            <label htmlFor="exam-title" className="form-label">Exam Name *</label>
             <input
+              id="exam-title"
               className="form-input"
               placeholder="e.g. 1st Term Exam 2025"
               value={form.title}
@@ -187,8 +190,8 @@ function ExamModal({ classes = [], initial = null, onClose, onSubmit, isSubmitti
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Type</label>
-            <select className="form-select" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+            <label htmlFor="exam-type" className="form-label">Type</label>
+            <select id="exam-type" className="form-select" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
               <option value="test">Class Test</option>
               <option value="weekly">Weekly Test</option>
               <option value="monthly">Monthly Test</option>
@@ -205,12 +208,12 @@ function ExamModal({ classes = [], initial = null, onClose, onSubmit, isSubmitti
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">From</label>
-              <input className="form-input" type="date" value={form.dateStart} onChange={e => setForm(f => ({ ...f, dateStart: e.target.value }))} />
+              <label htmlFor="exam-date-start" className="form-label">From</label>
+              <input id="exam-date-start" className="form-input" type="date" value={form.dateStart} onChange={e => setForm(f => ({ ...f, dateStart: e.target.value }))} />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">To</label>
-              <input className="form-input" type="date" value={form.dateEnd} onChange={e => setForm(f => ({ ...f, dateEnd: e.target.value }))} />
+              <label htmlFor="exam-date-end" className="form-label">To</label>
+              <input id="exam-date-end" className="form-input" type="date" value={form.dateEnd} onChange={e => setForm(f => ({ ...f, dateEnd: e.target.value }))} />
             </div>
           </div>
         </div>
@@ -354,6 +357,7 @@ export default function ExamsPage() {
                         <td>
                           <button
                             className="btn btn-sm"
+                            aria-label={`Delete ${e.title}`}
                             style={{ background: '#DC2626', color: '#fff', border: 'none', padding: '4px 10px', fontSize: 12 }}
                             onClick={() => { if (window.confirm('Delete this exam?')) del.mutate(e.id); }}
                           >
@@ -363,6 +367,8 @@ export default function ExamsPage() {
                         <td>
                           <button
                             className="btn btn-outline btn-sm"
+                            aria-label={isExpanded ? `Hide details for ${e.title}` : `Show details for ${e.title}`}
+                            aria-expanded={isExpanded}
                             style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                             onClick={() => setExpandedRow(isExpanded ? null : e.id)}
                           >

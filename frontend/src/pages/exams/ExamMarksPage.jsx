@@ -175,13 +175,14 @@ export default function ExamMarksPage() {
       <div className="ilm-card" style={{ marginBottom: 16 }}>
         <div className="ilm-card-body" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 200px' }}>
-            <label className="ilm-label">Select Exam *</label>
+            <label htmlFor="marks-exam-select" className="ilm-label">Select Exam *</label>
             {urlExamId && exam ? (
-              <div style={{ padding: '10px 14px', border: '1.5px solid #bfdbfe', borderRadius: 10, fontSize: 13, background: '#eff6ff', color: '#1d4ed8', fontWeight: 700 }}>
+              <div id="marks-exam-select" style={{ padding: '10px 14px', border: '1.5px solid #bfdbfe', borderRadius: 10, fontSize: 13, background: '#eff6ff', color: '#1d4ed8', fontWeight: 700 }}>
                 {exam.title} ({exam.term || exam.type || ''})
               </div>
             ) : (
               <select
+                id="marks-exam-select"
                 value={selectedExam}
                 onChange={e => { setSelectedExam(e.target.value); setMarks({}); }}
                 className="form-select"
@@ -195,8 +196,9 @@ export default function ExamMarksPage() {
             )}
           </div>
           <div style={{ flex: '1 1 200px' }}>
-            <label className="ilm-label">Select Class *</label>
+            <label htmlFor="marks-class-select" className="ilm-label">Select Class *</label>
             <select
+              id="marks-class-select"
               value={selectedClass}
               onChange={e => { setSelectedClass(e.target.value); setMarks({}); }}
               className="form-select"
@@ -278,6 +280,7 @@ export default function ExamMarksPage() {
                                 max={maxMarks}
                                 value={val}
                                 onChange={e => setMark(student.id, sub.id, e.target.value)}
+                                aria-label={`${student.name} — ${sub.name} marks out of ${maxMarks}`}
                                 placeholder="—"
                                 style={{
                                   width: 70, textAlign: 'center',

@@ -3,7 +3,7 @@
  * 5-tab unified fee page matching School Mentor layout
  * Tabs: Fee Structure | Fee Challans | Fee Receiving | Fee History | Reports
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
@@ -57,6 +57,7 @@ function MonthYearFilters({ month, year, search, onMonth, onYear, onSearch, onGe
           value={month}
           onChange={e => onMonth(e.target.value)}
           placeholder="e.g. July"
+          aria-label="Month"
           style={{ padding: '7px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, width: 120 }}
         />
       </div>
@@ -66,6 +67,7 @@ function MonthYearFilters({ month, year, search, onMonth, onYear, onSearch, onGe
           value={year}
           onChange={e => onYear(e.target.value)}
           placeholder="e.g. 2026"
+          aria-label="Year"
           style={{ padding: '7px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, width: 100 }}
         />
       </div>
@@ -77,6 +79,7 @@ function MonthYearFilters({ month, year, search, onMonth, onYear, onSearch, onGe
             value={search}
             onChange={e => onSearch(e.target.value)}
             placeholder="Search by Name, FatherName, Registration and Phone"
+            aria-label="Search by name, father name, registration or phone"
             style={{ padding: '7px 12px 7px 30px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12.5, width: '100%' }}
           />
         </div>
@@ -138,14 +141,14 @@ function UpdateFeeModal({ cls, onClose, onSave }) {
       background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
-      <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="update-fee-title" style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         {/* Header */}
         <div style={{ background: TEAL, padding: '16px 20px', borderRadius: '14px 14px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ color: '#fff', fontWeight: 800, fontSize: 15 }}>Update Fee Structure</div>
+            <div id="update-fee-title" style={{ color: '#fff', fontWeight: 800, fontSize: 15 }}>Update Fee Structure</div>
             <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>{cls.className} — {cls.sectionName || 'All Sections'}</div>
           </div>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button aria-label="Close update fee structure dialog" onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <X size={14} />
           </button>
         </div>
@@ -161,6 +164,7 @@ function UpdateFeeModal({ cls, onClose, onSave }) {
                   onChange={e => { const n = [...heads]; n[i] = { ...n[i], name: e.target.value }; setHeads(n); }}
                   style={{ flex: 1, padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}
                   placeholder="Fee head name"
+                  aria-label={`Fee head ${i + 1} name`}
                 />
                 <div style={{ position: 'relative' }}>
                   <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: 13 }}>Rs.</span>
@@ -171,9 +175,11 @@ function UpdateFeeModal({ cls, onClose, onSave }) {
                     style={{ width: 110, padding: '8px 12px 8px 34px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}
                     placeholder="0"
                     min="0"
+                    aria-label={`${h.name || 'Fee head ' + (i + 1)} amount`}
                   />
                 </div>
                 <button
+                  aria-label={`Remove ${h.name || 'fee head'}`}
                   onClick={() => setHeads(heads.filter((_, j) => j !== i))}
                   style={{ ...btn(), background: '#FEF2F2', color: '#DC2626', padding: '7px' }}
                 >
@@ -757,7 +763,7 @@ function FeeHistoryTab() {
                 </td>
                 <td style={{ padding: '10px 14px', color: '#374151' }}>{inv.paidAt ? new Date(inv.paidAt).toLocaleDateString() : '—'}</td>
                 <td style={{ padding: '10px 14px' }}>
-                  <button style={{ ...outlineBtn('#1d4ed8'), padding: '5px 9px' }}>
+                  <button aria-label={`Download invoice ${inv.invoiceNo || i + 1}`} style={{ ...outlineBtn('#1d4ed8'), padding: '5px 9px' }}>
                     <Download size={13} />
                   </button>
                 </td>
@@ -947,9 +953,9 @@ export default function FeeManagementPage() {
       {/* ── Onboarding Modal ── */}
       {showOnboarding && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(20px)', borderRadius: 24, padding: '36px 32px', maxWidth: 500, width: '100%', textAlign: 'center', boxShadow: '0 25px 80px rgba(27,47,110,0.25)', animation: 'scaleIn 0.3s ease-out' }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="fee-onboarding-title" style={{ background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(20px)', borderRadius: 24, padding: '36px 32px', maxWidth: 500, width: '100%', textAlign: 'center', boxShadow: '0 25px 80px rgba(27,47,110,0.25)', animation: 'scaleIn 0.3s ease-out' }}>
             <div style={{ fontSize: 64, marginBottom: 12 }}>💰</div>
-            <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1B2F6E', margin: '0 0 8px' }}>Fee Management</h2>
+            <h2 id="fee-onboarding-title" style={{ fontSize: 22, fontWeight: 800, color: '#1B2F6E', margin: '0 0 8px' }}>Fee Management</h2>
             <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.7, margin: '0 0 24px' }}>Complete fee management in 5 simple steps.</p>
 
             {/* 5-step process */}

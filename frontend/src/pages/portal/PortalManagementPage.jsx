@@ -321,6 +321,7 @@ export default function PortalManagementPage() {
                 <input
                   type="email"
                   className="form-input"
+                  aria-label={`Parent email for ${parentName}`}
                   style={{ padding:'4px 8px', fontSize:12, height:28, minWidth:180 }}
                   placeholder="Enter parent email…"
                   value={parentEmailOverrides[studentId] !== undefined ? parentEmailOverrides[studentId] : resolvedEmail}
@@ -680,18 +681,18 @@ export default function PortalManagementPage() {
       {/* ═══ RESET PASSWORD MODAL ═══ */}
       {resetModal && (
         <div className="modal-overlay" onClick={()=>setResetModal(null)}>
-          <div className="modal modal-sm" onClick={e=>e.stopPropagation()}>
+          <div className="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="reset-password-title" onClick={e=>e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <div className="modal-title">🔑 Reset Password</div>
+                <div id="reset-password-title" className="modal-title">🔑 Reset Password</div>
                 <div style={{ fontSize:12.5, color:'#6B7280', marginTop:3 }}>For: <strong>{resetModal.person.name}</strong></div>
               </div>
-              <button onClick={()=>setResetModal(null)} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF' }}><X size={17}/></button>
+              <button aria-label="Close reset password dialog" onClick={()=>setResetModal(null)} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF' }}><X size={17}/></button>
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label className="form-label">New Password</label>
-                <input className="form-input" type="text" placeholder="Enter new password (min 6 chars)"
+                <label htmlFor="reset-password-input" className="form-label">New Password</label>
+                <input id="reset-password-input" className="form-input" type="text" placeholder="Enter new password (min 6 chars)"
                   value={newPassword} onChange={e=>setNewPassword(e.target.value)}/>
               </div>
               <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:4 }}>

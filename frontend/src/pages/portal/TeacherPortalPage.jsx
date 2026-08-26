@@ -378,7 +378,7 @@ function StudentsTab({ classes }) {
                     <td style={{ padding: '10px 14px', color: '#64748B', fontWeight: 600 }}>{s.rollNo || '—'}</td>
                     <td style={{ padding: '10px 14px' }}>
                       {s.photo
-                        ? <img src={s.photo} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '2px solid #E2E8F0' }} />
+                        ? <img src={s.photo} alt={s.name ? `${s.name}'s photo` : 'Student photo'} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '2px solid #E2E8F0' }} />
                         : <div style={{ width: 32, height: 32, borderRadius: '50%', background: s.gender === 'female' ? 'linear-gradient(135deg,#F472B6,#EC4899)' : `linear-gradient(135deg,${NAVY},#2563EB)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 12 }}>{(s.name || '?').charAt(0)}</div>
                       }
                     </td>

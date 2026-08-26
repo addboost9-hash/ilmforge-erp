@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { Save, CheckCircle, XCircle, Clock, RefreshCw, Users, AlertTriangle } from 'lucide-react';
+import { Save, CheckCircle, XCircle, RefreshCw, AlertTriangle } from 'lucide-react';
 
 export default function AttendancePage() {
   const qc    = useQueryClient();
@@ -65,10 +65,10 @@ export default function AttendancePage() {
   const total   = data?.length || 0;
 
   const statusBtns = [
-    { val:'present', label:'P', color:'#15803D', bg:'#DCFCE7', border:'#BBF7D0' },
-    { val:'absent',  label:'A', color:'#B91C1C', bg:'#FEE2E2', border:'#FECACA' },
-    { val:'leave',   label:'L', color:'#B45309', bg:'#FEF3C7', border:'#FDE68A' },
-    { val:'late',    label:'Lt', color:'#1D4ED8', bg:'#DBEAFE', border:'#BFDBFE' },
+    { val:'present', label:'P',  full:'Present', color:'#15803D', bg:'#DCFCE7', border:'#BBF7D0' },
+    { val:'absent',  label:'A',  full:'Absent',  color:'#B91C1C', bg:'#FEE2E2', border:'#FECACA' },
+    { val:'leave',   label:'L',  full:'Leave',   color:'#B45309', bg:'#FEF3C7', border:'#FDE68A' },
+    { val:'late',    label:'Lt', full:'Late',    color:'#1D4ED8', bg:'#DBEAFE', border:'#BFDBFE' },
   ];
 
   return (
@@ -76,9 +76,9 @@ export default function AttendancePage() {
       {/* Onboarding Modal */}
       {showOnboarding && (
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',backdropFilter:'blur(10px)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-          <div style={{background:'rgba(255,255,255,0.96)',backdropFilter:'blur(20px)',borderRadius:24,padding:'36px 32px',maxWidth:480,width:'100%',textAlign:'center',boxShadow:'0 25px 80px rgba(27,47,110,0.25)',animation:'scaleIn 0.3s ease-out'}}>
+          <div role="dialog" aria-modal="true" aria-labelledby="attendance-onboarding-title" style={{background:'rgba(255,255,255,0.96)',backdropFilter:'blur(20px)',borderRadius:24,padding:'36px 32px',maxWidth:480,width:'100%',textAlign:'center',boxShadow:'0 25px 80px rgba(27,47,110,0.25)',animation:'scaleIn 0.3s ease-out'}}>
             <div style={{fontSize:64,marginBottom:12}}>📋</div>
-            <h2 style={{fontSize:22,fontWeight:800,color:'#1B2F6E',margin:'0 0 8px'}}>Daily Attendance</h2>
+            <h2 id="attendance-onboarding-title" style={{fontSize:22,fontWeight:800,color:'#1B2F6E',margin:'0 0 8px'}}>Daily Attendance</h2>
             <p style={{color:'#64748b',fontSize:14,lineHeight:1.7,margin:'0 0 24px'}}>Mark attendance for any class in seconds. Previous day correction is also supported.</p>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:24,textAlign:'left'}}>
               {[
@@ -125,7 +125,7 @@ export default function AttendancePage() {
               {notifyBadge}
             </div>
           )}
-          <button className="btn btn-outline btn-sm" onClick={() => refetch()}><RefreshCw size={14}/></button>
+          <button aria-label="Refresh attendance list" className="btn btn-outline btn-sm" onClick={() => refetch()}><RefreshCw size={14}/></button>
           <button className="btn btn-teal" onClick={() => save.mutate()} disabled={save.isPending || !filters.classId || total===0}>
             <Save size={15}/>
             {save.isPending ? (
@@ -166,24 +166,24 @@ export default function AttendancePage() {
       <div className="card" style={{marginBottom:14, padding:14}}>
         <div style={{display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end'}}>
           <div style={{flex:'0 0 160px'}}>
-            <label className="form-label">Class *</label>
-            <select className="form-select" value={filters.classId}
+            <label htmlFor="att-filter-class" className="form-label">Class *</label>
+            <select id="att-filter-class" className="form-select" value={filters.classId}
               onChange={e => setFilters({...filters, classId:e.target.value, sectionId:''})}>
               <option value="">Select Class</option>
               {(classes||[]).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div style={{flex:'0 0 130px'}}>
-            <label className="form-label">Section</label>
-            <select className="form-select" value={filters.sectionId}
+            <label htmlFor="att-filter-section" className="form-label">Section</label>
+            <select id="att-filter-section" className="form-select" value={filters.sectionId}
               onChange={e => setFilters({...filters, sectionId:e.target.value})}>
               <option value="">All Sections</option>
               {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
           <div style={{flex:'0 0 150px'}}>
-            <label className="form-label">Date</label>
-            <input className="form-input" type="date" value={filters.date}
+            <label htmlFor="att-filter-date" className="form-label">Date</label>
+            <input id="att-filter-date" className="form-input" type="date" value={filters.date}
               onChange={e => setFilters({...filters, date:e.target.value})}
               max={today}/>
           </div>
@@ -274,8 +274,8 @@ export default function AttendancePage() {
                       <td style={{color:'#64748B', fontSize:12.5}}>{s.fatherName||'—'}</td>
                       <td>
                         <div style={{display:'flex', gap:6}}>
-                          {statusBtns.map(({val, label, color, bg, border}) => (
-                            <button key={val} onClick={() => setAttendance({...attendance, [s.id]:val})}
+                          {statusBtns.map(({val, label, full, color, bg, border}) => (
+                            <button key={val} aria-label={`Mark ${s.name} as ${full}`} aria-pressed={attendance[s.id]===val} onClick={() => setAttendance({...attendance, [s.id]:val})}
                               style={{
                                 padding:'5px 12px', borderRadius:6, border:`1.5px solid ${attendance[s.id]===val ? border : '#E8EDF3'}`,
                                 cursor:'pointer',

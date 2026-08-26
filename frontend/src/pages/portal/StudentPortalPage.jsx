@@ -249,11 +249,11 @@ function AttendanceCalendar({ history = [] }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <button onClick={prevMonth} style={{ border: 'none', background: '#F1F5F9', borderRadius: 8, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <button aria-label="Previous month" onClick={prevMonth} style={{ border: 'none', background: '#F1F5F9', borderRadius: 8, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ChevronLeft size={16} color={NAVY} />
         </button>
         <span style={{ fontWeight: 700, fontSize: 15, color: NAVY }}>{monthLabel}</span>
-        <button onClick={nextMonth} style={{ border: 'none', background: '#F1F5F9', borderRadius: 8, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <button aria-label="Next month" onClick={nextMonth} style={{ border: 'none', background: '#F1F5F9', borderRadius: 8, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ChevronRight size={16} color={NAVY} />
         </button>
       </div>
@@ -355,7 +355,7 @@ function ProfilePanel({ open, onClose, student, rollNo, schoolName, studentPhoto
           zIndex: 200, backdropFilter: 'blur(2px)',
         }}
       />
-      <div style={{
+      <div role="dialog" aria-modal="true" aria-labelledby="profile-panel-title" style={{
         position: 'fixed', top: 0, right: 0, bottom: 0,
         width: 'min(360px, 92vw)',
         background: '#F0F4F8',
@@ -365,8 +365,8 @@ function ProfilePanel({ open, onClose, student, rollNo, schoolName, studentPhoto
       }}>
         {/* Panel header — dark navy */}
         <div style={{ background: NAVY, padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>My Profile</span>
-          <button onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.15)', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span id="profile-panel-title" style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>My Profile</span>
+          <button aria-label="Close profile panel" onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.15)', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <X size={16} color="#fff" />
           </button>
         </div>
@@ -374,7 +374,7 @@ function ProfilePanel({ open, onClose, student, rollNo, schoolName, studentPhoto
         <div style={{ padding: '16px 14px' }}>
           <div style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 20px', marginBottom: 12 }}>
             {studentPhoto
-              ? <img src={studentPhoto} alt="" style={{ width: 90, height: 90, borderRadius: '50%', objectFit: 'cover', border: `4px solid ${NAVY}`, marginBottom: 14 }} />
+              ? <img src={studentPhoto} alt={student?.name ? `${student.name}'s photo` : 'Student photo'} style={{ width: 90, height: 90, borderRadius: '50%', objectFit: 'cover', border: `4px solid ${NAVY}`, marginBottom: 14 }} />
               : (
                 <div style={{ width: 90, height: 90, borderRadius: '50%', background: student?.gender === 'female' ? 'linear-gradient(135deg,#F472B6,#EC4899)' : `linear-gradient(135deg,${NAVY},#2563EB)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 36, border: '4px solid #E5E7EB', marginBottom: 14 }}>
                   {student?.name?.charAt(0) || '?'}
@@ -813,7 +813,7 @@ export default function StudentPortalPage() {
             {/* Student info card */}
             <div style={{ ...card, display: 'flex', gap: 14, alignItems: 'center' }}>
               {studentPhoto
-                ? <img src={studentPhoto} alt="" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover', border: `3px solid ${NAVY}`, flexShrink: 0 }} />
+                ? <img src={studentPhoto} alt={`${student.name}'s photo`} style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover', border: `3px solid ${NAVY}`, flexShrink: 0 }} />
                 : (
                   <div style={{ width: 60, height: 60, borderRadius: '50%', background: student.gender === 'female' ? 'linear-gradient(135deg,#F472B6,#EC4899)' : `linear-gradient(135deg,${NAVY},#2563EB)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 24, border: '3px solid #E5E7EB', flexShrink: 0 }}>
                     {student.name?.charAt(0)}
