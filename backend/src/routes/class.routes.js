@@ -24,7 +24,14 @@ router.post('/', wrap(async (req, res) => {
 
 router.post('/:classId/sections', wrap(async (req, res) => {
   const { name } = req.body;
-  const section = await prisma.section.create({ data: { schoolId: req.schoolId, classId: parseInt(req.params.classId), name } });
+  const classId = parseInt(req.params.classId);
+
+  // IDOR: classId was not verified to belong to this school — a user could
+  // attach a new section to another school's class by guessing its id.
+  const cls = await prisma.class.findFirst({ where: { id: classId, schoolId: req.schoolId } });
+  if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
+
+  const section = await prisma.section.create({ data: { schoolId: req.schoolId, classId, name } });
   res.status(201).json({ success: true, data: section });
 }));
 
@@ -48,7 +55,14 @@ router.get('/:classId/subjects', wrap(async (req, res) => {
 
 router.post('/subjects', wrap(async (req, res) => {
   const { classId, name, code, totalMarks, teacherId } = req.body;
-  const subject = await prisma.subject.create({ data: { schoolId: req.schoolId, classId: parseInt(classId), name, code, totalMarks: totalMarks ? parseInt(totalMarks) : 100, teacherId: teacherId ? parseInt(teacherId) : null } });
+  const parsedClassId = parseInt(classId);
+
+  // IDOR: classId was not verified to belong to this school — a user could
+  // attach a new subject to another school's class by guessing its id.
+  const cls = await prisma.class.findFirst({ where: { id: parsedClassId, schoolId: req.schoolId } });
+  if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
+
+  const subject = await prisma.subject.create({ data: { schoolId: req.schoolId, classId: parsedClassId, name, code, totalMarks: totalMarks ? parseInt(totalMarks) : 100, teacherId: teacherId ? parseInt(teacherId) : null } });
   res.status(201).json({ success: true, data: subject });
 }));
 
@@ -58,6 +72,14 @@ router.put('/subjects/:id', wrap(async (req, res) => {
   if (!existing) return res.status(404).json({ success: false, message: 'Subject not found.' });
 
   const { classId, name, code, totalMarks, teacherId } = req.body;
+
+  // IDOR: classId was not verified to belong to this school — a user could
+  // re-parent this subject onto another school's class by guessing its id.
+  if (classId !== undefined) {
+    const cls = await prisma.class.findFirst({ where: { id: parseInt(classId), schoolId: req.schoolId } });
+    if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
+  }
+
   const subject = await prisma.subject.update({
     where: { id },
     data: {

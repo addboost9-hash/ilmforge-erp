@@ -103,9 +103,25 @@ router.post('/:homeworkId/submit', wrap(async (req, res) => {
 }));
 
 // GET /api/v1/homework/:homeworkId/submissions — teacher sees all submissions
+// No ownership check — GET is gated by PM canView, and parents/students also
+// have canView on the homework module, so any student could view every other
+// student's submission content/fileUrl for a homework item, and any teacher
+// (not just the one who assigned it) could see submissions for classes they
+// don't teach. Restrict to staff, and to the assigned teacher unless admin.
 router.get('/:homeworkId/submissions', wrap(async (req, res) => {
   const { homeworkId } = req.params;
   const { schoolId } = req;
+
+  const hw = await prisma.homeworkDiary.findFirst({
+    where: { id: parseInt(homeworkId), schoolId },
+  });
+  if (!hw) return res.status(404).json({ success: false, message: 'Homework not found.' });
+
+  const isAdmin = ['admin', 'super_admin'].includes(req.user?.role);
+  const isOwnerTeacher = req.user?.role === 'teacher' && hw.teacherId === req.user.id;
+  if (!isAdmin && !isOwnerTeacher) {
+    return res.status(403).json({ success: false, message: 'You can only view submissions for homework you assigned.' });
+  }
 
   const submissions = await prisma.notificationLog.findMany({
     where: {

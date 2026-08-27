@@ -765,9 +765,22 @@ router.get('/:id/exam-results', wrap(async (req, res) => {
   // Verify student belongs to this school
   const student = await prisma.student.findFirst({
     where: { id: studentId, schoolId, deletedAt: null },
-    select: { id: true },
+    select: { id: true, userId: true },
   });
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+
+  // No ownership check — any authenticated parent/student (both viewOnly on the
+  // 'students' module) could read another child's exam results by guessing the id.
+  if (req.user?.role === 'parent') {
+    const parent = await prisma.parent.findFirst({ where: { schoolId, userId: req.user.id } });
+    const link = parent
+      ? await prisma.parentStudent.findFirst({ where: { schoolId, parentId: parent.id, studentId } })
+      : null;
+    if (!link) return res.status(403).json({ success: false, message: 'Access denied for this student.' });
+  }
+  if (req.user?.role === 'student' && student.userId !== req.user.id) {
+    return res.status(403).json({ success: false, message: 'Access denied for this student.' });
+  }
 
   // Fetch marks for this student across all exams
   const marks = await prisma.examMark.findMany({
@@ -867,8 +880,15 @@ router.delete('/:id', wrap(async (req, res) => {
 // POST /api/v1/students/:id/promote  (single-student, legacy)
 router.post('/:id/promote', wrap(async (req, res) => {
   const { toClassId, toSectionId, toSessionId } = req.body;
+  const studentId = parseInt(req.params.id);
+
+  // IDOR: update was not scoped by schoolId — a user from another school could
+  // promote/mutate this record by guessing its id. Verify ownership first.
+  const existing = await prisma.student.findFirst({ where: { id: studentId, schoolId: req.schoolId, deletedAt: null }, select: { id: true } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Student not found.' });
+
   const student = await prisma.student.update({
-    where: { id: parseInt(req.params.id) },
+    where: { id: studentId },
     data: { classId: parseInt(toClassId), sectionId: toSectionId ? parseInt(toSectionId) : null, sessionId: toSessionId ? parseInt(toSessionId) : null }
   });
   res.json({ success: true, data: student, message: 'Student promoted successfully.' });

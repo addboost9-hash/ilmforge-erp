@@ -16,7 +16,14 @@ router.post('/inquiries', wrap(async (req, res) => {
 
 router.put('/inquiries/:id', wrap(async (req, res) => {
   const { status, notes } = req.body;
-  const inquiry = await prisma.admissionInquiry.update({ where: { id: parseInt(req.params.id) }, data: { status, notes, updatedAt: new Date() } });
+  const id = parseInt(req.params.id);
+
+  // IDOR: lookup was not scoped by schoolId — a user from another school could
+  // mutate this record by guessing its id.
+  const existing = await prisma.admissionInquiry.findFirst({ where: { id, schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Inquiry not found.' });
+
+  const inquiry = await prisma.admissionInquiry.update({ where: { id }, data: { status, notes, updatedAt: new Date() } });
   res.json({ success: true, data: inquiry });
 }));
 

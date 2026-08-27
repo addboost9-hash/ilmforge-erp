@@ -63,8 +63,13 @@ router.post('/', wrap(async (req, res) => {
 
 // GET /:id - single
 router.get('/:id', wrap(async (req, res) => {
+  // IDOR: lookup was not scoped by schoolId — a user from another school
+  // could read a scheme-of-study document by guessing its id. Scoped the
+  // same way as the list endpoint above: this school's own docs plus the
+  // shared (schoolId: null) template docs.
+  const { schoolId } = req;
   const doc = await prisma.sopDocument.findFirst({
-    where: { id: parseInt(req.params.id), category: 'scheme_of_study' },
+    where: { id: parseInt(req.params.id), category: 'scheme_of_study', OR: [{ schoolId }, { schoolId: null }] },
   });
   if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
 
@@ -77,7 +82,10 @@ router.get('/:id', wrap(async (req, res) => {
 
 // PUT /:id - update
 router.put('/:id', wrap(async (req, res) => {
-  const existing = await prisma.sopDocument.findFirst({ where: { id: parseInt(req.params.id), category: 'scheme_of_study' } });
+  // IDOR: lookup was not scoped by schoolId — a user from another school
+  // could mutate this scheme-of-study document by guessing its id.
+  const { schoolId } = req;
+  const existing = await prisma.sopDocument.findFirst({ where: { id: parseInt(req.params.id), category: 'scheme_of_study', OR: [{ schoolId }, { schoolId: null }] } });
   if (!existing) return res.status(404).json({ success: false, message: 'Not found.' });
 
   const { classId, subjectId, title, academicYear, months } = req.body;
@@ -107,7 +115,10 @@ router.put('/:id', wrap(async (req, res) => {
 
 // DELETE /:id
 router.delete('/:id', wrap(async (req, res) => {
-  const existing = await prisma.sopDocument.findFirst({ where: { id: parseInt(req.params.id), category: 'scheme_of_study' } });
+  // IDOR: lookup was not scoped by schoolId — a user from another school
+  // could delete this scheme-of-study document by guessing its id.
+  const { schoolId } = req;
+  const existing = await prisma.sopDocument.findFirst({ where: { id: parseInt(req.params.id), category: 'scheme_of_study', OR: [{ schoolId }, { schoolId: null }] } });
   if (!existing) return res.status(404).json({ success: false, message: 'Not found.' });
   await prisma.sopDocument.delete({ where: { id: parseInt(req.params.id) } });
   res.json({ success: true, message: 'Deleted.' });

@@ -26,9 +26,13 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json({ success: true, data: notice });
 }));
 
+// IDOR: delete was not scoped by schoolId — an admin from another school
+// could delete this school's notice by guessing its id.
 router.delete('/:id', wrap(async (req, res) => {
   if (!['admin','super_admin'].includes(req.user.role)) return res.status(403).json({ success: false });
-  await prisma.noticeboard.delete({ where: { id: parseInt(req.params.id) } });
+  const existing = await prisma.noticeboard.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Notice not found.' });
+  await prisma.noticeboard.delete({ where: { id: existing.id } });
   res.json({ success: true });
 }));
 

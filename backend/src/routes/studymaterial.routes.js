@@ -33,9 +33,19 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json({ success: true, data: material });
 }));
 
+// IDOR: update was not scoped by schoolId — cross-tenant deactivation by id.
+// No ownership check either — any teacher could deactivate any other
+// teacher's material; only admins or the uploading teacher may do so now.
 router.delete('/:id', wrap(async (req, res) => {
   if (!['admin','super_admin','teacher'].includes(req.user.role)) return res.status(403).json({ success: false });
-  await prisma.studyMaterial.update({ where: { id: parseInt(req.params.id) }, data: { isActive: false } });
+  const existing = await prisma.studyMaterial.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Material not found.' });
+  const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+  const isOwnerTeacher = req.user.role === 'teacher' && existing.teacherId === req.user.id;
+  if (!isAdmin && !isOwnerTeacher) {
+    return res.status(403).json({ success: false, message: 'You can only remove your own study material.' });
+  }
+  await prisma.studyMaterial.update({ where: { id: existing.id }, data: { isActive: false } });
   res.json({ success: true });
 }));
 
