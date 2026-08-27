@@ -10,6 +10,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { teacherCanAccessClass } = require('../utils/teacherScope');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 const MAX_ATTACH = 2 * 1024 * 1024 * 1.37; // ~2MB binary as base64
@@ -118,6 +119,13 @@ router.post('/conversations/broadcast', wrap(async (req, res) => {
   const classId = parseInt(req.body.classId);
   const cls = await prisma.class.findFirst({ where: { id: classId, schoolId: req.schoolId } });
   if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
+
+  // IDOR/scope gap: a teacher could previously broadcast to ANY class in the school by id,
+  // contradicting this file's own "teacher → own-class students & their parents" rule.
+  // Mirrors teacherCanAccessClass usage in attendance.routes.js — admins are unaffected.
+  if (req.user.role === 'teacher' && !(await teacherCanAccessClass(req, classId))) {
+    return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+  }
 
   // Collect student users of this class (by matching student names→users is unreliable; use role student+parent linked via students' emergencyPhone)
   const students = await prisma.student.findMany({ where: { schoolId: req.schoolId, classId, deletedAt: null }, select: { name: true, emergencyPhone: true } });

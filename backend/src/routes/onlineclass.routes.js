@@ -31,8 +31,23 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json({ success: true, data: oc });
 }));
 
+// No role check at all, and the update was not scoped by schoolId — any
+// authenticated user (with canUpdate on online_classes, e.g. any teacher)
+// could change the status of another school's or another teacher's online
+// class by guessing its id. Restrict to staff, scoped by schoolId, and only
+// the assigned teacher unless admin.
 router.put('/:id/status', wrap(async (req, res) => {
-  const oc = await prisma.onlineClass.update({ where: { id: parseInt(req.params.id) }, data: { status: req.body.status || 'completed' } });
+  if (!['admin', 'super_admin', 'teacher'].includes(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Teachers/admins only.' });
+  }
+  const existing = await prisma.onlineClass.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Online class not found.' });
+  const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+  const isOwnerTeacher = req.user.role === 'teacher' && existing.teacherId === req.user.id;
+  if (!isAdmin && !isOwnerTeacher) {
+    return res.status(403).json({ success: false, message: 'You can only update your own online class.' });
+  }
+  const oc = await prisma.onlineClass.update({ where: { id: existing.id }, data: { status: req.body.status || 'completed' } });
   res.json({ success: true, data: oc });
 }));
 

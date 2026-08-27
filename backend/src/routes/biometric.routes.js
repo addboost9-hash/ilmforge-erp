@@ -18,8 +18,14 @@ router.post('/devices', wrap(async (req, res) => {
 }));
 router.put('/devices/:id', wrap(async (req, res) => {
   const { isActive, name, ipAddress, port, location } = req.body;
+  const id = parseInt(req.params.id);
+  // IDOR: update was previously scoped by id alone with no schoolId check — a caller from
+  // another school could mutate (or disable) a biometric device belonging to a different
+  // tenant just by guessing/incrementing the id. Verify ownership first.
+  const existing = await prisma.biometricDevice.findFirst({ where: { id, schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Device not found.' });
   const d = await prisma.biometricDevice.update({
-    where: { id: parseInt(req.params.id) },
+    where: { id },
     data: { ...(name && { name }), ...(ipAddress !== undefined && { ipAddress }), ...(port && { port: parseInt(port) }), ...(location !== undefined && { location }), ...(isActive !== undefined && { isActive: !!isActive }), lastSyncAt: new Date() }
   });
   res.json({ success: true, data: d });
@@ -37,6 +43,18 @@ router.post('/punch', wrap(async (req, res) => {
     if (student) pid = student.id;
   }
   if (!pid) return res.status(404).json({ success: false, message: 'Person not found for punch.' });
+
+  // IDOR: when personId is supplied directly in the body (not resolved via rollNo) it was
+  // never checked against schoolId — a caller could punch/mark attendance for a person
+  // belonging to a different school (cross-tenant BiometricPunch/Attendance rows). Verify
+  // tenant ownership before writing anything.
+  if (personType === 'student') {
+    const owned = await prisma.student.findFirst({ where: { id: pid, schoolId: req.schoolId, deletedAt: null } });
+    if (!owned) return res.status(404).json({ success: false, message: 'Person not found for punch.' });
+  } else if (personType === 'staff') {
+    const owned = await prisma.staff.findFirst({ where: { id: pid, schoolId: req.schoolId, deletedAt: null } });
+    if (!owned) return res.status(404).json({ success: false, message: 'Person not found for punch.' });
+  }
 
   const punch = await prisma.biometricPunch.create({
     data: { schoolId: req.schoolId, deviceId: deviceId ? parseInt(deviceId) : null, personType, personId: pid, method, direction }

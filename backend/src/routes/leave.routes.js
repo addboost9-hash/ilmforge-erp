@@ -5,27 +5,71 @@ const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 const ADMIN_ROLES = ['admin', 'super_admin', 'teacher'];
 
+// Ownership: resolve the student User-ids that belong to this parent's own
+// children (ParentStudent links Parent -> Student, and Student.userId is the
+// login id leave applications are keyed on).
+async function getOwnChildUserIds(req) {
+  const parent = await prisma.parent.findFirst({ where: { userId: req.user.id, schoolId: req.schoolId } });
+  if (!parent) return [];
+  const links = await prisma.parentStudent.findMany({
+    where: { parentId: parent.id, schoolId: req.schoolId },
+    include: { student: { select: { userId: true } } },
+  });
+  return links.map((l) => l.student?.userId).filter(Boolean);
+}
+
 // GET /api/v1/leaves — role-scoped
+// No ownership check for the `parent` role — parent has canView on the
+// `leaves` module (module-level PM has no concept of "own child"), so a
+// parent hitting this with no filter saw every staff and student leave
+// application in the school. Scope parents to their own children's leaves.
 router.get('/', wrap(async (req, res) => {
   const where = { schoolId: req.schoolId };
   // Teachers/students see only their own applications
   if (req.user.role === 'teacher' || req.user.role === 'student') {
     where.applicantId = req.user.id;
     where.applicantType = req.user.role === 'teacher' ? 'staff' : 'student';
+  } else if (req.user.role === 'parent') {
+    const childUserIds = await getOwnChildUserIds(req);
+    where.applicantType = 'student';
+    where.applicantId = { in: childUserIds.length ? childUserIds : [-1] };
   }
   const data = await prisma.leaveApplication.findMany({ where, orderBy: { createdAt: 'desc' }, take: 100 });
   res.json({ success: true, data });
 }));
 
 // POST /api/v1/leaves
+// IDOR/impersonation: applicantId was taken straight from the request body
+// with no ownership check, so a parent (or teacher/student) could pass any
+// other person's id and file a leave application in their name. Non-admin
+// callers may now only file for themselves, and parents only for their own
+// child (verified via ParentStudent).
 router.post('/', wrap(async (req, res) => {
   const { applicantType, applicantId, fromDate, toDate, reason } = req.body;
   if (!fromDate || !toDate || !reason) return res.status(400).json({ success: false, message: 'Dates and reason required.' });
+
+  let finalApplicantId = req.user.id;
+  let finalApplicantType = applicantType || (req.user.role === 'teacher' ? 'staff' : 'student');
+
+  if (['admin', 'super_admin'].includes(req.user.role)) {
+    // Admins/super admins may file on behalf of any staff/student.
+    if (applicantId) finalApplicantId = parseInt(applicantId);
+  } else if (req.user.role === 'parent') {
+    finalApplicantType = 'student';
+    const childUserIds = await getOwnChildUserIds(req);
+    const requestedId = applicantId ? parseInt(applicantId) : null;
+    if (!requestedId || !childUserIds.includes(requestedId)) {
+      return res.status(403).json({ success: false, message: 'You can only file leave for your own child.' });
+    }
+    finalApplicantId = requestedId;
+  }
+  // teacher/student roles always file for themselves (finalApplicantId stays req.user.id)
+
   const leave = await prisma.leaveApplication.create({
     data: {
       schoolId: req.schoolId,
-      applicantType: applicantType || (req.user.role === 'teacher' ? 'staff' : 'student'),
-      applicantId: parseInt(applicantId) || req.user.id,
+      applicantType: finalApplicantType,
+      applicantId: finalApplicantId,
       fromDate: new Date(fromDate), toDate: new Date(toDate), reason,
     }
   });

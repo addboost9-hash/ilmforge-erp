@@ -6,11 +6,34 @@ const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 const canManage = (role) => ['super_admin', 'admin'].includes(role);
 
+// Ownership: personId on LeaveBalance is the Staff.id / Student.id (not the
+// User.id), so resolve which person records this non-admin caller is allowed
+// to see: a teacher's own staff record, or a parent's own children.
+async function getOwnPersonScope(req) {
+  if (req.user?.role === 'teacher') {
+    const staff = await prisma.staff.findFirst({ where: { userId: req.user.id, schoolId: req.schoolId } });
+    return { personTypes: ['staff', 'teacher'], personIds: staff ? [staff.id] : [] };
+  }
+  if (req.user?.role === 'parent') {
+    const parent = await prisma.parent.findFirst({ where: { userId: req.user.id, schoolId: req.schoolId } });
+    const links = parent
+      ? await prisma.parentStudent.findMany({ where: { parentId: parent.id, schoolId: req.schoolId }, select: { studentId: true } })
+      : [];
+    return { personTypes: ['student'], personIds: links.map((l) => l.studentId) };
+  }
+  return { personTypes: [], personIds: [] };
+}
+
 // ---------------------------------------------------------------------------
 // GET /leave-balance?personType=&classId=&sessionId=&search=&year= — list balances
 // FIX: previously returned raw LeaveBalance rows with no staff/student join,
 // so LeaveBalancePage.jsx's r.staff?.name / r.staff?.designation always
 // rendered blank, and the search/year query params it sends were ignored.
+//
+// No ownership check — `leaves` module canView also covers teacher/parent
+// roles, so any teacher or parent could list every staff and student's leave
+// balance in the school with no scoping. Non-admins are now limited to their
+// own record (teacher) or their own children's records (parent).
 // ---------------------------------------------------------------------------
 router.get('/', wrap(async (req, res) => {
   const { personType, classId, sessionId, search, year } = req.query;
@@ -21,6 +44,17 @@ router.get('/', wrap(async (req, res) => {
     ...(classId && { classId: parseInt(classId) }),
     ...(sessionId && { sessionId: parseInt(sessionId) }),
   };
+
+  if (!canManage(req.user?.role)) {
+    const scope = await getOwnPersonScope(req);
+    if (scope.personIds.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+    where.personId = { in: scope.personIds };
+    where.personType = personType && scope.personTypes.includes(personType)
+      ? personType
+      : { in: scope.personTypes };
+  }
 
   if (year && !sessionId) {
     const sessions = await prisma.session.findMany({
@@ -57,9 +91,19 @@ router.get('/', wrap(async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // GET /leave-balance/:personType/:personId — get one person's balance
+// IDOR — no ownership check, so any teacher or parent could pass an
+// arbitrary personId and read any other staff/student's leave balance.
 // ---------------------------------------------------------------------------
 router.get('/:personType/:personId', wrap(async (req, res) => {
   const { personType, personId } = req.params;
+
+  if (!canManage(req.user?.role)) {
+    const scope = await getOwnPersonScope(req);
+    if (!scope.personTypes.includes(personType) || !scope.personIds.includes(parseInt(personId))) {
+      return res.status(403).json({ success: false, message: 'You can only view your own leave balance.' });
+    }
+  }
+
   const balance = await prisma.leaveBalance.findFirst({
     where: {
       schoolId: req.schoolId,

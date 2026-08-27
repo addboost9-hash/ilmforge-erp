@@ -7,6 +7,19 @@ const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 router.post('/enroll', wrap(async (req, res) => {
   const { personType = 'student', personId, photoData, descriptor } = req.body;
   if (!personId || !photoData) return res.status(400).json({ success: false, message: 'personId and photoData required.' });
+
+  // IDOR: personId came straight from the body with no check that it actually belongs to
+  // this school — a caller could enroll a face record against another tenant's student/staff
+  // id. Verify ownership before writing.
+  const pid = parseInt(personId);
+  if (personType === 'student') {
+    const owned = await prisma.student.findFirst({ where: { id: pid, schoolId: req.schoolId, deletedAt: null } });
+    if (!owned) return res.status(404).json({ success: false, message: 'Person not found.' });
+  } else if (personType === 'staff') {
+    const owned = await prisma.staff.findFirst({ where: { id: pid, schoolId: req.schoolId, deletedAt: null } });
+    if (!owned) return res.status(404).json({ success: false, message: 'Person not found.' });
+  }
+
   const rec = await prisma.faceEnrollment.upsert({
     where: { schoolId_personType_personId: { schoolId: req.schoolId, personType, personId: parseInt(personId) } },
     create: { schoolId: req.schoolId, personType, personId: parseInt(personId), photoData, descriptor: descriptor ? JSON.stringify(descriptor) : null, enrolledBy: req.user.id },
@@ -28,13 +41,26 @@ router.get('/enrollments', wrap(async (req, res) => {
 router.post('/recognize-mark', wrap(async (req, res) => {
   const { personId, personType = 'student' } = req.body;
   if (!personId) return res.status(400).json({ success: false, message: 'personId required.' });
+
+  // IDOR: personId came straight from the body with no schoolId check — a caller could
+  // create a BiometricPunch/Attendance record for a student/staff belonging to a different
+  // school. Verify ownership before writing anything.
+  const pid = parseInt(personId);
+  if (personType === 'student') {
+    const owned = await prisma.student.findFirst({ where: { id: pid, schoolId: req.schoolId, deletedAt: null } });
+    if (!owned) return res.status(404).json({ success: false, message: 'Person not found.' });
+  } else if (personType === 'staff') {
+    const owned = await prisma.staff.findFirst({ where: { id: pid, schoolId: req.schoolId, deletedAt: null } });
+    if (!owned) return res.status(404).json({ success: false, message: 'Person not found.' });
+  }
+
   const punch = await prisma.biometricPunch.create({
-    data: { schoolId: req.schoolId, personType, personId: parseInt(personId), method: 'face', direction: 'in' }
+    data: { schoolId: req.schoolId, personType, personId: pid, method: 'face', direction: 'in' }
   });
   let attendance = null;
   if (personType === 'student') {
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const student = await prisma.student.findUnique({ where: { id: parseInt(personId) } });
+    const student = await prisma.student.findUnique({ where: { id: pid } });
     if (student) {
       const existing = await prisma.attendance.findFirst({ where: { schoolId: req.schoolId, studentId: student.id, date: { gte: today } } });
       if (!existing) {

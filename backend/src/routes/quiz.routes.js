@@ -232,11 +232,34 @@ router.post('/:id/attempt', wrap(async (req, res) => {
     return res.status(400).json({ success: false, message: 'answers object is required. Format: { questionId: chosenOption }' });
   }
 
-  // Determine student — from JWT (student portal) or explicit body field
-  const studentId = req.user?.studentId || (req.body.studentId ? parseInt(req.body.studentId) : null);
+  // No ownership check — req.user?.studentId is never populated by the JWT
+  // (see auth.service.js generateTokens: payload only carries id/schoolId/
+  // campusId/role/email), so this always fell through to the client-supplied
+  // req.body.studentId. Combined with this route having no role check at
+  // all, ANY authenticated user of the school (parent, accountant,
+  // gatekeeper, etc.) could submit — and tamper with the score of — another
+  // student's quiz attempt just by passing an arbitrary studentId. Students
+  // now resolve their own studentId server-side via their linked Student
+  // record; only staff may submit on behalf of a specific student, and that
+  // student is verified to belong to this school.
+  let studentId;
+  if (isStudent(req.user?.role)) {
+    const own = await prisma.student.findFirst({
+      where: { schoolId: req.schoolId, userId: req.user.id, deletedAt: null },
+      select: { id: true },
+    });
+    if (!own) return res.status(403).json({ success: false, message: 'No student record linked to this account.' });
+    studentId = own.id;
+  } else if (canManageQuizzes(req.user?.role)) {
+    studentId = req.body.studentId ? parseInt(req.body.studentId) : null;
+  } else {
+    return res.status(403).json({ success: false, message: 'Only students may submit quiz attempts.' });
+  }
   if (!studentId) {
     return res.status(400).json({ success: false, message: 'studentId is required.' });
   }
+  const targetStudent = await prisma.student.findFirst({ where: { id: studentId, schoolId: req.schoolId, deletedAt: null } });
+  if (!targetStudent) return res.status(404).json({ success: false, message: 'Student not found.' });
 
   // Prevent duplicate attempt
   const existing = await prisma.quizAttempt.findFirst({ where: { quizId, studentId } });
