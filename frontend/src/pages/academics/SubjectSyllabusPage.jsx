@@ -7,7 +7,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { BookOpen, ChevronLeft, Save, X } from 'lucide-react';
+import { BookOpen, ChevronLeft, Save, X, Plus } from 'lucide-react';
 import api from '../../api/client';
 
 const NAVY = '#1B2F6E';
@@ -355,7 +355,14 @@ export default function SubjectSyllabusPage() {
         <div className="card" style={{ padding: 48, textAlign: 'center' }}>
           <BookOpen size={40} color="#D1D5DB" style={{ marginBottom: 10 }} />
           <p style={{ color: '#6B7280', fontSize: 14, fontWeight: 600 }}>No subjects found for this class</p>
-          <p style={{ color: '#9CA3AF', fontSize: 12 }}>Add subjects to this class in Settings first.</p>
+          <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 16 }}>Add subjects to this class before writing its syllabus.</p>
+          <button
+            onClick={() => navigate('/settings/subjects')}
+            className="btn btn-teal"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Plus size={14} /> Add Subjects
+          </button>
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>

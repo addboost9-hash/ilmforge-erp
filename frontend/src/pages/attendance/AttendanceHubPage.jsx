@@ -333,11 +333,59 @@ function MarkAttendanceModal({ row, date, onClose, onSaved }) {
 /* ─── Expanded Detail Row ────────────────────────────────────────
    Renders as a <tr> wrapping stats + student list for the expanded class row
 ────────────────────────────────────────────────────────────────── */
-function ExpandedDetailRow({ students, loading }) {
+// FIX: this panel used to be pure read-only display (a StatusBadge with no
+// click handler), so a class expanded here for marking looked interactive
+// but did nothing — the only real way to mark attendance was the separate
+// "Attendance Not Marked" button/modal, which wasn't discoverable. This now
+// lets each row's status be clicked to cycle through it directly, with a
+// Save button and a success toast, mirroring MarkAttendanceModal's save.
+function ExpandedDetailRow({ row, students, loading, date, onSaved }) {
+  const [statuses, setStatuses] = useState({});
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    const m = {};
+    students.forEach((s) => {
+      const st = s.attendance?.status;
+      m[s.id] = st ? st.charAt(0).toUpperCase() + st.slice(1) : 'Not Marked';
+    });
+    setStatuses(m);
+    setDirty(false);
+  }, [students]);
+
+  const cycleStatus = (id) => {
+    setStatuses((prev) => {
+      const cur = prev[id] || 'Not Marked';
+      const idx = STATUS_CYCLE.indexOf(cur);
+      const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+      return { ...prev, [id]: next };
+    });
+    setDirty(true);
+  };
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.post('/attendance/save', {
+        classId: row.classId,
+        sectionId: row.sectionId || null,
+        date,
+        records: students.map((s) => ({
+          studentId: s.id,
+          status: (statuses[s.id] || 'Not Marked').toLowerCase().replace('not marked', 'absent'),
+        })),
+      }),
+    onSuccess: () => {
+      toast.success(`Attendance saved for ${row.className}${row.sectionName ? ' - ' + row.sectionName : ''}!`);
+      setDirty(false);
+      onSaved && onSaved();
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to save attendance'),
+  });
+
   const totalExp   = students.length;
-  const presentExp = students.filter(s => s.attendance?.status === 'present').length;
-  const absentExp  = students.filter(s => s.attendance?.status === 'absent').length;
-  const leaveExp   = students.filter(s => s.attendance?.status === 'leave').length;
+  const presentExp = Object.values(statuses).filter(v => v === 'Present').length;
+  const absentExp  = Object.values(statuses).filter(v => v === 'Absent').length;
+  const leaveExp   = Object.values(statuses).filter(v => v === 'Leave').length;
 
   return (
     <tr>
@@ -347,13 +395,19 @@ function ExpandedDetailRow({ students, loading }) {
         ) : (
           <>
             {/* Stats row */}
-            <div style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: '1px solid #dbeafe', flexWrap: 'wrap', fontSize: 13, color: '#374151' }}>
+            <div style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: '1px solid #dbeafe', flexWrap: 'wrap', fontSize: 13, color: '#374151', alignItems: 'center' }}>
               <span>Total Students: <strong>{totalExp}</strong></span>
               <span style={{ color: '#15803D' }}>Present Students: <strong>{presentExp}</strong></span>
               <span style={{ color: '#B91C1C' }}>Absent Students: <strong>{absentExp}</strong></span>
               <span style={{ color: '#B45309' }}>On Leave Students: <strong>{leaveExp}</strong></span>
-              <span style={{ color: '#6B7280' }}>Platform: —</span>
-              <span style={{ color: '#6B7280' }}>Created By/On: —</span>
+              <span style={{ color: '#6B7280', fontSize: 12 }}>Click a status to change it</span>
+              <button
+                style={{ ...btnTeal, marginLeft: 'auto', opacity: dirty ? 1 : 0.6 }}
+                disabled={save.isPending || totalExp === 0}
+                onClick={() => save.mutate()}
+              >
+                {save.isPending ? 'Saving…' : 'Save Attendance'}
+              </button>
             </div>
             {/* Student list */}
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -362,19 +416,26 @@ function ExpandedDetailRow({ students, loading }) {
                   <th style={{ padding: '7px 14px', color: '#0073b7', fontWeight: 700, textAlign: 'left' }}>#</th>
                   <th style={{ padding: '7px 14px', color: '#0073b7', fontWeight: 700, textAlign: 'left' }}>Reg No</th>
                   <th style={{ padding: '7px 14px', color: '#0073b7', fontWeight: 700, textAlign: 'left' }}>Name</th>
-                  <th style={{ padding: '7px 14px', color: '#0073b7', fontWeight: 700, textAlign: 'left' }}>Status</th>
+                  <th style={{ padding: '7px 14px', color: '#0073b7', fontWeight: 700, textAlign: 'left' }}>Status (click to change)</th>
                 </tr>
               </thead>
               <tbody>
                 {students.map((s, i) => {
-                  const st = s.attendance?.status;
-                  const label = st ? st.charAt(0).toUpperCase() + st.slice(1) : 'Not Marked';
+                  const label = statuses[s.id] || 'Not Marked';
                   return (
                     <tr key={s.id} style={{ borderBottom: '1px solid #dbeafe' }}>
                       <td style={{ padding: '7px 14px', color: '#9CA3AF' }}>{i + 1}</td>
                       <td style={{ padding: '7px 14px', fontFamily: 'monospace', color: TEAL, fontWeight: 700 }}>{s.rollNo || '—'}</td>
                       <td style={{ padding: '7px 14px', fontWeight: 600 }}>{s.name}</td>
-                      <td style={{ padding: '7px 14px' }}><StatusBadge status={label} /></td>
+                      <td style={{ padding: '7px 14px' }}>
+                        <button
+                          onClick={() => cycleStatus(s.id)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          aria-label={`Cycle attendance status for ${s.name}`}
+                        >
+                          <StatusBadge status={label} />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -573,7 +634,18 @@ function StudentAttendanceTab() {
                       </button>
                     </td>
                   </tr>
-                  {isExpanded && <ExpandedDetailRow students={expandedStudents} loading={loadingExpanded} />}
+                  {isExpanded && (
+                    <ExpandedDetailRow
+                      row={row}
+                      students={expandedStudents}
+                      loading={loadingExpanded}
+                      date={date}
+                      onSaved={() => {
+                        qc.invalidateQueries({ queryKey: ['attendance-marked-check'] });
+                        qc.invalidateQueries({ queryKey: ['attend-expanded'] });
+                      }}
+                    />
+                  )}
                 </>
               );
             })}

@@ -57,7 +57,6 @@ import ExamMarksPage from './pages/exams/ExamMarksPage';
 import ExamResultsPage from './pages/exams/ExamResultsPage';
 import ExpensesPage from './pages/expenses/ExpensesPage';
 import StockPage from './pages/stock/StockPage';
-import HomeworkPage from './pages/homework/HomeworkPage';
 import TransportPage from './pages/transport/TransportPage';
 import TimetablePage from './pages/timetable/TimetablePage';
 import NotificationsPage from './pages/notifications/NotificationsPage';
@@ -431,7 +430,10 @@ export default function App() {
             <Route path="/exams/:id/marks"            element={<ExamMarksPage />} />
             <Route path="/exams/:id/results"          element={<ExamResultsPage />} />
             <Route path="/timetable"                  element={<TimetablePage />} />
-            <Route path="/homework"                   element={<HomeworkPage />} />
+            {/* HomeworkPage was a weaker duplicate of HomeworkDiaryPage (dead
+                "Send via SMS" button, no subject-level assign/done tracking) —
+                redirect instead of keeping two competing UIs. */}
+            <Route path="/homework"                   element={<Navigate to="/homework/diary" replace />} />
 
             {/* Finance */}
             <Route path="/salary"                     element={<SalaryPage />} />

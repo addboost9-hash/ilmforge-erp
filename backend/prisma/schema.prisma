@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -116,12 +116,14 @@ model Class {
   name      String
   orderNo   Int       @default(0)
   isActive  Boolean   @default(true)
+  classTeacherId Int?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   sections  Section[]
   students  Student[]
   subjects  Subject[]
   feeStructures FeeStructure[]
+  classTeacher Staff? @relation("ClassTeacher", fields: [classTeacherId], references: [id])
 }
 
 model Section {
@@ -285,6 +287,7 @@ model Staff {
   attendance   StaffAttendance[]
   appraisals   StaffAppraisal[]
   payrollAdjustments PayrollAdjustment[]
+  classesAsTeacher Class[] @relation("ClassTeacher")
 }
 
 model FeeStructure {

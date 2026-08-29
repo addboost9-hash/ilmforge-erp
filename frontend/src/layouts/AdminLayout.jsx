@@ -44,7 +44,7 @@ const NAV = [
       { to: '/academics',      icon: BookOpen,      label: 'Curriculum Planner' },
       { to: '/examination',    icon: ClipboardList, label: 'Exam Vault' },
       { to: '/timetable',      icon: CalendarDays,  label: 'Class Schedule' },
-      { to: '/homework',       icon: BookMarked,    label: 'Homework Diary' },
+      { to: '/homework/diary', icon: BookMarked,    label: 'Homework Diary' },
       { to: '/online-classes', icon: Globe,         label: 'Virtual Classes',   roles: ['super_admin','admin','teacher'] },
     ],
   },

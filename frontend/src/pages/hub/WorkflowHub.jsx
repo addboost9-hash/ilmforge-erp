@@ -128,7 +128,7 @@ const WORKFLOWS = [
         icon: BookOpen,
         title: 'Homework / Study Material',
         desc: 'Have teachers assign homework or upload study material.',
-        link: '/homework',
+        link: '/homework/diary',
         label: 'Manage Homework',
         tip: 'This appears directly on the parent portal',
       },
