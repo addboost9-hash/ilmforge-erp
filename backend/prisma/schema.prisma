@@ -147,6 +147,7 @@ model Subject {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   class       Class    @relation(fields: [classId], references: [id])
+  examMarks   ExamMark[]
 }
 
 model Department {
@@ -225,6 +226,7 @@ model Student {
   corrections           AttendanceCorrection[]
   eventParticipations   EventParticipant[]
   alumniProfile         AlumniProfile?
+  examMarks             ExamMark[]
 
   @@index([schoolId, status, deletedAt])
   @@index([schoolId, classId, sectionId])
@@ -462,6 +464,8 @@ model ExamMark {
   isAbsent       Boolean  @default(false)
   createdAt      DateTime @default(now())
   exam           Exam     @relation(fields: [examId], references: [id])
+  student        Student  @relation(fields: [studentId], references: [id])
+  subject        Subject? @relation(fields: [subjectId], references: [id])
   theoryMarks    Int?
   practicalMarks Int?
   graceMarks     Int      @default(0)
