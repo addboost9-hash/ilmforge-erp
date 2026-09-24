@@ -191,8 +191,10 @@ export function ProgressBar({ value, max = 100, color = '#0073b7', height = 6, s
 /* ─── Fee voucher print — professional 3-copy with all heads ─ */
 export function printFeeVoucher({ student, invoice, school }) {
   const schoolName = school?.name || localStorage.getItem('registeredSchoolName') || 'IlmForge School';
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const monthLabel = invoice?.month ? `${months[invoice.month-1]} ${invoice?.year || ''}` : '—';
+  // FIX: FeeInvoice.month is stored as a full name string (e.g. "July"), not
+  // a 1-12 index — indexing a month-name array with it always produced
+  // undefined, so every printed fee voucher showed "undefined <year>".
+  const monthLabel = invoice?.month ? `${invoice.month} ${invoice?.year || ''}` : '—';
   const dueDate = invoice?.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-PK') : '—';
   const total = Number(invoice?.dueAmount || invoice?.totalAmount || 0);
   const isPaid = invoice?.status === 'paid';

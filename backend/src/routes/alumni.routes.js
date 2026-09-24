@@ -9,6 +9,7 @@
 const express = require('express');
 const router  = express.Router();
 const prisma  = require('../config/prisma');
+const { contains: ciContains, equals: ciEquals } = require('../utils/search');
 const wrap    = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // Mounted with only `protect` in app.js (no role gate, no PM check).
@@ -38,8 +39,8 @@ router.get('/', wrap(async (req, res) => {
     ...(classId && { classId: parseInt(classId) }),
     ...(search && {
       OR: [
-        { name:    { contains: search, mode: 'insensitive' } },
-        { rollNo:  { contains: search, mode: 'insensitive' } },
+        { name:    ciContains(search) },
+        { rollNo:  ciContains(search) },
       ],
     }),
   };
@@ -203,7 +204,7 @@ router.put('/:studentId', wrap(async (req, res) => {
     data: {
       schoolId, userId: req.user?.id || null,
       action: 'ALUMNI_PROFILE_UPDATED',
-      entity: 'student', entityId: studentId,
+      resource: 'student', resourceId: studentId,
       details: JSON.stringify(profileData),
     },
   }).catch(() => null);
@@ -253,7 +254,7 @@ router.post('/send-invitation', wrap(async (req, res) => {
     data: {
       schoolId, userId: req.user?.id || null,
       action: 'ALUMNI_INVITATION_SENT',
-      entity: 'school', entityId: schoolId,
+      resource: 'school', resourceId: schoolId,
       details: JSON.stringify({ channel, subject, total: alumni.length, reachableEmail, reachableSMS }),
     },
   }).catch(() => null);

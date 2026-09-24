@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,14 @@ const STATUS_OPTIONS = [
   { key: 'L', label: 'Leave', color: '#D97706', bg: '#FEF3C7' },
   { key: 'Lt', label: 'Late', color: '#7C3AED', bg: '#EDE9FE' },
 ];
+
+// FIX: the backend's Attendance.status column stores the full words
+// present|absent|leave|late (see backend/prisma/schema.prisma and every web
+// report that reads it) — this screen was posting the short UI codes
+// (P/A/L/Lt) straight through, which saved silently but showed up as
+// unrecognized statuses everywhere else attendance is read (dashboards,
+// percentage calculations, SMS triggers).
+const STATUS_TO_BACKEND = { P: 'present', A: 'absent', L: 'leave', Lt: 'late' };
 
 function getToday() {
   const d = new Date();
@@ -85,7 +93,10 @@ export default function AttendanceScreen() {
     : studentsData?.students || studentsData?.data || studentsData?.items || [];
 
   // Initialize attendance when students load
-  useCallback(() => {
+  // FIX: this was wrapped in useCallback, which only memoizes a function
+  // reference — it's never invoked on its own. Nothing ever actually ran, so
+  // newly-loaded students never got their default 'P' (present) mark.
+  useEffect(() => {
     if (students.length > 0) {
       const init = {};
       students.forEach((s) => {
@@ -115,7 +126,7 @@ export default function AttendanceScreen() {
     mutationFn: async () => {
       const records = students.map((s) => ({
         studentId: s._id || s.id,
-        status: attendance[s._id || s.id] || 'P',
+        status: STATUS_TO_BACKEND[attendance[s._id || s.id] || 'P'],
       }));
       const res = await api.post('/attendance/save', {
         classId: selectedClass,

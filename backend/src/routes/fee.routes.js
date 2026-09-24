@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { contains: ciContains, equals: ciEquals } = require('../utils/search');
 const { sendSMS } = require('../services/sms.service');
 const { sendFeePaidNotification, sendFeeReminderNotification } = require('../services/whatsapp.service');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
@@ -13,6 +14,54 @@ const requireFinanceRole = (req, res, next) => {
   }
   next();
 };
+
+// GET /api/v1/fees/stats?from=&to= — collection totals for a date range.
+// The analytics page's date filter had no backing endpoint, so it silently
+// fell through to month-fixed dashboard figures and changing the dates
+// appeared to do nothing.
+router.get('/stats', requireFinanceRole, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const { from, to } = req.query;
+
+  const range = {};
+  if (from) { const d = new Date(from); d.setHours(0, 0, 0, 0); range.gte = d; }
+  if (to)   { const d = new Date(to);   d.setHours(23, 59, 59, 999); range.lte = d; }
+  const hasRange = Object.keys(range).length > 0;
+
+  const [paidAgg, invoiceAgg] = await Promise.all([
+    prisma.feePayment.aggregate({
+      where: { schoolId, ...(hasRange && { paymentDate: range }) },
+      _sum: { amountPaid: true },
+      _count: true,
+    }),
+    // Outstanding is a running balance, so it is scoped by when the invoice
+    // was raised rather than by payment date.
+    prisma.feeInvoice.aggregate({
+      where: { schoolId, ...(hasRange && { createdAt: range }) },
+      _sum: { totalAmount: true, paidAmount: true, dueAmount: true, discount: true },
+      _count: true,
+    }),
+  ]);
+
+  const collected = paidAgg._sum.amountPaid || 0;
+  const pending = invoiceAgg._sum.dueAmount || 0;
+  const billed = invoiceAgg._sum.totalAmount || 0;
+
+  res.json({
+    success: true,
+    data: {
+      from: from || null,
+      to: to || null,
+      collected,
+      pending,
+      billed,
+      discount: invoiceAgg._sum.discount || 0,
+      paymentCount: paidAgg._count || 0,
+      invoiceCount: invoiceAgg._count || 0,
+      collectionRate: billed > 0 ? Math.round((collected / billed) * 1000) / 10 : 0,
+    },
+  });
+}));
 
 // POST /api/v1/fees/generate - Generate monthly fee for a class
 router.post('/generate', requireFinanceRole, wrap(async (req, res) => {
@@ -122,7 +171,7 @@ router.get('/invoices', requireFinanceRole, wrap(async (req, res) => {
     ...(status && { status }),
     ...(month && { month }),
     ...(year && { year: parseInt(year) }),
-    ...(search && { student: { OR: [{ name: { contains: search, mode: 'insensitive' } }, { rollNo: { contains: search, mode: 'insensitive' } }] } }),
+    ...(search && { student: { OR: [{ name: ciContains(search) }, { rollNo: ciContains(search) }] } }),
   };
   const [invoices, total] = await Promise.all([
     prisma.feeInvoice.findMany({ where, skip, take: parseInt(limit), include: { student: { select: { name: true, rollNo: true, classId: true } }, payments: { orderBy: { createdAt: 'desc' }, take: 1 } }, orderBy: { createdAt: 'desc' } }),
@@ -354,7 +403,7 @@ router.post('/invoices', requireFinanceRole, wrap(async (req, res) => {
       dueDate: dueDate ? new Date(dueDate) : new Date(Date.now() + 10 * 864e5),
     }
   });
-  await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_CREATED', entity: 'fee_invoice', entityId: inv.id, details: JSON.stringify({ total, heads }) } }).catch(() => null);
+  await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_CREATED', resource: 'fee_invoice', resourceId: inv.id, details: JSON.stringify({ total, heads }) } }).catch(() => null);
   res.status(201).json({ success: true, data: inv });
 }));
 
@@ -376,7 +425,7 @@ router.put('/invoices/:id', requireFinanceRole, wrap(async (req, res) => {
       ...(status && { status }),
     }
   });
-  await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_UPDATED', entity: 'fee_invoice', entityId: inv.id } }).catch(() => null);
+  await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_UPDATED', resource: 'fee_invoice', resourceId: inv.id } }).catch(() => null);
   res.json({ success: true, data: updated });
 }));
 
@@ -386,7 +435,7 @@ router.delete('/invoices/:id', requireFinanceRole, wrap(async (req, res) => {
   if (!inv) return res.status(404).json({ success: false, message: 'Invoice not found.' });
   if (inv.paidAmount > 0) return res.status(400).json({ success: false, message: 'A paid invoice cannot be deleted — please reverse the payment first.' });
   await prisma.feeInvoice.delete({ where: { id: inv.id } });
-  await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_DELETED', entity: 'fee_invoice', entityId: inv.id, details: JSON.stringify({ amount: inv.totalAmount, month: inv.month }) } }).catch(() => null);
+  await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_DELETED', resource: 'fee_invoice', resourceId: inv.id, details: JSON.stringify({ amount: inv.totalAmount, month: inv.month }) } }).catch(() => null);
   res.json({ success: true, message: 'Invoice deleted.' });
 }));
 
@@ -409,8 +458,8 @@ router.get('/student-by-barcode', requireFinanceRole, wrap(async (req, res) => {
       deletedAt: null,
       ...(campusId && { campusId }),
       OR: [
-        { rollNo:       { equals: code, mode: 'insensitive' } },
-        { admissionNo:  { equals: code, mode: 'insensitive' } },
+        { rollNo:       ciEquals(code) },
+        { admissionNo:  ciEquals(code) },
       ],
     },
     include: {
@@ -427,8 +476,8 @@ router.get('/student-by-barcode', requireFinanceRole, wrap(async (req, res) => {
         deletedAt: null,
         ...(campusId && { campusId }),
         OR: [
-          { rollNo:      { contains: code, mode: 'insensitive' } },
-          { admissionNo: { contains: code, mode: 'insensitive' } },
+          { rollNo:      ciContains(code) },
+          { admissionNo: ciContains(code) },
         ],
       },
       include: {
@@ -742,13 +791,14 @@ router.put('/student-discount/:studentId', requireFinanceRole, wrap(async (req, 
     const newDiscount = Math.min(totalDiscount, inv.totalAmount);
     const newDue = Math.max(0, inv.totalAmount - inv.paidAmount - newDiscount);
 
-    // FIX: this used to also set `updateData.remarks = ...`, but FeeInvoice
-    // has no `remarks` column — every call threw a Prisma "unknown argument"
-    // error, so applying a per-head discount always failed with a 500.
-    // The per-head breakdown (feeHeadDiscounts/comments) is still returned
-    // in this response and logged to the audit trail below; only the real
-    // discount/dueAmount totals are persisted on the invoice itself.
-    const updateData = { discount: newDiscount, dueAmount: newDue };
+    // FeeInvoice.remarks now exists in the schema, so persist the per-head
+    // breakdown here too — the GET handler above reads it back via
+    // latestInvoice.remarks to re-populate the discount form on reopen.
+    const updateData = {
+      discount: newDiscount,
+      dueAmount: newDue,
+      remarks: JSON.stringify({ feeHeadDiscounts, comments }),
+    };
 
     await prisma.feeInvoice.update({ where: { id: inv.id }, data: updateData });
     updated++;
@@ -756,7 +806,7 @@ router.put('/student-discount/:studentId', requireFinanceRole, wrap(async (req, 
 
   await prisma.auditLog.create({
     data: {
-      schoolId, userId: req.user.id, action: 'FEE_DISCOUNT_APPLIED', entity: 'student', entityId: studentId,
+      schoolId, userId: req.user.id, action: 'FEE_DISCOUNT_APPLIED', resource: 'student', resourceId: studentId,
       details: JSON.stringify({ totalDiscount, heads: heads.length, invoicesUpdated: updated }),
     },
   }).catch(() => null);

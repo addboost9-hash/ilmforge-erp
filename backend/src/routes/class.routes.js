@@ -12,7 +12,9 @@ router.get('/', wrap(async (req, res) => {
     },
     orderBy: { orderNo: 'asc' },
   });
-  res.setHeader('Cache-Control', 'private, max-age=300'); // 5 min cache
+  // Revalidate rather than serve from the browser cache: a 5-minute max-age
+  // here meant a newly added or deleted class did not show up until it expired.
+  res.setHeader('Cache-Control', 'private, no-cache');
   res.json({ success: true, data: classes });
 }));
 
@@ -55,7 +57,18 @@ router.get('/:classId/subjects', wrap(async (req, res) => {
 
 router.post('/subjects', wrap(async (req, res) => {
   const { classId, name, code, totalMarks, teacherId } = req.body;
+
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({ success: false, message: 'Subject name is required.' });
+  }
+
+  // Subject.classId is required by the schema. Without this guard an omitted
+  // or blank classId became parseInt(undefined) = NaN and Prisma threw,
+  // surfacing as a 500 instead of telling the user to pick a class.
   const parsedClassId = parseInt(classId);
+  if (!Number.isInteger(parsedClassId)) {
+    return res.status(400).json({ success: false, message: 'Please select the class this subject belongs to.' });
+  }
 
   // IDOR: classId was not verified to belong to this school — a user could
   // attach a new subject to another school's class by guessing its id.
@@ -75,15 +88,21 @@ router.put('/subjects/:id', wrap(async (req, res) => {
 
   // IDOR: classId was not verified to belong to this school — a user could
   // re-parent this subject onto another school's class by guessing its id.
-  if (classId !== undefined) {
-    const cls = await prisma.class.findFirst({ where: { id: parseInt(classId), schoolId: req.schoolId } });
+  // An empty-string classId from a form select parsed to NaN here and threw.
+  const reparent = classId !== undefined && classId !== null && classId !== '';
+  if (reparent) {
+    const parsed = parseInt(classId);
+    if (!Number.isInteger(parsed)) {
+      return res.status(400).json({ success: false, message: 'Invalid class selected.' });
+    }
+    const cls = await prisma.class.findFirst({ where: { id: parsed, schoolId: req.schoolId } });
     if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
   }
 
   const subject = await prisma.subject.update({
     where: { id },
     data: {
-      ...(classId !== undefined && { classId: parseInt(classId) }),
+      ...(reparent && { classId: parseInt(classId) }),
       ...(name !== undefined && { name }),
       ...(code !== undefined && { code }),
       ...(totalMarks !== undefined && { totalMarks: parseInt(totalMarks) }),

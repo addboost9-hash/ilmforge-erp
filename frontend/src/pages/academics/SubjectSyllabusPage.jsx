@@ -222,18 +222,8 @@ export default function SubjectSyllabusPage() {
     queryKey: ['syllabus-for-class', classId],
     queryFn: () => api.get('/syllabus', { params: { classId } }).then(r => r.data.data || []).catch(() => []),
     enabled: !!classId,
-    onSuccess: (data) => {
-      const newContents = {};
-      const newIds = {};
-      data.forEach(s => {
-        if (s.subjectId) {
-          newContents[s.subjectId] = s.units?.[0]?.content || '';
-          newIds[s.subjectId] = s.id;
-        }
-      });
-      setContents(prev => ({ ...newContents, ...prev }));
-      setSchemeIds(prev => ({ ...newIds, ...prev }));
-    },
+    // (An onSuccess callback used to live here. TanStack Query v5 removed it
+    // from useQuery, so it never ran — the effect below does this work.)
   });
 
   /* Populate contents from syllabus records on load */

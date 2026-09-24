@@ -7,8 +7,21 @@ import { t, LANGUAGES } from '../i18n/translations';
 
 const STORAGE_KEY = 'ilmforge_language';
 
+/**
+ * Roman Urdu was removed as a selectable language. A browser that still has
+ * 'roman' saved would otherwise render every label through a locale that no
+ * longer appears in the switcher, with no way back to English from the UI.
+ */
+const SUPPORTED = new Set(LANGUAGES.map((l) => l.code));
+const readLang = () => {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved && SUPPORTED.has(saved)) return saved;
+  if (saved) localStorage.setItem(STORAGE_KEY, 'en');
+  return 'en';
+};
+
 const useLanguageStore = create((set, get) => ({
-  lang: localStorage.getItem(STORAGE_KEY) || 'en',
+  lang: readLang(),
 
   setLang: (lang) => {
     localStorage.setItem(STORAGE_KEY, lang);
@@ -38,11 +51,11 @@ const useLanguageStore = create((set, get) => ({
 }));
 
 // Initialize direction on app load
-const savedLang = localStorage.getItem(STORAGE_KEY) || 'en';
+const savedLang = readLang();
 const savedLangObj = LANGUAGES.find(l => l.code === savedLang);
 document.documentElement.setAttribute('dir', savedLangObj?.dir || 'ltr');
 document.documentElement.setAttribute('lang', savedLang);
 if (savedLang === 'ur') document.body.classList.add('lang-ur');
-else if (savedLang === 'roman') document.body.classList.add('lang-roman');
+else document.body.classList.add('lang-en');
 
 export default useLanguageStore;

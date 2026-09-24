@@ -2,23 +2,71 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { Plus, ShoppingCart, Package, AlertTriangle } from 'lucide-react';
+import { Plus, ShoppingCart, Package, AlertTriangle, Pencil, Trash2, X, Save } from 'lucide-react';
 
 const money = v => 'Rs. ' + ((v||0)/100).toLocaleString();
 
+const EMPTY_FORM = { name:'', barcode:'', category:'', purchasePrice:'', sellPrice:'', quantity:'' };
+
 export default function StockPage() {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ name:'', barcode:'', category:'', purchasePrice:'', sellPrice:'', quantity:'' });
+  const [form, setForm] = useState(EMPTY_FORM);
+  // Inventory was create-and-sell only — no way to correct a price, fix a
+  // typo or retire a discontinued item. Editing reuses this same form.
+  const [editingId, setEditingId] = useState(null);
   const [sellForm, setSellForm] = useState({ productId:'', quantity:1, studentId:'' });
   const [receipt, setReceipt] = useState(null);
 
   const { data, isLoading } = useQuery({ queryKey:['products'], queryFn:()=>api.get('/products').then(r=>r.data.data) });
 
+  const resetForm = () => { setForm(EMPTY_FORM); setEditingId(null); };
+
   const add = useMutation({
     mutationFn: d => api.post('/products', d),
-    onSuccess: () => { toast.success('Product added!'); qc.invalidateQueries(['products']); setForm({name:'',barcode:'',category:'',purchasePrice:'',sellPrice:'',quantity:''}); },
+    onSuccess: () => { toast.success('Product added!'); qc.invalidateQueries(['products']); resetForm(); },
     onError: err => toast.error(err.response?.data?.message || 'Failed'),
   });
+
+  const update = useMutation({
+    mutationFn: ({ id, ...d }) => api.put(`/products/${id}`, d),
+    onSuccess: () => { toast.success('Product updated!'); qc.invalidateQueries(['products']); resetForm(); },
+    onError: err => toast.error(err.response?.data?.message || 'Failed to update'),
+  });
+
+  const remove = useMutation({
+    mutationFn: id => api.delete(`/products/${id}`),
+    onSuccess: r => { toast.success(r.data?.message || 'Product deleted'); qc.invalidateQueries(['products']); },
+    onError: err => toast.error(err.response?.data?.message || 'Failed to delete'),
+  });
+
+  const startEdit = (p) => {
+    setEditingId(p.id);
+    setForm({
+      name: p.name || '',
+      barcode: p.barcode || '',
+      category: p.category || '',
+      purchasePrice: ((p.purchasePrice || 0) / 100).toString(),
+      sellPrice: ((p.sellPrice || 0) / 100).toString(),
+      quantity: String(p.quantity ?? ''),
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const submitForm = () => {
+    const payload = {
+      ...form,
+      purchasePrice: Math.round(parseFloat(form.purchasePrice || 0) * 100),
+      sellPrice: Math.round(parseFloat(form.sellPrice || 0) * 100),
+      quantity: parseInt(form.quantity || 0),
+    };
+    if (editingId) update.mutate({ id: editingId, ...payload });
+    else add.mutate(payload);
+  };
+
+  const confirmRemove = (p) => {
+    if (!window.confirm(`Delete "${p.name}" from inventory?`)) return;
+    remove.mutate(p.id);
+  };
 
   const sell = useMutation({
     mutationFn: d => api.post('/products/sell', d),
@@ -58,20 +106,32 @@ export default function StockPage() {
         <div className="card">
           <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:14}}>
             <Package size={15} color="#0D9488"/>
-            <h3 style={{margin:0, fontSize:14, fontWeight:700, color:'#1E3A5F'}}>Add Product</h3>
+            <h3 style={{margin:0, fontSize:14, fontWeight:700, color:'#1E3A5F'}}>
+              {editingId ? 'Edit Product' : 'Add Product'}
+            </h3>
+            {editingId && (
+              <button
+                onClick={resetForm}
+                style={{marginLeft:'auto', display:'inline-flex', alignItems:'center', gap:4, background:'none', border:'none', color:'#64748B', fontSize:12, fontWeight:600, cursor:'pointer'}}
+              >
+                <X size={13}/> Cancel edit
+              </button>
+            )}
           </div>
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
-            {[['Product Name *','name','text'],['Barcode','barcode','text'],['Category','category','text'],['Purchase Price (Rs.)','purchasePrice','number'],['Sell Price (Rs.)','sellPrice','number'],['Initial Quantity','quantity','number']].map(([l,k,t]) => (
+            {[['Product Name *','name','text'],['Barcode','barcode','text'],['Category','category','text'],['Purchase Price (Rs.)','purchasePrice','number'],['Sell Price (Rs.)','sellPrice','number'],[editingId?'Quantity in Stock':'Initial Quantity','quantity','number']].map(([l,k,t]) => (
               <div key={k} className="form-group" style={{marginBottom:0}}>
-                <label className="form-label">{l}</label>
-                <input className="form-input" type={t} value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})} placeholder={k==='purchasePrice'?'0':k==='sellPrice'?'0':k==='quantity'?'0':''}/>
+                <label className="form-label" htmlFor={`product-${k}`}>{l}</label>
+                <input id={`product-${k}`} className="form-input" type={t} value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})} placeholder={k==='purchasePrice'?'0':k==='sellPrice'?'0':k==='quantity'?'0':''}/>
               </div>
             ))}
           </div>
           <button className="btn btn-teal" style={{marginTop:12,width:'100%',justifyContent:'center'}}
-            onClick={() => add.mutate({...form,purchasePrice:Math.round(parseFloat(form.purchasePrice||0)*100),sellPrice:Math.round(parseFloat(form.sellPrice||0)*100),quantity:parseInt(form.quantity||0)})}
-            disabled={!form.name||add.isPending}>
-            <Plus size={14}/> Add Product
+            onClick={submitForm}
+            disabled={!form.name || add.isPending || update.isPending}>
+            {editingId
+              ? <><Save size={14}/> {update.isPending ? 'Saving…' : 'Update Product'}</>
+              : <><Plus size={14}/> {add.isPending ? 'Adding…' : 'Add Product'}</>}
           </button>
         </div>
 
@@ -130,10 +190,10 @@ export default function StockPage() {
         {isLoading ? <div className="loading-center"><div className="spinner"/></div> : (
           <div className="table-wrap" style={{borderRadius:0, border:'none'}}>
             <table className="data-table">
-              <thead><tr><th>Name</th><th>Barcode</th><th>Category</th><th>Buy Price</th><th>Sell Price</th><th>Stock</th><th>Status</th></tr></thead>
+              <thead><tr><th>Name</th><th>Barcode</th><th>Category</th><th>Buy Price</th><th>Sell Price</th><th>Stock</th><th>Status</th><th style={{textAlign:'right'}}>Actions</th></tr></thead>
               <tbody>
                 {products.map(p => (
-                  <tr key={p.id}>
+                  <tr key={p.id} style={editingId===p.id ? {background:'#F0FDFA'} : undefined}>
                     <td style={{fontWeight:600, color:'#1E3A5F'}}>{p.name}</td>
                     <td style={{fontFamily:'monospace', fontSize:12}}>{p.barcode||'—'}</td>
                     <td><span className="badge badge-gray">{p.category||'General'}</span></td>
@@ -141,9 +201,17 @@ export default function StockPage() {
                     <td style={{fontWeight:700, color:'#15803D'}}>{money(p.sellPrice)}</td>
                     <td style={{fontWeight:700, color:p.quantity===0?'#B91C1C':p.quantity<=p.reorderLevel?'#B45309':'#15803D'}}>{p.quantity}</td>
                     <td><span className={`badge ${p.quantity===0?'badge-red':p.quantity<=p.reorderLevel?'badge-amber':'badge-green'}`}>{p.quantity===0?'Out':p.quantity<=p.reorderLevel?'Low':'In Stock'}</span></td>
+                    <td style={{textAlign:'right', whiteSpace:'nowrap'}}>
+                      <button className="btn btn-sm" style={{marginRight:6}} onClick={()=>startEdit(p)} aria-label={`Edit ${p.name}`}>
+                        <Pencil size={14}/>
+                      </button>
+                      <button className="btn btn-sm btn-red" onClick={()=>confirmRemove(p)} disabled={remove.isPending} aria-label={`Delete ${p.name}`}>
+                        <Trash2 size={14}/>
+                      </button>
+                    </td>
                   </tr>
                 ))}
-                {products.length===0 && <tr><td colSpan={7}><div className="empty-state"><div className="empty-state-icon">📦</div><div className="empty-state-text">No products yet</div></div></td></tr>}
+                {products.length===0 && <tr><td colSpan={8}><div className="empty-state"><div className="empty-state-icon">📦</div><div className="empty-state-text">No products yet</div></div></td></tr>}
               </tbody>
             </table>
           </div>

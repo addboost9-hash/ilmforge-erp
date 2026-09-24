@@ -166,7 +166,9 @@ router.get('/stats', wrap(async (req, res) => {
     balanceFee:   feeMap[c.id]?.dueAmount   || 0,
   }));
 
-  res.setHeader('Cache-Control', 'private, max-age=30'); // 30 sec dashboard cache
+  // Revalidate: a 30s browser cache meant the dashboard could still show the
+  // old totals right after a fee was collected or attendance was marked.
+  res.setHeader('Cache-Control', 'private, no-cache');
   res.json({
     success: true,
     data: {

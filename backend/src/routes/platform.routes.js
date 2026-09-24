@@ -18,7 +18,7 @@
 const express   = require('express');
 const router    = express.Router();
 const prisma    = require('../config/prisma');
-const crypto    = require('crypto');
+const { contains: ciContains, equals: ciEquals } = require('../utils/search');
 
 const wrap = fn => (req, res, next) => fn(req, res, next).catch(next);
 
@@ -39,25 +39,89 @@ const platformAuth = (req, res, next) => {
   next();
 };
 
-/* ── License Key Generator ───────────────────────────────────── */
-function generateLicenseKey(schoolId, plan, expiryDate) {
-  const data = `ILMFORGE-${schoolId}-${plan}-${expiryDate.toISOString().split('T')[0]}`;
-  const signature = crypto
-    .createHmac('sha256', process.env.LICENSE_SECRET || 'IlmForgeLicenseSecret2026')
-    .update(data)
-    .digest('hex')
-    .substring(0, 12)
-    .toUpperCase();
-  return `ILM-${String(schoolId).padStart(4,'0')}-${plan.toUpperCase().substring(0,4)}-${signature}`;
-}
+/* ── License Key Generator / Validator (shared with license.routes.js) ── */
+const { generateLicenseKey, validateLicenseKey } = require('../utils/license');
 
-/* ── Validate License Key ────────────────────────────────────── */
-function validateLicenseKey(key, schoolId, plan, expiryDate) {
-  const expected = generateLicenseKey(schoolId, plan, expiryDate);
-  return key === expected;
-}
+/* ── POST /platform/check-license (public — offline remote suspend check) ──
+   Called by offline app on startup to check if platform owner suspended it
+   No auth needed — just the license key.
+   FIX: this and /validate-license used to sit AFTER `router.use(platformAuth)`
+   below, so despite being commented "no auth needed" / "public", every call
+   was rejected with 403 (no x-platform-key) before reaching the handler.
+   A no-op middleware was added inline to "remove" the auth, but router.use()
+   applies unconditionally to every route registered after it — it can't be
+   un-applied per-route. The actual fix is registering these two routes
+   BEFORE router.use(platformAuth) runs, so they never go through it at all.
+   In practice this meant every offline school's startup suspend-check
+   silently failed open (parsed the 403 body, saw no `suspended` field, and
+   just continued) — the platform owner's remote-suspend kill switch never
+   actually worked.
+─────────────────────────────────────────────────────────────────── */
+router.post('/check-license', wrap(async (req, res) => {
+  const { key } = req.body;
+  if (!key) return res.json({ valid: false, reason: 'No key' });
 
-/* ═══ APPLY PLATFORM AUTH TO ALL ROUTES ════════════════════════ */
+  const school = await prisma.school.findFirst({
+    where: { licenseKey: key },
+    select: { id: true, name: true, status: true, suspendReason: true, licenseExpiry: true },
+  });
+
+  if (!school) return res.json({ valid: true, suspended: false, note: 'Key not in cloud DB — offline only' });
+
+  if (school.status === 'suspended') {
+    return res.json({ valid: false, suspended: true, reason: school.suspendReason || 'Suspended by platform admin' });
+  }
+
+  if (school.licenseExpiry && new Date(school.licenseExpiry) < new Date()) {
+    return res.json({ valid: false, suspended: true, reason: 'License expired in cloud — contact IlmForge' });
+  }
+
+  res.json({ valid: true, suspended: false, schoolName: school.name });
+}));
+
+/* ── POST /platform/validate-license (public — for offline check) ── */
+router.post('/validate-license', wrap(async (req, res) => {
+  const { licenseKey, schoolId } = req.body;
+  if (!licenseKey || !schoolId) {
+    return res.status(400).json({ success: false, message: 'licenseKey and schoolId required' });
+  }
+
+  const school = await prisma.school.findFirst({
+    where: { id: parseInt(schoolId), licenseKey },
+    select: { id: true, name: true, plan: true, licenseKey: true, licenseExpiry: true, status: true },
+  });
+
+  if (!school) {
+    return res.status(403).json({ success: false, valid: false, message: 'Invalid license key' });
+  }
+
+  if (school.status === 'suspended') {
+    return res.status(403).json({ success: false, valid: false, message: 'School account suspended' });
+  }
+
+  const now = new Date();
+  if (school.licenseExpiry && new Date(school.licenseExpiry) < now) {
+    return res.status(403).json({ success: false, valid: false, message: 'License expired', expiredOn: school.licenseExpiry });
+  }
+
+  const daysLeft = school.licenseExpiry
+    ? Math.ceil((new Date(school.licenseExpiry) - now) / (1000 * 60 * 60 * 24))
+    : null;
+
+  res.json({
+    success: true,
+    valid: true,
+    data: {
+      schoolName: school.name,
+      plan: school.plan,
+      daysLeft,
+      expiryDate: school.licenseExpiry,
+      message: daysLeft !== null ? `License valid — ${daysLeft} days remaining` : 'License valid (no expiry)',
+    }
+  });
+}));
+
+/* ═══ APPLY PLATFORM AUTH TO ALL ROUTES BELOW THIS LINE ═════════ */
 router.use(platformAuth);
 
 /* ── GET /platform/stats ─────────────────────────────────────── */
@@ -91,10 +155,10 @@ router.get('/schools', wrap(async (req, res) => {
     ...(plan && { plan }),
     ...(search && {
       OR: [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { slug: { contains: search, mode: 'insensitive' } },
-        { city: { contains: search, mode: 'insensitive' } },
+        { name: ciContains(search) },
+        { email: ciContains(search) },
+        { slug: ciContains(search) },
+        { city: ciContains(search) },
       ]
     }),
   };
@@ -257,75 +321,6 @@ router.post('/schools/:id/plan', wrap(async (req, res) => {
   });
 
   res.json({ success: true, message: `Plan updated to ${plan} for "${school.name}"`, data: school });
-}));
-
-/* ── POST /platform/check-license (public — offline remote suspend check) ──
-   Called by offline app on startup to check if platform owner suspended it
-   No auth needed — just the license key
-─────────────────────────────────────────────────────────────────── */
-router.post('/check-license', wrap(async (req, res) => {
-  const { key } = req.body;
-  if (!key) return res.json({ valid: false, reason: 'No key' });
-
-  const school = await prisma.school.findFirst({
-    where: { licenseKey: key },
-    select: { id: true, name: true, status: true, suspendReason: true, licenseExpiry: true },
-  });
-
-  if (!school) return res.json({ valid: true, suspended: false, note: 'Key not in cloud DB — offline only' });
-
-  if (school.status === 'suspended') {
-    return res.json({ valid: false, suspended: true, reason: school.suspendReason || 'Suspended by platform admin' });
-  }
-
-  if (school.licenseExpiry && new Date(school.licenseExpiry) < new Date()) {
-    return res.json({ valid: false, suspended: true, reason: 'License expired in cloud — contact IlmForge' });
-  }
-
-  res.json({ valid: true, suspended: false, schoolName: school.name });
-}));
-
-/* ── POST /platform/validate-license (public — for offline check) ── */
-// Remove platform auth for this one endpoint
-router.post('/validate-license', (req, res, next) => next(), wrap(async (req, res) => {
-  const { licenseKey, schoolId } = req.body;
-  if (!licenseKey || !schoolId) {
-    return res.status(400).json({ success: false, message: 'licenseKey and schoolId required' });
-  }
-
-  const school = await prisma.school.findFirst({
-    where: { id: parseInt(schoolId), licenseKey },
-    select: { id: true, name: true, plan: true, licenseKey: true, licenseExpiry: true, status: true },
-  });
-
-  if (!school) {
-    return res.status(403).json({ success: false, valid: false, message: 'Invalid license key' });
-  }
-
-  if (school.status === 'suspended') {
-    return res.status(403).json({ success: false, valid: false, message: 'School account suspended' });
-  }
-
-  const now = new Date();
-  if (school.licenseExpiry && new Date(school.licenseExpiry) < now) {
-    return res.status(403).json({ success: false, valid: false, message: 'License expired', expiredOn: school.licenseExpiry });
-  }
-
-  const daysLeft = school.licenseExpiry
-    ? Math.ceil((new Date(school.licenseExpiry) - now) / (1000 * 60 * 60 * 24))
-    : null;
-
-  res.json({
-    success: true,
-    valid: true,
-    data: {
-      schoolName: school.name,
-      plan: school.plan,
-      daysLeft,
-      expiryDate: school.licenseExpiry,
-      message: daysLeft !== null ? `License valid — ${daysLeft} days remaining` : 'License valid (no expiry)',
-    }
-  });
 }));
 
 /* ── DELETE /platform/schools/:id — Permanently delete a school ─

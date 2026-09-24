@@ -27,11 +27,11 @@ const TABS = [
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const SAMPLE_MONTHLY = MONTHS.map((m, i) => ({
-  month: m,
-  income:  [185000,190000,178000,210000,195000,220000,200000,215000,188000,205000,230000,245000][i],
-  expense: [140000,145000,132000,155000,148000,160000,142000,158000,135000,150000,162000,175000][i],
-}));
+/* Zeroed twelve-month scaffold. This page used to ship a hardcoded
+   SAMPLE_MONTHLY array of invented figures, which rendered identically for
+   every school and was indistinguishable from real accounts. Real totals now
+   come from GET /accounting/stats; this only shapes the empty state. */
+const EMPTY_MONTHLY = MONTHS.map(m => ({ month: m, income: 0, expense: 0 }));
 
 function StatCard({ label, value, icon: Icon, color, trend }) {
   return (
@@ -86,16 +86,34 @@ function QuickLinkCard({ title, desc, to, icon: Icon, color }) {
 }
 
 /* ── INCOME/EXPENSE TAB ── */
-function IncomeExpenseTab({ stats }) {
-  const thisMonth = SAMPLE_MONTHLY[new Date().getMonth()];
-  const net = thisMonth.income - thisMonth.expense;
+function IncomeExpenseTab({ stats, isLoading, isError }) {
+  const monthly = stats?.monthly?.length ? stats.monthly : EMPTY_MONTHLY;
+  const tm = stats?.thisMonth;
+  const annual = stats?.annual;
+
+  if (isLoading) {
+    return <div style={{ background:'#fff', borderRadius:10, padding:'40px 20px', textAlign:'center', color:'#64748b' }}>Loading accounts…</div>;
+  }
+  if (isError) {
+    return (
+      <div style={{ background:'#fff', borderRadius:10, padding:'40px 20px', textAlign:'center', color:'#991b1b', border:'1px solid #fee2e2' }}>
+        Could not load accounting figures. Please retry, or contact support if this persists.
+      </div>
+    );
+  }
+
   return (
     <div>
+      {stats && !stats.hasData && (
+        <div style={{ background:'#fffbeb', border:'1px solid #fde68a', color:'#92400e', borderRadius:10, padding:'12px 16px', marginBottom:16, fontSize:13 }}>
+          No fee payments or expenses recorded for {stats.year} yet — figures below will populate as transactions are entered.
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
-        <StatCard label="Total Income (This Month)"   value={Rs(thisMonth.income)}  icon={ArrowUpCircle}   color="#0d9488" trend={5.2} />
-        <StatCard label="Total Expense (This Month)"  value={Rs(thisMonth.expense)} icon={ArrowDownCircle} color="#ef4444" trend={-2.1} />
-        <StatCard label="Net Profit"                  value={Rs(net)}               icon={TrendingUp}      color="#1B2F6E" trend={8.4} />
-        <StatCard label="Annual Income"               value={Rs(2400000)}           icon={DollarSign}      color="#6366f1" />
+        <StatCard label={`Total Income (${tm?.month || 'This Month'})`}  value={Rs(tm?.income ?? 0)}  icon={ArrowUpCircle}   color="#0d9488" trend={tm?.incomeTrend ?? undefined} />
+        <StatCard label={`Total Expense (${tm?.month || 'This Month'})`} value={Rs(tm?.expense ?? 0)} icon={ArrowDownCircle} color="#ef4444" trend={tm?.expenseTrend ?? undefined} />
+        <StatCard label="Net Profit"                                     value={Rs(tm?.net ?? 0)}     icon={TrendingUp}      color="#1B2F6E" trend={tm?.netTrend ?? undefined} />
+        <StatCard label={`Annual Income (${stats?.year ?? ''})`}         value={Rs(annual?.income ?? 0)} icon={DollarSign}   color="#6366f1" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
@@ -103,7 +121,7 @@ function IncomeExpenseTab({ stats }) {
         <div style={{ background: '#fff', borderRadius: 10, padding: '18px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
           <h3 style={{ margin: '0 0 16px', color: '#1B2F6E', fontSize: 14, fontWeight: 600 }}>Monthly Income vs Expense</h3>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={SAMPLE_MONTHLY} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <BarChart data={monthly} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="month" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={v => (v / 1000) + 'k'} />
@@ -119,7 +137,7 @@ function IncomeExpenseTab({ stats }) {
         <div style={{ background: '#fff', borderRadius: 10, padding: '18px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
           <h3 style={{ margin: '0 0 16px', color: '#1B2F6E', fontSize: 14, fontWeight: 600 }}>Net Profit Trend</h3>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={SAMPLE_MONTHLY.map(d => ({ ...d, net: d.income - d.expense }))} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <LineChart data={monthly.map(d => ({ ...d, net: d.income - d.expense }))} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="month" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={v => (v / 1000) + 'k'} />
@@ -144,8 +162,11 @@ function IncomeExpenseTab({ stats }) {
             </tr>
           </thead>
           <tbody>
-            {SAMPLE_MONTHLY.map((row, i) => {
+            {monthly.map((row, i) => {
               const net = row.income - row.expense;
+              // A month with no transactions is not a profitable month —
+              // labelling an empty row "Profit" misreads as real performance.
+              const noActivity = row.income === 0 && row.expense === 0;
               return (
                 <tr key={row.month} style={{ borderBottom: '1px solid #f8fafc' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
@@ -154,13 +175,13 @@ function IncomeExpenseTab({ stats }) {
                   <td style={{ padding: '9px 16px', fontWeight: 600, color: '#1e293b' }}>{row.month}</td>
                   <td style={{ padding: '9px 16px', color: '#0d9488', fontWeight: 600 }}>{Rs(row.income)}</td>
                   <td style={{ padding: '9px 16px', color: '#ef4444' }}>{Rs(row.expense)}</td>
-                  <td style={{ padding: '9px 16px', color: net >= 0 ? '#0d9488' : '#ef4444', fontWeight: 600 }}>{Rs(net)}</td>
+                  <td style={{ padding: '9px 16px', color: noActivity ? '#94a3b8' : net >= 0 ? '#0d9488' : '#ef4444', fontWeight: 600 }}>{Rs(net)}</td>
                   <td style={{ padding: '9px 16px' }}>
                     <span style={{
-                      background: net >= 0 ? '#d1fae5' : '#fee2e2',
-                      color: net >= 0 ? '#065f46' : '#991b1b',
+                      background: noActivity ? '#f1f5f9' : net >= 0 ? '#d1fae5' : '#fee2e2',
+                      color: noActivity ? '#64748b' : net >= 0 ? '#065f46' : '#991b1b',
                       padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 600,
-                    }}>{net >= 0 ? 'Profit' : 'Loss'}</span>
+                    }}>{noActivity ? 'No activity' : net >= 0 ? 'Profit' : 'Loss'}</span>
                   </td>
                 </tr>
               );
@@ -288,11 +309,13 @@ function ReportsTab() {
 export default function AccountsPage() {
   const [activeTab, setActiveTab] = useState('income-expense');
 
-  const { data: accStats } = useQuery({
+  // No .catch(() => null) here: swallowing the error left the tab rendering
+  // zeroes that looked like real "no income" figures instead of a failure.
+  const { data: accStats, isLoading: accLoading, isError: accError } = useQuery({
     queryKey: ['accounting-stats'],
-    queryFn: () => api.get('/accounting/stats').then(r => r.data?.data || r.data).catch(() => null),
+    queryFn: () => api.get('/accounting/stats').then(r => r.data?.data || r.data),
     staleTime: 5 * 60_000,
-    retry: 0,
+    retry: 1,
   });
 
   return (
@@ -363,7 +386,7 @@ export default function AccountsPage() {
 
       {/* Tab Content */}
       <div>
-        {activeTab === 'income-expense' && <IncomeExpenseTab stats={accStats} />}
+        {activeTab === 'income-expense' && <IncomeExpenseTab stats={accStats} isLoading={accLoading} isError={accError} />}
         {activeTab === 'balance-sheet'  && <BalanceSheetTab />}
         {activeTab === 'transactions'   && <TransactionsTab />}
         {activeTab === 'reports'        && <ReportsTab />}

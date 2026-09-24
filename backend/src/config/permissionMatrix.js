@@ -92,6 +92,14 @@ const ROLE_DEFAULTS = {
   },
   student: {
     dashboard: viewOnly,
+    // FIX: students/fees/leaves were missing here entirely (every other
+    // role — parent, teacher, gatekeeper — has them). requireModulePermission
+    // denies access before a request even reaches a route's own row-level
+    // self-scoping, so the Student Portal's own-profile, fees, and leave
+    // application data all 403'd for every student, on every school.
+    students: viewOnly,
+    fees: viewOnly,
+    leaves: { ...viewOnly, canCreate: true },
     classes: viewOnly,
     timetable: viewOnly,
     noticeboard: viewOnly,

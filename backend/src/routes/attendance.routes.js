@@ -802,7 +802,11 @@ router.get('/student/:studentId/history', requireRole('student', 'parent', 'teac
   // Determine date range: current academic year (July-June) or session-based
   let startDate, endDate;
   if (sessionId) {
-    const session = await prisma.session.findUnique({ where: { id: parseInt(sessionId) } });
+    // findFirst + schoolId, not findUnique by id: the id arrives from the
+    // client, so an unscoped lookup would resolve another school's session.
+    const session = await prisma.academicSession.findFirst({
+      where: { id: parseInt(sessionId), schoolId: req.schoolId },
+    });
     if (!session) return res.status(404).json({ success: false, message: 'Session not found.' });
     startDate = session.startDate;
     endDate = session.endDate;
@@ -1011,7 +1015,7 @@ router.put('/corrections/:id/reject', requireRole('admin', 'super_admin', 'princ
 // Query: month, year, department(optional)
 router.get('/staff/report', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
-  const { month, year, department } = req.query;
+  const { month, year, departmentId } = req.query;
 
   const m = parseInt(month) || (new Date().getMonth() + 1);
   const y = parseInt(year) || new Date().getFullYear();
@@ -1021,11 +1025,12 @@ router.get('/staff/report', staffOnly, wrap(async (req, res) => {
   const staffList = await prisma.staff.findMany({
     where: {
       schoolId,
-      status: 'active',
+      isActive: true,
       deletedAt: null,
       ...(campusId && { campusId }),
-      ...(department && { department }),
+      ...(departmentId && { departmentId: parseInt(departmentId) }),
     },
+    include: { department: { select: { name: true } } },
     orderBy: { name: 'asc' },
   });
 
@@ -1055,7 +1060,7 @@ router.get('/staff/report', staffOnly, wrap(async (req, res) => {
       name: staff.name,
       empCode: staff.empCode || null,
       designation: staff.designation || null,
-      department: staff.department || null,
+      department: staff.department?.name || null,
       present, absent, late, leave, total,
       percentage: total > 0 ? Math.round((present / total) * 100) : 0,
       avgCheckIn,
@@ -1066,10 +1071,10 @@ router.get('/staff/report', staffOnly, wrap(async (req, res) => {
 }));
 
 // GET /api/v1/attendance/staff/excel — staff attendance XLSX download
-// Query: month, year, department(optional)
+// Query: month, year, departmentId(optional)
 router.get('/staff/excel', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
-  const { month, year, department } = req.query;
+  const { month, year, departmentId } = req.query;
 
   const m = parseInt(month) || (new Date().getMonth() + 1);
   const y = parseInt(year) || new Date().getFullYear();
@@ -1078,10 +1083,11 @@ router.get('/staff/excel', staffOnly, wrap(async (req, res) => {
 
   const staffList = await prisma.staff.findMany({
     where: {
-      schoolId, status: 'active', deletedAt: null,
+      schoolId, isActive: true, deletedAt: null,
       ...(campusId && { campusId }),
-      ...(department && { department }),
+      ...(departmentId && { departmentId: parseInt(departmentId) }),
     },
+    include: { department: { select: { name: true } } },
     orderBy: { name: 'asc' },
   });
 
@@ -1108,7 +1114,7 @@ router.get('/staff/excel', staffOnly, wrap(async (req, res) => {
 
     return {
       name: staff.name, empCode: staff.empCode || '-',
-      designation: staff.designation || '-', department: staff.department || '-',
+      designation: staff.designation || '-', department: staff.department?.name || '-',
       present, absent, late, leave, total,
       percentage: total > 0 ? Math.round((present / total) * 100) : 0,
       avgCheckIn,

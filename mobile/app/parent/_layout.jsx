@@ -1,6 +1,7 @@
 import { Tabs, useRouter } from 'expo-router';
 import { TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { clearAuth } from '../../src/store/auth';
 
 const NAVY = '#1B2F6E';
 
@@ -27,7 +28,7 @@ export default function ParentLayout() {
         headerRight: () => (
           <TouchableOpacity
             style={{ marginRight: 16 }}
-            onPress={() => router.replace('/login')}
+            onPress={async () => { await clearAuth(); router.replace('/login'); }}
           >
             <Ionicons name="log-out-outline" size={22} color="#fff" />
           </TouchableOpacity>

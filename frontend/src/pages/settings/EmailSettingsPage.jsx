@@ -140,7 +140,7 @@ export default function EmailSettingsPage() {
           <div className="card-body">
             {/* Provider Preset */}
             <div className="form-group">
-              <label className="form-label">Email Provider Select Karein</label>
+              <label className="form-label">Select Email Provider</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {PRESETS.map(p => (
                   <label key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', border: `2px solid ${selectedPreset === p.id ? '#0073b7' : '#e2e8f0'}`, borderRadius: 8, cursor: 'pointer', background: selectedPreset === p.id ? '#eff6ff' : 'white', transition: 'all .12s' }}>

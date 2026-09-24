@@ -6,8 +6,16 @@ const { authMiddleware, requireRole } = require('../middleware/auth.middleware')
 
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
-// Stricter rate limiter for sensitive auth endpoints — 10 requests per 15 minutes per IP.
-const authLimiter = rateLimit({
+/* This file used to apply one 10-per-IP-per-15-minutes limiter to /login as
+   well. A school is normally a single public IP, so only ten people could sign
+   in each morning before everyone else was locked out — and an admin could
+   reset at most ten staff passwords. Sign-in throttling is handled in app.js
+   instead, keyed by IP + account and counting only FAILED attempts.
+
+   What remains here guards the endpoints where each *successful* call costs
+   something or creates something: sending an SMS code, and registering a new
+   school. Those must count every request, not just failures. */
+const sensitiveLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
   standardHeaders: true,
@@ -17,7 +25,7 @@ const authLimiter = rateLimit({
 
 // POST /api/v1/auth/register
 // password is optional — system auto-generates one if not provided
-router.post('/register', wrap(async (req, res) => {
+router.post('/register', sensitiveLimiter, wrap(async (req, res) => {
   const { schoolName, name, email, phone, password, plan, logoUrl } = req.body;
   if (!schoolName || !name || !email || !phone) {
     return res.status(400).json({ success: false, message: 'School name, your name, email and phone are required.' });
@@ -46,7 +54,7 @@ router.get('/register', (req, res) => {
 });
 
 // POST /api/v1/auth/verify-phone  (also handles email OTP)
-router.post('/verify-phone', authLimiter, wrap(async (req, res) => {
+router.post('/verify-phone', sensitiveLimiter, wrap(async (req, res) => {
   const { userId, otp } = req.body;
   if (!userId || !otp) return res.status(400).json({ success: false, message: 'userId and otp are required.' });
   const data = await authService.verifyPhone({ userId, otp, requestOrigin: req.get('origin') || '' });
@@ -54,7 +62,7 @@ router.post('/verify-phone', authLimiter, wrap(async (req, res) => {
 }));
 
 // POST /api/v1/auth/verify-email-otp  (dedicated email OTP endpoint)
-router.post('/verify-email-otp', wrap(async (req, res) => {
+router.post('/verify-email-otp', sensitiveLimiter, wrap(async (req, res) => {
   const { userId, otp } = req.body;
   if (!userId || !otp) return res.status(400).json({ success: false, message: 'userId and otp are required.' });
   // Reuse verifyPhone — OTP stored same way regardless of delivery method
@@ -63,7 +71,7 @@ router.post('/verify-email-otp', wrap(async (req, res) => {
 }));
 
 // POST /api/v1/auth/resend-otp
-router.post('/resend-otp', wrap(async (req, res) => {
+router.post('/resend-otp', sensitiveLimiter, wrap(async (req, res) => {
   const { userId } = req.body;
   const data = await authService.resendOTP({ userId, requestOrigin: req.get('origin') || '' });
   res.json({ success: true, data });
@@ -84,7 +92,9 @@ router.post('/verify-email', wrap(async (req, res) => {
 }));
 
 // POST /api/v1/auth/login
-router.post('/login', authLimiter, wrap(async (req, res) => {
+// Throttled in app.js by IP + account, failed attempts only — see the note at
+// the top of this file for why a plain per-IP limit does not work here.
+router.post('/login', wrap(async (req, res) => {
   const { email, phone, password } = req.body;
   if (!password || (!email && !phone)) {
     return res.status(400).json({ success: false, message: 'Email/phone and password are required.' });
@@ -107,7 +117,7 @@ router.post('/logout', (req, res) => {
 });
 
 // POST /api/v1/auth/forgot-password
-router.post('/forgot-password', wrap(async (req, res) => {
+router.post('/forgot-password', sensitiveLimiter, wrap(async (req, res) => {
   const { email } = req.body;
   const data = await authService.forgotPassword({ email });
   res.json({ success: true, data });
@@ -161,8 +171,11 @@ const resetStaffPasswordHandler = wrap(async (req, res) => {
   res.json({ success: true, message: 'Password reset successfully.' });
 });
 
-router.post('/reset-staff-password', authLimiter, authMiddleware, requireRole('super_admin', 'admin'), resetStaffPasswordHandler);
-router.put('/reset-staff-password', authLimiter, authMiddleware, requireRole('super_admin', 'admin'), resetStaffPasswordHandler);
+// Already gated by authentication + super_admin/admin role. A 10-per-IP cap
+// here only stopped an admin part-way through resetting their staff's
+// passwords; the app-level auth limiter still covers abuse.
+router.post('/reset-staff-password', authMiddleware, requireRole('super_admin', 'admin'), resetStaffPasswordHandler);
+router.put('/reset-staff-password', authMiddleware, requireRole('super_admin', 'admin'), resetStaffPasswordHandler);
 
 // GET /api/v1/auth/me
 router.get('/me', authMiddleware, wrap(async (req, res) => {

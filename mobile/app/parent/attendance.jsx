@@ -17,15 +17,22 @@ const NAVY = '#1B2F6E';
 const STATUS_MAP = {
   P: { label: 'Present', color: '#059669', bg: '#D1FAE5' },
   Present: { label: 'Present', color: '#059669', bg: '#D1FAE5' },
+  present: { label: 'Present', color: '#059669', bg: '#D1FAE5' },
   A: { label: 'Absent', color: '#DC2626', bg: '#FEE2E2' },
   Absent: { label: 'Absent', color: '#DC2626', bg: '#FEE2E2' },
+  absent: { label: 'Absent', color: '#DC2626', bg: '#FEE2E2' },
   L: { label: 'Leave', color: '#D97706', bg: '#FEF3C7' },
   Leave: { label: 'Leave', color: '#D97706', bg: '#FEF3C7' },
+  leave: { label: 'Leave', color: '#D97706', bg: '#FEF3C7' },
   Lt: { label: 'Late', color: '#7C3AED', bg: '#EDE9FE' },
   Late: { label: 'Late', color: '#7C3AED', bg: '#EDE9FE' },
+  late: { label: 'Late', color: '#7C3AED', bg: '#EDE9FE' },
 };
 
 function AttendanceRow({ record }) {
+  // FIX: the real backend returns full lowercase words (present/absent/
+  // leave/late) — this map only had short codes and capitalized variants,
+  // so every real record fell through to the 'P'/Present default.
   const statusKey = record.status || record.attendanceStatus || 'P';
   const statusInfo = STATUS_MAP[statusKey] || STATUS_MAP['P'];
   const dateStr = record.date
@@ -68,7 +75,7 @@ export default function ParentAttendance() {
   const { data: attendanceData, isLoading, error, refetch } = useQuery({
     queryKey: ['child-attendance', activeChildId],
     queryFn: async () => {
-      const res = await api.get(`/attendance/student/${activeChildId}`);
+      const res = await api.get(`/attendance/student/${activeChildId}/history`);
       return res.data?.data || res.data;
     },
     enabled: !!activeChildId,

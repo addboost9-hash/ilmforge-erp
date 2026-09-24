@@ -16,13 +16,6 @@ const requireFinance = (req, res, next) => {
   next();
 };
 
-const requireAdmin = (req, res, next) => {
-  if (!['super_admin', 'admin'].includes(req.user?.role)) {
-    return res.status(403).json({ success: false, message: 'Admin access required.' });
-  }
-  next();
-};
-
 /** Parse a date-only string (YYYY-MM-DD) to start-of-day Date */
 const dayStart = (str) => { const d = new Date(str); d.setHours(0, 0, 0, 0); return d; };
 /** Parse a date-only string (YYYY-MM-DD) to exclusive next-day Date */
@@ -516,16 +509,8 @@ router.get('/staff/salary', requireFinance, wrap(async (req, res) => {
   res.json({ success: true, data, total: data.length, totalNet });
 }));
 
-// ─── 13. GET /report/accounting/daily-balancesheet ──────────────────────────
-// Individual accountant's daily balance sheet
-// ?accountantId=&date=
-router.get('/accounting/daily-balancesheet', requireFinance, wrap(async (req, res) => {
-  const { accountantId, date } = req.query;
-  if (!accountantId || !date) {
-    return res.status(400).json({ success: false, message: 'accountantId and date params required.' });
-  }
-
-  const accId = parseInt(accountantId);
+// Shared computation behind daily-balancesheet / balancesheet/:date / balancesheet/latest.
+async function computeDailyBalancesheet(schoolId, accId, date) {
   const targetStart = dayStart(date);
   const targetEnd = dayEnd(date);
 
@@ -533,7 +518,7 @@ router.get('/accounting/daily-balancesheet', requireFinance, wrap(async (req, re
   // Settlement is tracked in AuditLog with action 'BALANCESHEET_SETTLED'
   const lastSettlement = await prisma.auditLog.findFirst({
     where: {
-      schoolId: req.schoolId,
+      schoolId,
       action: 'BALANCESHEET_SETTLED',
       details: { contains: `"accountantId":${accId}` },
     },
@@ -544,10 +529,10 @@ router.get('/accounting/daily-balancesheet', requireFinance, wrap(async (req, re
     ? new Date(lastSettlement.createdAt)
     : new Date(0); // beginning of time if never settled
 
-  // Payments received by this accountant today
+  // Payments received by this accountant on the target date
   const todayPayments = await prisma.feePayment.findMany({
     where: {
-      schoolId: req.schoolId,
+      schoolId,
       receivedBy: accId,
       paymentDate: { gte: targetStart, lte: targetEnd },
     },
@@ -564,20 +549,20 @@ router.get('/accounting/daily-balancesheet', requireFinance, wrap(async (req, re
     orderBy: { paymentDate: 'asc' },
   });
 
-  // Expenses added by this accountant today
+  // Expenses added by this accountant on the target date
   const todayExpenses = await prisma.expense.findMany({
     where: {
-      schoolId: req.schoolId,
+      schoolId,
       addedBy: accId,
       date: { gte: targetStart, lte: targetEnd },
     },
     orderBy: { date: 'asc' },
   });
 
-  // Previous unsettled payments (between lastSettlement and today start)
+  // Previous unsettled payments (between lastSettlement and target-day start)
   const previousPayments = await prisma.feePayment.findMany({
     where: {
-      schoolId: req.schoolId,
+      schoolId,
       receivedBy: accId,
       paymentDate: { gte: unsettledSince, lt: targetStart },
     },
@@ -589,34 +574,73 @@ router.get('/accounting/daily-balancesheet', requireFinance, wrap(async (req, re
   const previousUnsettled = previousPayments.reduce((sum, p) => sum + p.amountPaid, 0);
   const cashInHand = previousUnsettled + todayCollected - todayExpensesTotal;
 
-  res.json({
-    success: true,
-    data: {
-      accountantId: accId,
-      date,
-      lastSettledAt: lastSettlement?.createdAt || null,
-      payments: todayPayments,
-      expenses: todayExpenses,
-      summary: {
-        previousUnsettled,
-        todayCollected,
-        todayExpenses: todayExpensesTotal,
-        cashInHand,
-      },
+  // "Settled" means this exact target date already has a BALANCESHEET_SETTLED
+  // audit entry recorded for it (not just "there exists some settlement ever").
+  const settledForDate = lastSettlement && lastSettlement.details?.includes(`"date":"${date}"`);
+
+  return {
+    accountantId: accId,
+    date,
+    status: settledForDate ? 'settled' : 'unsettled',
+    lastSettledAt: lastSettlement?.createdAt || null,
+    payments: todayPayments,
+    expenses: todayExpenses,
+    cashInHand,
+    summary: {
+      previousUnsettled,
+      todayCollected,
+      todayExpenses: todayExpensesTotal,
+      cashInHand,
     },
-  });
+  };
+}
+
+// ─── 13. GET /report/accounting/daily-balancesheet ──────────────────────────
+// Individual accountant's daily balance sheet
+// ?accountantId=&date=
+router.get('/accounting/daily-balancesheet', requireFinance, wrap(async (req, res) => {
+  const { accountantId, date } = req.query;
+  if (!accountantId || !date) {
+    return res.status(400).json({ success: false, message: 'accountantId and date params required.' });
+  }
+  const data = await computeDailyBalancesheet(req.schoolId, parseInt(accountantId), date);
+  res.json({ success: true, data });
+}));
+
+// ─── GET /report/accounting/balancesheet/latest — Accountant Portal banner ──
+// Today's sheet for the calling accountant (or ?accountantId= for admins).
+router.get('/accounting/balancesheet/latest', requireFinance, wrap(async (req, res) => {
+  const accId = req.query.accountantId ? parseInt(req.query.accountantId) : req.user.id;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const data = await computeDailyBalancesheet(req.schoolId, accId, todayStr);
+  res.json({ success: true, data });
+}));
+
+// ─── GET /report/accounting/balancesheet/:date — a specific day's sheet for
+// the calling accountant (or ?accountantId= for admins).
+router.get('/accounting/balancesheet/:date', requireFinance, wrap(async (req, res) => {
+  const accId = req.query.accountantId ? parseInt(req.query.accountantId) : req.user.id;
+  const data = await computeDailyBalancesheet(req.schoolId, accId, req.params.date);
+  res.json({ success: true, data });
 }));
 
 // ─── 14. POST /report/accounting/settle ─────────────────────────────────────
-// Mark a daily balancesheet as settled (admin only)
+// Mark a daily balancesheet as settled.
 // Body: { accountantId, date, notes }
-router.post('/accounting/settle', requireAdmin, wrap(async (req, res) => {
+// An accountant may only settle their own sheet (self-service, matches the
+// Accountant Portal's "Mark as Settled" button); admins/super_admins can
+// settle on behalf of any accountant.
+router.post('/accounting/settle', requireFinance, wrap(async (req, res) => {
   const { accountantId, date, notes } = req.body;
   if (!accountantId || !date) {
     return res.status(400).json({ success: false, message: 'accountantId and date required.' });
   }
 
   const accId = parseInt(accountantId);
+  const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+  if (!isAdmin && accId !== req.user.id) {
+    return res.status(403).json({ success: false, message: 'You can only settle your own balance sheet.' });
+  }
 
   // Verify accountant exists in this school
   const accountant = await prisma.user.findFirst({

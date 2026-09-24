@@ -105,11 +105,11 @@ async function runFeeReminders() {
       for (const inv of unpaid) {
         const parentUser = inv.student?.parents?.[0]?.parent?.user;
         const phone = parentUser?.phone || inv.student?.emergencyPhone;
-        const email  = parent?.email;
+        const email  = parentUser?.email;
         if (!phone && !email) continue;
 
         const msg = resolveTemplate(bodyTemplate, {
-          parent_name:  parent?.name || 'Parent',
+          parent_name:  parentUser?.name || 'Parent',
           student_name: inv.student?.name || 'Student',
           class:        inv.student?.class?.name || '',
           amount:       Number(inv.dueAmount).toLocaleString('en-PK'),
@@ -156,7 +156,7 @@ async function runAbsentAlerts() {
 
       const bodyTemplate = tpl?.body || defaultBody;
 
-      const absentRecords = await prisma.attendanceRecord.findMany({
+      const absentRecords = await prisma.attendance.findMany({
         where: {
           schoolId: rule.schoolId,
           status: 'absent',
@@ -177,13 +177,13 @@ async function runAbsentAlerts() {
       let sent = 0;
 
       for (const rec of absentRecords) {
-        const parent = rec.student?.parent;
-        const phone  = parent?.phone;
-        const email  = parent?.email;
+        const parentUser = rec.student?.parents?.[0]?.parent?.user;
+        const phone  = parentUser?.phone || rec.student?.emergencyPhone;
+        const email  = parentUser?.email;
         if (!phone && !email) continue;
 
         const msg = resolveTemplate(bodyTemplate, {
-          parent_name:  parent?.name || 'Parent',
+          parent_name:  parentUser?.name || 'Parent',
           student_name: rec.student?.name || 'Student',
           date:         dateStr,
         });
@@ -246,8 +246,9 @@ async function runBirthdayWishes() {
 
       let sent = 0;
       for (const s of birthdayStudents) {
-        const phone = s.parent?.phone;
-        const email = s.parent?.email;
+        const parentUser = s.parents?.[0]?.parent?.user;
+        const phone = parentUser?.phone || s.emergencyPhone;
+        const email = parentUser?.email;
         if (!phone && !email) continue;
         const msg = resolveTemplate(bodyTemplate, { name: s.name });
         await dispatch({ channel: rule.channel, phone, email, subject: `Happy Birthday ${s.name}! 🎂`, message: msg });
@@ -282,12 +283,12 @@ async function runDailyCollectionReport() {
       const payments = await prisma.feePayment.findMany({
         where: {
           schoolId: rule.schoolId,
-          paidAt: { gte: today, lt: tomorrow },
+          paymentDate: { gte: today, lt: tomorrow },
         },
-        select: { amount: true },
+        select: { amountPaid: true },
       });
 
-      const total = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      const total = payments.reduce((sum, p) => sum + Number(p.amountPaid || 0), 0);
       const count = payments.length;
 
       const school = await prisma.school.findUnique({

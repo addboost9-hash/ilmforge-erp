@@ -73,7 +73,8 @@ const REPORT_CATEGORIES = [
       { id:'income-expense',    label:'Income & Expense Report',    desc:'Monthly P&L summary',                               to:'/reporting-area' },
       { id:'outstanding-fees',  label:'Outstanding Fees Report',    desc:'Total pending dues by class',                       to:'/fees/defaulters' },
       { id:'payment-history',   label:'Payment History',            desc:'All fee payments received',                          to:'/payments/transactions' },
-      { id:'emi-report',        label:'EMI Plans Report',           desc:'Instalment plan tracking',                           to:'/fees/emi' },
+      // 'EMI Plans Report' removed: /fees/emi is still a "Coming Soon"
+      // placeholder, so the card led to an empty page.
     ],
   },
   {

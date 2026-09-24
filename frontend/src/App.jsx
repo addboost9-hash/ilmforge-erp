@@ -51,6 +51,9 @@ import AttendanceReportPage from './pages/attendance/AttendanceReportPage';
 import StaffAttendancePage from './pages/attendance/StaffAttendancePage';
 import StaffPage from './pages/staff/StaffPage';
 import StaffFormPage from './pages/staff/StaffFormPage';
+import DepartmentsPage from './pages/staff/DepartmentsPage';
+import StaffBirthdaysPage from './pages/staff/StaffBirthdaysPage';
+import NotFoundPage from './pages/NotFoundPage';
 import SalaryPage from './pages/salary/SalaryPage';
 import ExamsPage from './pages/exams/ExamsPage';
 import ExamMarksPage from './pages/exams/ExamMarksPage';
@@ -108,7 +111,6 @@ import TaskManagementPage from './pages/tasks/TaskManagementPage';
 import TestManagementPage from './pages/exams/TestManagementPage';
 import ReportingAreaPage from './pages/reports/ReportingAreaPage';
 import ParentAccountsPage from './pages/students/ParentAccountsPage';
-import FeeTypesPage from './pages/fees/FeeTypesPage';
 import DiscountedStudentsPage from './pages/fees/DiscountedStudentsPage';
 import FeeIncrementPage from './pages/fees/FeeIncrementPage';
 import AttendanceAwardsPage from './pages/attendance/AttendanceAwardsPage';
@@ -482,11 +484,13 @@ export default function App() {
             <Route path="/online-classes"             element={<OnlineClassesPage />} />
             <Route path="/study-materials"            element={<StudyMaterialsPage />} />
             <Route path="/email"                      element={<EmailManagementPage />} />
-            <Route path="/admissions/requests"        element={<AdmissionInquiriesPage />} />
+            {/* Alias of /admissions/inquiries — same page, no separate feature. */}
+            <Route path="/admissions/requests"        element={<Navigate to="/admissions/inquiries" replace />} />
             <Route path="/students/promote"           element={<StudentPromotionPage />} />
             <Route path="/students/id-cards"          element={<IDCardsPage />} />
             <Route path="/staff/id-cards"             element={<IDCardsPage />} />
-            <Route path="/exams/admit-cards"          element={<ExamsPage />} />
+            {/* Rendered the plain exams list, not an admit-card builder. */}
+            <Route path="/exams/admit-cards"          element={<Navigate to="/exams" replace />} />
             <Route path="/leaves"                     element={<LeavePage />} />
             <Route path="/announcements"              element={<AnnouncementsPage />} />
             <Route path="/tutorials"                  element={<VideoTutorialsPage />} />
@@ -504,26 +508,41 @@ export default function App() {
             <Route path="/tests"                      element={<TestManagementPage />} />
             <Route path="/reporting-area"             element={<ReportingAreaPage />} />
             <Route path="/parents/requests"           element={<ParentAccountsPage />} />
-            <Route path="/parents/gate-passes"        element={<ParentAccountsPage />} />
-            <Route path="/parents/dues-report"        element={<ParentAccountsPage />} />
+            {/* Both rendered the parent-accounts list, which is neither a gate
+                pass register nor a dues report — point them at the real pages. */}
+            <Route path="/parents/gate-passes"        element={<Navigate to="/gate-passes" replace />} />
+            <Route path="/parents/dues-report"        element={<Navigate to="/fees/defaulters" replace />} />
             {/* ExpenseManagementPage was a localStorage-backed fake-data UI
                 (seeded demo rows, nothing persisted to the server) — ExpensesPage
                 is the real, API-wired expense tracker. Redirect instead of
                 rendering the fake one. */}
             <Route path="/expense-management"         element={<Navigate to="/expenses" replace />} />
-            <Route path="/admissions/bulk"            element={<AdmissionsPage />} />
-            <Route path="/admissions/reports"         element={<AdmissionInquiriesPage />} />
-            <Route path="/students/transfer"          element={<StudentsPage />} />
-            <Route path="/staff/departments"          element={<StaffPage />} />
-            <Route path="/staff/birthdays"            element={<StaffPage />} />
-            <Route path="/staff/cv-bank"              element={<StaffPage />} />
+            {/* These nav items each used to render a generic list page, so the
+                menu advertised features the app didn't actually have. Ones that
+                duplicate a real page now redirect to it; the rest are real
+                pages below. */}
+            <Route path="/admissions/bulk"            element={<Navigate to="/students/bulk-import" replace />} />
+            {/* Both rendered an unrelated existing page rather than the
+                feature their path advertises; collapsed to the real one. */}
+            <Route path="/admissions/reports"         element={<Navigate to="/admissions/inquiries" replace />} />
+            <Route path="/students/transfer"          element={<Navigate to="/students" replace />} />
+            <Route path="/staff/departments"          element={<DepartmentsPage />} />
+            <Route path="/staff/birthdays"            element={<StaffBirthdaysPage />} />
+            <Route path="/staff/cv-bank"              element={<Navigate to="/staff" replace />} />
             <Route path="/staff/appraisals"           element={<StaffAppraisalsPage />} />
             <Route path="/attendance/awards"          element={<AttendanceAwardsPage />} />
             <Route path="/attendance/period"          element={<PeriodAttendancePage />} />
-            <Route path="/fees/types"                element={<FeeTypesPage />} />
+            {/* FeeTypesPage kept a localStorage-only list of fee-type names,
+                seeded with eight samples and three invented campuses, that
+                nothing else in the app ever read. Fee titles and amounts are
+                really configured per class in Fee Structure, which is
+                server-backed — so this is the one canonical place. */}
+            <Route path="/fees/types"                element={<Navigate to="/fees/structure" replace />} />
             <Route path="/fees/discounted"           element={<DiscountedStudentsPage />} />
             <Route path="/fees/increment"            element={<FeeIncrementPage />} />
-            <Route path="/fees/decrement"            element={<FeeIncrementPage />} />
+            {/* FeeIncrementPage already carries both increment and decrement
+                tabs, so a second route for it was a duplicate entry point. */}
+            <Route path="/fees/decrement"            element={<Navigate to="/fees/increment" replace />} />
             <Route path="/payments/transactions"     element={<PaymentTransactionsPage />} />
             <Route path="/library"                   element={<LibraryPage />} />
             <Route path="/push"                      element={<PushManagementPage />} />
@@ -684,8 +703,10 @@ export default function App() {
             <Route path="/academics"                 element={<React.Suspense fallback={<div className="card"><div className="card-body">Loading…</div></div>}><SchoolMentorAcademicsPage /></React.Suspense>} />
           </Route>
 
-          {/* 404 */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          {/* 404 — NotFoundPage existed but was never wired up, so any mistyped
+              or dead URL silently redirected to the dashboard and looked like
+              a successful navigation. Show a real 404 instead. */}
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
         </ErrorBoundary>
       </BrowserRouter>

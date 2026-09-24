@@ -379,7 +379,7 @@ function AdminQuizPage() {
   const toggleStatus = useMutation({
     mutationFn: async ({ id, currentStatus }) => {
       const newStatus = currentStatus === 'active' ? 'closed' : 'active';
-      const res = await api.patch(`/quizzes/${id}/status`, { status: newStatus });
+      const res = await api.put(`/quizzes/${id}/status`, { status: newStatus });
       return res.data?.data || res.data;
     },
     onSuccess: (_, vars) => {

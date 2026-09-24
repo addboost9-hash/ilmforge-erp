@@ -2,10 +2,9 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
+const prisma = require('../config/prisma');
 const { authMiddleware, requireRole } = require('../middleware/auth.middleware');
-
-const LICENSE_SECRET = process.env.LICENSE_SECRET || 'IlmForgeLicense@Secret#2026!OfflineKey';
+const { validateLicenseKey } = require('../utils/license');
 
 // Find license.json (installed by Setup.ps1)
 function getLicensePath() {
@@ -59,7 +58,13 @@ router.get('/status', authMiddleware, (req, res) => {
 });
 
 // POST /api/v1/license/renew — school enters new key to renew
-router.post('/renew', authMiddleware, requireRole('super_admin', 'admin'), (req, res) => {
+// FIX: this only regex-checked the key's FORMAT (ILM-XXXX-XXXX-XXXXXXXX), it
+// never verified the key was actually issued by the platform owner for this
+// school. Any string matching the pattern was accepted, so a school could
+// "renew" indefinitely with a made-up key. Now recomputes the same HMAC the
+// platform owner's key generator uses (see utils/license.js) and only
+// accepts an exact match, scoped to this school's id and current plan.
+router.post('/renew', authMiddleware, requireRole('super_admin', 'admin'), async (req, res) => {
   const { key, expiry } = req.body;
 
   if (!key || !expiry) {
@@ -73,6 +78,20 @@ router.post('/renew', authMiddleware, requireRole('super_admin', 'admin'), (req,
   const expiryDate = new Date(expiry);
   if (isNaN(expiryDate.getTime()) || expiryDate < new Date()) {
     return res.status(400).json({ success: false, message: 'Expiry date is invalid or in the past' });
+  }
+
+  const schoolId = req.user.schoolId;
+  let school;
+  try {
+    school = await prisma.school.findUnique({ where: { id: schoolId }, select: { plan: true } });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: `Failed to verify license: ${err.message}` });
+  }
+  if (!school) {
+    return res.status(404).json({ success: false, message: 'School not found.' });
+  }
+  if (!validateLicenseKey(key, schoolId, school.plan, expiryDate)) {
+    return res.status(403).json({ success: false, message: 'License key is invalid or was not issued for this school. Contact IlmForge support.' });
   }
 
   try {

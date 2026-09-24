@@ -611,7 +611,10 @@ export default function ParentPortalPage() {
                           <div style={{ flex:1, minWidth:140 }}>
                             <div style={{ fontWeight:700, fontSize:13.5, color:NAVY }}>{inv.feeTitle||'Monthly Fee'}</div>
                             <div style={{ fontSize:12, color:'#94A3B8', marginTop:2 }}>
-                              {inv.month&&inv.year ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][inv.month-1]} ${inv.year}` : fmtDate(inv.createdAt)}
+                              {/* FIX: FeeInvoice.month is already stored as a full name
+                                  string (e.g. "July"), not a 1-12 index — indexing a
+                                  month-name array with it always produced undefined. */}
+                              {inv.month&&inv.year ? `${inv.month} ${inv.year}` : fmtDate(inv.createdAt)}
                               &nbsp;·&nbsp;Total: {Rs(inv.totalAmount)}
                               {inv.dueAmount > 0 && <span style={{ color:'#DC2626', fontWeight:700 }}> · Due: {Rs(inv.dueAmount)}</span>}
                             </div>

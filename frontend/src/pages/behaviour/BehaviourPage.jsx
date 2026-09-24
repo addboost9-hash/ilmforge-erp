@@ -19,60 +19,82 @@ const TYPES = [
 ];
 const typeInfo = t => TYPES.find(x => x.value === t) || TYPES[0];
 
-const SEED = [
-  { id:1, studentId:1, studentName:'Ahmed Ali',    class:'Class 5', type:'positive',   title:'Outstanding Performance', desc:'Top in math exam with 98%', date:'2025-06-10', reporter:'Mr. Khan' },
-  { id:2, studentId:2, studentName:'Sara Fatima',  class:'Class 4', type:'incident',   title:'Late Arrival',           desc:'Arrived 30 mins late without notice', date:'2025-06-12', reporter:'Class Teacher' },
-  { id:3, studentId:3, studentName:'Usman Tariq',  class:'Class 6', type:'misconduct', title:'Classroom Disruption',   desc:'Disturbing other students during class', date:'2025-06-14', reporter:'Mr. Ali' },
-  { id:4, studentId:2, studentName:'Sara Fatima',  class:'Class 4', type:'counseling', title:'Parent Meeting',          desc:'Discussed attendance issues with parents', date:'2025-06-15', reporter:'Principal' },
-];
+const EMPTY_FORM = { studentId:'', type:'positive', title:'', desc:'', reporter:'' };
 
-const STORAGE_KEY = 'ilmforge_behaviour';
-
+/* Records live in the BehaviorRecord table via /api/v1/behaviour.
+   This page previously kept them in localStorage under 'ilmforge_behaviour',
+   seeded with four fictional students: disciplinary records were per-browser,
+   invisible to every other user, and lost whenever site data was cleared. */
 export default function BehaviourPage() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [search,   setSearch]   = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  const [form, setForm] = useState({ studentName:'', class:'', type:'positive', title:'', desc:'', reporter:'' });
+  const [form, setForm] = useState(EMPTY_FORM);
 
-  const { data: records = SEED } = useQuery({
-    queryKey: ['behaviour'],
-    queryFn: () => {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : SEED;
-    },
-    staleTime: 0,
+  const { data: students = [] } = useQuery({
+    queryKey: ['behaviour-students'],
+    queryFn: () => api.get('/students', { params: { limit: 500 } })
+      .then(r => r.data?.data?.students || r.data?.data || []),
+    staleTime: 5 * 60_000,
   });
 
-  const save = (list) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    qc.invalidateQueries(['behaviour']);
-  };
+  const { data: records = [], isLoading, isError, error } = useQuery({
+    queryKey: ['behaviour'],
+    queryFn: () => api.get('/behaviour').then(r => r.data?.data || []),
+  });
+
+  // The API keeps description/details/reportedBy/date inside a `notes` JSON
+  // blob, so flatten each row into the shape this page renders.
+  const rows = (records || []).map(r => {
+    let n = {};
+    try { n = JSON.parse(r.notes || '{}'); } catch { /* pre-JSON row */ }
+    return {
+      id: r.id,
+      studentName: r.student?.name || '—',
+      class: r.student?.class?.name || '',
+      rollNo: r.student?.rollNo || '',
+      type: r.category,
+      title: n.description || r.behavior || '',
+      desc: n.details || '',
+      reporter: n.reportedBy || '',
+      date: n.date || r.createdAt,
+    };
+  });
 
   const addRecord = useMutation({
-    mutationFn: async (data) => {
-      const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || JSON.stringify(SEED));
-      const newRec = { ...data, id: Date.now(), date: new Date().toISOString().split('T')[0] };
-      save([...existing, newRec]);
-      return newRec;
+    mutationFn: (data) => api.post('/behaviour', {
+      studentId:   data.studentId,
+      type:        data.type,
+      description: data.title,
+      details:     data.desc,
+      reportedBy:  data.reporter,
+      date:        new Date().toISOString().split('T')[0],
+    }).then(r => r.data?.data),
+    onSuccess: () => {
+      toast.success('Behaviour record added');
+      setShowForm(false);
+      setForm(EMPTY_FORM);
+      qc.invalidateQueries({ queryKey: ['behaviour'] });
     },
-    onSuccess: () => { toast.success('Behaviour record added!'); setShowForm(false); setForm({ studentName:'', class:'', type:'positive', title:'', desc:'', reporter:'' }); },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Could not add record'),
   });
 
   const deleteRecord = useMutation({
-    mutationFn: async (id) => {
-      const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || JSON.stringify(SEED));
-      save(existing.filter(r => r.id !== id));
+    mutationFn: (id) => api.delete(`/behaviour/${id}`),
+    onSuccess: () => {
+      toast.success('Record deleted');
+      qc.invalidateQueries({ queryKey: ['behaviour'] });
     },
-    onSuccess: () => toast.success('Record deleted'),
+    onError: (e) => toast.error(e?.response?.data?.message || 'Could not delete record'),
   });
 
-  const filtered = (records || [])
+  const filtered = rows
     .filter(r => !typeFilter || r.type === typeFilter)
     .filter(r => !search || r.studentName?.toLowerCase().includes(search.toLowerCase()) || r.title?.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const counts = TYPES.reduce((acc, t) => ({ ...acc, [t.value]: (records||[]).filter(r=>r.type===t.value).length }), {});
+  const counts = TYPES.reduce((acc, t) => ({ ...acc, [t.value]: rows.filter(r=>r.type===t.value).length }), {});
 
   const printReport = () => {
     const schoolName = localStorage.getItem('registeredSchoolName') || 'IlmForge School';
@@ -130,43 +152,48 @@ export default function BehaviourPage() {
       {showForm && (
         <div className="card" style={{ marginBottom:16, background:'#F0FDF9', border:'1px solid #CCFBF1' }}>
           <h3 style={{ fontSize:14, fontWeight:700, color:'#0F766E', marginBottom:14 }}>New Behaviour Record</h3>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:12 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+            {/* A real student picker, not free text: the record is stored
+                against the student's id, so it shows on that child's profile
+                and cannot drift from a typo in their name. */}
             <div className="form-group" style={{ marginBottom:0 }}>
-              <label className="form-label">Student Name *</label>
-              <input className="form-input" placeholder="Student Name" value={form.studentName}
-                onChange={e=>setForm({...form,studentName:e.target.value})}/>
+              <label className="form-label" htmlFor="bhv-student">Student *</label>
+              <select id="bhv-student" className="form-select" value={form.studentId}
+                onChange={e=>setForm({...form,studentId:e.target.value})}>
+                <option value="">Select student…</option>
+                {students.map(s=>(
+                  <option key={s.id} value={s.id}>
+                    {s.name}{s.rollNo ? ` — ${s.rollNo}` : ''}{s.class?.name ? ` (${s.class.name})` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="form-group" style={{ marginBottom:0 }}>
-              <label className="form-label">Class</label>
-              <input className="form-input" placeholder="e.g. Class 5" value={form.class}
-                onChange={e=>setForm({...form,class:e.target.value})}/>
-            </div>
-            <div className="form-group" style={{ marginBottom:0 }}>
-              <label className="form-label">Type *</label>
-              <select className="form-select" value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>
+              <label className="form-label" htmlFor="bhv-type">Type *</label>
+              <select id="bhv-type" className="form-select" value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>
                 {TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
             <div className="form-group" style={{ marginBottom:0 }}>
-              <label className="form-label">Reported By</label>
-              <input className="form-input" placeholder="Teacher name" value={form.reporter}
+              <label className="form-label" htmlFor="bhv-reporter">Reported By</label>
+              <input id="bhv-reporter" className="form-input" placeholder="Teacher name" value={form.reporter}
                 onChange={e=>setForm({...form,reporter:e.target.value})}/>
             </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:12, marginTop:10 }}>
             <div className="form-group" style={{ marginBottom:0 }}>
-              <label className="form-label">Title / Subject *</label>
-              <input className="form-input" placeholder="Brief title" value={form.title}
+              <label className="form-label" htmlFor="bhv-title">Title / Subject *</label>
+              <input id="bhv-title" className="form-input" placeholder="Brief title" value={form.title}
                 onChange={e=>setForm({...form,title:e.target.value})}/>
             </div>
             <div className="form-group" style={{ marginBottom:0 }}>
-              <label className="form-label">Details / Description</label>
-              <input className="form-input" placeholder="More details..." value={form.desc}
+              <label className="form-label" htmlFor="bhv-desc">Details / Description</label>
+              <input id="bhv-desc" className="form-input" placeholder="More details..." value={form.desc}
                 onChange={e=>setForm({...form,desc:e.target.value})}/>
             </div>
           </div>
           <div style={{ marginTop:12 }}>
-            <button className="btn btn-teal" disabled={!form.studentName || !form.title || addRecord.isPending}
+            <button className="btn btn-teal" disabled={!form.studentId || !form.title || addRecord.isPending}
               onClick={() => addRecord.mutate(form)}>
               <Plus size={13}/> {addRecord.isPending ? 'Saving…' : 'Add Record'}
             </button>
@@ -220,7 +247,19 @@ export default function BehaviourPage() {
                 </tr>
               );
             })}
-            {!filtered.length && (
+            {isLoading && (
+              <tr><td colSpan={8}><div className="empty-state" style={{ padding:28 }}>
+                <div className="empty-state-text">Loading behaviour records…</div>
+              </div></td></tr>
+            )}
+            {isError && !isLoading && (
+              <tr><td colSpan={8}><div className="empty-state" style={{ padding:28 }}>
+                <div className="empty-state-icon">⚠️</div>
+                <div className="empty-state-text">Could not load behaviour records</div>
+                <div className="empty-state-sub">{error?.response?.data?.message || 'Please try again.'}</div>
+              </div></td></tr>
+            )}
+            {!isLoading && !isError && !filtered.length && (
               <tr><td colSpan={8}><div className="empty-state" style={{ padding:28 }}>
                 <div className="empty-state-icon">📋</div>
                 <div className="empty-state-text">No behaviour records found</div>

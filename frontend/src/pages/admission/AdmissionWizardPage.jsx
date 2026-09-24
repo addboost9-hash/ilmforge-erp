@@ -182,7 +182,14 @@ export default function AdmissionWizardPage() {
     religion: '',
     postalAddress: '',
     address: '',       // Permanent Address
-    emergencyPhone: '+92 348 120000',
+    // FIX: this was pre-filled with '+92 348 120000', which is one digit short
+    // of a real Pakistani mobile number and fails this form's own
+    // validatePhone() check — so Step 1 refused to advance for every user, on
+    // a field they'd never touched. (Had it validated, it would have been
+    // worse: every student admitted without editing it would have been saved
+    // with a fake emergency contact number.) Starts empty; the field is
+    // required and its placeholder shows the expected format.
+    emergencyPhone: '',
     motherPhone: '',
     email: '',
     bFormNo: '',
@@ -411,11 +418,11 @@ export default function AdmissionWizardPage() {
       <div class="hd"><h1>Portal Access Credentials</h1><p>Student: <strong>${s.name}</strong> · Roll No: <strong>${s.rollNo}</strong> · Class: ${s.class?.name || '—'}</p></div>
       <div class="lnk">School Portal Link:<br>${c.portalLink}</div>
       <div class="card"><h3>STUDENT PORTAL LOGIN</h3>
-        <div class="row"><span>Email / Username</span><b>${c.student.email}</b></div>
+        <div class="row"><span>${c.student.loginIdLabel || "Login ID"}</span><b>${c.student.loginId || c.student.email}</b></div>
         <div class="row"><span>Password</span><b>${c.student.password}</b></div>
       </div>
       <div class="card parent"><h3>PARENT PORTAL LOGIN</h3>
-        <div class="row"><span>Email / Username</span><b>${c.parent.email}</b></div>
+        <div class="row"><span>${c.parent.loginIdLabel || "Login ID"}</span><b>${c.parent.loginId || c.parent.email}</b></div>
         <div class="row"><span>Password</span><b>${c.parent.password}</b></div>
       </div>
       <div class="warn">Keep this slip safe. These credentials are shown only once.</div>
@@ -469,7 +476,7 @@ export default function AdmissionWizardPage() {
                 <KeyRound className="w-4 h-4 text-teal-600" />
                 <h3 className="font-bold text-slate-800 text-sm">Student Portal Credentials</h3>
               </div>
-              <CredRow label="Email" value={c.student.email} onCopy={copyText} />
+              <CredRow label={c.student.loginIdLabel || "Login ID"} value={c.student.loginId || c.student.email} onCopy={copyText} />
               <CredRow label="Password" value={c.student.password} onCopy={copyText} mono />
             </div>
             <div className="bg-white border-l-4 border-amber-500 border border-slate-200 rounded-2xl p-5 mb-4 shadow-sm">
@@ -478,7 +485,7 @@ export default function AdmissionWizardPage() {
                 <h3 className="font-bold text-slate-800 text-sm">Parent Portal Credentials</h3>
                 {c.parent.existing && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">Sibling — existing account</span>}
               </div>
-              <CredRow label="Email" value={c.parent.email} onCopy={copyText} />
+              <CredRow label={c.parent.loginIdLabel || "Login ID"} value={c.parent.loginId || c.parent.email} onCopy={copyText} />
               <CredRow label="Password" value={c.parent.password} onCopy={copyText} mono />
             </div>
             <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5">
@@ -493,7 +500,7 @@ export default function AdmissionWizardPage() {
               <Printer className="w-4 h-4" /> Print Credentials Slip
             </button>
           )}
-          <button onClick={() => { setResult(null); setStep(1); setForm(f => ({ ...f, name: '', fatherName: '', dob: defaultDob(), emergencyPhone: '+92 348 120000', parentEmail: '' })); }}
+          <button onClick={() => { setResult(null); setStep(1); setForm(f => ({ ...f, name: '', fatherName: '', dob: defaultDob(), emergencyPhone: '', parentEmail: '' })); }}
             className="flex-1 border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-3 rounded-xl transition">
             + Admit Another Student
           </button>

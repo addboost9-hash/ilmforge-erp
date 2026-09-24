@@ -31,6 +31,34 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json({ success: true, data: ann, sentCount });
 }));
 
+/* ── PUT /:id — edit an announcement ──
+   Announcements could be posted and deleted but never corrected: fixing a
+   typo meant deleting and re-sending, which re-notifies every recipient.
+   Teachers may edit their own; admins may edit any. */
+router.put('/:id', wrap(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const existing = await prisma.announcement.findFirst({ where: { id, schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Announcement not found.' });
+
+  const isAdmin = ['admin','super_admin'].includes(req.user.role);
+  const isOwner = req.user.role === 'teacher' && existing.createdBy === req.user.id;
+  if (!isAdmin && !isOwner) {
+    return res.status(403).json({ success: false, message: 'You can only edit announcements you posted.' });
+  }
+
+  const { title, message, targetRole, channel } = req.body;
+  const ann = await prisma.announcement.update({
+    where: { id },
+    data: {
+      ...(title !== undefined && { title }),
+      ...(message !== undefined && { message }),
+      ...(targetRole !== undefined && { targetRole }),
+      ...(channel !== undefined && { channel }),
+    },
+  });
+  res.json({ success: true, data: ann, message: 'Announcement updated.' });
+}));
+
 router.delete('/:id', wrap(async (req, res) => {
   if (!['admin','super_admin'].includes(req.user.role)) return res.status(403).json({ success: false, message: 'Admins only.' });
   const id = parseInt(req.params.id);

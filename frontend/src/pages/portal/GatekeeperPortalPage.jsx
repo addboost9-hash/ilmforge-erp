@@ -7,6 +7,8 @@
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
 
@@ -162,33 +164,57 @@ function CollapseHeader({ open, onToggle, title, badge, children: badgeChildren 
 }
 
 /* ── Visitor Management Tab ───────────────────────── */
+/* The visitor register is school data, not device data: it is stored server
+   side via /api/v1/visitors. It used to live in this browser's localStorage,
+   capped at 50 rows — so each gate device showed a different list, and the
+   record of who was inside the building was lost whenever site data cleared. */
 function VisitorTab({ CYAN, NAVY }) {
+  const qc = useQueryClient();
   const [form, setForm] = useState({ visitorName:'', phone:'', purpose:'Meeting', hostName:'', vehicleNo:'' });
-  const [visitors, setVisitors] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('gk_visitors') || '[]'); } catch { return []; }
-  });
-  const [checking, setChecking] = useState(false);
 
   const PURPOSES = ['Meeting','Delivery','Parent Visit','Interview','Inspection','Other'];
 
-  const checkin = () => {
-    if (!form.visitorName.trim()) { alert('Visitor name required'); return; }
-    const entry = { ...form, id: Date.now(), checkinTime: new Date().toLocaleTimeString('en-PK', { hour:'2-digit', minute:'2-digit' }), checkoutTime: null, date: new Date().toLocaleDateString('en-PK') };
-    const updated = [entry, ...visitors];
-    setVisitors(updated);
-    localStorage.setItem('gk_visitors', JSON.stringify(updated.slice(0,50)));
-    setForm({ visitorName:'', phone:'', purpose:'Meeting', hostName:'', vehicleNo:'' });
-    alert(`Visitor pass issued for ${entry.visitorName}`);
-  };
+  const { data: visitorData, isLoading: visitorsLoading, isError: visitorsError } = useQuery({
+    queryKey: ['gate-visitors'],
+    queryFn: () => api.get('/visitors', { params: { scope: 'today' } }).then(r => r.data),
+    refetchInterval: 30000, // other gates check people in and out too
+  });
 
-  const checkout = (id) => {
-    const updated = visitors.map(v => v.id === id ? { ...v, checkoutTime: new Date().toLocaleTimeString('en-PK', { hour:'2-digit', minute:'2-digit' }) } : v);
-    setVisitors(updated);
-    localStorage.setItem('gk_visitors', JSON.stringify(updated.slice(0,50)));
-  };
+  const fmtTime = (t) => t
+    ? new Date(t).toLocaleTimeString('en-PK', { hour:'2-digit', minute:'2-digit' })
+    : null;
 
-  const todayVisitors = visitors.filter(v => v.date === new Date().toLocaleDateString('en-PK'));
+  const todayVisitors = (visitorData?.data || []).map(v => ({
+    ...v,
+    checkinTime: fmtTime(v.checkinAt),
+    checkoutTime: fmtTime(v.checkoutAt),
+  }));
   const inside = todayVisitors.filter(v => !v.checkoutTime).length;
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['gate-visitors'] });
+
+  const checkinMut = useMutation({
+    mutationFn: (body) => api.post('/visitors', body).then(r => r.data?.data),
+    onSuccess: (v) => {
+      toast.success(`Visitor pass issued for ${v?.visitorName || 'visitor'}`);
+      setForm({ visitorName:'', phone:'', purpose:'Meeting', hostName:'', vehicleNo:'' });
+      refresh();
+    },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Could not check the visitor in'),
+  });
+
+  const checkoutMut = useMutation({
+    mutationFn: (id) => api.put(`/visitors/${id}/checkout`).then(r => r.data),
+    onSuccess: () => { toast.success('Visitor checked out'); refresh(); },
+    onError: (e) => { toast.error(e?.response?.data?.message || 'Could not check the visitor out'); refresh(); },
+  });
+
+  const checkin = () => {
+    if (!form.visitorName.trim()) { toast.error('Visitor name is required'); return; }
+    checkinMut.mutate(form);
+  };
+
+  const checkout = (id) => checkoutMut.mutate(id);
 
   const inp = { width:'100%', padding:'8px 10px', border:`1px solid ${CYAN}25`, borderRadius:7, fontSize:12, fontFamily:'inherit', background:'rgba(255,255,255,0.05)', color:'white', outline:'none' };
 
@@ -241,7 +267,11 @@ function VisitorTab({ CYAN, NAVY }) {
         <div style={{ padding:'12px 16px', borderBottom:`1px solid ${CYAN}15`, fontWeight:700, color:CYAN, fontSize:13 }}>
           📋 Today's Visitor Log ({todayVisitors.length})
         </div>
-        {todayVisitors.length === 0 ? (
+        {visitorsLoading ? (
+          <div style={{ padding:24, textAlign:'center', color:'#475569', fontSize:13 }}>Loading visitor log…</div>
+        ) : visitorsError ? (
+          <div style={{ padding:24, textAlign:'center', color:'#f87171', fontSize:13 }}>Could not load the visitor log — please retry.</div>
+        ) : todayVisitors.length === 0 ? (
           <div style={{ padding:24, textAlign:'center', color:'#475569', fontSize:13 }}>No visitors today</div>
         ) : todayVisitors.map(v => (
           <div key={v.id} style={{ padding:'10px 16px', borderBottom:`1px solid rgba(255,255,255,0.04)`, display:'flex', alignItems:'center', gap:12 }}>

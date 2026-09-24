@@ -612,6 +612,50 @@ router.post('/:id/payroll/propose', wrap(async (req, res) => {
   res.status(201).json({ success: true, data: adjustment });
 }));
 
+/* Advances an adjustment through the approval workflow atomically.
+ *
+ * Each stage used to read the row, check its status, then update by id — a
+ * check-then-act race: two approvers clicking at the same moment both saw
+ * `proposed` and both proceeded, so a dual-approval adjustment could clear
+ * both gates on one person's click, defeating the segregation-of-duties
+ * control this workflow exists to enforce. The state change is now a
+ * conditional updateMany (compare-and-set on the expected stage/status), and
+ * the audit entry shares its transaction so an approval can never be
+ * recorded without its trail.
+ *
+ * Returns null when another request already moved the row on.
+ */
+const ADJUSTMENT_INCLUDE = {
+  staff: { select: { id: true, name: true, empCode: true } },
+  appraisal: { select: { id: true, year: true, term: true, score: true } },
+};
+
+async function advanceAdjustment({ req, adjustmentId, schoolId, expect, data, auditAction }) {
+  return prisma.$transaction(async (tx) => {
+    const { count } = await tx.payrollAdjustment.updateMany({
+      where: { id: adjustmentId, schoolId, ...expect },
+      data,
+    });
+    if (count === 0) return null;
+
+    await tx.auditLog.create({
+      data: {
+        schoolId,
+        userId: req.user?.id,
+        action: auditAction,
+        resource: 'payroll_adjustment',
+        resourceId: adjustmentId,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'] || null,
+      },
+    });
+
+    return tx.payrollAdjustment.findUnique({ where: { id: adjustmentId }, include: ADJUSTMENT_INCLUDE });
+  });
+}
+
+const RACE_MESSAGE = 'This adjustment was just updated by someone else. Reload to see its current status.';
+
 router.post('/payroll/:adjustmentId/approve', wrap(async (req, res) => {
   if (!canApproveRole(req.user?.role)) {
     return res.status(403).json({ success: false, message: 'Only admin can approve adjustments.' });
@@ -640,31 +684,18 @@ router.post('/payroll/:adjustmentId/approve', wrap(async (req, res) => {
       });
     }
 
-    const firstPass = await prisma.payrollAdjustment.update({
-      where: { id: adjustmentId },
+    const firstPass = await advanceAdjustment({
+      req, adjustmentId, schoolId,
+      expect: { status: 'proposed', approvalStage: 0 },
       data: {
         approvalStage: 1,
         firstApprovedBy: req.user?.id,
         firstApprovedAt: new Date(),
         firstApprovalComment: comment || null,
       },
-      include: {
-        staff: { select: { id: true, name: true, empCode: true } },
-        appraisal: { select: { id: true, year: true, term: true, score: true } },
-      },
+      auditAction: 'first_approve_payroll_adjustment',
     });
-
-    await prisma.auditLog.create({
-      data: {
-        schoolId,
-        userId: req.user?.id,
-        action: 'first_approve_payroll_adjustment',
-        resource: 'payroll_adjustment',
-        resourceId: adjustmentId,
-        ipAddress: req.ip,
-        userAgent: req.headers['user-agent'] || null,
-      },
-    });
+    if (!firstPass) return res.status(409).json({ success: false, message: RACE_MESSAGE });
 
     return res.json({ success: true, data: firstPass, message: 'First approval complete. Awaiting final approval.' });
   }
@@ -680,8 +711,9 @@ router.post('/payroll/:adjustmentId/approve', wrap(async (req, res) => {
       });
     }
 
-    const secondPass = await prisma.payrollAdjustment.update({
-      where: { id: adjustmentId },
+    const secondPass = await advanceAdjustment({
+      req, adjustmentId, schoolId,
+      expect: { status: 'proposed', approvalStage: 1 },
       data: {
         approvalStage: 2,
         status: 'approved',
@@ -691,23 +723,9 @@ router.post('/payroll/:adjustmentId/approve', wrap(async (req, res) => {
         approvedBy: req.user?.id,
         approvedAt: new Date(),
       },
-      include: {
-        staff: { select: { id: true, name: true, empCode: true } },
-        appraisal: { select: { id: true, year: true, term: true, score: true } },
-      },
+      auditAction: 'second_approve_payroll_adjustment',
     });
-
-    await prisma.auditLog.create({
-      data: {
-        schoolId,
-        userId: req.user?.id,
-        action: 'second_approve_payroll_adjustment',
-        resource: 'payroll_adjustment',
-        resourceId: adjustmentId,
-        ipAddress: req.ip,
-        userAgent: req.headers['user-agent'] || null,
-      },
-    });
+    if (!secondPass) return res.status(409).json({ success: false, message: RACE_MESSAGE });
 
     return res.json({ success: true, data: secondPass, message: 'Final approval complete.' });
   }
@@ -716,8 +734,9 @@ router.post('/payroll/:adjustmentId/approve', wrap(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Adjustment already fully approved.' });
   }
 
-  const updated = await prisma.payrollAdjustment.update({
-    where: { id: adjustmentId },
+  const updated = await advanceAdjustment({
+    req, adjustmentId, schoolId,
+    expect: { status: 'proposed' },
     data: {
       approvalStage: 2,
       status: 'approved',
@@ -725,23 +744,9 @@ router.post('/payroll/:adjustmentId/approve', wrap(async (req, res) => {
       approvedBy: req.user?.id,
       approvedAt: new Date(),
     },
-    include: {
-      staff: { select: { id: true, name: true, empCode: true } },
-      appraisal: { select: { id: true, year: true, term: true, score: true } },
-    },
+    auditAction: 'approve_payroll_adjustment',
   });
-
-  await prisma.auditLog.create({
-    data: {
-      schoolId,
-      userId: req.user?.id,
-      action: 'approve_payroll_adjustment',
-      resource: 'payroll_adjustment',
-      resourceId: adjustmentId,
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent'] || null,
-    },
-  });
+  if (!updated) return res.status(409).json({ success: false, message: RACE_MESSAGE });
 
   res.json({ success: true, data: updated });
 }));

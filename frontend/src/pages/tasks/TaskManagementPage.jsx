@@ -2,8 +2,8 @@
  * IlmForge — Task Management
  * Assign, track, and complete staff tasks with priority badges and status filters
  */
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import {
@@ -11,59 +11,16 @@ import {
   User, Trash2, Edit2, CheckCircle,
 } from 'lucide-react';
 
-/* ── localStorage key ─────────────────────────────── */
-const LS_KEY = 'ilmforge_tasks';
+/* Tasks live in the SchoolTask table via /api/v1/tasks. They were previously
+   held in localStorage under 'ilmforge_tasks' and seeded with three sample
+   tasks, so a task assigned by one user was invisible to everyone else. */
 
-/* ── Seed data ────────────────────────────────────── */
-const SEED_TASKS = [
-  {
-    id: 1,
-    title: 'Prepare Monthly Progress Reports',
-    description: 'Compile and submit student progress reports for June.',
-    assignedTo: { id: '', name: 'Admin Staff' },
-    dueDate: '2026-07-05',
-    priority: 'High',
-    status: 'Pending',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    title: 'Update Timetable for New Session',
-    description: 'Revise the timetable according to the new academic session schedule.',
-    assignedTo: { id: '', name: 'Class Coordinator' },
-    dueDate: '2026-07-10',
-    priority: 'Medium',
-    status: 'In Progress',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 3,
-    title: 'Library Books Inventory Check',
-    description: 'Conduct a full inventory of library books and update the register.',
-    assignedTo: { id: '', name: 'Librarian' },
-    dueDate: '2026-06-30',
-    priority: 'Low',
-    status: 'Completed',
-    createdAt: new Date().toISOString(),
-  },
-];
-
-/* ── Helpers ──────────────────────────────────────── */
-const loadTasks = () => {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  localStorage.setItem(LS_KEY, JSON.stringify(SEED_TASKS));
-  return SEED_TASKS;
-};
-
-const saveTasks = (tasks) => {
-  localStorage.setItem(LS_KEY, JSON.stringify(tasks));
-};
-
-const nextId = (tasks) =>
-  tasks.length ? Math.max(...tasks.map((t) => t.id)) + 1 : 1;
+/* The API stores status/priority lower-case; this page displays them in
+   title case. These translate between the two. */
+const STATUS_TO_UI = { pending: 'Pending', in_progress: 'In Progress', completed: 'Completed' };
+const STATUS_TO_API = { Pending: 'pending', 'In Progress': 'in_progress', Completed: 'completed' };
+const PRIORITY_TO_UI = { low: 'Low', medium: 'Medium', high: 'High' };
+const PRIORITY_TO_API = { Low: 'low', Medium: 'medium', High: 'high' };
 
 const fmtDate = (d) => {
   if (!d) return '—';
@@ -108,22 +65,63 @@ const emptyForm = () => ({
    MAIN COMPONENT
 ════════════════════════════════════════════════════ */
 export default function TaskManagementPage() {
-  const [tasks,     setTasks]     = useState(loadTasks);
+  const qc = useQueryClient();
   const [filter,    setFilter]    = useState('All');
   const [showModal, setShowModal] = useState(false);
   const [editTask,  setEditTask]  = useState(null);   // null = add mode
   const [form,      setForm]      = useState(emptyForm());
-  const [saving,    setSaving]    = useState(false);
 
   /* Fetch staff list for the assign-to dropdown */
   const { data: staffList = [] } = useQuery({
     queryKey: ['staff'],
-    queryFn: () => api.get('/staff').then((r) => r.data.data || []),
+    queryFn: () => api.get('/staff', { params: { limit: 500 } })
+      .then((r) => r.data?.data?.staff || r.data?.data || []),
     staleTime: 5 * 60 * 1000,
   });
 
-  /* Persist whenever tasks change */
-  useEffect(() => { saveTasks(tasks); }, [tasks]);
+  const { data: rawTasks = [], isLoading, isError, error } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: () => api.get('/tasks').then((r) => r.data?.data || []),
+  });
+
+  // Reshape server rows into the field names this page's markup uses.
+  const tasks = rawTasks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    description: t.description || '',
+    assignedTo: t.assignedToUser
+      ? { id: t.assignedTo, name: t.assignedToUser.name }
+      : { id: '', name: '' },
+    dueDate: t.dueDate ? String(t.dueDate).slice(0, 10) : '',
+    priority: PRIORITY_TO_UI[t.priority] || 'Medium',
+    status: STATUS_TO_UI[t.status] || 'Pending',
+    createdAt: t.createdAt,
+  }));
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['tasks'] });
+  const fail = (e) => toast.error(e?.response?.data?.message || 'Request failed');
+
+  const createTask = useMutation({
+    mutationFn: (body) => api.post('/tasks', body).then((r) => r.data),
+    onSuccess: () => { toast.success('Task added successfully'); invalidate(); },
+    onError: fail,
+  });
+  const patchTask = useMutation({
+    mutationFn: ({ id, ...body }) => api.put(`/tasks/${id}`, body).then((r) => r.data),
+    onSuccess: () => { toast.success('Task updated successfully'); invalidate(); },
+    onError: fail,
+  });
+  const completeTask = useMutation({
+    mutationFn: (id) => api.put(`/tasks/${id}/complete`).then((r) => r.data),
+    onSuccess: () => { toast.success('Task marked as completed'); invalidate(); },
+    onError: fail,
+  });
+  const removeTask = useMutation({
+    mutationFn: (id) => api.delete(`/tasks/${id}`).then((r) => r.data),
+    onSuccess: () => { toast.success('Task deleted'); invalidate(); },
+    onError: fail,
+  });
+  const saving = createTask.isPending || patchTask.isPending;
 
   /* ── Stats ─────────────────────────────────────── */
   const total      = tasks.length;
@@ -166,12 +164,14 @@ export default function TaskManagementPage() {
   };
 
   /* ── Handle staff select ────────────────────────── */
-  const handleStaffChange = (id) => {
-    const member = staffList.find((s) => String(s.id) === String(id));
+  // The API assigns tasks by USER id, while the dropdown lists staff records —
+  // so carry the staff member's linked userId, not the staff row id.
+  const handleStaffChange = (userId) => {
+    const member = staffList.find((s) => String(s.userId) === String(userId));
     setForm((f) => ({
       ...f,
-      assignedToId:   id,
-      assignedToName: member ? (member.name || member.staffName || '') : '',
+      assignedToId:   userId,
+      assignedToName: member ? (member.name || '') : '',
     }));
   };
 
@@ -180,57 +180,31 @@ export default function TaskManagementPage() {
     if (!form.title.trim()) { toast.error('Task title is required'); return; }
     if (!form.dueDate)       { toast.error('Due date is required');   return; }
 
-    setSaving(true);
-    setTimeout(() => {
-      if (editTask) {
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === editTask.id
-              ? {
-                  ...t,
-                  title:       form.title.trim(),
-                  description: form.description.trim(),
-                  assignedTo:  { id: form.assignedToId, name: form.assignedToName },
-                  dueDate:     form.dueDate,
-                  priority:    form.priority,
-                  status:      form.status,
-                }
-              : t
-          )
-        );
-        toast.success('Task updated successfully');
-      } else {
-        const newTask = {
-          id:          nextId(tasks),
-          title:       form.title.trim(),
-          description: form.description.trim(),
-          assignedTo:  { id: form.assignedToId, name: form.assignedToName },
-          dueDate:     form.dueDate,
-          priority:    form.priority,
-          status:      form.status,
-          createdAt:   new Date().toISOString(),
-        };
-        setTasks((prev) => [newTask, ...prev]);
-        toast.success('Task added successfully');
-      }
-      setSaving(false);
-      closeModal();
-    }, 300);
+    const payload = {
+      title:       form.title.trim(),
+      description: form.description.trim(),
+      assignedTo:  form.assignedToId || null,
+      dueDate:     form.dueDate,
+      priority:    PRIORITY_TO_API[form.priority] || 'medium',
+    };
+
+    if (editTask) {
+      patchTask.mutate(
+        { id: editTask.id, ...payload, status: STATUS_TO_API[form.status] || 'pending' },
+        { onSuccess: closeModal },
+      );
+    } else {
+      createTask.mutate(payload, { onSuccess: closeModal });
+    }
   };
 
   /* ── Mark complete ─────────────────────────────── */
-  const markComplete = (id) => {
-    setTasks((prev) =>
-      prev.map((t) => t.id === id ? { ...t, status: 'Completed' } : t)
-    );
-    toast.success('Task marked as completed');
-  };
+  const markComplete = (id) => completeTask.mutate(id);
 
   /* ── Delete ────────────────────────────────────── */
   const deleteTask = (id) => {
     if (!window.confirm('Delete this task?')) return;
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-    toast.success('Task deleted');
+    removeTask.mutate(id);
   };
 
   /* ── Tab config ────────────────────────────────── */
@@ -416,7 +390,19 @@ export default function TaskManagementPage() {
         </div>
 
         {/* Table */}
-        {visible.length === 0 ? (
+        {isLoading ? (
+          <div className="empty-state" style={{ padding: 60 }}>
+            <div className="empty-state-text">Loading tasks…</div>
+          </div>
+        ) : isError ? (
+          <div className="empty-state" style={{ padding: 60 }}>
+            <div className="empty-state-icon">
+              <AlertCircle size={40} color="#EF4444" />
+            </div>
+            <div className="empty-state-text">Could not load tasks</div>
+            <div className="empty-state-sub">{error?.response?.data?.message || 'Please try again.'}</div>
+          </div>
+        ) : visible.length === 0 ? (
           <div className="empty-state" style={{ padding: 60 }}>
             <div className="empty-state-icon">
               <CheckSquare size={40} color="#D1D5DB" />
@@ -563,10 +549,11 @@ export default function TaskManagementPage() {
             <div className="modal-body">
               {/* Title */}
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>
+                <label htmlFor="task-title" style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>
                   Task Title <span style={{ color: '#EF4444' }}>*</span>
                 </label>
                 <input
+                  id="task-title"
                   className="form-input"
                   placeholder="e.g. Prepare exam schedule"
                   value={form.title}
@@ -595,14 +582,18 @@ export default function TaskManagementPage() {
                   Assign To (Staff)
                 </label>
                 <select
+                  id="task-assignee"
                   className="form-select"
                   value={form.assignedToId}
                   onChange={(e) => handleStaffChange(e.target.value)}
                 >
                   <option value="">-- Select Staff Member --</option>
-                  {staffList.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name || s.staffName || `Staff #${s.id}`}
+                  {/* value is the linked user id: that is what the task API
+                      assigns against, and staff without a login cannot be
+                      assigned a task at all. */}
+                  {staffList.filter((s) => s.userId).map((s) => (
+                    <option key={s.id} value={s.userId}>
+                      {s.name || `Staff #${s.id}`}
                       {s.designation ? ` — ${s.designation}` : ''}
                     </option>
                   ))}
@@ -625,10 +616,11 @@ export default function TaskManagementPage() {
               {/* Due Date + Priority row */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
                 <div>
-                  <label style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>
+                  <label htmlFor="task-due" style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>
                     Due Date <span style={{ color: '#EF4444' }}>*</span>
                   </label>
                   <input
+                    id="task-due"
                     type="date"
                     className="form-input"
                     value={form.dueDate}

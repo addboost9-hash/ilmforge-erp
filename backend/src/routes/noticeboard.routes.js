@@ -26,6 +26,29 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json({ success: true, data: notice });
 }));
 
+/* ── PUT /:id — edit a notice ──
+   Notices support pinning and expiry but had no edit route, so correcting a
+   date, re-pinning, or extending an expiry all required deleting and
+   re-posting the notice. */
+router.put('/:id', wrap(async (req, res) => {
+  if (!['admin','super_admin'].includes(req.user.role)) return res.status(403).json({ success: false, message: 'Admins only.' });
+  const existing = await prisma.noticeboard.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Notice not found.' });
+
+  const { title, message, targetRole, isPinned, expiresAt } = req.body;
+  const notice = await prisma.noticeboard.update({
+    where: { id: existing.id },
+    data: {
+      ...(title !== undefined && { title }),
+      ...(message !== undefined && { message }),
+      ...(targetRole !== undefined && { targetRole }),
+      ...(isPinned !== undefined && { isPinned: !!isPinned }),
+      ...(expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
+    },
+  });
+  res.json({ success: true, data: notice, message: 'Notice updated.' });
+}));
+
 // IDOR: delete was not scoped by schoolId — an admin from another school
 // could delete this school's notice by guessing its id.
 router.delete('/:id', wrap(async (req, res) => {

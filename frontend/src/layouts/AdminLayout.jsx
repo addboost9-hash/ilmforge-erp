@@ -448,8 +448,10 @@ export default function AdminLayout() {
     { label: 'Fee Defaulters', desc: 'Unpaid fees list', path: '/fees/defaulters', icon: '⚠️', group: 'Fees' },
     { label: 'Fee Structure', desc: 'Set fee per class', path: '/fees/structure', icon: '🗂️', group: 'Fees' },
     { label: 'Fee Voucher Download', desc: 'Public fee slip', path: '/fee-voucher', icon: '🎫', group: 'Fees' },
-    { label: 'Parent Wallet', desc: 'Advance credit system', path: '/fees/parent-wallet', icon: '💳', group: 'Fees' },
-    { label: 'EMI Plans', desc: 'Instalment schedules', path: '/fees/emi', icon: '📅', group: 'Fees' },
+    // 'Parent Wallet' (/fees/parent-wallet) and 'EMI Plans' (/fees/emi) are
+    // not listed here: both pages are still "Coming Soon" placeholders, and
+    // offering them in the command palette advertised features the system
+    // cannot perform. Re-add these entries when the pages are built.
     // Attendance
     { label: 'Mark Attendance', desc: 'Daily class attendance', path: '/attendance', icon: '✅', group: 'Attendance' },
     { label: 'Barcode Attendance', desc: 'Scan ID cards', path: '/attendance/barcode', icon: '📷', group: 'Attendance' },

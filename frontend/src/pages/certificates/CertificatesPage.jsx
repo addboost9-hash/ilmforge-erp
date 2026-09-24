@@ -486,13 +486,7 @@ export default function CertificatesPage() {
     queryFn:  () => api.get('/classes').then(r => r.data.data),
   });
 
-  const { data:sections } = useQuery({
-    queryKey: ['sections', classId],
-    queryFn:  () => classId
-      ? api.get('/sections', { params:{ classId } }).then(r => r.data.data || [])
-      : Promise.resolve([]),
-    enabled: !!classId,
-  });
+  const sections = classes?.find(c => c.id === Number(classId))?.sections || [];
 
   const { data:school } = useQuery({
     queryKey: ['school-settings'],

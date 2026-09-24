@@ -63,6 +63,26 @@ router.get('/sessions', wrap(async (req, res) => {
   res.json({ success: true, data: sessions });
 }));
 
+// GET /settings/admins — administrator accounts for this school.
+// The launch checklist counts these; with no such endpoint it always read
+// zero, so the "Admin Accounts" setup step could never be satisfied.
+// Never returns passwordHash.
+router.get('/admins', wrap(async (req, res) => {
+  const admins = await prisma.user.findMany({
+    where: {
+      schoolId: req.schoolId,
+      role: { in: ['super_admin', 'admin'] },
+      deletedAt: null,
+    },
+    select: {
+      id: true, name: true, email: true, phone: true, role: true,
+      isActive: true, lastLoginAt: true, createdAt: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  res.json({ success: true, data: admins });
+}));
+
 router.post('/sessions', wrap(async (req, res) => {
   const { name, startDate, endDate, isActive } = req.body;
   if (isActive) await prisma.academicSession.updateMany({ where: { schoolId: req.schoolId }, data: { isActive: false } });
@@ -400,6 +420,31 @@ router.put('/notifications', wrap(async (req, res) => {
   const prefs = { ...DEFAULT_NOTIFICATION_PREFS, ...(req.body || {}) };
   const settings = await setSchoolSettings(req.schoolId, { notificationPrefs: prefs });
   res.json({ success: true, data: settings.notificationPrefs });
+}));
+
+// ---------------------------------------------------------------------------
+// WhatsApp integration settings persisted in backend JSON store (school-scoped)
+// FIX: WhatsAppSettingsPage's Save button called PUT /settings/whatsapp, which
+// didn't exist — the call 404'd but was swallowed by a blanket .catch(), so
+// the page always showed "saved!" without ever persisting anything.
+// ---------------------------------------------------------------------------
+const DEFAULT_WHATSAPP_SETTINGS = {
+  apiToken: '',
+  connectionMethod: 'qr',
+  pairingCode: '',
+  apiProvider: 'wasender',
+  apiUrl: 'https://api.wasender.app/api',
+};
+
+router.get('/whatsapp', wrap(async (req, res) => {
+  const settings = await getSchoolSettings(req.schoolId);
+  res.json({ success: true, data: settings.whatsapp || DEFAULT_WHATSAPP_SETTINGS });
+}));
+
+router.put('/whatsapp', wrap(async (req, res) => {
+  const whatsapp = { ...DEFAULT_WHATSAPP_SETTINGS, ...(req.body || {}) };
+  const settings = await setSchoolSettings(req.schoolId, { whatsapp });
+  res.json({ success: true, data: settings.whatsapp });
 }));
 
 // ---------------------------------------------------------------------------

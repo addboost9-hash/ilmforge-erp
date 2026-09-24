@@ -34,7 +34,7 @@ function StudentCard({ item, onPress }) {
       </View>
       <View style={styles.studentInfo}>
         <Text style={styles.studentName} numberOfLines={1}>
-          {item.name || item.fullName || item.firstName + ' ' + item.lastName || 'Unknown'}
+          {item.name || item.fullName || [item.firstName, item.lastName].filter(Boolean).join(' ') || 'Unknown'}
         </Text>
         <Text style={styles.studentMeta}>
           Roll #{item.rollNo || item.rollNumber || item.admissionNo || 'N/A'}

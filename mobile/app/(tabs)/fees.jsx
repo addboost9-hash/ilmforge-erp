@@ -99,9 +99,14 @@ export default function FeesScreen() {
     : invoicesData?.invoices || invoicesData?.fees || invoicesData?.data || [];
 
   const payMutation = useMutation({
+    // FIX: PATCH /fees/:id/pay doesn't exist. The real endpoint is
+    // POST /fees/payments, which records a payment against an invoice (it
+    // isn't a status toggle — it needs the amount being paid). "Mark as
+    // Paid" here means settling the full remaining balance in one payment.
     mutationFn: async (invoice) => {
-      const id = invoice._id || invoice.id;
-      const res = await api.patch(`/fees/${id}/pay`, { paymentMethod: 'cash' });
+      const invoiceId = invoice._id || invoice.id;
+      const amountPaid = invoice.dueAmount ?? invoice.amount ?? invoice.totalAmount;
+      const res = await api.post('/fees/payments', { invoiceId, amountPaid, method: 'cash' });
       return res.data;
     },
     onSuccess: () => {

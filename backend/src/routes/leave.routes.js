@@ -90,12 +90,26 @@ router.patch('/:id/approve', wrap(async (req, res) => {
     data: { status: 'approved', approvedBy: req.user.id },
   });
 
-  // Auto-deduct leave balance when approved
-  if (existing.staffId && existing.days) {
+  // Auto-deduct leave balance when approved.
+  // FIX: this previously checked existing.staffId / existing.days, fields that
+  // don't exist on LeaveApplication (it has applicantType/applicantId and
+  // fromDate/toDate instead), so the deduction never ran for any approval.
+  // applicantId is a User.id, while LeaveBalance.personId is the Staff.id /
+  // Student.id, so it must be resolved via the corresponding staff/student row.
+  const days = Math.round((new Date(existing.toDate) - new Date(existing.fromDate)) / 86400000) + 1;
+  const person = existing.applicantType === 'staff'
+    ? await prisma.staff.findFirst({ where: { userId: existing.applicantId, schoolId: req.schoolId }, select: { id: true } })
+    : await prisma.student.findFirst({ where: { userId: existing.applicantId, schoolId: req.schoolId }, select: { id: true } });
+
+  if (person && days > 0) {
     await prisma.leaveBalance.updateMany({
-      where: { schoolId: req.schoolId, staffId: existing.staffId, leaveType: existing.type },
-      data: { used: { increment: existing.days }, remaining: { decrement: existing.days } },
-    }).catch(() => {}); // Don't fail if no balance record exists
+      where: {
+        schoolId: req.schoolId,
+        personId: person.id,
+        personType: existing.applicantType === 'staff' ? { in: ['staff', 'teacher'] } : 'student',
+      },
+      data: { consumed: { increment: days }, remaining: { decrement: days } },
+    }).catch(() => {}); // Don't fail approval if no balance record exists yet
   }
 
   res.json({ success: true, data: leave });

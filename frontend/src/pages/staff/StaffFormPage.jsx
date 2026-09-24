@@ -92,6 +92,11 @@ export default function StaffFormPage() {
     enabled: isEdit,
   });
 
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => api.get('/staff/departments').then(r => r.data.data || []),
+  });
+
   useEffect(() => {
     if (!existingStaff) return;
     setForm({
@@ -271,7 +276,19 @@ export default function StaffFormPage() {
           </div>
           <div className="form-group">
             <label className="form-label">Department</label>
-            <input className="form-input" placeholder="Science, Arts, Admin..." value={form.departmentId} onChange={set('departmentId')}/>
+            {/* FIX: this was a free-text box bound to departmentId, so typing
+                "Science" sent parseInt("Science") === NaN to the backend and
+                the department was silently never saved. Departments are a
+                real table — pick one (managed at /staff/departments). */}
+            <select className="form-select" value={form.departmentId} onChange={set('departmentId')}>
+              <option value="">— No department —</option>
+              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+            {departments.length === 0 && (
+              <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 4 }}>
+                No departments yet — add them under Staff → Departments.
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label className="form-label">Joining Date</label>

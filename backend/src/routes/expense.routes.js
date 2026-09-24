@@ -56,6 +56,45 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json({ success: true, data: { ...expense, category: category || null } });
 }));
 
+/* ── PUT /:id — correct a logged expense ──
+   Expenses could be logged and deleted but never edited, so fixing a wrong
+   amount, date or category meant deleting the entry and re-creating it —
+   which loses the original addedBy/created trail. Accepts a category name
+   the same way POST does. */
+router.put('/:id', wrap(async (req, res) => {
+  const existing = await prisma.expense.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Expense not found.' });
+
+  const { categoryId, category, amount, description, date } = req.body;
+
+  let resolvedCategoryId = existing.categoryId;
+  if (categoryId !== undefined) {
+    resolvedCategoryId = categoryId ? parseInt(categoryId) : null;
+  } else if (category !== undefined) {
+    if (!category) {
+      resolvedCategoryId = null;
+    } else {
+      const found = await prisma.expenseCategory.findFirst({ where: { schoolId: req.schoolId, name: category } });
+      resolvedCategoryId = found ? found.id : (await prisma.expenseCategory.create({ data: { schoolId: req.schoolId, name: category } })).id;
+    }
+  }
+
+  const expense = await prisma.expense.update({
+    where: { id: existing.id },
+    data: {
+      categoryId: resolvedCategoryId,
+      ...(amount !== undefined && { amount: parseInt(amount) }),
+      ...(description !== undefined && { description }),
+      ...(date !== undefined && { date: date ? new Date(date) : existing.date }),
+    },
+  });
+
+  const cat = resolvedCategoryId
+    ? await prisma.expenseCategory.findUnique({ where: { id: resolvedCategoryId }, select: { name: true } })
+    : null;
+  res.json({ success: true, data: { ...expense, category: cat?.name || null }, message: 'Expense updated.' });
+}));
+
 // DELETE /:id — was entirely missing; the Accountant Portal's expense log
 // "delete" button called this and always got a 404.
 router.delete('/:id', wrap(async (req, res) => {

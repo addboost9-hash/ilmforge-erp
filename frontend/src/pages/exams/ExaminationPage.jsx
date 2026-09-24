@@ -701,7 +701,7 @@ function DateSheetEditModal({ examId, examTitle, row, onClose, queryClient, clas
 
   const { data: subjectsList = [] } = useQuery({
     queryKey: ['datesheet-subjects', classId],
-    queryFn: () => api.get('/subjects', { params: { classId } }).then(r => r.data.data || []),
+    queryFn: () => api.get('/classes/subjects', { params: { classId } }).then(r => r.data.data || []),
     enabled: !!classId,
   });
 

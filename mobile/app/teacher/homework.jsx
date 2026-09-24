@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../../src/api/client';
+import { getAuth } from '../../src/store/auth';
 
 const NAVY = '#1B2F6E';
 
@@ -28,7 +29,7 @@ function getTomorrow() {
 function HomeworkCard({ hw }) {
   const subject = hw.subject?.name || hw.subjectName || hw.subject || 'Subject';
   const title = hw.title || hw.description?.slice(0, 60) || 'Homework';
-  const due = hw.dueDate ? new Date(hw.dueDate).toLocaleDateString('en-PK') : 'N/A';
+  const due = hw.date ? new Date(hw.date).toLocaleDateString('en-PK') : 'N/A';
   const className = hw.class?.name || hw.className || 'All Classes';
 
   return (
@@ -47,6 +48,7 @@ function HomeworkCard({ hw }) {
 
 export default function HomeworkScreen() {
   const [showForm, setShowForm] = useState(false);
+  const [teacherId, setTeacherId] = useState(null);
   const [form, setForm] = useState({
     classId: '',
     subjectId: '',
@@ -54,6 +56,10 @@ export default function HomeworkScreen() {
     description: '',
     dueDate: getTomorrow(),
   });
+
+  useEffect(() => {
+    getAuth().then(({ user }) => setTeacherId(user?.id || null));
+  }, []);
 
   const { data: classesData } = useQuery({
     queryKey: ['teacher-classes'],
@@ -71,10 +77,13 @@ export default function HomeworkScreen() {
     },
   });
 
+  // FIX: /homework/teacher doesn't exist — the real endpoint is GET /homework
+  // with a `createdBy` query param (see backend/src/routes/homework.routes.js).
   const { data: hwData, isLoading: loadingHw, refetch } = useQuery({
-    queryKey: ['teacher-homework'],
+    queryKey: ['teacher-homework', teacherId],
+    enabled: !!teacherId,
     queryFn: async () => {
-      const res = await api.get('/homework/teacher');
+      const res = await api.get('/homework', { params: { createdBy: teacherId } });
       return res.data?.data || res.data;
     },
   });
@@ -95,12 +104,16 @@ export default function HomeworkScreen() {
     mutationFn: async () => {
       if (!form.title.trim()) throw new Error('Title is required.');
       if (!form.description.trim()) throw new Error('Description is required.');
+      // FIX: the backend's HomeworkDiary has one free-text `description`
+      // column (no separate title) and expects the due date as `date`, not
+      // `dueDate` — posting `dueDate` meant the picked date was silently
+      // ignored (every entry defaulted to "today") and `title` was dropped
+      // entirely since the backend never reads it.
       const res = await api.post('/homework', {
         classId: form.classId || undefined,
         subjectId: form.subjectId || undefined,
-        title: form.title.trim(),
-        description: form.description.trim(),
-        dueDate: form.dueDate,
+        description: `${form.title.trim()}\n\n${form.description.trim()}`,
+        date: form.dueDate,
       });
       return res.data;
     },

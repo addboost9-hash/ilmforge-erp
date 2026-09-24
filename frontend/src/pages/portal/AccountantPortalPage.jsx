@@ -219,7 +219,7 @@ function DashboardTab({ user, setActiveTab }) {
   const { data: lastSheet } = useQuery({
     queryKey: ['last-balancesheet'],
     queryFn: () =>
-      api.get('/accounting/balancesheet/latest').then((r) => r.data.data || null),
+      api.get('/reports/accounting/balancesheet/latest').then((r) => r.data.data || null),
     staleTime: 60_000,
     retry: false,
   });
@@ -536,7 +536,7 @@ function BalancesheetTab({ user }) {
   const { data: sheetStatus } = useQuery({
     queryKey: ['sheet-status', date],
     queryFn: () =>
-      api.get(`/accounting/balancesheet/${date}`).then((r) => r.data.data || null),
+      api.get(`/reports/accounting/balancesheet/${date}`).then((r) => r.data.data || null),
     staleTime: 30_000,
     retry: false,
   });
@@ -544,13 +544,13 @@ function BalancesheetTab({ user }) {
   const { data: prevSheet } = useQuery({
     queryKey: ['prev-sheet'],
     queryFn: () =>
-      api.get('/accounting/balancesheet/latest').then((r) => r.data.data || null),
+      api.get('/reports/accounting/balancesheet/latest').then((r) => r.data.data || null),
     staleTime: 60_000,
     retry: false,
   });
 
   const settleMutation = useMutation({
-    mutationFn: () => api.post(`/accounting/settle/${date}`),
+    mutationFn: () => api.post('/reports/accounting/settle', { accountantId: user?.id, date }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sheet-status', date] });
       queryClient.invalidateQueries({ queryKey: ['last-balancesheet'] });

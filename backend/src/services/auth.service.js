@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../config/prisma');
+const phoneUtil = require('../utils/phone');
 const { sendSMS } = require('./sms.service');
 const { sendEmail, sendWelcomeEmail, sendOTPEmail, sendSchoolReadyEmail } = require('./email.service');
 
@@ -390,17 +391,41 @@ const login = async ({ email, phone, password }) => {
   const normalizedPhone = identifier ? identifier.trim().replace(/[^0-9+]/g, '') : null;
   const orConditions = [];
   if (normalizedEmail) orConditions.push({ email: normalizedEmail });
-  if (normalizedPhone && normalizedPhone.length >= 10) {
-    orConditions.push({ phone: normalizedPhone });
-    // Also try with leading zero variants
-    if (normalizedPhone.startsWith('92') && normalizedPhone.length === 12) {
-      orConditions.push({ phone: '0' + normalizedPhone.slice(2) });
-    } else if (normalizedPhone.startsWith('0') && normalizedPhone.length === 11) {
-      orConditions.push({ phone: '92' + normalizedPhone.slice(1) });
+  // Match every stored format of the same number. The previous version never
+  // stripped a leading '+', so a parent saved as +923481200001 could only sign
+  // in by typing that exact form — 03481200001 silently failed.
+  if (normalizedPhone && phoneUtil.core(normalizedPhone).length === 10) {
+    for (const v of phoneUtil.variants(normalizedPhone)) orConditions.push({ phone: v });
+  }
+
+  const where = orConditions.length > 1 ? { OR: orConditions } : (orConditions[0] || { email: '' });
+  let user = await prisma.user.findFirst({ where: { ...where, deletedAt: null }, include: { school: true } });
+
+  // Fall back to the student's roll number. A student's stored email is a
+  // synthetic address they never see (name.rollno@slug.student); the roll
+  // number is the identifier the school actually issues them.
+  //
+  // Roll numbers are only unique WITHIN a school — 'ST-001' exists in most
+  // of them — so this cannot just take the first match. It collects every
+  // candidate and lets the password decide which school the person belongs
+  // to; a wrong-tenant row simply fails bcrypt and is skipped.
+  if (!user && identifier) {
+    const candidates = await prisma.student.findMany({
+      where: { rollNo: identifier.trim(), deletedAt: null, NOT: { userId: null } },
+      select: { userId: true },
+      take: 20,
+    });
+    for (const c of candidates) {
+      const candidate = await prisma.user.findFirst({
+        where: { id: c.userId, deletedAt: null },
+        include: { school: true },
+      });
+      if (candidate && await bcrypt.compare(password, candidate.passwordHash)) {
+        user = candidate;
+        break;
+      }
     }
   }
-  const where = orConditions.length > 1 ? { OR: orConditions } : (orConditions[0] || { email: '' });
-  const user = await prisma.user.findFirst({ where: { ...where, deletedAt: null }, include: { school: true } });
 
   if (!user) throw { status: 401, message: 'Invalid credentials.' };
   if (!user.isActive) throw { status: 403, message: 'Account is deactivated. Contact your admin.' };

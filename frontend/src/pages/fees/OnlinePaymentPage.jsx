@@ -319,7 +319,10 @@ export default function OnlinePaymentPage() {
 
   const { data: txns = [] } = useQuery({
     queryKey: ['recent-payments-online'],
-    queryFn: () => api.get('/payments?method=online&limit=20').then(r => r.data.data || []).catch(() => []),
+    // /payments has no collection handler; /payments/transactions is the
+    // canonical listing and already supports the method/limit filters.
+    queryFn: () => api.get('/payments/transactions', { params: { method: 'online', limit: 20 } })
+      .then(r => r.data.data || []).catch(() => []),
   });
 
   const statusColor = s => ({

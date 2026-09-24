@@ -39,9 +39,14 @@ export default function LoginPage() {
       const role = res.data.user?.role;
       const name = res.data.user?.name?.split(' ')[0] || 'User';
       toast.success(`Welcome, ${name}! 👋`);
+      // FIX: this local table sent accountants to /fees/collect instead of
+      // their actual portal — every route guard elsewhere (App.jsx's
+      // ROLE_PORTALS/PortalRedirect) treats /accountant-portal as their home,
+      // so this was inconsistent (and self-correcting on the next navigation,
+      // since RoleRoute would bounce them there anyway).
       const portals = {
         parent: '/parent-portal', student: '/student-portal', teacher: '/teacher-portal',
-        gatekeeper: '/gatekeeper-portal', accountant: '/fees/collect',
+        gatekeeper: '/gatekeeper-portal', accountant: '/accountant-portal',
       };
       navigate(portals[role] || '/dashboard');
     } else {
@@ -226,7 +231,7 @@ export default function LoginPage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <Link to="/apply" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 10, background: '#F0FDFA', border: '1.5px solid #99F6E4', color: '#0F766E', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>
+            <Link to="/apply-admission" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 10, background: '#F0FDFA', border: '1.5px solid #99F6E4', color: '#0F766E', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>
               <UserPlus size={14} /> Apply for Admission
             </Link>
             <Link to="/fee-voucher" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 10, background: '#FFFBEB', border: '1.5px solid #FDE68A', color: '#B45309', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>

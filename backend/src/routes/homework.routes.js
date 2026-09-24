@@ -67,6 +67,50 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json({ success: true, data: hw });
 }));
 
+/* ── PUT /api/v1/homework/:id — edit posted homework ──
+   Homework could be posted and deleted but never corrected, so fixing a typo
+   or changing the due date meant deleting the entry (and any student
+   submissions attached to it) and re-posting. Same ownership rule as delete. */
+router.put('/:id', wrap(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const existing = await prisma.homeworkDiary.findFirst({ where: { id, schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Homework not found.' });
+
+  const isOwner = existing.teacherId === req.user.id;
+  const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+  if (!isOwner && !isAdmin) {
+    return res.status(403).json({ success: false, message: 'You can only edit homework you posted.' });
+  }
+
+  const { classId, sectionId, subjectId, description, date } = req.body;
+  const hw = await prisma.homeworkDiary.update({
+    where: { id },
+    data: {
+      ...(classId !== undefined && { classId: classId ? parseInt(classId) : null }),
+      ...(sectionId !== undefined && { sectionId: sectionId ? parseInt(sectionId) : null }),
+      ...(subjectId !== undefined && { subjectId: subjectId ? parseInt(subjectId) : null }),
+      ...(description !== undefined && { description }),
+      ...(date !== undefined && { date: date ? new Date(date) : existing.date }),
+    },
+  });
+  res.json({ success: true, data: hw, message: 'Homework updated.' });
+}));
+
+// DELETE /api/v1/homework/:id — the delete button in AcademicsPage/HomeworkDiaryPage
+// called this but no such route existed, so removing a homework entry always 404'd.
+router.delete('/:id', wrap(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const existing = await prisma.homeworkDiary.findFirst({ where: { id, schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Homework not found.' });
+  const isOwner = existing.teacherId === req.user.id;
+  const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+  if (!isOwner && !isAdmin) {
+    return res.status(403).json({ success: false, message: 'You can only delete homework you posted.' });
+  }
+  await prisma.homeworkDiary.delete({ where: { id } });
+  res.json({ success: true, message: 'Homework deleted.' });
+}));
+
 // POST /api/v1/homework/:homeworkId/submit — student submits homework
 router.post('/:homeworkId/submit', wrap(async (req, res) => {
   const { homeworkId } = req.params;

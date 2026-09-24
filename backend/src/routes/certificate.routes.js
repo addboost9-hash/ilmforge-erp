@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { contains: ciContains, equals: ciEquals } = require('../utils/search');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 router.get('/', wrap(async (req, res) => {
@@ -51,10 +52,10 @@ router.get('/registry', wrap(async (req, res) => {
         ...(certType && { certType }),
         ...(personType && { personType }),
         ...(search && {
-          personName: { contains: search, mode: 'insensitive' },
+          personName: ciContains(search),
         }),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { issuedAt: 'desc' },
     });
     res.json({ success: true, data: records });
   } catch (err) {

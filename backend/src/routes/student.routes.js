@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { contains: ciContains, equals: ciEquals } = require('../utils/search');
+const phoneUtil = require('../utils/phone');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // GET /api/v1/students
@@ -107,9 +109,9 @@ router.get('/', wrap(async (req, res) => {
       // Split into words — each word is searched independently (OR logic)
       const words = search.trim().split(/\s+/).filter(w => w.length > 0);
       const wordConditions = words.flatMap(word => [
-        { name:       { contains: word, mode: 'insensitive' } },
-        { rollNo:     { contains: word, mode: 'insensitive' } },
-        { fatherName: { contains: word, mode: 'insensitive' } },
+        { name:       ciContains(word) },
+        { rollNo:     ciContains(word) },
+        { fatherName: ciContains(word) },
       ]);
       return { OR: wordConditions };
     })()),
@@ -132,8 +134,10 @@ router.get('/', wrap(async (req, res) => {
     }),
     prisma.student.count({ where }),
   ]);
-  // Short cache for list queries (browser-level)
-  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
+  // Revalidate rather than serve stale: with max-age + stale-while-revalidate
+  // a newly admitted, edited or removed student could be missing from this
+  // list for up to five minutes. The ETag keeps unchanged responses cheap.
+  res.setHeader('Cache-Control', 'private, no-cache');
   res.json({ success: true, data: students, total, page: parseInt(page), pages: Math.ceil(total / takeNum) });
 }));
 
@@ -341,8 +345,11 @@ router.post('/', wrap(async (req, res) => {
         ? await tx.user.findFirst({
             where: { schoolId, role: 'parent', deletedAt: null,
               OR: [
-                { phone: emergencyPhone },
-                { phone: (emergencyPhone || '').replace(/\D/g, '') },
+                // Every format this number may already be stored as. Matching only
+                // the literal string and its digits meant a sibling admitted as
+                // 0348... did not find a parent saved as +9234..., creating a
+                // second account for the same real person.
+                ...phoneUtil.variants(emergencyPhone).map((v) => ({ phone: v })),
                 ...(finalParentEmail ? [{ email: finalParentEmail }] : []),
               ]
             }
@@ -363,7 +370,9 @@ router.post('/', wrap(async (req, res) => {
             schoolId, campusId: student.campusId,
             name: fatherName || `Parent of ${name}`,
             email: finalParentEmail,
-            phone: emergencyPhone || null,
+            // Stored canonically (+92XXXXXXXXXX) so later lookups and phone logins
+            // match regardless of how the next screen formats it.
+            phone: phoneUtil.canonical(emergencyPhone) || emergencyPhone || null,
             role: 'parent',
             passwordHash: parentPasswordHash,
             phoneVerifiedAt: new Date(),
@@ -388,7 +397,6 @@ router.post('/', wrap(async (req, res) => {
     let invoice = null;
     if (generateFirstInvoice) {
       const now    = new Date();
-      const monthNum  = now.getMonth() + 1;          // 1-12
       const monthName = now.toLocaleString('default', { month: 'long' }); // "July"
       const amount = parseInt(monthlyFee) || 0;
       if (amount > 0) {
@@ -398,8 +406,8 @@ router.post('/', wrap(async (req, res) => {
             schoolId, campusId: student.campusId, studentId: student.id,
             classId: student.classId,
             feeTitle: `Monthly Fee Of ${monthName}`,
-            month: monthNum, year: now.getFullYear(),
-            totalAmount: amount, paidAmount: 0, dueAmount: amount, balance: amount,
+            month: monthName, year: now.getFullYear(),
+            totalAmount: amount, paidAmount: 0, dueAmount: amount,
             status: 'unpaid', voucherNo: vNo,
             dueDate: new Date(now.getFullYear(), now.getMonth(), 10),
           }
@@ -420,7 +428,7 @@ router.post('/', wrap(async (req, res) => {
       data: {
         schoolId, userId: req.user.id,
         action: 'STUDENT_ADMITTED',
-        entity: 'student', entityId: student.id,
+        resource: 'student', resourceId: student.id,
         details: JSON.stringify({ name, rollNo: finalRollNo, portalAccounts: createPortalAccounts }),
       }
     }).catch(() => null);
@@ -434,12 +442,38 @@ router.post('/', wrap(async (req, res) => {
   const parentPasswordHint = emergencyPhone
     ? `Last 5 digits of phone + 123 (e.g. ${emergencyPhone.replace(/[^0-9]/g,'').slice(-5)}123)`
     : null;
+  // `loginId` is what the school should actually hand over. The parent signs
+  // in with their phone number — that is what they remember — while the
+  // synthetic .parent/.student address stays as an internal unique key and is
+  // returned as `email` for anything that still reads it.
+  const parentLoginPhone = phoneUtil.canonical(emergencyPhone);
   const credentials = createPortalAccounts ? {
     portalLink,
-    student: { email: safeStudentEmail, password: studentPassword, portal: 'Student Portal', passwordHint: `Roll number + 123 (e.g. ${finalRollNo.replace(/[^a-zA-Z0-9]/g,'')}123)` },
+    student: {
+      loginId: finalRollNo,
+      loginIdLabel: 'Roll number',
+      email: safeStudentEmail,
+      password: studentPassword,
+      portal: 'Student Portal',
+      passwordHint: `Roll number + 123 (e.g. ${finalRollNo.replace(/[^a-zA-Z0-9]/g,'')}123)`,
+    },
     parent: result.parentIsExisting
-      ? { email: result.parentUser.email, password: '(existing account — same as sibling)', portal: 'Parent Portal', existing: true }
-      : { email: result.parentUser?.email || finalParentEmail, password: parentPassword, portal: 'Parent Portal', passwordHint: parentPasswordHint },
+      ? {
+          loginId: parentLoginPhone || result.parentUser.phone || result.parentUser.email,
+          loginIdLabel: parentLoginPhone ? 'Phone number' : 'Email',
+          email: result.parentUser.email,
+          password: '(existing account — same as sibling)',
+          portal: 'Parent Portal',
+          existing: true,
+        }
+      : {
+          loginId: parentLoginPhone || finalParentEmail,
+          loginIdLabel: parentLoginPhone ? 'Phone number' : 'Email',
+          email: result.parentUser?.email || finalParentEmail,
+          password: parentPassword,
+          portal: 'Parent Portal',
+          passwordHint: parentPasswordHint,
+        },
   } : null;
 
   res.status(201).json({ success: true, data: result.student, credentials, invoice: result.invoice });
@@ -514,6 +548,7 @@ router.post('/promote', wrap(async (req, res) => {
   }
 
   let promoted = 0, held = 0, passout = 0;
+  const skipped = [];
   const now = new Date();
 
   await prisma.$transaction(async (tx) => {
@@ -528,7 +563,7 @@ router.post('/promote', wrap(async (req, res) => {
         where: { id: sid, schoolId, deletedAt: null },
         select: { id: true, classId: true, sectionId: true, sessionId: true },
       });
-      if (!existing) continue; // skip students not belonging to this school
+      if (!existing) { skipped.push({ studentId: sid, reason: 'student not found in this school' }); continue; }
 
       let updateData = {};
 
@@ -554,12 +589,14 @@ router.post('/promote', wrap(async (req, res) => {
         };
         passout++;
       } else {
-        continue; // unknown action — skip
+        skipped.push({ studentId: sid, reason: `unknown action "${action}"` });
+        continue;
       }
 
       await tx.student.update({ where: { id: sid }, data: updateData });
 
-      // Write promotion log record
+      // Part of the same transaction: a promotion without its log cannot be
+      // undone, so the two must succeed or fail together.
       await tx.promotionLog.create({
         data: {
           schoolId,
@@ -574,7 +611,7 @@ router.post('/promote', wrap(async (req, res) => {
           promotedById:  req.user?.id || null,
           createdAt:     now,
         },
-      }).catch(() => null); // graceful: if PromotionLog model doesn't exist yet, skip
+      });
     }
 
     // Audit log entry for the bulk operation
@@ -583,14 +620,22 @@ router.post('/promote', wrap(async (req, res) => {
         schoolId,
         userId: req.user?.id || null,
         action: 'BULK_PROMOTION',
-        entity: 'student',
-        entityId: 0,
+        resource: 'student',
+        resourceId: 0,
         details: JSON.stringify({ promoted, held, passout, total: records.length, fromSessionId, newSessionId }),
       },
     }).catch(() => null);
   });
 
-  res.json({ success: true, promoted, held, passout, total: records.length, message: 'Bulk promotion completed.' });
+  // Report skips explicitly — silently returning "completed" for records that
+  // were never applied hides mistakes until the next academic year.
+  res.json({
+    success: true, promoted, held, passout, total: records.length,
+    skipped: skipped.length, skippedDetails: skipped,
+    message: skipped.length
+      ? `Promotion completed for ${records.length - skipped.length} of ${records.length} student(s); ${skipped.length} skipped.`
+      : 'Bulk promotion completed.',
+  });
 }));
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -612,16 +657,40 @@ router.get('/promotion-history', wrap(async (req, res) => {
       where,
       orderBy: { createdAt: 'desc' },
       take: parseInt(limit),
-      include: {
-        student:     { select: { id: true, name: true, rollNo: true } },
-        fromClass:   { select: { id: true, name: true } },
-        toClass:     { select: { id: true, name: true } },
-        newSession:  { select: { id: true, name: true } },
-        promotedBy:  { select: { id: true, name: true } },
-      },
     });
 
-    return res.json({ success: true, data: logs });
+    // PromotionLog carries scalar FKs only, so resolve the display names in
+    // one batched query per entity rather than N includes.
+    const ids = (key) => [...new Set(logs.map((l) => l[key]).filter(Boolean))];
+    const classIds = [...new Set([...ids('fromClassId'), ...ids('toClassId')])];
+    const [students, classes, sessions, users] = await Promise.all([
+      ids('studentId').length
+        ? prisma.student.findMany({ where: { id: { in: ids('studentId') } }, select: { id: true, name: true, rollNo: true } })
+        : [],
+      classIds.length
+        ? prisma.class.findMany({ where: { id: { in: classIds } }, select: { id: true, name: true } })
+        : [],
+      ids('newSessionId').length
+        ? prisma.academicSession.findMany({ where: { id: { in: ids('newSessionId') } }, select: { id: true, name: true } })
+        : [],
+      ids('promotedById').length
+        ? prisma.user.findMany({ where: { id: { in: ids('promotedById') } }, select: { id: true, name: true } })
+        : [],
+    ]);
+    const byId = (rows) => Object.fromEntries(rows.map((r) => [r.id, r]));
+    const sMap = byId(students), cMap = byId(classes), seMap = byId(sessions), uMap = byId(users);
+
+    return res.json({
+      success: true,
+      data: logs.map((l) => ({
+        ...l,
+        student:    sMap[l.studentId]     || null,
+        fromClass:  cMap[l.fromClassId]   || null,
+        toClass:    cMap[l.toClassId]     || null,
+        newSession: seMap[l.newSessionId] || null,
+        promotedBy: uMap[l.promotedById]  || null,
+      })),
+    });
   } catch (_modelErr) {
     // PromotionLog model not yet migrated — fall back to AuditLog
     try {
@@ -629,8 +698,12 @@ router.get('/promotion-history', wrap(async (req, res) => {
         where: { schoolId, action: 'BULK_PROMOTION' },
         orderBy: { createdAt: 'desc' },
         take: parseInt(limit),
-        include: { user: { select: { id: true, name: true } } },
       });
+      const userIds = [...new Set(auditLogs.map(l => l.userId).filter(Boolean))];
+      const users = userIds.length
+        ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+        : [];
+      const userMap = Object.fromEntries(users.map(u => [u.id, u]));
       const shaped = auditLogs.map(l => {
         let details = {};
         try { details = JSON.parse(l.details || '{}'); } catch { /* ignore */ }
@@ -642,7 +715,7 @@ router.get('/promotion-history', wrap(async (req, res) => {
           fromClass: null,
           toClass: null,
           newSession: details.newSessionId ? { id: details.newSessionId, name: `Session #${details.newSessionId}` } : null,
-          promotedBy: l.user,
+          promotedBy: userMap[l.userId] || null,
           promoted: details.promoted,
           held: details.held,
           passout: details.passout,
@@ -783,12 +856,15 @@ router.get('/:id/exam-results', wrap(async (req, res) => {
   }
 
   // Fetch marks for this student across all exams
+  // FIX: Exam has no `name`/`date` columns (it's `title`/`dateStart`) — this
+  // threw a Prisma validation error on every call, so exam results could
+  // never actually be viewed for any student.
   const marks = await prisma.examMark.findMany({
     where: { studentId, exam: { schoolId } },
     include: {
-      exam: { select: { id: true, name: true, date: true } },
+      exam: { select: { id: true, title: true, dateStart: true } },
     },
-    orderBy: [{ exam: { date: 'desc' } }],
+    orderBy: [{ exam: { dateStart: 'desc' } }],
     take: 50,
   });
 
@@ -801,15 +877,33 @@ router.get('/:id/exam-results', wrap(async (req, res) => {
 
   const data = marks.map(m => ({
     id:            m.id,
-    examName:      m.exam?.name || '—',
+    examName:      m.exam?.title || '—',
     subjectName:   m.subjectId ? (subjectMap[m.subjectId] || `Subject ${m.subjectId}`) : '—',
     totalMarks:    m.totalMarks,
     obtainedMarks: m.obtainedMarks,
     grade:         m.grade,
-    date:          m.exam?.date,
+    date:          m.exam?.dateStart,
   }));
 
   res.json({ success: true, data });
+}));
+
+// GET /api/v1/students/stats
+// FIX: this endpoint never existed — StudentsHub.jsx's KPI cards called it,
+// silently caught the failure, and always showed "—" placeholders. Must be
+// registered before the /:id route below, or "stats" gets parsed as an id.
+router.get('/stats', wrap(async (req, res) => {
+  const { schoolId, campusId } = req;
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const [totalStudents, activeStudents, newThisMonth] = await Promise.all([
+    prisma.student.count({ where: { schoolId, deletedAt: null, ...(campusId && { campusId }) } }),
+    prisma.student.count({ where: { schoolId, deletedAt: null, status: 'active', ...(campusId && { campusId }) } }),
+    prisma.student.count({ where: { schoolId, deletedAt: null, admissionDate: { gte: monthStart }, ...(campusId && { campusId }) } }),
+  ]);
+
+  res.json({ success: true, data: { totalStudents, activeStudents, newThisMonth } });
 }));
 
 // GET /api/v1/students/:id

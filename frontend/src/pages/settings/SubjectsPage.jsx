@@ -1,41 +1,24 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/client';
 
-const SEED_SUBJECTS = [
-  { id: 1, name: 'Mathematics', code: 'MTH', description: 'Numbers and algebra' },
-  { id: 2, name: 'English', code: 'ENG' },
-  { id: 3, name: 'Urdu', code: 'URD' },
-  { id: 4, name: 'Science', code: 'SCI' },
-  { id: 5, name: 'Social Studies', code: 'SST' },
-  { id: 6, name: 'Islamiat', code: 'ISL' },
-  { id: 7, name: 'Computer', code: 'COM' },
-  { id: 8, name: 'Physics', code: 'PHY' },
-  { id: 9, name: 'Chemistry', code: 'CHM' },
-  { id: 10, name: 'Biology', code: 'BIO' },
-];
+/* Subjects are owned by the server (/classes/subjects) — the same store that
+   /settings/classes and the academics hub read.
 
-const LS_KEY = 'ilmforge_subjects';
+   This page used to keep a parallel localStorage copy seeded with ten sample
+   subjects, and fell back to it whenever the API returned an empty list or a
+   save failed. The effects were: a school with no subjects yet saw ten
+   subjects it had never created, and a failed save reported success while the
+   subject existed only in that one browser — invisible to timetables, exams
+   and every other user. The fallback is gone; failures now surface. */
 
 function toArrayPayload(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
   if (Array.isArray(payload?.items)) return payload.items;
   return [];
-}
-
-function getLocalSubjects() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  localStorage.setItem(LS_KEY, JSON.stringify(SEED_SUBJECTS));
-  return SEED_SUBJECTS;
-}
-
-function saveLocalSubjects(subjects) {
-  localStorage.setItem(LS_KEY, JSON.stringify(subjects));
 }
 
 const emptyForm = { name: '', code: '', classId: '', description: '' };
@@ -47,20 +30,15 @@ export default function SubjectsPage() {
   const [editForm, setEditForm] = useState(emptyForm);
   const [filterClass, setFilterClass] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [useLocal, setUseLocal] = useState(false);
-  const [localSubjects, setLocalSubjects] = useState(() => getLocalSubjects());
 
-  const { data: subjectsData, isLoading: subjectsLoading } = useQuery({
+  const {
+    data: subjectsData,
+    isLoading: subjectsLoading,
+    isError: subjectsError,
+    error: subjectsErrorObj,
+  } = useQuery({
     queryKey: ['subjects'],
-    queryFn: async () => {
-      try {
-        const res = await api.get('/classes/subjects');
-        return toArrayPayload(res.data);
-      } catch {
-        setUseLocal(true);
-        return getLocalSubjects();
-      }
-    },
+    queryFn: () => api.get('/classes/subjects').then((res) => toArrayPayload(res.data)),
   });
 
   const { data: classesData } = useQuery({
@@ -75,7 +53,9 @@ export default function SubjectsPage() {
     },
   });
 
-  const subjects = useLocal ? localSubjects : (toArrayPayload(subjectsData).length ? toArrayPayload(subjectsData) : localSubjects);
+  // An empty result means this school genuinely has no subjects yet — show
+  // that, rather than substituting sample data.
+  const subjects = toArrayPayload(subjectsData);
   const classes = toArrayPayload(classesData);
 
   const getClassName = (classId) => {
@@ -84,79 +64,31 @@ export default function SubjectsPage() {
     return cls ? cls.name : classId;
   };
 
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['subjects'] });
+  const fail = (e) => toast.error(e?.response?.data?.message || 'Could not save subject');
+
   const addMutation = useMutation({
-    mutationFn: async (data) => {
-      try {
-        const res = await api.post('/classes/subjects', data);
-        return { remote: true, data: res.data };
-      } catch {
-        return { remote: false, data };
-      }
-    },
-    onSuccess: (result) => {
-      if (result.remote) {
-        queryClient.invalidateQueries(['subjects']);
-      } else {
-        const current = getLocalSubjects();
-        const newId = current.length ? Math.max(...current.map((s) => s.id)) + 1 : 1;
-        const newSubject = { id: newId, ...result.data };
-        const updated = [...current, newSubject];
-        saveLocalSubjects(updated);
-        setLocalSubjects(updated);
-        setUseLocal(true);
-        queryClient.invalidateQueries(['subjects']);
-      }
-      setForm(emptyForm);
-    },
+    mutationFn: (data) => api.post('/classes/subjects', data).then((r) => r.data),
+    onSuccess: () => { toast.success('Subject added'); refresh(); setForm(emptyForm); },
+    onError: fail,
   });
 
   const editMutation = useMutation({
-    mutationFn: async ({ id, data }) => {
-      try {
-        const res = await api.put(`/classes/subjects/${id}`, data);
-        return { remote: true, id, data: res.data };
-      } catch {
-        return { remote: false, id, data };
-      }
-    },
-    onSuccess: (result) => {
-      if (result.remote) {
-        queryClient.invalidateQueries(['subjects']);
-      } else {
-        const current = getLocalSubjects();
-        const updated = current.map((s) =>
-          s.id === result.id ? { ...s, ...result.data } : s
-        );
-        saveLocalSubjects(updated);
-        setLocalSubjects(updated);
-        setUseLocal(true);
-        queryClient.invalidateQueries(['subjects']);
-      }
+    mutationFn: ({ id, data }) => api.put(`/classes/subjects/${id}`, data).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('Subject updated');
+      refresh();
       setEditId(null);
       setEditForm(emptyForm);
     },
+    onError: fail,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id) => {
-      try {
-        await api.delete(`/classes/subjects/${id}`);
-        return { remote: true, id };
-      } catch {
-        return { remote: false, id };
-      }
-    },
-    onSuccess: (result) => {
-      if (result.remote) {
-        queryClient.invalidateQueries(['subjects']);
-      } else {
-        const current = getLocalSubjects();
-        const updated = current.filter((s) => s.id !== result.id);
-        saveLocalSubjects(updated);
-        setLocalSubjects(updated);
-        setUseLocal(true);
-        queryClient.invalidateQueries(['subjects']);
-      }
+    mutationFn: (id) => api.delete(`/classes/subjects/${id}`).then((r) => r.data),
+    onSuccess: () => { toast.success('Subject deleted'); refresh(); setDeleteConfirm(null); },
+    onError: (e) => {
+      toast.error(e?.response?.data?.message || 'Could not delete subject');
       setDeleteConfirm(null);
     },
   });
@@ -167,7 +99,10 @@ export default function SubjectsPage() {
 
   const handleAdd = (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return;
+    if (!form.name.trim()) { toast.error('Subject name is required'); return; }
+    // Every subject belongs to a class (Subject.classId is required), so ask
+    // for it here rather than letting the save fail server-side.
+    if (!form.classId) { toast.error('Select the class this subject belongs to'); return; }
     addMutation.mutate(form);
   };
 
@@ -211,8 +146,9 @@ export default function SubjectsPage() {
         <form onSubmit={handleAdd}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 2fr auto', gap: '0.75rem', alignItems: 'flex-end' }}>
             <div>
-              <label className="form-label">Subject Name *</label>
+              <label className="form-label" htmlFor="subject-name">Subject Name *</label>
               <input
+                id="subject-name"
                 className="form-input"
                 type="text"
                 placeholder="e.g. Mathematics"
@@ -233,13 +169,16 @@ export default function SubjectsPage() {
               />
             </div>
             <div>
-              <label className="form-label">Class</label>
+              {/* Required: a subject is always attached to a class. The old
+                  "All Classes" default read as optional and the save failed. */}
+              <label className="form-label" htmlFor="subject-class">Class *</label>
               <select
+                id="subject-class"
                 className="form-select"
                 value={form.classId}
                 onChange={(e) => setForm({ ...form, classId: e.target.value })}
               >
-                <option value="">All Classes</option>
+                <option value="">Select class…</option>
                 {classes.map((cls) => (
                   <option key={cls.id} value={cls.id}>
                     {cls.name}
@@ -306,6 +245,11 @@ export default function SubjectsPage() {
         {subjectsLoading ? (
           <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
             Loading subjects...
+          </div>
+        ) : subjectsError ? (
+          <div className="empty-state">
+            <BookOpen size={40} />
+            <p>Could not load subjects — {subjectsErrorObj?.response?.data?.message || 'please try again.'}</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="empty-state">

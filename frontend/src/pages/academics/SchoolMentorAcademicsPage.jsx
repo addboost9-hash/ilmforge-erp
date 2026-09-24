@@ -9,7 +9,7 @@
  *         AI sparkle button, animated calendar date cards, staggered textbook rows
  */
 import { useState, useCallback, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import {
@@ -21,18 +21,7 @@ const TEAL  = '#1B2F6E';
 const NAVY  = '#1B2F6E';
 const RED   = '#DC2626';
 
-const DEFAULT_KEY_DATES = {
-  '1st Term': [
-    { id: 1, event: '1st Term Starting date',   date: '2026-03-02', icon: 'blue'   },
-    { id: 2, event: '1st Monthlies',             date: '2026-04-06', icon: 'green'  },
-    { id: 3, event: 'First-Term Examinations',   date: '2026-05-20', icon: 'yellow' },
-    { id: 4, event: 'PTM',                        date: '2026-06-06', icon: 'purple' },
-  ],
-  '2nd Term': [
-    { id: 5, event: '2nd Term Starting date',   date: '2026-09-01', icon: 'green'  },
-    { id: 6, event: '3rd Monthlies',             date: '2026-10-12', icon: 'teal'   },
-  ],
-};
+/* DEFAULT_KEY_DATES removed: key dates come from the school calendar API. */
 
 const ICON_COLORS = {
   blue:   '#2563EB',
@@ -281,54 +270,95 @@ function KeyDateCard({ d }) {
 /* ═══════════════════════════════════════════════════════════════
    ACADEMIC CALENDAR TAB
 ═══════════════════════════════════════════════════════════════ */
-function AcademicCalendarTab() {
-  const [keyDates, setKeyDates] = useState(() => {
-    try {
-      const saved = localStorage.getItem('sm_key_dates');
-      return saved ? JSON.parse(saved) : DEFAULT_KEY_DATES;
-    } catch { return DEFAULT_KEY_DATES; }
-  });
+/* Key dates are school data held in HolidayEvent via /api/v1/calendar.
+   They used to live in this browser's localStorage, seeded with a fixed
+   demo timetable ("1st Term Starting date — 2 March 2026"), so every school
+   saw the same invented calendar, only the person who typed a date could see
+   it, and clearing site data erased it. The term each date belongs to is
+   carried in the event's notes field. */
+const CALENDAR_TERMS = ['1st Term', '2nd Term', '3rd Term'];
 
+function AcademicCalendarTab() {
+  const qc = useQueryClient();
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ term: '1st Term', event: '', date: '' });
 
-  const saveKeyDates = useCallback((updated) => {
-    setKeyDates(updated);
-    localStorage.setItem('sm_key_dates', JSON.stringify(updated));
-  }, []);
+  const { data: rawEvents = [], isLoading: datesLoading, isError: datesError } = useQuery({
+    queryKey: ['academic-key-dates'],
+    queryFn: () => api.get('/calendar/events').then(r => r.data?.data || []),
+  });
+
+  const termOf = (notes) => {
+    try { const n = JSON.parse(notes || '{}'); if (n.term) return n.term; } catch { /* plain note */ }
+    return '1st Term';
+  };
+
+  // Group the school's calendar entries under their term for display.
+  const keyDates = {};
+  for (const term of CALENDAR_TERMS) keyDates[term] = [];
+  for (const e of rawEvents) {
+    const term = termOf(e.notes);
+    (keyDates[term] = keyDates[term] || []).push({
+      id: e.id,
+      event: e.title,
+      date: String(e.startDate || '').slice(0, 10),
+      icon: 'teal',
+    });
+  }
+  for (const term of Object.keys(keyDates)) {
+    keyDates[term].sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['academic-key-dates'] });
+
+  const addMut = useMutation({
+    mutationFn: (body) => api.post('/calendar/holidays', body).then(r => r.data),
+    onSuccess: () => {
+      toast.success('Key date added');
+      setEditForm({ term: '1st Term', event: '', date: '' });
+      setShowEditModal(false);
+      refresh();
+    },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Could not add this key date'),
+  });
+
+  const removeMut = useMutation({
+    mutationFn: (id) => api.delete(`/calendar/holidays/${id}`).then(r => r.data),
+    onSuccess: () => { toast.success('Removed'); refresh(); },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Could not remove this key date'),
+  });
 
   const addEntry = () => {
     if (!editForm.event.trim() || !editForm.date) {
       toast.error('Event name and date are required');
       return;
     }
-    const updated = { ...keyDates };
-    const term = editForm.term;
-    const existing = updated[term] || [];
-    const newId = Date.now();
-    updated[term] = [...existing, { id: newId, event: editForm.event.trim(), date: editForm.date, icon: 'teal' }];
-    saveKeyDates(updated);
-    setEditForm({ term: '1st Term', event: '', date: '' });
-    setShowEditModal(false);
-    toast.success('Key date added!');
+    addMut.mutate({
+      title: editForm.event.trim(),
+      eventType: 'event',
+      startDate: editForm.date,
+      notes: JSON.stringify({ term: editForm.term }),
+    });
   };
 
-  const removeEntry = (term, id) => {
-    const updated = { ...keyDates, [term]: keyDates[term].filter(d => d.id !== id) };
-    saveKeyDates(updated);
-    toast.success('Removed');
-  };
+  const removeEntry = (_term, id) => removeMut.mutate(id);
 
-  const schoolName = 'School Mentor Demo';
+  const schoolName = localStorage.getItem('registeredSchoolName') || 'School';
 
-  /* Animated key-date cards for the top horizontal scroll strip */
-  const dateCards = [
-    { label: 'Term 1 Start',  date: '1st March 2026',  icon: '🎒', color: '#1B2F6E' },
-    { label: 'Monthly Test',  date: '6th April 2026',  icon: '📝', color: '#0073b7' },
-    { label: 'Term 1 Exams',  date: '20th May 2026',   icon: '📋', color: '#7c3aed' },
-    { label: 'PTM',           date: '6th June 2026',   icon: '👨‍👩‍👧', color: '#059669' },
-    { label: 'Term 2 Start',  date: '1st Sep 2026',    icon: '📚', color: '#D97706' },
-  ];
+  /* The strip used to be five hardcoded dates. It now shows the school's own
+     next five upcoming entries, and simply stays empty until they add some. */
+  const CARD_COLORS = ['#1B2F6E', '#0073b7', '#7c3aed', '#059669', '#D97706'];
+  const today = new Date().toISOString().slice(0, 10);
+  const dateCards = rawEvents
+    .filter(e => String(e.startDate || '').slice(0, 10) >= today)
+    .sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)))
+    .slice(0, 5)
+    .map((e, i) => ({
+      label: e.title,
+      date: new Date(e.startDate).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' }),
+      icon: '📅',
+      color: CARD_COLORS[i % CARD_COLORS.length],
+    }));
 
   return (
     <div>
@@ -913,52 +943,13 @@ function SchemeOfStudiesTab() {
 /* ═══════════════════════════════════════════════════════════════
    LESSON PLAN VIEW MODAL
 ═══════════════════════════════════════════════════════════════ */
-const SAMPLE_LESSON_PLAN = {
-  class: 'IV',
-  subject: 'Science',
-  unitNo: '01',
-  unitName: 'Introduction',
-  timeRequired: '45 Minutes',
-  topics: [
-    {
-      id: 1,
-      name: 'Word Opposites',
-      mainQuestion: 'match the word opposite',
-      type: 'table',
-      rows: [
-        { word: 'day',     opposite: 'Night'   },
-        { word: 'Morning', opposite: 'Evening' },
-        { word: 'Long',    opposite: 'Short'   },
-        { word: 'small',   opposite: 'High'    },
-        { word: 'up',      opposite: 'down'    },
-      ],
-    },
-    {
-      id: 2,
-      name: 'Applications',
-      mainQuestion: 'write an application for sick leave',
-      type: 'application',
-      subject: 'Sick leave',
-      body: 'Respected sir, i beg to say that I am suffering from fever and cannot attend school today. I request you to grant me leave for one day i.e. 2nd March, 2026.\n\nYours obediently,\n[Student Name]',
-    },
-  ],
-};
+/* SAMPLE_LESSON_PLAN removed: the view modal now renders the lesson plan
+   that was actually selected, not a fixed sample. */
 
 function LessonPlanViewModal({ plan, onClose }) {
-  const [selectAll, setSelectAll] = useState(false);
-  const [selected, setSelected] = useState({});
-
-  const toggleSelect = (topicId, rowIdx) => {
-    const key = `${topicId}_${rowIdx}`;
-    setSelected(s => ({ ...s, [key]: !s[key] }));
-  };
-
-  const toggleSelectAll = () => {
-    const next = !selectAll;
-    setSelectAll(next);
-    if (!next) setSelected({});
-  };
-
+  // The select-all / per-row checkbox state belonged to the hardcoded
+  // worksheet table this modal used to show; it has no meaning for a real
+  // lesson plan and is gone along with it.
   return (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20, overflowY: 'auto' }}
@@ -1004,86 +995,25 @@ function LessonPlanViewModal({ plan, onClose }) {
             ))}
           </div>
 
-          {/* Select All */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#2563EB', cursor: 'pointer' }}>
-              <input type="checkbox" checked={selectAll} onChange={toggleSelectAll} />
-              — Select All Questions
-            </label>
-          </div>
 
-          {/* Topics */}
-          {plan.topics.map(topic => (
-            <div key={topic.id} style={{ marginBottom: 24 }}>
-              {/* Topic heading */}
-              <div style={{ fontWeight: 700, fontSize: 14, textAlign: 'center', color: NAVY, marginBottom: 10, padding: '8px', background: '#F8FAFC', borderRadius: 6, border: '1px solid #E2E8F0' }}>
-                Topic: {topic.name}
+          {/* Real lesson-plan content. This modal previously rendered a fixed
+              "Word / Opposite" worksheet with select-all checkboxes that
+              belonged to a design mock-up, not to the plan being viewed. */}
+          {plan.sections?.length ? plan.sections.map(([heading, body]) => (
+            <div key={heading} style={{ marginBottom: 18 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: NAVY, marginBottom: 6, padding: '7px 10px', background: '#F8FAFC', borderRadius: 6, border: '1px solid #E2E8F0' }}>
+                {heading}
               </div>
-
-              {/* Main Question row */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontWeight: 700, fontSize: 13, color: '#374151' }}>
-                  Main Question 1: {topic.mainQuestion}
-                </span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#64748B', cursor: 'pointer', whiteSpace: 'nowrap', marginLeft: 12 }}>
-                  <input type="checkbox" checked={selectAll} onChange={toggleSelectAll} />
-                  Select All {topic.name}
-                </label>
+              <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap', padding: '0 4px' }}>
+                {body}
               </div>
-
-              {topic.type === 'table' && (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: '#F8FAFC' }}>
-                      <th style={{ padding: '8px 10px', textAlign: 'left', border: '1px solid #E2E8F0', fontSize: 12 }}>Sr No</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'left', border: '1px solid #E2E8F0', fontSize: 12 }}>Word</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'left', border: '1px solid #E2E8F0', fontSize: 12 }}>Opposite</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'center', border: '1px solid #E2E8F0', fontSize: 12 }}>Select</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topic.rows.map((row, idx) => {
-                      const key = `${topic.id}_${idx}`;
-                      return (
-                        <tr key={idx}>
-                          <td style={{ padding: '8px 10px', border: '1px solid #E2E8F0', color: '#94A3B8' }}>{idx + 1}</td>
-                          <td style={{ padding: '8px 10px', border: '1px solid #E2E8F0', fontWeight: 500 }}>{row.word}</td>
-                          <td style={{ padding: '8px 10px', border: '1px solid #E2E8F0' }}>{row.opposite}</td>
-                          <td style={{ padding: '8px 10px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
-                            <input
-                              type="checkbox"
-                              checked={selectAll || !!selected[key]}
-                              onChange={() => toggleSelect(topic.id, idx)}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-
-              {topic.type === 'application' && (
-                <div style={{ border: '1px solid #E2E8F0', borderRadius: 8, padding: 16 }}>
-                  <div style={{ marginBottom: 8 }}>
-                    <span style={{ fontWeight: 600, fontSize: 12, color: '#374151' }}>Subject: </span>
-                    <span style={{ fontSize: 13, color: NAVY }}>{topic.subject}</span>
-                  </div>
-                  <div style={{ marginBottom: 8 }}>
-                    <span style={{ fontWeight: 600, fontSize: 12, color: '#374151' }}>Body:</span>
-                    <div style={{ fontSize: 13, color: '#374151', whiteSpace: 'pre-line', marginTop: 4, lineHeight: 1.6, background: '#FAFAFA', padding: 10, borderRadius: 6, border: '1px solid #F1F5F9' }}>
-                      {topic.body}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={selectAll} onChange={toggleSelectAll} /> Select
-                    </label>
-                  </div>
-                </div>
-              )}
             </div>
-          ))}
+          )) : (
+            <div style={{ padding: 28, textAlign: 'center', color: '#64748B', fontSize: 13, background: '#F8FAFC', borderRadius: 8, border: '1px dashed #CBD5E1' }}>
+              This lesson plan has no detailed content saved yet.
+            </div>
+          )}
+
         </div>
       </div>
     </div>
@@ -1472,7 +1402,7 @@ function ViewLessonPlanTab() {
 
   const { data: viewSubjects = [] } = useQuery({
     queryKey: ['subjects-for-lp', classId],
-    queryFn: () => api.get('/subjects', { params: { classId } }).then(r => r.data.data || []),
+    queryFn: () => api.get('/classes/subjects', { params: { classId } }).then(r => r.data.data || []),
     enabled: !!classId,
     staleTime: 300_000,
   });
@@ -1481,20 +1411,8 @@ function ViewLessonPlanTab() {
 
   const [units, setUnits] = useState([]);
 
-  const makeDemoUnits = (cId, sId) => [
-    {
-      id: 1, unitNo: 'U01', unitName: 'Basics Science', classId: cId, subjectId: sId,
-      details: [{ id: 1, unitNo: 'U01', unitName: 'Basics Science', status: 'Not Submitted' }],
-    },
-    {
-      id: 2, unitNo: 'U02', unitName: 'Living Things', classId: cId, subjectId: sId,
-      details: [{ id: 2, unitNo: 'U02', unitName: 'Living Things', status: 'Submitted' }],
-    },
-    {
-      id: 3, unitNo: 'U03', unitName: 'Plants & Animals', classId: cId, subjectId: sId,
-      details: [{ id: 3, unitNo: 'U03', unitName: 'Plants & Animals', status: 'Not Submitted' }],
-    },
-  ];
+  /* makeDemoUnits removed: the lesson-plan list shows only the plans the
+     school actually has, never invented "Basics Science" placeholders. */
 
   const handleFetch = async () => {
     if (!classId) return toast.error('Please select a class');
@@ -1504,8 +1422,11 @@ function ViewLessonPlanTab() {
       const res = await api.get('/lesson-plans', {
         params: { classId, subjectId: subjectId || undefined },
       }).catch(() => null);
-      const data = res?.data?.data || [];
-      setUnits(data.length ? data : makeDemoUnits(classId, subjectId));
+      // Show what the school actually has. This used to fall back to
+      // makeDemoUnits() whenever the list came back empty, so a class with no
+      // lesson plans displayed invented ones that could not be opened or
+      // edited and did not exist on the server.
+      setUnits(res?.data?.data || []);
       setFetched(true);
       setPlanView('lesson');
     } finally {
@@ -1515,21 +1436,43 @@ function ViewLessonPlanTab() {
 
   const toggleRow  = (id) => setExpandedRows(r => ({ ...r, [id]: !r[id] }));
 
-  const handleDelete = (id) => {
+  // Previously this only dropped the row from local state and reported
+  // "Deleted" — the plan was never removed on the server and came straight
+  // back on the next fetch.
+  const handleDelete = async (id) => {
     if (!window.confirm('Delete this lesson plan?')) return;
-    setUnits(u => u.filter(x => x.id !== id));
-    toast.success('Deleted');
+    try {
+      await api.delete(`/lesson-plans/${id}`);
+      setUnits(u => u.filter(x => x.id !== id));
+      toast.success('Lesson plan deleted');
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Could not delete this lesson plan');
+    }
   };
 
+  // Opens the plan that was actually clicked. This used to spread
+  // SAMPLE_LESSON_PLAN and override only the class/subject/unit labels, so
+  // every lesson plan in the school opened showing the same canned
+  // "Word Opposites" Science content.
   const openModal = (unit, det) => {
-    const className   = classes.find(c => String(c.id) === String(classId))?.name || classId;
-    const subjectName = subjectsForClass.find(s => String(s.id) === String(subjectId))?.name || 'Science';
+    const className   = unit?.className   || classes.find(c => String(c.id) === String(classId))?.name || classId;
+    const subjectName = unit?.subjectName || subjectsForClass.find(s => String(s.id) === String(subjectId))?.name || '—';
+    const p = unit?.planData || {};
     setViewModal({
-      ...SAMPLE_LESSON_PLAN,
       class: className,
       subject: subjectName,
-      unitNo: det.unitNo,
-      unitName: det.unitName,
+      unitNo: det?.unitNo || '—',
+      unitName: det?.unitName || unit?.title || '—',
+      timeRequired: p.timeRequired || p.duration || '—',
+      // Sections come straight from the stored plan; anything the teacher did
+      // not fill in is simply absent rather than filled with sample text.
+      sections: [
+        ['Objectives',     unit?.objectives || p.objectives],
+        ['Main Activity',  unit?.content    || p.mainActivity],
+        ['Practice',       unit?.activities || p.practice],
+        ['Assessment',     unit?.assessment || p.assessment],
+        ['Notes',          p.notes],
+      ].filter(([, v]) => v && String(v).trim()),
     });
   };
 

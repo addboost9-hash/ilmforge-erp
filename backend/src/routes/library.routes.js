@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { contains: ciContains, equals: ciEquals } = require('../utils/search');
 
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
@@ -51,10 +52,10 @@ router.get('/books', wrap(async (req, res) => {
     ...(active === 'false' ? { isActive: false } : {}),
     ...(search ? {
       OR: [
-        { title: { contains: String(search), mode: 'insensitive' } },
-        { author: { contains: String(search), mode: 'insensitive' } },
-        { isbn: { contains: String(search), mode: 'insensitive' } },
-        { accessionNo: { contains: String(search), mode: 'insensitive' } },
+        { title: ciContains(String(search)) },
+        { author: ciContains(String(search)) },
+        { isbn: ciContains(String(search)) },
+        { accessionNo: ciContains(String(search)) },
       ],
     } : {}),
   };

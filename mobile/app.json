@@ -36,6 +36,9 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "https://ilmforge-erp.onrender.com/api/v1"
     }
   }
 }

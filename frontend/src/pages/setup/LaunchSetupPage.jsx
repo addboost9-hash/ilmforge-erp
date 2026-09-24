@@ -233,8 +233,8 @@ export default function LaunchSetupPage() {
     queryFn: async () => {
       const [school, classes, subjects, staff, feeStructures, sessions, admins] = await Promise.allSettled([
         api.get('/settings/school').then(r => r.data),
-        api.get('/settings/classes').then(r => r.data),
-        api.get('/subjects').then(r => r.data),
+        api.get('/classes').then(r => r.data),
+        api.get('/classes/subjects').then(r => r.data),
         api.get('/staff/stats').then(r => r.data?.data || r.data),
         api.get('/fees/structures').then(r => r.data),
         api.get('/settings/sessions').then(r => r.data),

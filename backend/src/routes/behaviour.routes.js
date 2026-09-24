@@ -74,12 +74,20 @@ router.get('/', wrap(async (req, res) => {
 // POST /api/v1/behaviour — create record
 router.post('/', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
-  const { studentId, type, description, severity, action, reportedBy, date } = req.body;
+  const { studentId, type, description, details, severity, action, reportedBy, date } = req.body;
   if (!studentId) return res.status(400).json({ success: false, message: 'studentId is required.' });
   if (!type)      return res.status(400).json({ success: false, message: 'type is required.' });
 
+  // The student must belong to this school — otherwise a staff user could
+  // attach a disciplinary record to another tenant's student by id.
+  const student = await prisma.student.findFirst({
+    where: { id: parseInt(studentId), schoolId, deletedAt: null }, select: { id: true },
+  });
+  if (!student) return res.status(404).json({ success: false, message: 'Student not found in this school.' });
+
   const notesData = JSON.stringify({
     description: description || '',
+    details:     details     || '',
     severity:    severity    || 'Low',
     action:      action      || '',
     reportedBy:  reportedBy  || '',
@@ -108,13 +116,14 @@ router.post('/', staffOnly, wrap(async (req, res) => {
 router.put('/:id', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const id = parseInt(req.params.id);
-  const { type, description, severity, action, reportedBy, date } = req.body;
+  const { type, description, details, severity, action, reportedBy, date } = req.body;
 
   const existing = await prisma.behaviorRecord.findFirst({ where: { id, schoolId } });
   if (!existing) return res.status(404).json({ success: false, message: 'Record not found.' });
 
   const notesData = JSON.stringify({
     description: description || '',
+    details:     details     || '',
     severity:    severity    || 'Low',
     action:      action      || '',
     reportedBy:  reportedBy  || '',

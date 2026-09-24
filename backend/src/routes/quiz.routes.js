@@ -52,16 +52,27 @@ router.post('/', wrap(async (req, res) => {
       status: 'draft',
       createdBy: req.user?.id || null,
       questions: {
-        create: questions.map((q, idx) => ({
-          questionText: q.questionText,
-          optionA: q.optionA || null,
-          optionB: q.optionB || null,
-          optionC: q.optionC || null,
-          optionD: q.optionD || null,
-          correctOption: q.correctOption || null,
-          marks: q.marks ? parseFloat(q.marks) : 1,
-          order: idx + 1,
-        })),
+        create: questions.map((q, idx) => {
+          // The Quiz builder UI posts { q, options: [4], answer: index };
+          // this route only understood { questionText, optionA..D,
+          // correctOption }, so questionText arrived undefined and every
+          // quiz creation failed with a Prisma error. Accept both shapes.
+          const opts = Array.isArray(q.options) ? q.options : [];
+          const letters = ['A', 'B', 'C', 'D'];
+          const answerLetter =
+            q.correctOption ||
+            (Number.isInteger(q.answer) ? letters[q.answer] : null);
+          return {
+            questionText: q.questionText || q.q || q.question || q.text || '',
+            optionA: q.optionA ?? opts[0] ?? null,
+            optionB: q.optionB ?? opts[1] ?? null,
+            optionC: q.optionC ?? opts[2] ?? null,
+            optionD: q.optionD ?? opts[3] ?? null,
+            correctOption: answerLetter,
+            marks: q.marks ? parseInt(q.marks) : 1,
+            order: idx + 1,
+          };
+        }),
       },
     },
     include: { questions: true },
@@ -154,7 +165,7 @@ router.put('/:id', wrap(async (req, res) => {
           optionC: q.optionC || null,
           optionD: q.optionD || null,
           correctOption: q.correctOption || null,
-          marks: q.marks ? parseFloat(q.marks) : 1,
+          marks: q.marks ? parseInt(q.marks) : 1,
           order: idx + 1,
         })),
       });
@@ -323,7 +334,7 @@ router.get('/:id/attempts', wrap(async (req, res) => {
   const attempts = await prisma.quizAttempt.findMany({
     where: { quizId },
     include: {
-      student: { select: { id: true, name: true, rollNo: true, admissionNo: true } },
+      student: { select: { id: true, name: true, rollNo: true } },
     },
     orderBy: { score: 'desc' },
   });

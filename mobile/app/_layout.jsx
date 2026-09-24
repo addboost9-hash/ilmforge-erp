@@ -3,7 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuth } from '../src/store/auth';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,16 +25,14 @@ function AuthGuard({ children }) {
 
   const checkAuth = async () => {
     try {
-      const token = await AsyncStorage.getItem('accessToken');
-      const userStr = await AsyncStorage.getItem('user');
+      const { token, user } = await getAuth();
       const inAuthGroup = segments[0] === 'login';
 
-      if (!token || !userStr) {
+      if (!token || !user) {
         if (!inAuthGroup) {
           router.replace('/login');
         }
       } else {
-        const user = JSON.parse(userStr);
         if (inAuthGroup) {
           redirectByRole(user.role, router);
         }

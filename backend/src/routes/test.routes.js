@@ -189,7 +189,7 @@ router.get('/:id/marks', wrap(async (req, res) => {
   const marks = await prisma.testMark.findMany({
     where: { testId },
     include: {
-      student: { select: { id: true, name: true, rollNo: true, admissionNo: true } },
+      student: { select: { id: true, name: true, rollNo: true } },
     },
     orderBy: { student: { rollNo: 'asc' } },
   });
@@ -207,7 +207,7 @@ router.get('/:id/tabulation', wrap(async (req, res) => {
   const marks = await prisma.testMark.findMany({
     where: { testId },
     include: {
-      student: { select: { id: true, name: true, rollNo: true, admissionNo: true } },
+      student: { select: { id: true, name: true, rollNo: true } },
     },
   });
 
@@ -219,7 +219,7 @@ router.get('/:id/tabulation', wrap(async (req, res) => {
       studentId: m.studentId,
       rollNo: m.student?.rollNo,
       name: m.student?.name,
-      admissionNo: m.student?.admissionNo,
+      admissionNo: m.student?.rollNo,
       obtainedMarks: m.obtainedMarks,
       totalMarks: m.totalMarks,
       percentage: parseFloat(pct.toFixed(2)),
@@ -264,7 +264,7 @@ router.get('/:id/position-holders', wrap(async (req, res) => {
   const marks = await prisma.testMark.findMany({
     where: { testId, isAbsent: false },
     include: {
-      student: { select: { id: true, name: true, rollNo: true, admissionNo: true } },
+      student: { select: { id: true, name: true, rollNo: true } },
     },
     orderBy: { obtainedMarks: 'desc' },
     take: 10,
@@ -279,7 +279,7 @@ router.get('/:id/position-holders', wrap(async (req, res) => {
       studentId: m.studentId,
       rollNo: m.student?.rollNo,
       name: m.student?.name,
-      admissionNo: m.student?.admissionNo,
+      admissionNo: m.student?.rollNo,
       obtainedMarks: m.obtainedMarks,
       totalMarks: m.totalMarks,
       percentage: parseFloat(pct.toFixed(2)),
@@ -311,7 +311,7 @@ router.get('/:id/excel', wrap(async (req, res) => {
   const marks = await prisma.testMark.findMany({
     where: { testId },
     include: {
-      student: { select: { id: true, name: true, rollNo: true, admissionNo: true } },
+      student: { select: { id: true, name: true, rollNo: true } },
     },
     orderBy: { student: { rollNo: 'asc' } },
   });
@@ -323,7 +323,7 @@ router.get('/:id/excel', wrap(async (req, res) => {
     const pct = m.totalMarks > 0 ? (m.obtainedMarks / m.totalMarks) * 100 : 0;
     return {
       rollNo: m.student?.rollNo,
-      admissionNo: m.student?.admissionNo,
+      admissionNo: m.student?.rollNo,
       name: m.student?.name,
       obtainedMarks: m.isAbsent ? 'ABS' : m.obtainedMarks,
       totalMarks: m.totalMarks,

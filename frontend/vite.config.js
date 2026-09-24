@@ -24,35 +24,26 @@ export default defineConfig({
         clientsClaim: true,
         // Cache strategies
         runtimeCaching: [
+          // One rule for every API call, whatever origin it is served from.
+          //
+          // This replaces three rules that were each wrong in a different way:
+          //   - classes and dashboard were StaleWhileRevalidate (5 min / 1 min),
+          //     so after adding or deleting a class or subject the refetch was
+          //     answered from cache and the change did not appear;
+          //   - the general API rule hardcoded a single host, so it silently
+          //     stopped matching whenever the API moved. Matching on the path
+          //     instead keeps it correct regardless of which host serves it.
+          //
+          // Matching on the /api/v1/ path works for a same-origin deployment
+          // and for a separate API host. NetworkFirst means a reachable server
+          // always wins; the cache is only an offline fallback.
           {
-            // Granular cache for classes API — stale-while-revalidate, 5 min TTL
-            urlPattern: /^\/api\/v1\/classes/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'classes-cache',
-              expiration: { maxAgeSeconds: 300 },
-            },
-          },
-          {
-            // Granular cache for dashboard API — stale-while-revalidate, 1 min TTL
-            urlPattern: /^\/api\/v1\/dashboard/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'dashboard-cache',
-              expiration: { maxAgeSeconds: 60 },
-            },
-          },
-          {
-            // Cache API responses for offline use
-            urlPattern: /^https:\/\/ilmforge-erp\.onrender\.com\/api\/v1\/.*/,
-            handler: 'NetworkFirst',      // try network first, fallback to cache
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/v1/'),
+            handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 24 * 60 * 60,  // 24 hours
-              },
-              networkTimeoutSeconds: 10,  // fallback to cache after 10s
+              networkTimeoutSeconds: 10,
+              expiration: { maxEntries: 100, maxAgeSeconds: 24 * 60 * 60 },
             },
           },
           {

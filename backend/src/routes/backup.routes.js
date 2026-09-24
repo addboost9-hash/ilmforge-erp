@@ -75,7 +75,6 @@ router.post('/restore', wrap(async (req, res) => {
           data: {
             schoolId: req.schoolId,
             name: cls.name,
-            level: cls.level || null,
           },
         });
         result.classes.restored++;

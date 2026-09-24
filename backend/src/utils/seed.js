@@ -121,6 +121,18 @@ async function main() {
     create: { schoolId: school.id, campusId: campus.id, name: 'Accountant', email: 'accountant@demo.com', phone: '03044444444', role: 'accountant', passwordHash: acpwHash, phoneVerifiedAt: new Date(), mustChangePassword: true }
   });
 
+  // ── Gatekeeper ─────────────────────────────────────────────
+  // The gatekeeper role has its own portal (barcode attendance, gate passes,
+  // visitor register) and its own permission-matrix entry, but no account was
+  // ever seeded — so that portal could not be opened or handed over for
+  // testing without creating a user by hand first.
+  const gkpwHash = await bcrypt.hash('gatekeeper', 12);
+  await prisma.user.upsert({
+    where:  { email_schoolId: { email: 'gatekeeper@demo.com', schoolId: school.id } },
+    update: {},
+    create: { schoolId: school.id, campusId: campus.id, name: 'Gate Keeper', email: 'gatekeeper@demo.com', phone: '03055555555', role: 'gatekeeper', passwordHash: gkpwHash, phoneVerifiedAt: new Date(), mustChangePassword: true }
+  });
+
   // ── Students ───────────────────────────────────────────────
   const sec1A = await prisma.section.findFirst({ where: { schoolId: school.id, classId: c1.id, name: 'A' } });
   const studentNames = [
@@ -157,6 +169,23 @@ async function main() {
     }
   }
 
+  // ── Student login ──────────────────────────────────────────
+  // Students have their own portal, but no student User was ever seeded, so
+  // the Student Portal could not be signed into on a fresh install. Attach a
+  // login to the first student so every role is reachable out of the box.
+  const firstStudent = await prisma.student.findFirst({ where: { schoolId: school.id, rollNo: 'ST-001' } });
+  if (firstStudent && !firstStudent.userId) {
+    const existingStudentUser = await prisma.user.findFirst({ where: { email: 'student1@demo.com', schoolId: school.id } });
+    const studentUser = existingStudentUser || await prisma.user.create({
+      data: {
+        schoolId: school.id, campusId: campus.id, name: firstStudent.name,
+        email: 'student1@demo.com', phone: '03066666666', role: 'student',
+        passwordHash: await bcrypt.hash('student', 10), phoneVerifiedAt: new Date(),
+      },
+    });
+    await prisma.student.update({ where: { id: firstStudent.id }, data: { userId: studentUser.id } });
+  }
+
   // ── Expense categories ─────────────────────────────────────
   for (const cName of ['Salaries','Utilities','Repair & Maintenance','Stationery','Events']) {
     const ex = await prisma.expenseCategory.findFirst({ where: { schoolId: school.id, name: cName } });
@@ -174,6 +203,8 @@ async function main() {
   console.log('👨‍🏫 Teacher:    teacher1@demo.com / teacher');
   console.log('💰 Accountant: accountant@demo.com / accountant');
   console.log('👨‍👩‍👦 Parent:     parent1@demo.com / parent');
+  console.log('🎓 Student:    student1@demo.com / student');
+  console.log('🚪 Gatekeeper: gatekeeper@demo.com / gatekeeper');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }
 

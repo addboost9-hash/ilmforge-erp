@@ -14,6 +14,7 @@
 const express = require('express');
 const router  = express.Router();
 const prisma  = require('../config/prisma');
+const { contains: ciContains, equals: ciEquals } = require('../utils/search');
 const wrap    = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // Mounted with only `protect` in app.js (no role gate, no PM check) — every
@@ -40,7 +41,7 @@ router.get('/', wrap(async (req, res) => {
     schoolId,
     ...(type   && { type }),
     ...(status && { status }),
-    ...(search && { title: { contains: search, mode: 'insensitive' } }),
+    ...(search && { title: ciContains(search) }),
   };
 
   // Month/year filter on the event date
@@ -132,7 +133,7 @@ router.post('/', staffOnly, wrap(async (req, res) => {
     data: {
       schoolId, userId: req.user?.id || null,
       action: 'EVENT_CREATED',
-      entity: 'schoolEvent', entityId: event.id,
+      resource: 'schoolEvent', resourceId: event.id,
       details: JSON.stringify({ title, type, date }),
     },
   }).catch(() => null);
@@ -299,7 +300,7 @@ router.post('/:id/results', staffOnly, wrap(async (req, res) => {
     data: {
       schoolId, userId: req.user?.id || null,
       action: 'EVENT_RESULTS_RECORDED',
-      entity: 'schoolEvent', entityId: eventId,
+      resource: 'schoolEvent', resourceId: eventId,
       details: JSON.stringify({ total: updated.length }),
     },
   }).catch(() => null);

@@ -316,6 +316,11 @@ export default function ExamsPage() {
                 <tr>
                   <th style={{ width: 40 }}>S.No.</th>
                   <th>Exam Name</th>
+                  {/* "Enter marks" is this page's headline job (see the
+                      subtitle), but the only way in was to expand the Detail
+                      chevron first — so the primary action was hidden behind
+                      a disclosure control. Surfaced as a row action. */}
+                  <th style={{ width: 90 }}>Marks</th>
                   <th style={{ width: 80 }}>Edit</th>
                   <th style={{ width: 70 }}>PDF</th>
                   <th style={{ width: 70 }}>Word</th>
@@ -334,6 +339,16 @@ export default function ExamsPage() {
                         <td style={{ fontWeight: 700, color: '#1E3A5F' }}>
                           {e.title}
                           <span className={`badge ${typeBadge[e.type] || 'badge-gray'}`} style={{ marginLeft: 8 }}>{e.type}</span>
+                        </td>
+                        <td>
+                          <Link
+                            to={`/exams/${e.id}/marks`}
+                            className="btn btn-sm"
+                            style={{ background: '#0D9488', color: '#fff', border: 'none', padding: '4px 10px', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            title={`Enter marks for ${e.title}`}
+                          >
+                            <ClipboardList size={11} /> Marks
+                          </Link>
                         </td>
                         <td>
                           <button
@@ -379,7 +394,7 @@ export default function ExamsPage() {
 
                       {isExpanded && (
                         <tr key={`${e.id}-detail`} style={{ background: '#F0FDF9' }}>
-                          <td colSpan={7} style={{ padding: '10px 20px', fontSize: 13 }}>
+                          <td colSpan={8} style={{ padding: '10px 20px', fontSize: 13 }}>
                             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', color: '#374151' }}>
                               <span>
                                 <strong>Exam Name:</strong> {e.title}
@@ -417,7 +432,7 @@ export default function ExamsPage() {
                   );
                 })}
                 {(!data || data.length === 0) && (
-                  <tr><td colSpan={7}>
+                  <tr><td colSpan={8}>
                     <EmptyState
                       type="exams"
                       title="No exams created yet"

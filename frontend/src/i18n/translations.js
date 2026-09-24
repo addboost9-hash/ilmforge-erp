@@ -1,12 +1,16 @@
 /**
  * IlmForge — Multi-Language Translations
- * Languages: English (en) | اردو (ur) | Roman Urdu (roman)
+ * Languages: English (en) | اردو (ur)
+ *
+ * Roman Urdu was removed as a selectable language: transliterated strings
+ * such as "Load ho raha hai…" read as unfinished product copy. The roman:
+ * values are left in the table below, unused, so the locale can be restored
+ * deliberately rather than reconstructed.
  */
 
 export const LANGUAGES = [
   { code: 'en',    label: 'English',       nativeLabel: 'English',  dir: 'ltr', flag: '🇬🇧' },
   { code: 'ur',    label: 'Urdu',          nativeLabel: 'اردو',     dir: 'rtl', flag: '🇵🇰' },
-  { code: 'roman', label: 'Roman Urdu',    nativeLabel: 'Roman',    dir: 'ltr', flag: '🇵🇰' },
 ];
 
 export const translations = {

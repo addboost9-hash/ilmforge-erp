@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,10 @@ const STATUS_OPTIONS = [
   { key: 'L', label: 'Leave', color: '#D97706', bg: '#FEF3C7' },
   { key: 'Lt', label: 'Late', color: '#7C3AED', bg: '#EDE9FE' },
 ];
+
+// FIX: see (tabs)/attendance.jsx — the backend stores full words
+// (present|absent|leave|late), not these short UI codes.
+const STATUS_TO_BACKEND = { P: 'present', A: 'absent', L: 'leave', Lt: 'late' };
 
 function getToday() {
   const d = new Date();
@@ -59,22 +63,29 @@ export default function TeacherAttendance() {
       return res.data?.data || res.data;
     },
     enabled: !!selectedClass,
-    onSuccess: (data) => {
-      const list = Array.isArray(data)
-        ? data
-        : data?.students || data?.data || data?.items || [];
-      const init = {};
-      list.forEach((s) => {
-        const id = s._id || s.id;
-        if (!attendance[id]) init[id] = 'P';
-      });
-      setAttendance((prev) => ({ ...init, ...prev }));
-    },
   });
 
   const students = Array.isArray(studentsData)
     ? studentsData
     : studentsData?.students || studentsData?.data || studentsData?.items || [];
+
+  // FIX: this logic lived in the query's `onSuccess` callback, which was
+  // removed in TanStack Query v5 (this project is pinned to ^5.40.0) — it
+  // silently never ran, so newly-loaded students never got a default 'P'
+  // (present) mark. Moved to a plain effect on the derived `students` list,
+  // matching the same fix applied to (tabs)/attendance.jsx.
+  useEffect(() => {
+    if (students.length > 0) {
+      const init = {};
+      students.forEach((s) => {
+        const id = s._id || s.id;
+        if (!attendance[id]) init[id] = 'P';
+      });
+      if (Object.keys(init).length > 0) {
+        setAttendance((prev) => ({ ...init, ...prev }));
+      }
+    }
+  }, [students]);
 
   const setStatus = (studentId, status) => {
     setAttendance((prev) => ({ ...prev, [studentId]: status }));
@@ -92,7 +103,7 @@ export default function TeacherAttendance() {
     mutationFn: async () => {
       const records = students.map((s) => ({
         studentId: s._id || s.id,
-        status: attendance[s._id || s.id] || 'P',
+        status: STATUS_TO_BACKEND[attendance[s._id || s.id] || 'P'],
       }));
       const res = await api.post('/attendance/save', {
         classId: selectedClass,

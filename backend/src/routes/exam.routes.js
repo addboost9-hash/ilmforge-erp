@@ -1418,11 +1418,11 @@ router.get('/:id/results/sms-blast', wrap(async (req, res) => {
   const studentIds = result.rows.map((r) => r.studentId);
   const students = await prisma.student.findMany({
     where: { id: { in: studentIds } },
-    select: { id: true, name: true, parentPhone: true, fatherPhone: true, motherPhone: true },
+    select: { id: true, name: true, emergencyPhone: true, motherPhone: true },
   });
   const studentPhoneMap = {};
   students.forEach((s) => {
-    studentPhoneMap[s.id] = s.parentPhone || s.fatherPhone || s.motherPhone || null;
+    studentPhoneMap[s.id] = s.emergencyPhone || s.motherPhone || null;
   });
 
   const sent = [];
@@ -1477,14 +1477,14 @@ router.post('/:id/results/sms-blast', wrap(async (req, res) => {
   const studentIds = rows.map((r) => r.studentId);
   const students = await prisma.student.findMany({
     where: { id: { in: studentIds } },
-    select: { id: true, name: true, parentPhone: true, fatherPhone: true, motherPhone: true },
+    select: { id: true, name: true, emergencyPhone: true, motherPhone: true },
   });
 
   const studentMap = {};
   students.forEach((s) => {
     studentMap[s.id] = {
       name: s.name,
-      phone: s.parentPhone || s.fatherPhone || s.motherPhone || null,
+      phone: s.emergencyPhone || s.motherPhone || null,
     };
   });
 

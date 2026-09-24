@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { UserPlus, Edit, Award, Users, UserCheck, UserX, Phone, Mail, LayoutGrid, Table, X, GraduationCap, ShieldCheck, Activity } from 'lucide-react';
+import { UserPlus, Edit, Award, Users, UserCheck, UserX, UserMinus, Phone, Mail, LayoutGrid, Table, X, GraduationCap, ShieldCheck, Activity } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
 import { SkeletonRows, SkeletonCard } from '../../components/Skeleton';
 
@@ -127,8 +128,24 @@ function StaffCard({ s, idx }) {
 
 /* ── Main page ─────────────────────────────────────────────────────── */
 export default function StaffPage() {
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey:['staff'], queryFn:()=>api.get('/staff').then(r=>r.data) });
   const { data:stats } = useQuery({ queryKey:['staff-stats'], queryFn:()=>api.get('/staff/stats').then(r=>r.data.data) });
+
+  const offboard = useMutation({
+    mutationFn: (id) => api.delete(`/staff/${id}`),
+    onSuccess: (r) => {
+      toast.success(r.data?.message || 'Staff offboarded');
+      qc.invalidateQueries({ queryKey:['staff'] });
+      qc.invalidateQueries({ queryKey:['staff-stats'] });
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to offboard'),
+  });
+
+  const confirmOffboard = (s) => {
+    if (!window.confirm(`Offboard ${s.name}? Their login will be disabled and they'll be removed from staff lists. Payroll and attendance history is kept.`)) return;
+    offboard.mutate(s.id);
+  };
 
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'card'
   const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem('staff_visited'));
@@ -308,6 +325,19 @@ export default function StaffPage() {
                         <Link to={'/staff/'+s.id+'/edit'} className="btn btn-outline btn-sm btn-icon" title="Edit">
                           <Edit size={13}/>
                         </Link>
+                        {/* Staff could be added but never removed — an
+                            offboarded employee stayed in every list and kept
+                            their login. This soft-deletes and deactivates. */}
+                        <button
+                          className="btn btn-outline btn-sm btn-icon"
+                          style={{ color:'#B91C1C', borderColor:'#FECACA' }}
+                          title="Offboard"
+                          aria-label={`Offboard ${s.name}`}
+                          disabled={offboard.isPending}
+                          onClick={() => confirmOffboard(s)}
+                        >
+                          <UserMinus size={13}/>
+                        </button>
                       </div>
                     </td>
                   </tr>

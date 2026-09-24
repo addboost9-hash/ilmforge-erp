@@ -51,29 +51,36 @@ export default function ExamMarksPage() {
   const { data: subjects = [] } = useQuery({
     queryKey: ['subjects-for-class', selectedClass],
     queryFn: () =>
-      api.get('/subjects', { params: { classId: selectedClass } })
+      api.get('/classes/subjects', { params: { classId: selectedClass } })
          .then(r => r.data.data || []),
     enabled: !!selectedClass,
   });
 
-  /* Pre-fill existing marks when exam + class both selected */
-  useQuery({
+  /* Pre-fill existing marks when exam + class both selected.
+     FIX: this prefill hung off `onSuccess`, which TanStack Query v5 removed
+     from useQuery (this project pins ^5.17.0). The request ran but the
+     callback never fired, so previously-saved marks never came back into the
+     inputs: reopening the page showed an empty sheet even though the marks
+     were in the database, and saving from that blank sheet wiped them. */
+  const { data: existingMarks } = useQuery({
     queryKey: ['exam-marks-prefill', selectedExam, selectedClass],
     queryFn: () =>
       api.get(`/exams/${selectedExam}/results`, { params: { classId: selectedClass } })
          .then(r => r.data.data || []),
     enabled: !!selectedExam && !!selectedClass,
-    onSuccess: (data) => {
-      const m = {};
-      (data || []).forEach(row => {
-        const sId = String(row.studentId);
-        const subId = String(row.subjectId || 'total');
-        if (!m[sId]) m[sId] = {};
-        m[sId][subId] = String(row.obtainedMarks ?? '');
-      });
-      setMarks(m);
-    },
   });
+
+  useEffect(() => {
+    if (!existingMarks) return;
+    const m = {};
+    existingMarks.forEach(row => {
+      const sId = String(row.studentId);
+      const subId = String(row.subjectId || 'total');
+      if (!m[sId]) m[sId] = {};
+      m[sId][subId] = String(row.obtainedMarks ?? '');
+    });
+    setMarks(m);
+  }, [existingMarks]);
 
   /* ── Helpers ───────────────────────────────────────────────────── */
   const setMark = (studentId, subjectId, value) => {

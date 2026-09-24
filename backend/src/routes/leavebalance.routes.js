@@ -57,7 +57,7 @@ router.get('/', wrap(async (req, res) => {
   }
 
   if (year && !sessionId) {
-    const sessions = await prisma.session.findMany({
+    const sessions = await prisma.academicSession.findMany({
       where: { schoolId: req.schoolId, startDate: { gte: new Date(parseInt(year), 0, 1), lt: new Date(parseInt(year) + 1, 0, 1) } },
       select: { id: true },
     });

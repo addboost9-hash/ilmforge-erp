@@ -13,3 +13,6 @@ backend/prisma/dev.db-shm
 backend/prisma/dev.db-wal
 backend/prisma/*.pg.bak
 backend/.env.sqlite
+
+# Locally generated license artifact — contains a real key, do not commit
+license.json
