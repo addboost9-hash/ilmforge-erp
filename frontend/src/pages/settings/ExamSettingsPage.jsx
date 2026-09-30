@@ -16,6 +16,7 @@ const DEFAULTS = {
 5. Follow the invigilator's instructions at all times.`,
   failCriteria: 'less_than_passing',
   passingMarks: '40',
+  termsCount: 2,
   gradingSystem: 'percentage',
   gradeAPlus: '90',
   gradeA:  '80',
@@ -161,6 +162,40 @@ export default function ExamSettingsPage() {
             />
             <div style={{ fontSize:11.5, color:'#94A3B8', marginTop:4 }}>
               Leave a blank line between each point for better spacing.
+            </div>
+          </div>
+        </div>
+
+        {/* Exam terms */}
+        <div className="card">
+          <h3 style={{ fontSize:13.5, fontWeight:700, color:'#1E3A5F', marginBottom:14 }}>Exam Terms</h3>
+
+          <div className="form-group">
+            <label htmlFor="terms-count" className="form-label">How many exam terms does your school run?</label>
+            <select
+              id="terms-count"
+              className="form-select"
+              style={{ maxWidth: 220 }}
+              value={form.termsCount ?? 2}
+              onChange={e => f('termsCount', parseInt(e.target.value))}
+            >
+              {[1,2,3,4,5,6].map(n => (
+                <option key={n} value={n}>{n} {n === 1 ? 'term' : 'terms'}</option>
+              ))}
+            </select>
+            <div style={{ fontSize:11.5, color:'#64748b', marginTop:6, lineHeight:1.6 }}>
+              The Exam Vault shows one tab per term. Most schools run two; set up to six
+              if yours examines more often.
+              {Number(form.termsCount) > 2 && (
+                <> Your terms will be: {['1st','2nd','3rd','4th','5th','6th']
+                  .slice(0, Number(form.termsCount)).join(', ')}.</>
+              )}
+            </div>
+            <div style={{ fontSize:11.5, color:'#92400e', background:'#fffbeb', border:'1px solid #fde68a',
+                          borderRadius:6, padding:'8px 10px', marginTop:8, lineHeight:1.6 }}>
+              Reducing this later does not delete exams already recorded under a removed
+              term — they stay in the system, but their tab is hidden until you raise the
+              count again.
             </div>
           </div>
         </div>

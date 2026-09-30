@@ -298,13 +298,27 @@ Set **Pass / Fail Criteria**, **Grade Boundaries (%)**, **Division Thresholds (%
 
 Click **Save Preferences**.
 
+### How many terms your school runs
+
+**School Settings → Exam Settings → Exam Terms**
+
+Choose how many exam terms your school holds in a session, from 1 to 6. Most schools
+run two. The Exam Vault then shows one tab per term — *1st Term*, *2nd Term*, and so on
+up to *6th Term*.
+
+Set this before creating exams, so each exam can be filed under the right term.
+
+> Lowering the number later does not delete exams already recorded under a removed term.
+> They stay in the system and reappear if you raise the count again.
+
 ### Creating an exam
 
 **Sidebar → Exam Vault** (`/exams`)
 
 1. Click **Add Exam**.
 2. Enter the exam name (Mid Term, Final Term), class, and dates.
-3. Save.
+3. Choose the **Term** — the dropdown lists the terms your school has configured.
+4. Save.
 
 ### Entering marks
 

@@ -9,6 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { buildTerms, examMatchesTerm } from '../../utils/terms';
 import {
   Plus, Pencil, Trash2, ChevronDown, ChevronUp, X,
   Bell, Save, Check, Edit3, Award, FileText, User, Settings,
@@ -140,6 +141,7 @@ function ClassMultiSelect({ classes = [], selectedClasses, onChange }) {
 
 /* ─────────────────────── EXAM MODAL ─────────────────────── */
 function ExamModal({ classes = [], initial = null, onClose, onSubmit, isSubmitting }) {
+  const terms = useTerms();
   const [form, setForm] = useState(() => {
     if (!initial) return { title: '', term: '1st', selectedClasses: [], dateStart: '', dateEnd: '' };
     let selectedClasses = [];
@@ -162,7 +164,9 @@ function ExamModal({ classes = [], initial = null, onClose, onSubmit, isSubmitti
     onSubmit({
       title: form.title.trim(),
       term: form.term,
-      type: form.term === '1st' ? 'first_term' : 'second_term',
+      // Terms 1 and 2 keep their historic type values so older exams and
+      // reports still match; later terms use a predictable term_N form.
+      type: (terms.find(t => t.key === form.term) || {}).type || 'first_term',
       classId: form.selectedClasses[0]?.classId || null,
       classIds: JSON.stringify(form.selectedClasses),
       dateStart: form.dateStart || null,
@@ -195,9 +199,8 @@ function ExamModal({ classes = [], initial = null, onClose, onSubmit, isSubmitti
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Term</label>
-            <select className="form-select" value={form.term} onChange={e => setForm(f => ({ ...f, term: e.target.value }))}>
-              <option value="1st">1st Term</option>
-              <option value="2nd">2nd Term</option>
+            <select className="form-select" aria-label="Term" value={form.term} onChange={e => setForm(f => ({ ...f, term: e.target.value }))}>
+              {terms.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
           </div>
           <div>
@@ -367,6 +370,17 @@ function exportExamsPDF(exams, activeTerm, schoolName, logoUrl) {
   if(w){w.document.write(html);w.document.close();}
 }
 
+/* How many exam terms this school runs. Two by default, up to six, set in
+   School Settings -> Exam Settings. Cached, because all four tabs ask for it. */
+function useTerms() {
+  const { data } = useQuery({
+    queryKey: ['exam-settings'],
+    queryFn: () => api.get('/settings/exam').then(r => r.data.data).catch(() => null),
+    staleTime: 300_000,
+  });
+  return buildTerms(data?.termsCount ?? 2);
+}
+
 function ExamSetupTab() {
   const qc = useQueryClient();
   const [activeTerm, setActiveTerm] = useState('1st');
@@ -378,16 +392,8 @@ function ExamSetupTab() {
   const { data: allExams = [], isLoading } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams').then(r => r.data.data || []) });
   const { data: school } = useQuery({ queryKey: ['school-profile'], queryFn: () => api.get('/settings/school').then(r => r.data.data).catch(() => ({})) });
 
-  // Filter by term
-  const filteredExams = allExams.filter(e => {
-    const term = (e.term || '').toLowerCase();
-    const type = (e.type || '').toLowerCase();
-    if (activeTerm === '1st') {
-      return term === '1st' || type.includes('first') || type.includes('mid') || type === 'first_term' || type === 'semester1' || type === 'semester2';
-    } else {
-      return term === '2nd' || type.includes('second') || type.includes('final') || type === 'second_term' || type === 'semester3' || type === 'semester4' || type === 'annual';
-    }
-  });
+  const terms = useTerms();
+  const filteredExams = allExams.filter(e => examMatchesTerm(e, activeTerm));
 
   const exams = filteredExams;
 
@@ -422,8 +428,11 @@ function ExamSetupTab() {
       {/* Term toggle + actions */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-          <button style={termBtnStyle(activeTerm === '1st')} onClick={() => setActiveTerm('1st')}>1st Term</button>
-          <button style={termBtnStyle(activeTerm === '2nd')} onClick={() => setActiveTerm('2nd')}>2nd Term</button>
+          {terms.map(t => (
+            <button key={t.key} style={termBtnStyle(activeTerm === t.key)} onClick={() => setActiveTerm(t.key)}>
+              {t.label}
+            </button>
+          ))}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => exportExamsPDF(filteredExams, activeTerm, school?.name, school?.logoUrl)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>PDF</button>
@@ -574,12 +583,8 @@ function DateSheetTab() {
 
   const { data: allExams = [] } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams').then(r => r.data.data || []) });
 
-  const exams = allExams.filter(e => {
-    const term = (e.term || '').toLowerCase();
-    const type = (e.type || '').toLowerCase();
-    if (activeTerm === '1st') return term === '1st' || type.includes('first') || type === 'first_term';
-    return term === '2nd' || type.includes('second') || type === 'second_term' || type.includes('final') || type === 'annual';
-  });
+  const terms = useTerms();
+  const exams = allExams.filter(e => examMatchesTerm(e, activeTerm));
 
   const selectedExam = exams.find(ex => String(ex.id) === String(examId));
 
@@ -594,8 +599,12 @@ function DateSheetTab() {
       {/* Term toggle */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <button style={termBtnStyle(activeTerm === '1st')} onClick={() => { setActiveTerm('1st'); setExamId(''); }}>1st Term</button>
-          <button style={termBtnStyle(activeTerm === '2nd')} onClick={() => { setActiveTerm('2nd'); setExamId(''); }}>2nd Term</button>
+          {terms.map(t => (
+            <button key={t.key} style={termBtnStyle(activeTerm === t.key)}
+              onClick={() => { setActiveTerm(t.key); setExamId(''); }}>
+              {t.label}
+            </button>
+          ))}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>PDF</button>
@@ -867,12 +876,8 @@ function SyllabusTab() {
   const [examId, setExamId] = useState('');
 
   const { data: allExams = [] } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams').then(r => r.data.data || []) });
-  const exams = allExams.filter(e => {
-    const term = (e.term || '').toLowerCase();
-    const type = (e.type || '').toLowerCase();
-    if (activeTerm === '1st') return term === '1st' || type.includes('first') || type === 'first_term';
-    return term === '2nd' || type.includes('second') || type === 'second_term' || type.includes('final') || type === 'annual';
-  });
+  const terms = useTerms();
+  const exams = allExams.filter(e => examMatchesTerm(e, activeTerm));
 
   const { data: classes = [] } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes').then(r => r.data.data || []) });
 
@@ -890,8 +895,11 @@ function SyllabusTab() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <button style={termBtnStyle(activeTerm === '1st')} onClick={() => setActiveTerm('1st')}>1st Term</button>
-          <button style={termBtnStyle(activeTerm === '2nd')} onClick={() => setActiveTerm('2nd')}>2nd Term</button>
+          {terms.map(t => (
+            <button key={t.key} style={termBtnStyle(activeTerm === t.key)} onClick={() => setActiveTerm(t.key)}>
+              {t.label}
+            </button>
+          ))}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>PDF</button>

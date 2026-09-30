@@ -1241,6 +1241,13 @@ model ExamSettings {
   admitCardInstructions  String?
   resultCardHeader       String?
   failCriteria           String   @default("less_than_passing")
+
+  // How many exam terms this school runs in a session. Most run two, but
+  // some run up to six, so it is a per-school setting rather than a fixed
+  // pair of tabs. Exam.term already stores a free-text label ("1st".."6th"),
+  // so only the count needs recording here.
+  termsCount             Int      @default(2)
+
   updatedAt              DateTime @updatedAt
   school                 School   @relation(fields: [schoolId], references: [id])
 }

@@ -175,7 +175,14 @@ const EXAM_SETTINGS_FIELD_MAP_REVERSE = Object.fromEntries(
 const EXAM_SETTINGS_INT_FIELDS = new Set([
   'passingMarks', 'gradeAPlus', 'gradeA', 'gradeB', 'gradeC', 'gradeD',
   'firstDivision', 'secondDivision', 'thirdDivision',
+  'termsCount',
 ]);
+
+/* A school runs between one and six exam terms. The bound is enforced here
+   rather than trusted from the form, so a bad value cannot make the Exam
+   Vault render an absurd number of tabs. */
+const MIN_TERMS = 1;
+const MAX_TERMS = 6;
 const EXAM_SETTINGS_BOOL_FIELDS = new Set([
   'showRankOnMarksheet', 'showPercentage', 'showGrade', 'showAttendance',
   'showTeacherSignature', 'showPrincipalSignature',
@@ -190,6 +197,7 @@ const DEFAULT_EXAM_SETTINGS = {
   admitCardInstructions: '',
   failCriteria: 'less_than_passing',
   passingMarks: 40,
+  termsCount: 2,
   gradingSystem: 'percentage',
   gradeAPlus: 90, gradeA: 80, gradeB: 65, gradeC: 50, gradeD: 40,
   showRankOnMarksheet: true,
@@ -233,7 +241,11 @@ router.put('/exam', wrap(async (req, res) => {
   for (const [feField, value] of Object.entries(req.body || {})) {
     if (value === undefined) continue;
     const dbField = EXAM_SETTINGS_FIELD_MAP[feField] || feField;
-    if (EXAM_SETTINGS_INT_FIELDS.has(dbField)) data[dbField] = parseInt(value) || 0;
+    if (dbField === 'termsCount') {
+      const n = parseInt(value);
+      data.termsCount = Math.min(MAX_TERMS, Math.max(MIN_TERMS, Number.isFinite(n) ? n : 2));
+    }
+    else if (EXAM_SETTINGS_INT_FIELDS.has(dbField)) data[dbField] = parseInt(value) || 0;
     else if (EXAM_SETTINGS_BOOL_FIELDS.has(dbField)) data[dbField] = Boolean(value);
     else if (EXAM_SETTINGS_STRING_FIELDS.has(dbField)) data[dbField] = String(value);
     // Any other key (e.g. isDefault, schoolId) is ignored — not a real column.
