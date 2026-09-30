@@ -146,7 +146,7 @@ export default function SMSPage() {
               <div className="form-row">
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Class</label>
-                  <select className="form-select" value={classId} onChange={e => { setClassId(e.target.value); setSectionId(''); setSendAll(false); }}>
+                  <select aria-label="Class" className="form-select" value={classId} onChange={e => { setClassId(e.target.value); setSectionId(''); setSendAll(false); }}>
                     <option value="">Select class…</option>
                     {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
@@ -154,7 +154,7 @@ export default function SMSPage() {
                 {sections.length > 0 && (
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Section</label>
-                    <select className="form-select" value={sectionId} onChange={e => setSectionId(e.target.value)}>
+                    <select aria-label="Section" className="form-select" value={sectionId} onChange={e => setSectionId(e.target.value)}>
                       <option value="">All Sections</option>
                       {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>

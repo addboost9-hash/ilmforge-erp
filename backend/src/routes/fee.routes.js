@@ -30,7 +30,7 @@ router.get('/stats', requireFinanceRole, wrap(async (req, res) => {
 
   const [paidAgg, invoiceAgg] = await Promise.all([
     prisma.feePayment.aggregate({
-      where: { schoolId, ...(hasRange && { paymentDate: range }) },
+      where: { schoolId, voidedAt: null, ...(hasRange && { paymentDate: range }) },
       _sum: { amountPaid: true },
       _count: true,
     }),
@@ -251,7 +251,7 @@ router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
     const result = await prisma.$transaction(async (tx) => {
       const current = await tx.feeInvoice.findUniqueOrThrow({ where: { id: parseInt(invoiceId) } });
       if (paidNum + discountNum > current.dueAmount) {
-        throw Object.assign(new Error(`Payment plus discount (Rs ${paidNum + discountNum}) exceeds the remaining due amount (Rs ${current.dueAmount}).`), { status: 400 });
+        throw Object.assign(new Error(`Payment plus discount (${rs(paidNum + discountNum)}) exceeds the remaining due amount (${rs(current.dueAmount)}).`), { status: 400 });
       }
       const due = Math.max(0, current.dueAmount - paidNum - discountNum);
       const status = due === 0 ? 'paid' : 'partial';
@@ -308,6 +308,160 @@ router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
 // GET /api/v1/fees/defaulters
 // FIX: added pagination via limit/offset query params to prevent unbounded result sets.
 // Defaults to 50 rows per page; hard-capped at 500.
+/* ────────────────────────────────────────────────────────────────────
+   Correcting a mis-keyed payment.
+
+   A recorded payment is never edited in place and never deleted. Voiding
+   reverses its effect on the invoice and leaves the original row on the
+   ledger, flagged. A correction does the same and writes a replacement
+   row linked back to what it replaced, so "Rs 25,000 was collected then
+   corrected to Rs 2,500" stays visible to an auditor.
+
+   Both run in one transaction and re-read the invoice inside it, so a
+   correction racing a fresh payment cannot lose an update.
+   ──────────────────────────────────────────────────────────────────── */
+
+// Recompute an invoice from its own non-voided payments, rather than
+// incrementing/decrementing, so the invoice can never drift out of step
+// with the payment rows that justify it.
+// Amounts are stored in paisa; messages read back to the user in rupees.
+const rs = (paisa) => 'Rs ' + Math.round((paisa || 0) / 100).toLocaleString('en-PK');
+
+const recomputeInvoice = async (tx, invoiceId) => {
+  const inv = await tx.feeInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
+  const live = await tx.feePayment.findMany({
+    where: { invoiceId, voidedAt: null },
+    select: { amountPaid: true, discount: true },
+  });
+  const paid = live.reduce((t, r) => t + r.amountPaid, 0);
+  const disc = live.reduce((t, r) => t + r.discount, 0);
+  const due = Math.max(0, inv.totalAmount + inv.lateFee - paid - disc);
+  const status = due === 0 ? 'paid' : (paid + disc > 0 ? 'partial' : 'unpaid');
+  await tx.feeInvoice.update({
+    where: { id: invoiceId },
+    data: { paidAmount: paid, discount: disc, dueAmount: due, status },
+  });
+  return { paid, due, status };
+};
+
+// POST /api/v1/fees/payments/:id/void  — cancel a payment outright
+router.post('/payments/:id/void', requireFinanceRole, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const id = parseInt(req.params.id);
+  const reason = String(req.body?.reason || '').trim();
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ success: false, message: 'A valid payment id is required.' });
+  }
+  if (!reason) {
+    return res.status(400).json({ success: false, message: 'A reason is required to void a payment.' });
+  }
+
+  const existing = await prisma.feePayment.findFirst({ where: { id, schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Payment not found.' });
+  if (existing.voidedAt) {
+    return res.status(400).json({ success: false, message: 'This payment has already been voided.' });
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.feePayment.update({
+      where: { id },
+      data: { voidedAt: new Date(), voidedBy: req.user.id, voidReason: reason },
+    });
+    return recomputeInvoice(tx, existing.invoiceId);
+  });
+
+  res.json({
+    success: true,
+    data: { invoiceId: existing.invoiceId, ...result },
+    message: `Payment of ${rs(existing.amountPaid)} voided. Invoice balance updated.`,
+  });
+}));
+
+// PUT /api/v1/fees/payments/:id  — correct the amount (void + replacement)
+router.put('/payments/:id', requireFinanceRole, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const id = parseInt(req.params.id);
+  const { amountPaid, discount, method, reason } = req.body || {};
+  const paidNum = parseInt(amountPaid);
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ success: false, message: 'A valid payment id is required.' });
+  }
+  if (!Number.isFinite(paidNum) || paidNum <= 0) {
+    return res.status(400).json({ success: false, message: 'A positive corrected amount is required.' });
+  }
+  const why = String(reason || '').trim();
+  if (!why) {
+    return res.status(400).json({ success: false, message: 'A reason is required to correct a payment.' });
+  }
+
+  const existing = await prisma.feePayment.findFirst({ where: { id, schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Payment not found.' });
+  if (existing.voidedAt) {
+    return res.status(400).json({ success: false, message: 'This payment has already been voided and cannot be corrected again.' });
+  }
+  if (existing.replacedBy) {
+    return res.status(400).json({ success: false, message: 'This payment has already been corrected.' });
+  }
+
+  const discNum = Number.isFinite(parseInt(discount)) ? parseInt(discount) : existing.discount;
+  if (discNum < 0) {
+    return res.status(400).json({ success: false, message: 'discount cannot be negative.' });
+  }
+
+  let out;
+  try {
+    out = await prisma.$transaction(async (tx) => {
+      // Void first, so the headroom check below sees the invoice WITHOUT
+      // the mistaken amount — otherwise correcting 250 up to 2,500 would
+      // be rejected for "exceeding" a due it is itself responsible for.
+      await tx.feePayment.update({
+        where: { id },
+        data: { voidedAt: new Date(), voidedBy: req.user.id, voidReason: `Corrected: ${why}` },
+      });
+      const afterVoid = await recomputeInvoice(tx, existing.invoiceId);
+
+      if (paidNum + discNum > afterVoid.due) {
+        throw Object.assign(new Error(
+          `Corrected amount (${rs(paidNum + discNum)}) exceeds the amount outstanding on this invoice (${rs(afterVoid.due)}).`
+        ), { status: 400 });
+      }
+
+      const replacement = await tx.feePayment.create({
+        data: {
+          schoolId,
+          invoiceId: existing.invoiceId,
+          studentId: existing.studentId,
+          amountPaid: paidNum,
+          discount: discNum,
+          method: method || existing.method,
+          receivedBy: req.user.id,
+          receiptNo: `RCP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          remarks: `Correction of receipt ${existing.receiptNo || existing.id}: ${why}`,
+          replacesId: existing.id,
+        },
+      });
+      const final = await recomputeInvoice(tx, existing.invoiceId);
+      return { replacement, ...final };
+    });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ success: false, message: err.message });
+    throw err;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      payment: out.replacement,
+      receiptNo: out.replacement.receiptNo,
+      newDue: out.due,
+      newStatus: out.status,
+      voidedPaymentId: existing.id,
+      previousAmount: existing.amountPaid,
+    },
+    message: `Corrected from ${rs(existing.amountPaid)} to ${rs(paidNum)}. A new receipt has been issued.`,
+  });
+}));
+
 router.get('/defaulters', requireFinanceRole, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { classId } = req.query;
@@ -547,13 +701,20 @@ router.get('/payments', requireFinanceRole, wrap(async (req, res) => {
     prisma.feePayment.count({ where }),
   ]);
 
-  const totalAmount = payments.reduce((sum, p) => sum + p.amountPaid, 0);
+  // Voided rows stay in the list so the correction is visible to whoever
+  // is reconciling the day's cash, but they are not money collected, so
+  // they are excluded from the total the dashboard also reports.
+  const totalAmount = payments
+    .filter((p) => !p.voidedAt)
+    .reduce((sum, p) => sum + p.amountPaid, 0);
+  const voidedCount = payments.filter((p) => p.voidedAt).length;
 
   res.json({
     success: true,
     data: payments,
     total,
     totalAmount,
+    voidedCount,
     page: parseInt(page),
     pages: Math.ceil(total / take),
   });
@@ -591,7 +752,7 @@ router.get('/payments/export', requireFinanceRole, wrap(async (req, res) => {
   };
 
   const payments = await prisma.feePayment.findMany({
-    where,
+    where: { ...where, voidedAt: null },
     include: {
       invoice: {
         select: {

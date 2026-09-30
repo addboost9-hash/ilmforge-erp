@@ -121,7 +121,7 @@ export default function DiscountedStudentsPage() {
       {/* Filter row */}
       <div className="card" style={{ marginBottom:14, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
         <label className="form-label" style={{ margin:0, fontSize:13, whiteSpace:'nowrap' }}>Filter by Class:</label>
-        <select className="form-select" style={{ width:200, fontSize:13 }} value={filterClass} onChange={e => setFilterClass(e.target.value)}>
+        <select aria-label="Filter by Class" className="form-select" style={{ width:200, fontSize:13 }} value={filterClass} onChange={e => setFilterClass(e.target.value)}>
           <option value="">All Classes</option>
           {uniqueClasses.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -270,7 +270,7 @@ export default function DiscountedStudentsPage() {
               {/* Discount Type */}
               <div className="form-group" style={{ margin:0 }}>
                 <label className="form-label">Discount Type *</label>
-                <select
+                <select aria-label="Discount Type"
                   className="form-select"
                   value={form.discountType}
                   onChange={e => setForm({ ...form, discountType:e.target.value, discountValue:'' })}

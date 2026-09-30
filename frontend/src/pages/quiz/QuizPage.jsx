@@ -752,7 +752,7 @@ function AdminQuizPage() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Duration (min)</label>
-            <input
+            <input aria-label="Duration (min)"
               className="form-input"
               type="number"
               min={1}
@@ -762,7 +762,7 @@ function AdminQuizPage() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Due Date</label>
-            <input
+            <input aria-label="Due Date"
               className="form-input"
               type="date"
               value={form.dueDate}

@@ -16,7 +16,9 @@ import {
   ArrowUpCircle, ArrowDownCircle, Scale
 } from 'lucide-react';
 
-const Rs = v => 'Rs. ' + Number(v || 0).toLocaleString('en-PK');
+// Amounts arrive in paisa (Rs 3,500 is 350000); this was printing the
+// stored figure straight out, a hundred times too large.
+const Rs = v => 'Rs. ' + (Number(v || 0) / 100).toLocaleString('en-PK');
 
 const TABS = [
   { id: 'income-expense', label: 'Income / Expense', icon: BarChart2 },

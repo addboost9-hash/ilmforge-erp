@@ -114,7 +114,21 @@ async function generateEmpCode(schoolId, designation) {
 }
 
 router.post('/', wrap(async (req, res) => {
-  const { name, email, phone, departmentId, designation, joiningDate, basicSalary, salaryType, cnic, gender, dob } = req.body;
+  const { name, email, phone, departmentId, designation, joiningDate, basicSalary, salaryType, cnic, gender, dob, role: requestedRole } = req.body;
+
+  // Staff logins were hardcoded to 'teacher' regardless of designation, so an
+  // accountant or gatekeeper received a teacher's permissions and could not
+  // reach their own portal. Honour an explicit role, otherwise infer it from
+  // the designation, and fall back to teacher.
+  const STAFF_ROLES = ['teacher', 'accountant', 'gatekeeper', 'admin'];
+  const inferRole = (d) => {
+    const t = String(d || '').toLowerCase();
+    if (t.includes('account') || t.includes('cashier') || t.includes('bursar')) return 'accountant';
+    if (t.includes('gate') || t.includes('security') || t.includes('guard')) return 'gatekeeper';
+    if (t.includes('principal') || t.includes('head') || t.includes('director') || t.includes('admin')) return 'admin';
+    return 'teacher';
+  };
+  const staffRole = STAFF_ROLES.includes(requestedRole) ? requestedRole : inferRole(designation);
   if (!name || !email) return res.status(400).json({ success: false, message: 'Name and email required.' });
 
   const tempPassword = generateTempPassword();
@@ -132,7 +146,7 @@ router.post('/', wrap(async (req, res) => {
 
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
-      data: { schoolId: req.schoolId, campusId, name, email, phone, role: 'teacher', passwordHash, mustChangePassword: true }
+      data: { schoolId: req.schoolId, campusId, name, email, phone, role: staffRole, passwordHash, mustChangePassword: true }
     });
     const staff = await tx.staff.create({
       data: {
@@ -149,7 +163,33 @@ router.post('/', wrap(async (req, res) => {
     return { user, staff };
   });
 
-  res.status(201).json({ success: true, data: result, tempPassword });
+  // Hand back everything the school needs to give this person access.
+  // Previously only tempPassword came back and the UI discarded it, so a new
+  // staff member had no way to learn where or how to sign in.
+  const school = await prisma.school.findUnique({ where: { id: req.schoolId }, select: { slug: true, name: true } });
+  const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const ROLE_LABEL = { teacher: 'Teacher Portal', accountant: 'Accountant Portal', gatekeeper: 'Gate Portal', admin: 'Admin Dashboard' };
+
+  res.status(201).json({
+    success: true,
+    data: result,
+    tempPassword,
+    credentials: {
+      // Tagged with the role so the login page can name the portal it
+      // belongs to. The destination after sign-in still comes from the
+      // account's own role, never from this parameter.
+      portalLink: `${FRONTEND_URL}/login?slug=${school?.slug || ''}&role=${staffRole}`,
+      loginId: email,
+      loginIdLabel: 'Email',
+      phone: phone || null,
+      password: tempPassword,
+      role: staffRole,
+      portal: ROLE_LABEL[staffRole] || 'Staff Portal',
+      empCode,
+      schoolName: school?.name || '',
+      mustChangePassword: true,
+    },
+  });
 }));
 
 router.get('/stats', wrap(async (req, res) => {

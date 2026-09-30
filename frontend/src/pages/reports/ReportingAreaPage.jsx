@@ -13,7 +13,9 @@ import {
 import { buildWatermarkCss, buildWatermarkMarkup } from '../../utils/watermarkPrint';
 
 /* ─── helpers ─────────────────────────────────────────────────────────── */
-const money   = v  => 'Rs. ' + Number(v || 0).toLocaleString('en-PK');
+// Amounts arrive in paisa (Rs 3,500 is 350000); this was printing the
+// stored figure straight out, a hundred times too large.
+const money   = v  => 'Rs. ' + (Number(v || 0) / 100).toLocaleString('en-PK');
 const today   = () => new Date().toISOString().slice(0, 10);
 const fmtD    = d  => d ? new Date(d).toLocaleDateString('en-PK', { day:'2-digit', month:'short', year:'numeric' }) : '—';
 const schoolName = () => localStorage.getItem('schoolName')    || 'IlmForge School';

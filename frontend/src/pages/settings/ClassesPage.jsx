@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { Plus, BookOpen, Layers } from 'lucide-react';
+import { Plus, BookOpen, Layers, Pencil, Check, X } from 'lucide-react';
 
 export default function ClassesPage() {
   const qc = useQueryClient();
@@ -12,6 +12,9 @@ export default function ClassesPage() {
   const [subName, setSubName] = useState('');
   const [subClassId, setSubClassId] = useState('');
   const [tab, setTab] = useState('classes');
+  // Inline rename: `editing` is the class id being edited.
+  const [editing, setEditing] = useState(null);
+  const [editName, setEditName] = useState('');
 
   const { data, isLoading } = useQuery({ queryKey:['classes'], queryFn:()=>api.get('/classes').then(r=>r.data.data) });
   const { data:subjects } = useQuery({ queryKey:['subjects-all'], queryFn:()=>api.get('/classes/subjects').then(r=>r.data.data) });
@@ -21,6 +24,25 @@ export default function ClassesPage() {
     onSuccess: () => { toast.success('Class added!'); qc.invalidateQueries(['classes']); setName(''); },
     onError: err => toast.error(err.response?.data?.message || 'Failed'),
   });
+
+  const renameClass = useMutation({
+    mutationFn: ({ id, name }) => api.put('/classes/' + id, { name }),
+    onSuccess: () => {
+      toast.success('Class name updated');
+      qc.invalidateQueries({ queryKey: ['classes'] });
+      setEditing(null);
+    },
+    onError: err => toast.error(err.response?.data?.message || 'Could not rename the class'),
+  });
+
+  const startEdit = (c) => { setEditing(c.id); setEditName(c.name); };
+  const saveEdit = () => {
+    const trimmed = editName.trim();
+    if (!trimmed) return toast.error('Class name cannot be empty');
+    const current = (data || []).find(c => c.id === editing);
+    if (current && trimmed === current.name) return setEditing(null);
+    renameClass.mutate({ id: editing, name: trimmed });
+  };
 
   const addSection = useMutation({
     mutationFn: () => api.post('/classes/'+secClassId+'/sections', {name:secName}),
@@ -97,21 +119,51 @@ export default function ClassesPage() {
             tab==='classes' ? (
               <div className="table-wrap" style={{borderRadius:0, border:'none'}}>
                 <table className="data-table">
-                  <thead><tr><th>#</th><th>Class Name</th><th>Sections</th><th>Order</th></tr></thead>
+                  <thead><tr><th>#</th><th>Class Name</th><th>Sections</th><th>Order</th><th>Actions</th></tr></thead>
                   <tbody>
                     {(data||[]).map((c, i) => (
                       <tr key={c.id}>
                         <td style={{color:'#94a3b8', fontSize:12}}>{i+1}</td>
-                        <td style={{fontWeight:700, color:'#1E3A5F'}}>{c.name}</td>
+                        <td style={{fontWeight:700, color:'#1E3A5F'}}>
+                          {editing === c.id ? (
+                            <input
+                              className="form-input"
+                              value={editName}
+                              autoFocus
+                              style={{ maxWidth: 200, padding: '4px 8px', fontSize: 13 }}
+                              onChange={e => setEditName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') saveEdit();
+                                if (e.key === 'Escape') setEditing(null);
+                              }}
+                            />
+                          ) : c.name}
+                        </td>
                         <td>
                           {(c.sections||[]).length > 0
                             ? (c.sections||[]).map(s => <span key={s.id} className="badge badge-teal" style={{marginRight:4}}>{s.name}</span>)
                             : <span style={{fontSize:12, color:'#94a3b8'}}>No sections</span>}
                         </td>
                         <td style={{color:'#64748B', fontSize:12}}>{c.orderNo}</td>
+                        <td>
+                          {editing === c.id ? (
+                            <div style={{ display:'flex', gap:5 }}>
+                              <button className="btn btn-sm btn-success" onClick={saveEdit} disabled={renameClass.isPending}>
+                                <Check size={12} /> Save
+                              </button>
+                              <button className="btn btn-sm btn-outline" onClick={() => setEditing(null)}>
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button className="btn btn-sm btn-outline" onClick={() => startEdit(c)}>
+                              <Pencil size={12} /> Rename
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
-                    {(!data||data.length===0) && <tr><td colSpan={4} style={{textAlign:'center',padding:32,color:'#94a3b8'}}>No classes yet. Add one on the left.</td></tr>}
+                    {(!data||data.length===0) && <tr><td colSpan={5} style={{textAlign:'center',padding:32,color:'#94a3b8'}}>No classes yet. Add one on the left.</td></tr>}
                   </tbody>
                 </table>
               </div>

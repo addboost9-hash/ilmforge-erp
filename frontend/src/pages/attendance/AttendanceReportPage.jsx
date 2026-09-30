@@ -208,7 +208,7 @@ export default function AttendanceReportPage() {
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <label className="form-label">Class *</label>
-            <select
+            <select aria-label="Class"
               className="form-select"
               style={{ width: 160 }}
               value={filters.classId}
@@ -220,7 +220,7 @@ export default function AttendanceReportPage() {
           </div>
           <div>
             <label className="form-label">Section</label>
-            <select
+            <select aria-label="Section"
               className="form-select"
               style={{ width: 130 }}
               value={filters.sectionId}
@@ -233,7 +233,7 @@ export default function AttendanceReportPage() {
           </div>
           <div>
             <label className="form-label">Month</label>
-            <select
+            <select aria-label="Month"
               className="form-select"
               style={{ width: 140 }}
               value={filters.month}
@@ -244,7 +244,7 @@ export default function AttendanceReportPage() {
           </div>
           <div>
             <label className="form-label">Year</label>
-            <input
+            <input aria-label="Year"
               className="form-input"
               type="number"
               style={{ width: 100 }}
@@ -254,7 +254,7 @@ export default function AttendanceReportPage() {
           </div>
           <div>
             <label className="form-label">Date From</label>
-            <input
+            <input aria-label="Date From"
               className="form-input"
               type="date"
               style={{ width: 140 }}
@@ -264,7 +264,7 @@ export default function AttendanceReportPage() {
           </div>
           <div>
             <label className="form-label">Date To</label>
-            <input
+            <input aria-label="Date To"
               className="form-input"
               type="date"
               style={{ width: 140 }}

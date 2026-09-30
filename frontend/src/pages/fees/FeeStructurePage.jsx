@@ -48,7 +48,7 @@ export default function FeeStructurePage() {
 
           <div className="form-group">
             <label className="form-label">Class *</label>
-            <select className="form-select" value={form.classId} onChange={e=>setForm({...form,classId:e.target.value})}>
+            <select aria-label="Class" className="form-select" value={form.classId} onChange={e=>setForm({...form,classId:e.target.value})}>
               <option value="">Select Class</option>
               {(classes||[]).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -67,11 +67,11 @@ export default function FeeStructurePage() {
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
             <div className="form-group">
               <label className="form-label">Due Day</label>
-              <input className="form-input" type="number" min="1" max="31" value={form.dueDayOfMonth} onChange={e=>setForm({...form,dueDayOfMonth:e.target.value})}/>
+              <input aria-label="Due Day" className="form-input" type="number" min="1" max="31" value={form.dueDayOfMonth} onChange={e=>setForm({...form,dueDayOfMonth:e.target.value})}/>
             </div>
             <div className="form-group">
               <label className="form-label">Late Fee/Day (Rs.)</label>
-              <input className="form-input" type="number" value={form.lateFeePerDay} onChange={e=>setForm({...form,lateFeePerDay:e.target.value})}/>
+              <input aria-label="Late Fee/Day (Rs.)" className="form-input" type="number" value={form.lateFeePerDay} onChange={e=>setForm({...form,lateFeePerDay:e.target.value})}/>
             </div>
           </div>
 

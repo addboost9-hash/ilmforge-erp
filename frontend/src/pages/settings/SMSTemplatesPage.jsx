@@ -326,7 +326,7 @@ export default function SMSTemplatesPage() {
                 {/* Message textarea */}
                 <div className="form-group">
                   <label className="form-label">Message Template</label>
-                  <textarea
+                  <textarea aria-label="Message Template"
                     className="form-input form-textarea"
                     rows={4}
                     value={t.message}

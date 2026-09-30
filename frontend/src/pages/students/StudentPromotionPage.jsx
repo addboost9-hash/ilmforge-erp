@@ -316,7 +316,7 @@ export default function StudentPromotionPage() {
 
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">Current Session</label>
-                <select className="form-select" value={filters.currentSessionId}
+                <select aria-label="Current Session" className="form-select" value={filters.currentSessionId}
                   onChange={e => setFilters(f => ({ ...f, currentSessionId: e.target.value }))}>
                   <option value="">Select Session</option>
                   {(sessions || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -325,7 +325,7 @@ export default function StudentPromotionPage() {
 
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">New Session (Promote Into)</label>
-                <select className="form-select" value={filters.newSessionId}
+                <select aria-label="New Session (Promote Into)" className="form-select" value={filters.newSessionId}
                   onChange={e => setFilters(f => ({ ...f, newSessionId: e.target.value }))}>
                   <option value="">Select New Session</option>
                   {(sessions || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -334,7 +334,7 @@ export default function StudentPromotionPage() {
 
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">From Class *</label>
-                <select className="form-select" value={filters.classId}
+                <select aria-label="From Class" className="form-select" value={filters.classId}
                   onChange={e => {
                     setFilters(f => ({ ...f, classId: e.target.value, sectionFilter: 'all' }));
                     setPreviewRows([]); setPreviewed(false);
@@ -348,7 +348,7 @@ export default function StudentPromotionPage() {
 
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">From Section</label>
-                <select className="form-select" value={filters.sectionFilter}
+                <select aria-label="From Section" className="form-select" value={filters.sectionFilter}
                   onChange={e => { setFilters(f => ({ ...f, sectionFilter: e.target.value })); setPreviewRows([]); setPreviewed(false); }}>
                   {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>

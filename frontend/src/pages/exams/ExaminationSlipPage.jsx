@@ -476,7 +476,7 @@ export default function ExaminationSlipPage() {
           {/* Exam */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Exam *</label>
-            <select
+            <select aria-label="Exam"
               className="form-select"
               value={examId}
               onChange={e => { setExamId(e.target.value); setGenerated(false); }}
@@ -492,7 +492,7 @@ export default function ExaminationSlipPage() {
           {/* Class */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Class *</label>
-            <select
+            <select aria-label="Class"
               className="form-select"
               value={classId}
               onChange={e => { setClassId(e.target.value); setSectionId(''); setGenerated(false); }}
@@ -507,7 +507,7 @@ export default function ExaminationSlipPage() {
           {/* Section */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Section</label>
-            <select
+            <select aria-label="Section"
               className="form-select"
               value={sectionId}
               onChange={e => { setSectionId(e.target.value); setGenerated(false); }}

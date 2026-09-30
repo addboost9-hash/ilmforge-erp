@@ -119,7 +119,7 @@ export default function FailedStudentsPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, alignItems: 'flex-end' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Class *</label>
-            <select
+            <select aria-label="Class"
               className="form-select"
               value={classId}
               onChange={e => { setClassId(e.target.value); setSectionId(''); }}
@@ -131,7 +131,7 @@ export default function FailedStudentsPage() {
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Section</label>
-            <select
+            <select aria-label="Section"
               className="form-select"
               value={sectionId}
               onChange={e => setSectionId(e.target.value)}
@@ -146,7 +146,7 @@ export default function FailedStudentsPage() {
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Exam *</label>
-            <select
+            <select aria-label="Exam"
               className="form-select"
               value={examId}
               onChange={e => setExamId(e.target.value)}

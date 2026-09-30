@@ -167,7 +167,7 @@ export default function GeneralSettingsPage() {
           <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:14 }}>
             <div>
               <label className="form-label">Running Session</label>
-              <select className="form-select" value={form.runningSession}
+              <select aria-label="Running Session" className="form-select" value={form.runningSession}
                 onChange={e => setForm(f=>({...f, runningSession:e.target.value}))}>
                 {['2023-2024','2024-2025','2025-2026','2026-2027'].map(s=><option key={s}>{s}</option>)}
               </select>
@@ -200,7 +200,7 @@ export default function GeneralSettingsPage() {
             </div>
             <div>
               <label className="form-label">Barcode Attendance IN/OUT Message</label>
-              <select className="form-select" value={form.barcodeAttMsg}
+              <select aria-label="Barcode Attendance IN/OUT Message" className="form-select" value={form.barcodeAttMsg}
                 onChange={e => setForm(f=>({...f, barcodeAttMsg:e.target.value}))}>
                 {['Yes','No'].map(v=><option key={v}>{v}</option>)}
               </select>

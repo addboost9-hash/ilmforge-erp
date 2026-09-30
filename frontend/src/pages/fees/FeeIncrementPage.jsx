@@ -181,7 +181,7 @@ export default function FeeIncrementPage() {
           {/* Campus */}
           <div className="form-group">
             <label className="form-label">Campus</label>
-            <select className="form-select" value={form.campus} onChange={e => setForm({ campus: e.target.value, classId: '', section: '' })}>
+            <select aria-label="Campus" className="form-select" value={form.campus} onChange={e => setForm({ campus: e.target.value, classId: '', section: '' })}>
               {CAMPUSES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
@@ -189,7 +189,7 @@ export default function FeeIncrementPage() {
           {/* Class */}
           <div className="form-group">
             <label className="form-label">Class *</label>
-            <select className="form-select" value={form.classId} onChange={e => setForm({ classId: e.target.value, section: '' })}>
+            <select aria-label="Class" className="form-select" value={form.classId} onChange={e => setForm({ classId: e.target.value, section: '' })}>
               <option value="">Select Class</option>
               {(classes || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -198,7 +198,7 @@ export default function FeeIncrementPage() {
           {/* Section */}
           <div className="form-group">
             <label className="form-label">Section</label>
-            <select className="form-select" value={form.section} onChange={e => setForm({ section: e.target.value })}>
+            <select aria-label="Section" className="form-select" value={form.section} onChange={e => setForm({ section: e.target.value })}>
               <option value="">All Sections</option>
               {sections.map(s => {
                 const key = (s && s.id) ? s.id : (s && s.name) ? s.name : s;
@@ -235,7 +235,7 @@ export default function FeeIncrementPage() {
           {/* Accountant (read-only) */}
           <div className="form-group">
             <label className="form-label">Accountant</label>
-            <input
+            <input aria-label="Accountant"
               className="form-input"
               value={user ? user.name : 'Admin'}
               readOnly
@@ -246,7 +246,7 @@ export default function FeeIncrementPage() {
           {/* Date (auto-filled, read-only) */}
           <div className="form-group">
             <label className="form-label">Date &amp; Time</label>
-            <input
+            <input aria-label="Date &amp; Time"
               className="form-input"
               value={NOW()}
               readOnly

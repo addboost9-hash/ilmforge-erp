@@ -448,7 +448,7 @@ export default function FeeTypesPage() {
             {/* Campus */}
             <div className="form-group" style={{ marginBottom: 14 }}>
               <label className="form-label">Campus</label>
-              <select
+              <select aria-label="Campus"
                 className="form-select"
                 value={form.campus}
                 onChange={e => setForm({ ...form, campus: e.target.value })}

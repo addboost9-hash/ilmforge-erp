@@ -6,12 +6,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
+import { printHTML } from '../../utils/print';
 import { Printer, Search, FileText, ChevronRight } from 'lucide-react';
 
 const fmtDate = d => d ? new Date(d).toLocaleDateString('en-PK', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
 
 /* ── Print function ─────────────────────────────────────── */
-function printAdmissionForm(student, school) {
+export function printAdmissionForm(student, school) {
   const logo    = school?.logoUrl || localStorage.getItem('schoolLogoPreview') || '';
   const sName   = school?.name   || localStorage.getItem('registeredSchoolName') || 'IlmForge School';
   const sAddr   = school?.address || '';
@@ -246,9 +247,7 @@ function printAdmissionForm(student, school) {
 </body>
 </html>`;
 
-  const w = window.open('', '_blank', 'width=1000,height=800');
-  w.document.write(html);
-  w.document.close();
+  printHTML(html, { title: student ? `Admission Form - ${student.name}` : 'Admission Form' });
 }
 
 /* ── Main Page ──────────────────────────────────────────── */

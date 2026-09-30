@@ -17,7 +17,10 @@ import QRCode from 'qrcode';
 import { ArrowLeft, Lock, Search, Printer, Download, MessageSquare, FileText, CheckCircle } from 'lucide-react';
 
 /* ── helpers ──────────────────────────────────────────────── */
-const Rs      = v => 'Rs. ' + Number(v || 0).toLocaleString('en-PK');
+// Fee amounts are stored in paisa (Rs 3,500 is 350000). This page was
+// printing the stored figure straight out, so every amount a parent or
+// student saw read a hundred times too large.
+const Rs      = v => 'Rs. ' + (Number(v || 0) / 100).toLocaleString('en-PK');
 const MONTHS  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const mName   = m => MONTHS[(parseInt(m) - 1)] || m;
 const fmtDate = d => d ? new Date(d).toLocaleDateString('en-PK', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';

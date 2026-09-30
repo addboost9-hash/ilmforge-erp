@@ -506,6 +506,77 @@ const SECTIONS = [
   },
 
   /* ──────────────────────────────────────────
+     LATEST — added after v3.4
+  ────────────────────────────────────────── */
+  {
+    id: 'latest',
+    icon: '✨',
+    color: '#0F3D33',
+    title: 'Latest Additions',
+    desc: 'Fee corrections, portal links, admission form printing, card designs, dashboard',
+    chapters: [
+      {
+        title: 'Correcting a fee that was collected wrongly',
+        steps: [
+          { n:1, text:'Collect Fee → search the student → scroll to the "Payments Received" panel' },
+          { n:2, text:'Use "Correct" to change the amount, or "Void" to cancel the payment outright' },
+          { n:3, text:'A reason is required for both, and it is kept on the record' },
+          { n:4, text:'The original entry is never deleted — it stays, marked, and a new receipt is issued' },
+          { n:5, text:'Collection totals, reports and the dashboard update to the corrected figure at once' },
+        ],
+        note: 'Collecting more than the amount outstanding is refused, so an over-collection cannot be recorded in the first place.',
+      },
+      {
+        title: 'Portal links for every role',
+        steps: [
+          { n:1, text:'School Settings → Portal Links lists the sign-in link for all six portals' },
+          { n:2, text:'Each row shows what that person signs in with: email, roll number or phone' },
+          { n:3, text:'Copy a single link, or use "Copy all" to send the whole set' },
+          { n:4, text:'Staff sign-in details are also shown once, on screen, when the staff record is saved' },
+        ],
+        note: 'A link only opens the sign-in page. What someone can see is decided by their own account, so sharing a link is safe.',
+      },
+      {
+        title: 'Printing the admission form',
+        steps: [
+          { n:1, text:'After admitting a student, click "Print Admission Form" on the success screen' },
+          { n:2, text:'The A4 form prints on your school letterhead, already filled in' },
+          { n:3, text:'It carries signature lines for parent, class teacher, coordinator and principal' },
+          { n:4, text:'To reprint later: Admissions → Admission Form Print → Filled Form → search the student' },
+          { n:5, text:'Choose "Blank Form" for empty forms to keep at the front desk' },
+        ],
+      },
+      {
+        title: 'ID card designs',
+        steps: [
+          { n:1, text:'Five ready-made designs: Academic, Campus Arc, Executive, Minimal, Bold Band' },
+          { n:2, text:'Pick a design first, then set the primary and accent colours to match the school' },
+          { n:3, text:'Every card prints front and back together, with a QR code on both sides' },
+          { n:4, text:'Fields with no value are left off the card instead of printing as a dash' },
+        ],
+      },
+      {
+        title: 'Renaming a class',
+        steps: [
+          { n:1, text:'School Settings → Classes → click "Rename" on the class row' },
+          { n:2, text:'Edit the name, then press Enter or click Save. Escape cancels' },
+          { n:3, text:'Two classes cannot share the same name — the system will say so' },
+        ],
+      },
+      {
+        title: 'The dashboard',
+        steps: [
+          { n:1, text:'School health: a score out of 100 with the reason for it shown underneath' },
+          { n:2, text:'Anything not yet recorded is left out of the score rather than counted as zero' },
+          { n:3, text:'"Why this result?" explains the change month to month, and the parts always add up exactly' },
+          { n:4, text:'Panels saying "N more months of data needed" switch on by themselves as history builds' },
+          { n:5, text:'"Export as PDF" produces a clean copy for board meetings' },
+        ],
+      },
+    ],
+  },
+
+  /* ──────────────────────────────────────────
      9. NEW FEATURES v3.4
   ────────────────────────────────────────── */
   {

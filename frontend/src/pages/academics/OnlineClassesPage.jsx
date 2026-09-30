@@ -70,7 +70,7 @@ export default function OnlineClassesPage() {
             </div>
             <div className="form-group">
               <label className="form-label">For Class</label>
-              <select className="form-select" value={form.classId} onChange={e=>setForm({...form,classId:e.target.value})}>
+              <select aria-label="For Class" className="form-select" value={form.classId} onChange={e=>setForm({...form,classId:e.target.value})}>
                 <option value="">All Classes</option>
                 {(classes||[]).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -81,7 +81,7 @@ export default function OnlineClassesPage() {
             </div>
             <div className="form-group">
               <label className="form-label">Scheduled Date & Time</label>
-              <input className="form-input" type="datetime-local" value={form.scheduledAt} onChange={e=>setForm({...form,scheduledAt:e.target.value})}/>
+              <input aria-label="Scheduled Date & Time" className="form-input" type="datetime-local" value={form.scheduledAt} onChange={e=>setForm({...form,scheduledAt:e.target.value})}/>
             </div>
             <div className="form-group" style={{ gridColumn:'span 2' }}>
               <label className="form-label">Description</label>

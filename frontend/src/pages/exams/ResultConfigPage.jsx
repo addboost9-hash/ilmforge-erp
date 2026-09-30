@@ -249,8 +249,8 @@ function ResultSetupTab({ config, onChange }) {
                       </td>
                       <td style={{ padding: '6px 8px' }}>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button onClick={saveGrade} style={{ ...iconBtn, color: TEAL, borderColor: TEAL }}><Check size={13} /></button>
-                          <button onClick={cancelGrade} style={{ ...iconBtn, color: '#EF4444', borderColor: '#EF4444' }}><X size={13} /></button>
+                          <button aria-label="Save grade" title="Save grade" onClick={saveGrade} style={{ ...iconBtn, color: TEAL, borderColor: TEAL }}><Check size={13} /></button>
+                          <button aria-label="Cancel editing grade" title="Cancel" onClick={cancelGrade} style={{ ...iconBtn, color: '#EF4444', borderColor: '#EF4444' }}><X size={13} /></button>
                         </div>
                       </td>
                     </>
@@ -265,8 +265,8 @@ function ResultSetupTab({ config, onChange }) {
                       <td style={{ padding: '8px 12px', color: '#64748B' }}>{g.comment}</td>
                       <td style={{ padding: '8px 12px' }}>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button onClick={() => startEditGrade(idx)} style={{ ...iconBtn, color: '#0073b7', borderColor: '#0073b7' }}><Edit3 size={12} /></button>
-                          <button onClick={() => removeGrade(idx)} style={{ ...iconBtn, color: '#EF4444', borderColor: '#EF4444' }}><Trash2 size={12} /></button>
+                          <button aria-label="Edit grade" title="Edit grade" onClick={() => startEditGrade(idx)} style={{ ...iconBtn, color: '#0073b7', borderColor: '#0073b7' }}><Edit3 size={12} /></button>
+                          <button aria-label="Remove grade" title="Remove grade" onClick={() => removeGrade(idx)} style={{ ...iconBtn, color: '#EF4444', borderColor: '#EF4444' }}><Trash2 size={12} /></button>
                         </div>
                       </td>
                     </>
@@ -348,7 +348,7 @@ function ResultSetupTab({ config, onChange }) {
                     />
                   </td>
                   <td style={{ padding: '6px 8px' }}>
-                    <button onClick={() => removeSignature(idx)} style={{ ...iconBtn, color: '#EF4444', borderColor: '#EF4444' }}>
+                    <button aria-label="Remove signature" title="Remove signature" onClick={() => removeSignature(idx)} style={{ ...iconBtn, color: '#EF4444', borderColor: '#EF4444' }}>
                       <Trash2 size={12} />
                     </button>
                   </td>
@@ -422,8 +422,8 @@ function ResultSetupTab({ config, onChange }) {
                       </td>
                       <td style={{ padding: '6px 8px' }}>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button onClick={saveRemark} style={{ ...iconBtn, color: TEAL, borderColor: TEAL }}><Check size={13} /></button>
-                          <button onClick={() => setEditingRemarkIdx(null)} style={{ ...iconBtn, color: '#EF4444', borderColor: '#EF4444' }}><X size={13} /></button>
+                          <button aria-label="Save remark" title="Save remark" onClick={saveRemark} style={{ ...iconBtn, color: TEAL, borderColor: TEAL }}><Check size={13} /></button>
+                          <button aria-label="Cancel editing remark" title="Cancel" onClick={() => setEditingRemarkIdx(null)} style={{ ...iconBtn, color: '#EF4444', borderColor: '#EF4444' }}><X size={13} /></button>
                         </div>
                       </td>
                     </>
@@ -434,8 +434,8 @@ function ResultSetupTab({ config, onChange }) {
                       <td style={{ padding: '8px 12px', color: '#64748B' }}>{r.remark}</td>
                       <td style={{ padding: '8px 12px' }}>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button onClick={() => startEditRemark(idx)} style={{ ...iconBtn, color: '#0073b7', borderColor: '#0073b7' }}><Edit3 size={12} /></button>
-                          <button onClick={() => removeRemark(idx)} style={{ ...iconBtn, color: '#EF4444', borderColor: '#EF4444' }}><Trash2 size={12} /></button>
+                          <button aria-label="Edit remark" title="Edit remark" onClick={() => startEditRemark(idx)} style={{ ...iconBtn, color: '#0073b7', borderColor: '#0073b7' }}><Edit3 size={12} /></button>
+                          <button aria-label="Remove remark" title="Remove remark" onClick={() => removeRemark(idx)} style={{ ...iconBtn, color: '#EF4444', borderColor: '#EF4444' }}><Trash2 size={12} /></button>
                         </div>
                       </td>
                     </>

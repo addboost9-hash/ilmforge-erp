@@ -431,7 +431,7 @@ export default function AccountingPage() {
 
                   <div className="form-group">
                     <label className="form-label">Category *</label>
-                    <select className="form-select" value={expForm.category} onChange={e => setExpForm({ ...expForm, category: e.target.value })}>
+                    <select aria-label="Category" className="form-select" value={expForm.category} onChange={e => setExpForm({ ...expForm, category: e.target.value })}>
                       <option value="">Select Category</option>
                       {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
@@ -444,7 +444,7 @@ export default function AccountingPage() {
 
                   <div className="form-group">
                     <label className="form-label">Date</label>
-                    <input className="form-input" type="date" value={expForm.date} onChange={e => setExpForm({ ...expForm, date: e.target.value })} />
+                    <input aria-label="Date" className="form-input" type="date" value={expForm.date} onChange={e => setExpForm({ ...expForm, date: e.target.value })} />
                   </div>
 
                   <div className="form-group">

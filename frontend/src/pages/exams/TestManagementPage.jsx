@@ -225,7 +225,7 @@ function TestListTab({ classes, subjects }) {
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <div className="form-group" style={{ marginBottom: 0, minWidth: 200 }}>
           <label className="form-label">Filter by Class</label>
-          <select
+          <select aria-label="Filter by Class"
             className="form-select"
             value={filterClassId}
             onChange={e => setFilterClassId(e.target.value)}
@@ -266,7 +266,7 @@ function TestListTab({ classes, subjects }) {
             {/* Subject */}
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Subject</label>
-              <select className="form-select" value={form.subjectId} onChange={e => set('subjectId', e.target.value)}>
+              <select aria-label="Subject" className="form-select" value={form.subjectId} onChange={e => set('subjectId', e.target.value)}>
                 <option value="">Select Subject</option>
                 {subjects.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
@@ -277,7 +277,7 @@ function TestListTab({ classes, subjects }) {
             {/* Class */}
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Class *</label>
-              <select
+              <select aria-label="Class"
                 className="form-select"
                 value={form.classId}
                 onChange={e => { set('classId', e.target.value); set('sectionId', ''); }}
@@ -290,7 +290,7 @@ function TestListTab({ classes, subjects }) {
             {/* Section */}
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Section</label>
-              <select
+              <select aria-label="Section"
                 className="form-select"
                 value={form.sectionId}
                 onChange={e => set('sectionId', e.target.value)}
@@ -306,7 +306,7 @@ function TestListTab({ classes, subjects }) {
             {/* Date */}
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Test Date *</label>
-              <input
+              <input aria-label="Test Date"
                 className="form-input"
                 type="date"
                 value={form.date}
@@ -330,7 +330,7 @@ function TestListTab({ classes, subjects }) {
             {/* Test Type */}
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Test Type</label>
-              <select className="form-select" value={form.testType} onChange={e => set('testType', e.target.value)}>
+              <select aria-label="Test Type" className="form-select" value={form.testType} onChange={e => set('testType', e.target.value)}>
                 {TEST_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
@@ -519,7 +519,7 @@ function MarksEntryTab({ classes }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, alignItems: 'flex-end' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Select Test *</label>
-            <select
+            <select aria-label="Select Test"
               className="form-select"
               value={selectedTestId}
               onChange={e => setSelectedTestId(e.target.value)}
@@ -535,7 +535,7 @@ function MarksEntryTab({ classes }) {
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Class *</label>
-            <select
+            <select aria-label="Class"
               className="form-select"
               value={filterClassId}
               onChange={e => { setFilterClassId(e.target.value); setFilterSectionId(''); }}
@@ -547,7 +547,7 @@ function MarksEntryTab({ classes }) {
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Section</label>
-            <select
+            <select aria-label="Section"
               className="form-select"
               value={filterSectionId}
               onChange={e => setFilterSectionId(e.target.value)}
@@ -827,7 +827,7 @@ function TabulationTab({ classes }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, alignItems: 'flex-end' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Class *</label>
-            <select
+            <select aria-label="Class"
               className="form-select"
               value={classId}
               onChange={e => { setClassId(e.target.value); setSectionId(''); setTestId(''); }}
@@ -839,7 +839,7 @@ function TabulationTab({ classes }) {
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Section</label>
-            <select
+            <select aria-label="Section"
               className="form-select"
               value={sectionId}
               onChange={e => setSectionId(e.target.value)}
@@ -854,7 +854,7 @@ function TabulationTab({ classes }) {
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Select Test *</label>
-            <select
+            <select aria-label="Select Test"
               className="form-select"
               value={testId}
               onChange={e => setTestId(e.target.value)}
@@ -1080,7 +1080,7 @@ function PositionHoldersTab({ classes }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, alignItems: 'flex-end' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Class *</label>
-            <select
+            <select aria-label="Class"
               className="form-select"
               value={classId}
               onChange={e => { setClassId(e.target.value); setSectionId(''); setTestId(''); }}
@@ -1092,7 +1092,7 @@ function PositionHoldersTab({ classes }) {
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Section</label>
-            <select
+            <select aria-label="Section"
               className="form-select"
               value={sectionId}
               onChange={e => setSectionId(e.target.value)}
@@ -1107,7 +1107,7 @@ function PositionHoldersTab({ classes }) {
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Select Test *</label>
-            <select
+            <select aria-label="Select Test"
               className="form-select"
               value={testId}
               onChange={e => setTestId(e.target.value)}

@@ -198,7 +198,7 @@ function MarkAttendanceTab({ classes }) {
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: '0 0 160px' }}>
             <label className="form-label">Class *</label>
-            <select className="form-select" value={filters.classId}
+            <select aria-label="Class" className="form-select" value={filters.classId}
               onChange={e => setFilters({ ...filters, classId: e.target.value, sectionId: '' })}>
               <option value="">Select Class</option>
               {(classes || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -206,7 +206,7 @@ function MarkAttendanceTab({ classes }) {
           </div>
           <div style={{ flex: '0 0 130px' }}>
             <label className="form-label">Section</label>
-            <select className="form-select" value={filters.sectionId}
+            <select aria-label="Section" className="form-select" value={filters.sectionId}
               onChange={e => setFilters({ ...filters, sectionId: e.target.value })}>
               <option value="">All Sections</option>
               {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -214,7 +214,7 @@ function MarkAttendanceTab({ classes }) {
           </div>
           <div style={{ flex: '0 0 150px' }}>
             <label className="form-label">Date</label>
-            <input className="form-input" type="date" value={filters.date}
+            <input aria-label="Date" className="form-input" type="date" value={filters.date}
               onChange={e => setFilters({ ...filters, date: e.target.value })}
               max={today} />
           </div>
@@ -418,7 +418,7 @@ function ReportTab({ classes }) {
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: '0 0 150px' }}>
             <label className="form-label">Class *</label>
-            <select className="form-select" value={filters.classId}
+            <select aria-label="Class" className="form-select" value={filters.classId}
               onChange={e => setFilters({ ...filters, classId: e.target.value, sectionId: '', subjectId: '' })}>
               <option value="">Select Class</option>
               {(classes || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -426,7 +426,7 @@ function ReportTab({ classes }) {
           </div>
           <div style={{ flex: '0 0 120px' }}>
             <label className="form-label">Section</label>
-            <select className="form-select" value={filters.sectionId}
+            <select aria-label="Section" className="form-select" value={filters.sectionId}
               onChange={e => setFilters({ ...filters, sectionId: e.target.value })}>
               <option value="">All</option>
               {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -434,7 +434,7 @@ function ReportTab({ classes }) {
           </div>
           <div style={{ flex: '0 0 160px' }}>
             <label className="form-label">Subject</label>
-            <select className="form-select" value={filters.subjectId}
+            <select aria-label="Subject" className="form-select" value={filters.subjectId}
               onChange={e => setFilters({ ...filters, subjectId: e.target.value })}>
               <option value="">All Subjects</option>
               {(subjects || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -442,14 +442,14 @@ function ReportTab({ classes }) {
           </div>
           <div style={{ flex: '0 0 130px' }}>
             <label className="form-label">Month</label>
-            <select className="form-select" value={filters.month}
+            <select aria-label="Month" className="form-select" value={filters.month}
               onChange={e => setFilters({ ...filters, month: e.target.value })}>
               {months.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
             </select>
           </div>
           <div style={{ flex: '0 0 90px' }}>
             <label className="form-label">Year</label>
-            <select className="form-select" value={filters.year}
+            <select aria-label="Year" className="form-select" value={filters.year}
               onChange={e => setFilters({ ...filters, year: e.target.value })}>
               {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>

@@ -309,7 +309,7 @@ export default function BISEResultCardPage() {
           </div>
           <div style={{ flex: '0 0 220px' }}>
             <label className="form-label">Select Exam</label>
-            <select className="form-select" value={examId} onChange={e => setExamId(e.target.value)}>
+            <select aria-label="Select Exam" className="form-select" value={examId} onChange={e => setExamId(e.target.value)}>
               <option value="">— Select Exam —</option>
               {exams.map(e => <option key={e.id} value={e.id}>{e.title || e.name}</option>)}
             </select>

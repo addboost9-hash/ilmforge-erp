@@ -10,7 +10,7 @@ router.get('/ledger', wrap(async (req, res) => {
 
   const [payments, expenses, categories] = await Promise.all([
     prisma.feePayment.findMany({
-      where: { schoolId: req.schoolId },
+      where: { voidedAt: null, schoolId: req.schoolId },
       include: { invoice: { select: { feeTitle: true, student: { select: { name: true, rollNo: true } } } } },
       orderBy: { paymentDate: 'desc' },
       take: limit,
@@ -61,7 +61,7 @@ router.get('/stats', wrap(async (req, res) => {
 
   const [payments, expenses] = await Promise.all([
     prisma.feePayment.findMany({
-      where: { schoolId: req.schoolId, paymentDate: { gte: start, lt: end } },
+      where: { voidedAt: null, schoolId: req.schoolId, paymentDate: { gte: start, lt: end } },
       select: { amountPaid: true, paymentDate: true },
     }),
     prisma.expense.findMany({

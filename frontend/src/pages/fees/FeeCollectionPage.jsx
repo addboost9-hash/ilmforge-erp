@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { Search, DollarSign, Printer, X, CheckCircle, Receipt } from 'lucide-react';
+import { Search, DollarSign, Printer, X, CheckCircle, Receipt, Pencil, Ban } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
 import EmptyState from '../../components/ui/EmptyState';
 
@@ -18,6 +18,10 @@ export default function FeeCollectionPage() {
   const [payForm, setPayForm] = useState({ amountPaid: '', discount: 0, method: 'cash', notifyVia: 'whatsapp_sms' });
   const [receiptData, setReceiptData] = useState(null); // holds last payment receipt for display
   const [showCoin, setShowCoin] = useState(false);
+  // Correcting a mis-keyed receipt. `fixing` holds the payment being
+  // amended; mode 'correct' replaces the amount, 'void' cancels it.
+  const [fixing, setFixing] = useState(null);
+  const [fixForm, setFixForm] = useState({ amountPaid: '', reason: '' });
   const [paidAmount, setPaidAmount] = useState(0);
 
   const { data: searchResults, isFetching: sLoading } = useQuery({
@@ -66,6 +70,52 @@ export default function FeeCollectionPage() {
     },
     onError: err => toast.error(err.response?.data?.message || 'Payment failed'),
   });
+
+  const afterFix = (msg) => {
+    toast.success(msg);
+    qc.invalidateQueries(['student-fee', selected?.id]);
+    qc.invalidateQueries(['dashboard']);
+    qc.invalidateQueries(['fee-payments-export']);
+    setFixing(null);
+  };
+
+  const correct = useMutation({
+    mutationFn: ({ id, ...d }) => api.put('/fees/payments/' + id, d),
+    onSuccess: r => afterFix(r.data.message || 'Payment corrected.'),
+    onError: err => toast.error(err.response?.data?.message || 'Could not correct the payment.'),
+  });
+
+  const voidPay = useMutation({
+    mutationFn: ({ id, reason }) => api.post(`/fees/payments/${id}/void`, { reason }),
+    onSuccess: r => afterFix(r.data.message || 'Payment voided.'),
+    onError: err => toast.error(err.response?.data?.message || 'Could not void the payment.'),
+  });
+
+  const openFix = (payment, invoice, mode) => {
+    setFixing({ ...payment, invoice, mode });
+    setFixForm({ amountPaid: ((payment.amountPaid || 0) / 100).toFixed(0), reason: '' });
+  };
+
+  const submitFix = () => {
+    if (!fixForm.reason.trim()) return toast.error('Please give a reason — it is kept on the record.');
+    if (fixing.mode === 'void') {
+      return voidPay.mutate({ id: fixing.id, reason: fixForm.reason.trim() });
+    }
+    const amt = parseFloat(fixForm.amountPaid);
+    if (!Number.isFinite(amt) || amt <= 0) return toast.error('Enter the correct amount.');
+    correct.mutate({
+      id: fixing.id,
+      amountPaid: Math.round(amt * 100),
+      method: fixing.method,
+      reason: fixForm.reason.trim(),
+    });
+  };
+
+  // Every payment across this student's invoices, newest first, so a mistake
+  // can be put right from the same screen it was made on.
+  const allPayments = (feeData?.invoices || [])
+    .flatMap(inv => (inv.payments || []).map(p => ({ ...p, invoice: inv })))
+    .sort((a, b) => new Date(b.paymentDate || b.createdAt) - new Date(a.paymentDate || a.createdAt));
 
   const openPayModal = (inv) => {
     setActiveInv(inv);
@@ -298,6 +348,147 @@ export default function FeeCollectionPage() {
               </span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Payments received - with a way to put a mis-keyed amount right */}
+      {feeData && allPayments.length > 0 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8 }}>
+            <Receipt size={15} style={{ color: 'var(--text-muted)' }} />
+            <div>
+              <div className="card-title">Payments Received</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                Collected the wrong amount? Correct or void it here - the original stays on record.
+              </div>
+            </div>
+          </div>
+          <div className="table-wrap" style={{ borderRadius: 0, border: 'none' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Receipt</th>
+                  <th>Date</th>
+                  <th>Fee</th>
+                  <th>Amount</th>
+                  <th>Method</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allPayments.map(p => {
+                  const voided = !!p.voidedAt;
+                  return (
+                    <tr key={p.id} style={voided ? { opacity: 0.6 } : undefined}>
+                      <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{p.receiptNo || p.id}</td>
+                      <td style={{ color: 'var(--text-secondary)' }}>
+                        {new Date(p.paymentDate || p.createdAt).toLocaleDateString('en-PK')}
+                      </td>
+                      <td style={{ color: 'var(--text-secondary)' }}>
+                        {p.invoice?.feeTitle}
+                        {p.invoice?.month ? ' (' + p.invoice.month + ' ' + (p.invoice.year || '') + ')' : ''}
+                      </td>
+                      <td style={{ fontWeight: 700, textDecoration: voided ? 'line-through' : 'none' }}>
+                        {money(p.amountPaid)}
+                      </td>
+                      <td style={{ textTransform: 'capitalize', color: 'var(--text-secondary)' }}>{p.method}</td>
+                      <td>
+                        {voided ? (
+                          <span className="badge badge-danger" title={p.voidReason || ''}>
+                            {p.voidReason && p.voidReason.indexOf('Corrected') === 0 ? 'Corrected' : 'Voided'}
+                          </span>
+                        ) : p.replacesId ? (
+                          <span className="badge badge-warning">Replacement</span>
+                        ) : (
+                          <span className="badge badge-success">Valid</span>
+                        )}
+                      </td>
+                      <td>
+                        {voided ? (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.voidReason}</span>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 5 }}>
+                            <button className="btn btn-sm btn-outline" onClick={() => openFix(p, p.invoice, 'correct')}>
+                              <Pencil size={12} /> Correct
+                            </button>
+                            <button className="btn btn-sm btn-outline" style={{ color: 'var(--stat-red)' }}
+                              onClick={() => openFix(p, p.invoice, 'void')}>
+                              <Ban size={12} /> Void
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Correct / Void dialog */}
+      {fixing && (
+        <div className="modal-overlay" onClick={() => setFixing(null)}>
+          <div className="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="fix-payment-title"
+            onClick={e => e.stopPropagation()} style={{ padding: 0 }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div id="fix-payment-title" className="modal-title">
+                {fixing.mode === 'void' ? 'Void Payment' : 'Correct Payment'}
+              </div>
+              <button aria-label="Close correction dialog" onClick={() => setFixing(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 13, border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Receipt</span>
+                  <strong style={{ fontFamily: 'monospace' }}>{fixing.receiptNo || fixing.id}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Recorded amount</span>
+                  <strong>{money(fixing.amountPaid)}</strong>
+                </div>
+              </div>
+
+              {fixing.mode === 'correct' && (
+                <div className="form-group">
+                  <label htmlFor="fix-amount" className="form-label">Correct amount (Rs.)</label>
+                  <input id="fix-amount" type="number" min="1" className="form-input" autoFocus
+                    value={fixForm.amountPaid}
+                    onChange={e => setFixForm(f => ({ ...f, amountPaid: e.target.value }))} />
+                </div>
+              )}
+
+              <div className="form-group">
+                <label htmlFor="fix-reason" className="form-label">
+                  Reason <span style={{ color: 'var(--stat-red)' }}>*</span>
+                </label>
+                <input id="fix-reason" className="form-input" autoFocus={fixing.mode === 'void'}
+                  placeholder={fixing.mode === 'void' ? 'e.g. Cheque bounced' : 'e.g. Entered 25,000 instead of 2,500'}
+                  value={fixForm.reason}
+                  onChange={e => setFixForm(f => ({ ...f, reason: e.target.value }))} />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                  The original entry is kept and marked, not deleted. Collection totals and the
+                  dashboard update to the corrected figure.
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn btn-outline" onClick={() => setFixing(null)}>Cancel</button>
+              <button className={fixing.mode === 'void' ? 'btn btn-danger' : 'btn btn-success'}
+                onClick={submitFix} disabled={correct.isPending || voidPay.isPending}>
+                {correct.isPending || voidPay.isPending
+                  ? 'Saving...'
+                  : fixing.mode === 'void'
+                    ? <><Ban size={15} /> Void Payment</>
+                    : <><CheckCircle size={15} /> Save Correction</>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

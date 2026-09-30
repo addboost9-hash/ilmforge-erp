@@ -215,7 +215,7 @@ export default function HomeworkDiaryPage() {
           <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
             <div>
               <label className="form-label">Select Class</label>
-              <select className="form-select" style={{ minWidth:160 }} value={classId} onChange={e => setClassId(e.target.value)}>
+              <select aria-label="Select Class" className="form-select" style={{ minWidth:160 }} value={classId} onChange={e => setClassId(e.target.value)}>
                 <option value="">— Select Class —</option>
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>

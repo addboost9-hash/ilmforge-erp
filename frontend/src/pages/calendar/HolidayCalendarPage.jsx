@@ -141,17 +141,17 @@ export default function HolidayCalendarPage() {
             </div>
             <div className="form-group" style={{ marginBottom:0 }}>
               <label className="form-label">Start Date *</label>
-              <input className="form-input" type="date" value={form.date}
+              <input aria-label="Start Date" className="form-input" type="date" value={form.date}
                 onChange={e => setForm({ ...form, date:e.target.value })}/>
             </div>
             <div className="form-group" style={{ marginBottom:0 }}>
               <label className="form-label">End Date</label>
-              <input className="form-input" type="date" value={form.endDate}
+              <input aria-label="End Date" className="form-input" type="date" value={form.endDate}
                 onChange={e => setForm({ ...form, endDate:e.target.value })}/>
             </div>
             <div className="form-group" style={{ marginBottom:0 }}>
               <label className="form-label">Type</label>
-              <select className="form-select" value={form.type}
+              <select aria-label="Type" className="form-select" value={form.type}
                 onChange={e => setForm({ ...form, type:e.target.value })}>
                 {TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>

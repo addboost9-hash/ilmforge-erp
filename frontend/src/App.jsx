@@ -78,6 +78,7 @@ import NoticeboardPage from './pages/settings/NoticeboardPage';
 import PaymentSettingsPage from './pages/settings/PaymentSettingsPage';
 import ProfilePage from './pages/settings/ProfilePage';
 import SchoolProfilePage from './pages/settings/SchoolProfilePage';
+import PortalLinksPage from './pages/settings/PortalLinksPage';
 import CertificatesPage from './pages/certificates/CertificatesPage';
 import IDCardsPage from './pages/idcards/IDCardsPage';
 import FamilyVoucherPage from './pages/fees/FamilyVoucherPage';
@@ -459,6 +460,7 @@ export default function App() {
 
             {/* Settings */}
             <Route path="/settings"                   element={<SchoolProfilePage />} />
+            <Route path="/settings/portal-links"      element={<PortalLinksPage />} />
             <Route path="/settings/classes"           element={<ClassesPage />} />
             <Route path="/settings/sessions"          element={<SessionsPage />} />
             <Route path="/settings/sms-templates"     element={<SMSTemplatesPage />} />

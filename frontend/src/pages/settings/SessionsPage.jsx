@@ -37,11 +37,11 @@ export default function SessionsPage() {
           </div>
           <div className="form-group">
             <label className="form-label">Start Date</label>
-            <input className="form-input" type="date" value={form.startDate} onChange={e=>setForm({...form,startDate:e.target.value})}/>
+            <input aria-label="Start Date" className="form-input" type="date" value={form.startDate} onChange={e=>setForm({...form,startDate:e.target.value})}/>
           </div>
           <div className="form-group">
             <label className="form-label">End Date</label>
-            <input className="form-input" type="date" value={form.endDate} onChange={e=>setForm({...form,endDate:e.target.value})}/>
+            <input aria-label="End Date" className="form-input" type="date" value={form.endDate} onChange={e=>setForm({...form,endDate:e.target.value})}/>
           </div>
           <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:14}}>
             <input type="checkbox" id="active" checked={form.isActive} onChange={e=>setForm({...form,isActive:e.target.checked})} style={{width:16,height:16}}/>

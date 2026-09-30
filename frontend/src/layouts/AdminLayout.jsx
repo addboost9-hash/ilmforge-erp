@@ -19,7 +19,7 @@ import {
   Bot, X, Calendar,
   ShieldCheck, BarChart2, Database, ClipboardList,
   ShoppingCart,
-  CalendarDays, Rocket, Truck,
+  CalendarDays, Rocket, Truck, Link2,
   TrendingUp, BookMarked, Globe, QrCode, UserPlus, Receipt, Award,
   BookOpenCheck,
 } from 'lucide-react';
@@ -99,6 +99,7 @@ const NAV = [
     group: 'ADMIN',
     items: [
       { to: '/settings',        icon: Settings,    label: 'School Settings' },
+      { to: '/settings/portal-links', icon: Link2, label: 'Portal Links',  roles: ['super_admin','admin'] },
       { to: '/launch-setup',    icon: Rocket,      label: 'Quick Setup',       roles: ['super_admin','admin'] },
       { to: '/settings/backup', icon: Database,    label: 'Backup & Restore',  roles: ['super_admin','admin'] },
     ],
@@ -134,8 +135,8 @@ function LanguageToggle() {
         onMouseLeave={e => { if(!open){ e.currentTarget.style.borderColor='#dee2e6'; e.currentTarget.style.background='#fff'; }}}
       >
         <span style={{ fontSize: 16 }}>{current.flag}</span>
-        <span>{current.nativeLabel}</span>
-        <span style={{ fontSize: 10, color: '#94a3b8' }}>▼</span>
+        <span className="lang-label">{current.nativeLabel}</span>
+        <span className="lang-caret" style={{ fontSize: 10, color: '#94a3b8' }}>▼</span>
       </button>
 
       {open && (
@@ -432,6 +433,14 @@ export default function AdminLayout() {
     ? localStorage.getItem('schoolLogoPreview')
     : null;
 
+  // The sidebar leads with the school's own identity. `school` comes from the
+  // signed-in session; the localStorage values are the fallback set when the
+  // school registered or first opened a branded portal link.
+  const schoolLogo = school?.logoUrl || logo;
+  const schoolDisplayName = school?.name
+    || (typeof window !== 'undefined' ? localStorage.getItem('registeredSchoolName') : null)
+    || 'My School';
+
   /* ── Module index for smart search ── */
   const MODULE_INDEX = useMemo(() => [
     // Students
@@ -477,6 +486,7 @@ export default function AdminLayout() {
     // Settings
     { label: 'School Profile', desc: 'Logo & basic info', path: '/settings', icon: '🏫', group: 'Settings' },
     { label: 'Classes & Sections', desc: 'Grade management', path: '/settings/classes', icon: '🏛️', group: 'Settings' },
+    { label: 'Portal Links', desc: 'Sign-in link for each role', path: '/settings/portal-links', icon: '🔗', group: 'Settings' },
     { label: 'SMS Templates', desc: '15+ auto templates', path: '/settings/sms-templates', icon: '📱', group: 'Settings' },
     { label: 'Admin Accounts', desc: 'Manage admins', path: '/settings/admins', icon: '👤', group: 'Settings' },
     { label: 'Backup & Restore', desc: 'Database export', path: '/settings/backup', icon: '💾', group: 'Settings' },
@@ -800,41 +810,53 @@ export default function AdminLayout() {
           transition: 'width 0.28s cubic-bezier(0.4,0,0.2,1)',
         }}
       >
+        {/* Branding: the school's own name and logo, with the IlmForge
+            mark kept only as the attribution line. */}
         {/* ── Brand area ── */}
         <div style={{
           padding:'16px 14px 12px',
           borderBottom:'1px solid rgba(255,255,255,0.08)',
         }}>
-          {/* IlmForge brand */}
+          {/* The school leads: this is their system, not ours. IlmForge stays
+              as the attribution line underneath. Falls back to the IlmForge
+              mark only while the school is still unknown. */}
           <div style={{display:'flex', alignItems:'center', gap:10, marginBottom: collapsed ? 0 : 10}}>
-            <div style={{
-              width:36, height:36, borderRadius:10, flexShrink:0,
-              background:'linear-gradient(135deg,#D97706,#F59E0B)',
-              display:'flex', alignItems:'center', justifyContent:'center',
-              fontSize:18, boxShadow:'0 4px 12px rgba(217,119,6,0.4)',
-            }}>🎓</div>
+            {schoolLogo ? (
+              <img
+                src={schoolLogo}
+                alt=""
+                style={{
+                  width:36, height:36, borderRadius:10, flexShrink:0,
+                  objectFit:'cover', background:'rgba(255,255,255,0.1)',
+                  boxShadow:'0 4px 12px rgba(0,0,0,0.25)',
+                }}
+              />
+            ) : (
+              <div style={{
+                width:36, height:36, borderRadius:10, flexShrink:0,
+                background:'linear-gradient(135deg,#D97706,#F59E0B)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                fontSize:18, boxShadow:'0 4px 12px rgba(217,119,6,0.4)',
+              }}>🎓</div>
+            )}
             {!collapsed && (
-              <div>
-                <div style={{fontSize:15, fontWeight:900, color:'white', lineHeight:1, letterSpacing:-0.3}}>
-                  ilm<span style={{color:'#D97706', fontFamily:"'Noto Nastaliq Urdu',serif"}}>فورج</span>
+              <div style={{minWidth:0}}>
+                <div
+                  title={schoolDisplayName}
+                  style={{
+                    fontSize:14, fontWeight:900, color:'white', lineHeight:1.15,
+                    letterSpacing:-0.2, overflow:'hidden', textOverflow:'ellipsis',
+                    whiteSpace:'nowrap', maxWidth:150,
+                  }}
+                >
+                  {schoolDisplayName}
                 </div>
-                <div style={{fontSize:9, color:'rgba(255,255,255,0.5)', marginTop:1, letterSpacing:0.5}}>
-                  ILM KO ASAAN BANAYE
+                <div style={{fontSize:9, color:'rgba(255,255,255,0.45)', marginTop:2, letterSpacing:0.4}}>
+                  Powered by ilm<span style={{color:'#D97706', fontFamily:"'Noto Nastaliq Urdu',serif"}}>فورج</span>
                 </div>
               </div>
             )}
           </div>
-          {/* School name (smaller, below brand) */}
-          {!collapsed && (
-            <div style={{
-              background:'rgba(255,255,255,0.08)', borderRadius:8,
-              padding:'6px 10px', fontSize:11, color:'rgba(255,255,255,0.7)',
-              fontWeight:600, overflow:'hidden', whiteSpace:'nowrap',
-              textOverflow:'ellipsis',
-            }}>
-              🏫 {school?.name || localStorage.getItem('registeredSchoolName') || 'My School'}
-            </div>
-          )}
         </div>
 
         {/* ── Navigation area with scroll arrows ── */}
@@ -985,7 +1007,7 @@ export default function AdminLayout() {
         <header className="top-header" style={{ background: '#fff', borderBottom: '1px solid #dee2e6' }}>
 
           {/* Left: hamburger + breadcrumb */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="hdr-left" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
               aria-label={isPinnedOpen ? 'Collapse sidebar (auto-collapses after 5s inactivity)' : 'Pin sidebar open'}
               title={isPinnedOpen ? '📌 Pinned — click to unpin (auto-collapses in 5s)' : '📌 Click to pin sidebar'}
@@ -1010,7 +1032,7 @@ export default function AdminLayout() {
             </button>
 
             {/* Breadcrumb */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+            <div className="hdr-breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
               <Link to="/dashboard" style={{ color: '#999', fontWeight: 500, textDecoration: 'none' }}
                 onMouseEnter={e => { e.currentTarget.style.color = '#0073b7'; }}
                 onMouseLeave={e => { e.currentTarget.style.color = '#999'; }}
@@ -1228,7 +1250,7 @@ export default function AdminLayout() {
           </div>
 
           {/* Right: language toggle + notification bell + session badge + user avatar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="hdr-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
 
             {/* Language Toggle */}
             <LanguageToggle />
@@ -1262,6 +1284,7 @@ export default function AdminLayout() {
 
             {/* Academic session badge */}
             <div
+              className="hdr-session"
               title="Academic Session 2025-2026"
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
@@ -1300,7 +1323,7 @@ export default function AdminLayout() {
                 }}>
                   {initials}
                 </div>
-                <div style={{ lineHeight: 1.25 }}>
+                <div className="hdr-user-text" style={{ lineHeight: 1.25 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#333', whiteSpace: 'nowrap' }}>
                     {user?.name || 'Admin'}
                   </div>

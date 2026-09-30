@@ -1662,3 +1662,264 @@ body.lang-ur .metric-value { font-family: 'Noto Nastaliq Urdu', serif; }
 
 /* Fade the real content in once it replaces a skeleton placeholder */
 .skeleton-content-fade { animation: fadeIn .25s ease; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PRINTING — authoritative rules, last so they win the cascade.
+
+   The problem this replaces: printing was subtractive. The old rules hid
+   the sidebar and header, then sent whatever else happened to be on the
+   screen to the printer — filter bars, tab strips, search boxes, action
+   buttons, pagination. A timetable printed 81 buttons alongside the grid.
+   Nothing in the app ever said "this is the document".
+
+   Two mechanisms now:
+
+   1. Interactive chrome never prints. A button or a toast is a control,
+      not paper. Applied everywhere, so pages that were never touched
+      still print better than before.
+
+   2. Opt-in isolation. Mark the document with [data-print-root] (see
+      printSection() in utils/print.js) and only that region prints. Use
+      visibility rather than display so the element keeps its place in
+      the layout and ancestors are not collapsed underneath it.
+   ═══════════════════════════════════════════════════════════════════ */
+@media print {
+  /* --- 1. chrome that is never part of a document --- */
+  .sidebar,
+  .top-header,
+  .app-header,
+  .no-print,
+  .sb-scroll-arrow,
+  .modal-overlay,
+  .modal,
+  [data-fab],
+  [role="alert"],
+  [role="dialog"],
+  [aria-modal="true"] {
+    display: none !important;
+  }
+
+  /* A dialog's backdrop is usually an inline-styled position:fixed wrapper,
+     which no class selector can reach. Hiding the dialog alone would leave
+     that grey sheet covering the printed page, so hide the wrapper through
+     the dialog it contains. */
+  :has(> [role="dialog"]),
+  :has(> [aria-modal="true"]) {
+    display: none !important;
+  }
+
+  /* A button is a control, not content. This is the single biggest cause
+     of "it printed the whole screen": most print buttons on this project
+     are inline-styled, so the old `.btn { display:none }` missed them. */
+  button,
+  .btn,
+  .btn-sm,
+  .btn-icon,
+  .btn-ghost,
+  .btn-icon-only,
+  .action-tile,
+  .tab-btn {
+    display: none !important;
+  }
+
+  /* Filter controls are not part of the document either. Checked against
+     every control that survived a print on the report pages: all of them
+     were search boxes, date ranges and dropdowns sitting OUTSIDE a table.
+     Controls inside a table are left alone, because there they can be the
+     data itself - a mark entry sheet, for example - and losing those would
+     be worse than printing a stray filter. */
+  input:not(table input),
+  select:not(table select),
+  textarea:not(table textarea),
+  .filter-bar,
+  .search-bar {
+    display: none !important;
+  }
+
+  /* Anything explicitly marked as printable stays, even if it is a button
+     or sits inside a region hidden above. */
+  .print-only,
+  .print-keep,
+  .print-keep * {
+    display: revert !important;
+    visibility: visible !important;
+  }
+
+  /* --- 2. page setup --- */
+  .main-wrapper { margin-left: 0 !important; margin-right: 0 !important; }
+  .page-content { padding: 0 !important; }
+  body { background: #fff !important; }
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+    break-inside: avoid;
+  }
+  table { break-inside: auto; }
+  thead { display: table-header-group; }  /* repeat headers across pages */
+
+  /* Header rows are styled for a coloured background on screen, which left
+     white text on near-white paper. Force readable contrast for print. */
+  thead tr, thead th, .data-table thead tr, .data-table thead th {
+    background: #f1f5f9 !important;
+    color: #1f2430 !important;
+    border-bottom: 1px solid #94a3b8 !important;
+  }
+  td, .data-table td { color: #1f2430 !important; }
+  tr, img { break-inside: avoid; }
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* --- 3. opt-in isolation: print one region and nothing else --- */
+  body.print-isolate * { visibility: hidden !important; }
+  body.print-isolate [data-print-root],
+  body.print-isolate [data-print-root] * { visibility: visible !important; }
+  body.print-isolate [data-print-root] button,
+  body.print-isolate [data-print-root] .btn,
+  body.print-isolate [data-print-root] .tab-btn { display: none !important; }
+  body.print-isolate [data-print-root] {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
+
+/* On screen these are inert; they only mean anything to the printer. */
+.print-only { display: none; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESPONSIVE — measured fixes, last so they win the cascade.
+
+   A crawl of all 190 admin routes at 390px found 182 of them scrolling
+   sideways, by up to 322px. The causes were not per-page; they were four
+   shared structures, so they are fixed here once rather than in 182 files:
+
+     1. The header's right-hand cluster (language, bell, session, user)
+        is a nowrap flex row that measured 401px inside a 390px header.
+        It had no class, so no stylesheet could reach it.
+     2. Tables set min-width:560px inside a wrapper that scrolls, but the
+        wrapper sits in a flex column and flex items default to
+        min-width:auto, so it grew to fit instead of scrolling.
+     3. Tab strips did the same.
+     4. Cards laid out on fixed minmax() tracks wider than a phone.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* A flex/grid child will not shrink below its content unless told to.
+   This single rule is what lets the scroll containers below work. */
+.main-wrapper,
+.main-wrapper > *,
+.page-content,
+.page-content > *,
+.card,
+.card-body,
+.table-wrap {
+  min-width: 0;
+}
+
+/* Wide tables scroll inside their own box instead of widening the page. */
+.table-wrap,
+.table-responsive {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tab strips scroll rather than wrap into a ragged pile. */
+.tab-bar,
+.tabs,
+.tab-strip {
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.tab-btn { flex-shrink: 0; }
+
+@media (max-width: 768px) {
+  /* Header: let both clusters shrink, and drop the wordier chips. The
+     information stays reachable - the session is in the page context and
+     the user menu opens from the avatar. */
+  .top-header { gap: 8px; }
+  .hdr-left, .hdr-actions { min-width: 0; }
+  .hdr-actions { gap: 6px; flex-shrink: 1; }
+  .hdr-session { display: none !important; }
+  .hdr-user-text { display: none !important; }
+
+  /* Breadcrumbs are the first thing to go when space is tight - the page
+     title says where you are anyway. The language name and the user's name
+     go too; the flag and the avatar still identify both. */
+  .breadcrumb, .hdr-breadcrumb { display: none !important; }
+  .lang-label, .lang-caret { display: none !important; }
+
+  /* Horizontal rows inside page content wrap rather than squeezing their
+     text into a one-word column and pushing the last chip out of view.
+     Tab strips are excluded because they are meant to scroll instead. */
+  .page-content [style*="display:flex"]:not(.tab-bar):not(.tabs),
+  .page-content [style*="display: flex"]:not(.tab-bar):not(.tabs) {
+    flex-wrap: wrap;
+  }
+  /* ...but not when the author asked for a column, and not for the fixed
+     card faces in the ID card preview. */
+  .page-content [style*="flex-direction:column"],
+  .page-content [style*="flex-direction: column"],
+  .idcard-face, .idcard-face * {
+    flex-wrap: nowrap;
+  }
+
+  /* Fixed multi-column card grids collapse to one column. */
+  .page-content [style*="grid-template-columns"],
+  .stat-grid, .card-grid, .module-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Comfortable hit targets. 36px is the practical floor for a finger;
+     anything inside a table row is left alone so dense action columns
+     do not blow up. */
+  button:not(table button),
+  .btn:not(table .btn),
+  a.btn {
+    min-height: 36px;
+  }
+
+  /* Action buttons inside table rows were left out of the rule above so
+     dense rows would not blow up, but at 20px they are genuinely hard to
+     hit. Give them a tap target without changing the row height much.
+     Absolutely-positioned overlays (the photo badge on an ID card row)
+     are excluded, since sizing those would move them off their anchor. */
+  table button:not([style*="position:absolute"]):not([style*="position: absolute"]),
+  table .btn {
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  .page-content { padding: 12px !important; }
+  .card { border-radius: 10px; }
+}
+
+/* Long values (emails, URLs, IDs) wrap instead of forcing a page-wide
+   scrollbar on a phone. */
+@media (max-width: 480px) {
+  td, .card-body { overflow-wrap: anywhere; }
+}
+
+/* ── Keyboard focus. Without this a keyboard user cannot tell where they
+   are; :focus-visible keeps it off mouse clicks. ── */
+:focus-visible {
+  outline: 2px solid var(--primary, #0073b7);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Respect a reduced-motion preference rather than animating regardless. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

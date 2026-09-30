@@ -193,14 +193,14 @@ export default function AdmissionsPage() {
 
             <div className="form-group">
               <label className="form-label">Gender</label>
-              <select className="form-select" value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})}>
+              <select aria-label="Gender" className="form-select" value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})}>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
               </select>
             </div>
             <div className="form-group">
               <label className="form-label">Date of Birth</label>
-              <input className="form-input" type="date" value={form.dob} onChange={e=>setForm({...form,dob:e.target.value})}/>
+              <input aria-label="Date of Birth" className="form-input" type="date" value={form.dob} onChange={e=>setForm({...form,dob:e.target.value})}/>
             </div>
             <div className="form-group">
               <label className="form-label" style={{ display:'flex', alignItems:'center', gap:6 }}>
@@ -233,14 +233,14 @@ export default function AdmissionsPage() {
 
             <div className="form-group">
               <label className="form-label">Class</label>
-              <select className="form-select" value={form.classId} onChange={onClassChange}>
+              <select aria-label="Class" className="form-select" value={form.classId} onChange={onClassChange}>
                 <option value="">Select Class</option>
                 {(classes||[]).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div className="form-group">
               <label className="form-label">Section</label>
-              <select className="form-select" value={form.sectionId} onChange={e=>setForm({...form,sectionId:e.target.value})}>
+              <select aria-label="Section" className="form-select" value={form.sectionId} onChange={e=>setForm({...form,sectionId:e.target.value})}>
                 <option value="">Select Section</option>
                 {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>

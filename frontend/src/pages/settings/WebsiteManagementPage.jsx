@@ -285,7 +285,7 @@ export default function WebsiteManagementPage() {
                   ))}
                   <div className="form-group">
                     <label className="form-label">Academic Session</label>
-                    <select className="form-select" {...f('session')}>
+                    <select aria-label="Academic Session" className="form-select" {...f('session')}>
                       {['2023-2024','2024-2025','2025-2026','2026-2027'].map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
@@ -431,11 +431,11 @@ export default function WebsiteManagementPage() {
                   ))}
                   <div className="form-group" style={{ gridColumn:'1/-1' }}>
                     <label className="form-label">Staff Description</label>
-                    <textarea className="form-input" rows={2} {...f('staffText')} />
+                    <textarea aria-label="Staff Description" className="form-input" rows={2} {...f('staffText')} />
                   </div>
                   <div className="form-group" style={{ gridColumn:'1/-1' }}>
                     <label className="form-label">School Facilities Description</label>
-                    <textarea className="form-input" rows={2} {...f('facilitiesText')} />
+                    <textarea aria-label="School Facilities Description" className="form-input" rows={2} {...f('facilitiesText')} />
                   </div>
                 </div>
               </div>
@@ -456,7 +456,7 @@ export default function WebsiteManagementPage() {
                     </div>
                     <div className="form-group">
                       <label className="form-label">Description</label>
-                      <textarea className="form-input" rows={2} {...f(`fac${n}Text`)} />
+                      <textarea aria-label="Description" className="form-input" rows={2} {...f(`fac${n}Text`)} />
                     </div>
                   </div>
                 ))}

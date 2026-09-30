@@ -40,13 +40,13 @@ router.get('/stats', wrap(async (req, res) => {
     prisma.staffAttendance.count({ where: { schoolId, date: { gte: today, lt: tomorrow }, status: 'present' } }),
     prisma.staffAttendance.count({ where: { schoolId, date: { gte: today, lt: tomorrow }, status: 'absent' } }),
     prisma.feeInvoice.count({ where: { schoolId, status: { in: ['unpaid', 'partial', 'overdue'] } } }),
-    prisma.feePayment.aggregate({ _sum: { amountPaid: true }, where: { schoolId, paymentDate: { gte: today, lt: tomorrow } } }),
+    prisma.feePayment.aggregate({ _sum: { amountPaid: true }, where: { voidedAt: null, schoolId, paymentDate: { gte: today, lt: tomorrow } } }),
     prisma.expense.aggregate({ _sum: { amount: true }, where: { schoolId, date: { gte: today, lt: tomorrow } } }),
-    prisma.feePayment.aggregate({ _sum: { amountPaid: true }, where: { schoolId, paymentDate: { gte: monthStart, lt: tomorrow } } }),
+    prisma.feePayment.aggregate({ _sum: { amountPaid: true }, where: { voidedAt: null, schoolId, paymentDate: { gte: monthStart, lt: tomorrow } } }),
     prisma.attendance.count({ where: { schoolId, date: { gte: today, lt: tomorrow }, status: 'present' } }).catch(() => 0),
     prisma.student.count({ where: { schoolId, deletedAt: null, createdAt: { gte: monthStart } } }),
     prisma.feePayment.findMany({
-      where: { schoolId },
+      where: { voidedAt: null, schoolId },
       orderBy: { paymentDate: 'desc' },
       take: 10,
       select: {
@@ -74,7 +74,7 @@ router.get('/stats', wrap(async (req, res) => {
 
   const [monthlyPayments, monthlyExpenses] = await Promise.all([
     prisma.feePayment.findMany({
-      where: { schoolId, paymentDate: { gte: yearAgo } },
+      where: { voidedAt: null, schoolId, paymentDate: { gte: yearAgo } },
       select: { amountPaid: true, paymentDate: true },
     }),
     prisma.expense.findMany({
@@ -110,7 +110,7 @@ router.get('/stats', wrap(async (req, res) => {
 
   const [feePaymentsTwoYears, attendanceSixMonths] = await Promise.all([
     prisma.feePayment.findMany({
-      where: { schoolId, paymentDate: { gte: lastYearStart, lt: nextYearStart } },
+      where: { voidedAt: null, schoolId, paymentDate: { gte: lastYearStart, lt: nextYearStart } },
       select: { amountPaid: true, paymentDate: true },
     }),
     prisma.attendance.findMany({

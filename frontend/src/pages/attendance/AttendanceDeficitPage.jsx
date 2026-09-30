@@ -174,7 +174,7 @@ export default function AttendanceDeficitPage() {
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <label className="form-label">Class</label>
-            <select
+            <select aria-label="Class"
               className="form-select"
               style={{ width: 160 }}
               value={filters.classId}
@@ -186,7 +186,7 @@ export default function AttendanceDeficitPage() {
           </div>
           <div>
             <label className="form-label">Month</label>
-            <select
+            <select aria-label="Month"
               className="form-select"
               style={{ width: 140 }}
               value={filters.month}
@@ -197,7 +197,7 @@ export default function AttendanceDeficitPage() {
           </div>
           <div>
             <label className="form-label">Year</label>
-            <input
+            <input aria-label="Year"
               className="form-input"
               type="number"
               style={{ width: 100 }}

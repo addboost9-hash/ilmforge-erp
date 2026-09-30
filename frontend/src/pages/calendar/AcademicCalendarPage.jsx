@@ -123,17 +123,17 @@ export default function AcademicCalendarPage() {
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                 <div className="form-group">
                   <label className="form-label">Event Type</label>
-                  <select className="form-select" value={form.type} onChange={e => setForm({...form,type:e.target.value})}>
+                  <select aria-label="Event Type" className="form-select" value={form.type} onChange={e => setForm({...form,type:e.target.value})}>
                     {EVENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Start Date *</label>
-                  <input type="date" className="form-input" value={form.date} onChange={e => setForm({...form,date:e.target.value})} />
+                  <input aria-label="Start Date" type="date" className="form-input" value={form.date} onChange={e => setForm({...form,date:e.target.value})} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">End Date (optional)</label>
-                  <input type="date" className="form-input" value={form.endDate} onChange={e => setForm({...form,endDate:e.target.value})} />
+                  <input aria-label="End Date (optional)" type="date" className="form-input" value={form.endDate} onChange={e => setForm({...form,endDate:e.target.value})} />
                 </div>
                 <div className="form-group" style={{ display:'flex', alignItems:'center', gap:8, paddingTop:24 }}>
                   <input type="checkbox" id="holiday" checked={form.isHoliday} onChange={e => setForm({...form,isHoliday:e.target.checked})} />

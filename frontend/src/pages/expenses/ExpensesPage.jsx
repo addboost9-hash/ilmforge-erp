@@ -88,7 +88,7 @@ export default function ExpensesPage() {
 
             <div className="form-group">
               <label className="form-label">Date</label>
-              <input className="form-input" type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/>
+              <input aria-label="Date" className="form-input" type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/>
             </div>
 
             <button className="btn btn-red" style={{width:'100%', justifyContent:'center'}}

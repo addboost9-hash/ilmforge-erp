@@ -205,7 +205,7 @@ export default function AdminsPage() {
             </div>
             <div className="form-group">
               <label className="form-label">Role / Portal</label>
-              <select className="form-select" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>
+              <select aria-label="Role / Portal" className="form-select" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>
                 {roleOptions.map(r => <option key={r.val} value={r.val}>{r.label}</option>)}
               </select>
             </div>

@@ -11,48 +11,76 @@ P3019) rather than generating wrong SQL, so this folder is Postgres-only.
 
 ---
 
-## The two migrations
+## The migrations
 
 | Migration | What it is | Runs on production? |
 |---|---|---|
 | `20260915000000_baseline_existing_production` | The 80 tables Neon **already has**, as built by the old `db push`. Generated from commit `a0d2a1a`. | **No — mark as applied** |
-| `20260915000100_add_visitor_promotion_logs` | The new work: 2 tables, 13 columns, 4 indexes, 6 foreign keys. | **Yes** |
+| `20260915000100_add_visitor_promotion_logs` | The new work: 2 tables, 13 columns, 4 indexes, 6 foreign keys. | **No — `db push` already applied it** |
+| `20260929000000_add_payment_corrections` | Fee payment corrections: 4 nullable columns, 1 unique index, 1 index, 1 self-referencing foreign key on `FeePayment`. | **Yes — genuinely new** |
 
-The baseline exists only so Prisma knows where production started. Running it
-against Neon would fail — the tables are already there.
+Neither runs against Neon. The baseline describes where production started;
+the delta was already applied by the last `db push` deploy. Both are simply
+recorded so Prisma knows where the history begins.
 
 ---
 
-## One-time setup (do this once, before the next deploy)
+## One-time setup (do this once, before switching render.yaml)
 
-Run against production **with `DATABASE_URL` pointing at Neon**:
+**Both migrations are already reflected in production.** The deploy that
+shipped these files still ran `db push --accept-data-loss`, which applied the
+new tables and columns to Neon before `migrate deploy` was ever switched on.
+So both are marked as applied — neither is executed.
+
+Run against production, with `DATABASE_URL` pointing at Neon:
 
 ```bash
-# 1. OPTIONAL BUT RECOMMENDED — check Neon matches the baseline.
-#    Read-only. Prints the SQL that WOULD be needed to bring the baseline
-#    up to your current schema. Expect it to show only the delta migration's
-#    changes. Anything else means production has drifted — stop and review.
+cd backend
+
+# 1. OPTIONAL BUT RECOMMENDED — confirm Neon already matches the schema.
+#    Read-only. Prints the SQL that WOULD be needed to reconcile them.
+#    Expect EMPTY output. Anything printed means production has drifted —
+#    stop and review before going further.
 npx prisma migrate diff \
   --from-url "$DATABASE_URL" \
   --to-schema-datamodel prisma/schema.prisma \
   --script
 
-# 2. Tell Prisma the baseline is already applied. Writes one row to the
-#    _prisma_migrations bookkeeping table. Touches no application data,
-#    creates no tables, runs none of the baseline SQL.
+# 2. Record both migrations as applied. Each writes one row to the
+#    _prisma_migrations bookkeeping table. No application data is touched,
+#    no table is created, none of the migration SQL runs.
 npx prisma migrate resolve --applied 20260915000000_baseline_existing_production
+npx prisma migrate resolve --applied 20260915000100_add_visitor_promotion_logs
 
-# 3. Confirm.
+# 3. Confirm. Expect: "Database schema is up to date!" with both applied.
 npx prisma migrate status
-#    Expect: baseline applied, 20260915000100_add_visitor_promotion_logs pending.
 ```
 
-After that, every Render deploy runs `prisma migrate deploy` and applies only
-what is genuinely new.
+### The third migration is different
 
----
+`20260929000000_add_payment_corrections` was written **after** the switch away
+from `db push`, so unlike the first two it has **not** been applied to Neon.
+Do not `migrate resolve` it. It runs on the next deploy, or manually with
+`npx prisma migrate deploy`.
 
-## What the pending migration will do
+It adds four nullable columns, two indexes and one self-referencing foreign
+key to `FeePayment`. Nothing is dropped and no existing row is rewritten:
+every payment already recorded simply reads as "not voided". The SQL was
+checked against `prisma migrate diff` output for a PostgreSQL datamodel and
+matches it exactly.
+
+Only after step 3 reports clean, switch the build command over:
+
+```bash
+git add render.yaml backend/render.yaml
+git commit -m "Use prisma migrate deploy instead of db push"
+git push origin main
+```
+
+From that point every deploy applies only genuinely new migrations, and a
+failure stops the build instead of rewriting the database.
+
+## What these migrations contain (already applied in production)
 
 No `DROP TABLE`, no `DROP COLUMN`, no `TRUNCATE` — verified. Every added column
 is either nullable or has a default, so existing rows are fine.
@@ -69,8 +97,8 @@ foreign keys added to tables that already hold data:
 | `Quiz.classId → Class` | a Quiz row references a missing Class |
 | `BehaviorRecord.studentId → Student` | a BehaviorRecord references a missing Student |
 
-If one fails the migration aborts in a transaction and the database is left
-untouched — a failed deploy, not lost data. To check in advance:
+These applied cleanly during the deploy that shipped them, which means no
+orphaned rows existed. Kept here for reference if you rebuild from scratch:
 
 ```sql
 SELECT COUNT(*) FROM "Exam" e
@@ -79,7 +107,6 @@ SELECT COUNT(*) FROM "Exam" e
 -- repeat per row of the table above; every count should be 0
 ```
 
-Clean up any orphans before deploying.
 
 ---
 

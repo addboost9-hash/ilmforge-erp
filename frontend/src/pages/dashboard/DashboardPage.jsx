@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import api from '../../api/client';
 import useAuthStore from '../../store/auth.store';
+import AdminDashboard from './AdminDashboard';
 import { useTranslation } from '../../hooks/useTranslation';
 import {
   ChevronRight, ClipboardList, CreditCard, UserPlus,
@@ -20,6 +21,12 @@ import { SkeletonCard } from '../../components/Skeleton';
 
 /* ── helpers ── */
 const Rs = v => 'Rs. ' + Number(v || 0).toLocaleString('en-PK');
+
+// Fee amounts are stored in paisa (a Rs 3,500 fee is 350000), the same as
+// the fee pages assume. The dashboard was printing the stored figure
+// straight out, so every collection total read 100x too high.
+const fromPaisa = v => Math.round(Number(v || 0) / 100);
+const RsPaisa = v => Rs(fromPaisa(v));
 const fmtDate = d => d ? new Date(d).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -99,8 +106,8 @@ function buildFeeChartData(stats) {
   const lastYear = stats?.monthlyFeeLastYear || [];
   return MONTHS.map((m, i) => ({
     month: m,
-    thisYear: thisYear[i] ?? 0,
-    lastYear: lastYear[i] ?? 0,
+    thisYear: Math.round((thisYear[i] ?? 0) / 100),
+    lastYear: Math.round((lastYear[i] ?? 0) / 100),
   }));
 }
 
@@ -119,7 +126,7 @@ function buildAttChartData(stats) {
 /* ══════════════════════════════════════════════════════════
    MAIN DASHBOARD
 ══════════════════════════════════════════════════════════ */
-export default function DashboardPage() {
+function LegacyDashboard() {
   const nav = useNavigate();
   const { user, school: authSchool } = useAuthStore();
   const { t } = useTranslation();
@@ -186,8 +193,9 @@ export default function DashboardPage() {
   const admissions = Array.isArray(recentStudents) ? recentStudents
     : (Array.isArray(s.recentStudents) ? s.recentStudents : []);
 
-  const payments = Array.isArray(recentPayments) ? recentPayments
-    : (Array.isArray(s.recentPayments) ? s.recentPayments : []);
+  const payments = (Array.isArray(recentPayments) ? recentPayments
+    : (Array.isArray(s.recentPayments) ? s.recentPayments : []))
+    .filter(p => !p.voidedAt);
 
   const activity = payments.length ? payments : admissions;
 
@@ -195,7 +203,7 @@ export default function DashboardPage() {
     { label:'TOTAL STUDENTS', value:totalStudents, icon:'👥', gradient:'var(--ilm-gradient-primary)', href:'/students' },
     { label:'PRESENT TODAY', value:presentToday, icon:'✅', gradient:'var(--ilm-gradient-success)', href:'/attendance-hub' },
     { label:'TOTAL STAFF', value:totalStaff, icon:'👨‍🏫', gradient:'linear-gradient(135deg,#6366f1,#8b5cf6)', href:'/staff' },
-    { label:'FEE TODAY', value:`Rs.${Number(feeToday).toLocaleString()}`, icon:'💰', gradient:'var(--ilm-gradient-gold)', href:'/hub/fees' },
+    { label:'FEE TODAY', value:RsPaisa(feeToday), icon:'💰', gradient:'var(--ilm-gradient-gold)', href:'/hub/fees' },
     { label:'PENDING FEES', value:feeDefaulters, icon:'📋', gradient:'var(--ilm-gradient-danger)', href:'/fees/defaulters' },
   ];
 
@@ -301,7 +309,7 @@ export default function DashboardPage() {
         <div style={{display:'flex', gap:20, flexWrap:'wrap'}}>
           {[
             {label:'Attendance Rate', val: totalStudents > 0 ? Math.round((presentToday/totalStudents)*100)+'%' : '—', icon:'📋', ok: presentToday/totalStudents > 0.85},
-            {label:'Fee Collected', val: 'Rs.'+Number(feeToday).toLocaleString(), icon:'💰', ok: feeToday > 0},
+            {label:'Fee Collected', val: RsPaisa(feeToday), icon:'💰', ok: feeToday > 0},
             {label:'Active Exams', val: '—', icon:'📝', ok: true},
             {label:'Alerts', val: feeDefaulters > 0 ? feeDefaulters+' pending' : 'All clear', icon:'🔔', ok: feeDefaulters === 0},
           ].map(item => (
@@ -508,10 +516,11 @@ export default function DashboardPage() {
                   </td>
                 </tr>
               ) : activity.slice(0, 10).map((item, i) => {
-                const isPay = !!item.amount;
+                const amt = item.amountPaid ?? item.amount;
+                const isPay = amt != null;
                 const name   = item.student?.name || item.name || '—';
                 const cls    = item.student?.class?.name || item.class?.name || item.className || '—';
-                const action = isPay ? `Fee – ${Rs(item.amount)}` : 'New Admission';
+                const action = isPay ? `Fee – ${RsPaisa(amt)}` : 'New Admission';
                 const date   = fmtDate(item.paidAt || item.createdAt || item.admissionDate);
                 const status = isPay ? 'Paid' : 'Active';
                 const statusColor = isPay ? { bg: '#d4edda', color: '#155724' } : { bg: '#cce5ff', color: '#004085' };
@@ -546,4 +555,15 @@ export default function DashboardPage() {
       `}</style>
     </div>
   );
+}
+
+/**
+ * /dashboard is role-aware. Owners, principals and admins get the rebuilt
+ * dashboard; any other role that reaches this route keeps the previous view
+ * rather than a blank screen, until its own dashboard lands in a later phase.
+ */
+export default function DashboardPage() {
+  const { user } = useAuthStore();
+  const isAdmin = ['admin', 'super_admin', 'principal'].includes(user?.role);
+  return isAdmin ? <AdminDashboard /> : <LegacyDashboard />;
 }

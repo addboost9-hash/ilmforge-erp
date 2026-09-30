@@ -215,7 +215,7 @@ export default function SubjectsPage() {
       <div className="card" style={{ marginBottom: '1rem', padding: '0.75rem 1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <label className="form-label" style={{ margin: 0, whiteSpace: 'nowrap' }}>Filter by Class:</label>
-          <select
+          <select aria-label="Filter by Class"
             className="form-select"
             style={{ maxWidth: '220px' }}
             value={filterClass}

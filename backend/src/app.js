@@ -270,6 +270,10 @@ const PM = (moduleKey) => requireModulePermission(moduleKey);
 /* ═══ Route mounts WITH role-based access control ═══
    Read access stays broad (portals need it, routes do row-level scoping);
    write-heavy admin modules get hard role gates. */
+// Admin dashboard: owner/principal view. Mounted before the shared
+// dashboard routes and restricted, so a teacher cannot reach school-wide
+// finance by guessing the URL.
+app.use('/api/v1/dashboard/admin', protect, ADMIN_ONLY, PM('dashboard'), R('./routes/dashboard.admin.routes'));
 app.use('/api/v1/dashboard',       protect, PM('dashboard'), R('./routes/dashboard.routes'));
 app.use('/api/v1/students',        protect, PM('students'), R('./routes/student.routes'));          // row-level scoping inside
 app.use('/api/v1/admissions',      protect, FINANCE, PM('admissions'), R('./routes/admission.routes'));

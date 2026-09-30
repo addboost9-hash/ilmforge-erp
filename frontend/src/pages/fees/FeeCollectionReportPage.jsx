@@ -14,7 +14,9 @@ const MONTHS = [
   'July','August','September','October','November','December',
 ];
 
-const money = v => 'Rs. ' + Number(v || 0).toLocaleString();
+// Amounts arrive in paisa (Rs 3,500 is 350000); this was printing the
+// stored figure straight out, a hundred times too large.
+const money = v => 'Rs. ' + (Number(v || 0) / 100).toLocaleString();
 
 export default function FeeCollectionReportPage() {
   const [filters, setFilters] = useState({
@@ -87,7 +89,7 @@ export default function FeeCollectionReportPage() {
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <label className="form-label">Month</label>
-            <select
+            <select aria-label="Month"
               className="form-select"
               style={{ width: 150 }}
               value={filters.month}
@@ -100,7 +102,7 @@ export default function FeeCollectionReportPage() {
           </div>
           <div>
             <label className="form-label">Year</label>
-            <input
+            <input aria-label="Year"
               className="form-input"
               type="number"
               style={{ width: 100 }}
@@ -110,7 +112,7 @@ export default function FeeCollectionReportPage() {
           </div>
           <div>
             <label className="form-label">From Date (optional)</label>
-            <input
+            <input aria-label="From Date (optional)"
               className="form-input"
               type="date"
               style={{ width: 160 }}
@@ -120,7 +122,7 @@ export default function FeeCollectionReportPage() {
           </div>
           <div>
             <label className="form-label">To Date (optional)</label>
-            <input
+            <input aria-label="To Date (optional)"
               className="form-input"
               type="date"
               style={{ width: 160 }}

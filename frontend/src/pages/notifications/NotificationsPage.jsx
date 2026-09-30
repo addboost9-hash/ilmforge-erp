@@ -402,7 +402,7 @@ function SendNowTab() {
           <div className="card-body">
             <div className="form-group">
               <label className="form-label">Use Template</label>
-              <select className="form-select" value={templateId} onChange={e => handleTemplateSelect(e.target.value)}>
+              <select aria-label="Use Template" className="form-select" value={templateId} onChange={e => handleTemplateSelect(e.target.value)}>
                 <option value="">— Custom message —</option>
                 {CATEGORIES.map(cat => (
                   <optgroup key={cat.id} label={cat.label}>
@@ -514,13 +514,13 @@ function TemplatesTab() {
               </div>
               <div className="form-group">
                 <label className="form-label">Channel</label>
-                <select className="form-select" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+                <select aria-label="Channel" className="form-select" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
                   {['sms', 'whatsapp', 'email', 'push', 'all'].map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Category</label>
-                <select className="form-select" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+                <select aria-label="Category" className="form-select" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
                   {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
@@ -528,7 +528,7 @@ function TemplatesTab() {
             {form.type === 'email' && (
               <div className="form-group">
                 <label className="form-label">Subject</label>
-                <input className="form-input" value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} />
+                <input aria-label="Subject" className="form-input" value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} />
               </div>
             )}
             <div className="form-group">
@@ -673,13 +673,13 @@ function AutomationTab() {
               </div>
               <div className="form-group">
                 <label className="form-label">Trigger</label>
-                <select className="form-select" value={form.trigger} onChange={e => setForm({ ...form, trigger: e.target.value })}>
+                <select aria-label="Trigger" className="form-select" value={form.trigger} onChange={e => setForm({ ...form, trigger: e.target.value })}>
                   {TRIGGER_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Channel</label>
-                <select className="form-select" value={form.channel} onChange={e => setForm({ ...form, channel: e.target.value })}>
+                <select aria-label="Channel" className="form-select" value={form.channel} onChange={e => setForm({ ...form, channel: e.target.value })}>
                   <option value="sms">SMS</option>
                   <option value="whatsapp">WhatsApp</option>
                   <option value="email">Email</option>
@@ -689,7 +689,7 @@ function AutomationTab() {
             </div>
             <div className="form-group">
               <label className="form-label">Template</label>
-              <select className="form-select" value={form.templateId} onChange={e => setForm({ ...form, templateId: e.target.value })}>
+              <select aria-label="Template" className="form-select" value={form.templateId} onChange={e => setForm({ ...form, templateId: e.target.value })}>
                 <option value="">— Default template —</option>
                 {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
@@ -710,7 +710,7 @@ function AutomationTab() {
             )}
             <div className="form-group">
               <label className="form-label">Time</label>
-              <input type="time" className="form-input" style={{ maxWidth: 140 }} value={form.runTime} onChange={e => setForm({ ...form, runTime: e.target.value })} />
+              <input aria-label="Time" type="time" className="form-input" style={{ maxWidth: 140 }} value={form.runTime} onChange={e => setForm({ ...form, runTime: e.target.value })} />
             </div>
             <button className="btn btn-primary" onClick={() => createRule.mutate()} disabled={!form.name || createRule.isPending}>
               {createRule.isPending ? 'Creating…' : 'Create Rule'}

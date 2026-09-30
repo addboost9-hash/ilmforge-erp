@@ -111,15 +111,15 @@ export default function PaymentSettingsPage() {
             </div>
             <div className="form-group">
               <label className="form-label">Voucher Header Text</label>
-              <input className="form-input" value={voucherForm.headerText} onChange={e=>setVoucherForm({...voucherForm,headerText:e.target.value})}/>
+              <input aria-label="Voucher Header Text" className="form-input" value={voucherForm.headerText} onChange={e=>setVoucherForm({...voucherForm,headerText:e.target.value})}/>
             </div>
             <div className="form-group">
               <label className="form-label">Footer / Note Text</label>
-              <textarea className="form-input form-textarea" value={voucherForm.footerText} onChange={e=>setVoucherForm({...voucherForm,footerText:e.target.value})}/>
+              <textarea aria-label="Footer / Note Text" className="form-input form-textarea" value={voucherForm.footerText} onChange={e=>setVoucherForm({...voucherForm,footerText:e.target.value})}/>
             </div>
             <div className="form-group">
               <label className="form-label">Number of Copies</label>
-              <select className="form-select" value={voucherForm.copies} onChange={e=>setVoucherForm({...voucherForm,copies:e.target.value})}>
+              <select aria-label="Number of Copies" className="form-select" value={voucherForm.copies} onChange={e=>setVoucherForm({...voucherForm,copies:e.target.value})}>
                 <option value="1">1 Copy</option>
                 <option value="2">2 Copies (Bank + School)</option>
                 <option value="3">3 Copies</option>

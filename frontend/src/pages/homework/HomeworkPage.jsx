@@ -52,7 +52,7 @@ export default function HomeworkPage() {
 
           <div className="form-group">
             <label className="form-label">Class</label>
-            <select className="form-select" value={form.classId} onChange={e=>setForm({...form,classId:e.target.value,subjectId:''})}>
+            <select aria-label="Class" className="form-select" value={form.classId} onChange={e=>setForm({...form,classId:e.target.value,subjectId:''})}>
               <option value="">Select Class</option>
               {(classes||[]).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -60,7 +60,7 @@ export default function HomeworkPage() {
 
           <div className="form-group">
             <label className="form-label">Subject</label>
-            <select className="form-select" value={form.subjectId} onChange={e=>setForm({...form,subjectId:e.target.value})}>
+            <select aria-label="Subject" className="form-select" value={form.subjectId} onChange={e=>setForm({...form,subjectId:e.target.value})}>
               <option value="">All Subjects</option>
               {(subjects||[]).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
@@ -68,7 +68,7 @@ export default function HomeworkPage() {
 
           <div className="form-group">
             <label className="form-label">Date</label>
-            <input className="form-input" type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/>
+            <input aria-label="Date" className="form-input" type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/>
           </div>
 
           <div className="form-group">

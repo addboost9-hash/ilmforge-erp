@@ -179,7 +179,7 @@ export default function AttendanceCorrectionPage() {
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <div>
                 <label className="form-label">Class *</label>
-                <select
+                <select aria-label="Class"
                   className="form-select"
                   style={{ width: 160 }}
                   value={form.classId}
@@ -191,7 +191,7 @@ export default function AttendanceCorrectionPage() {
               </div>
               <div>
                 <label className="form-label">Section</label>
-                <select
+                <select aria-label="Section"
                   className="form-select"
                   style={{ width: 130 }}
                   value={form.sectionId}
@@ -204,7 +204,7 @@ export default function AttendanceCorrectionPage() {
               </div>
               <div>
                 <label className="form-label">Date *</label>
-                <input
+                <input aria-label="Date"
                   type="date"
                   className="form-input"
                   style={{ width: 160 }}
@@ -303,7 +303,7 @@ export default function AttendanceCorrectionPage() {
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div>
                   <label className="form-label">New Status *</label>
-                  <select
+                  <select aria-label="New Status"
                     className="form-select"
                     style={{ width: 180 }}
                     value={form.requestedStatus}

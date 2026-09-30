@@ -439,6 +439,9 @@ router.post('/', wrap(async (req, res) => {
   // Build credentials payload for frontend popup / print
   const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
   const portalLink = `${FRONTEND_URL}/login?slug=${slug}`;
+  // A link per role, so the student and the parent each get one that opens
+  // their own branded portal rather than a shared generic login.
+  const linkFor = (role) => `${FRONTEND_URL}/login?slug=${slug}&role=${role}`;
   const parentPasswordHint = emergencyPhone
     ? `Last 5 digits of phone + 123 (e.g. ${emergencyPhone.replace(/[^0-9]/g,'').slice(-5)}123)`
     : null;
@@ -455,6 +458,7 @@ router.post('/', wrap(async (req, res) => {
       email: safeStudentEmail,
       password: studentPassword,
       portal: 'Student Portal',
+      portalLink: linkFor('student'),
       passwordHint: `Roll number + 123 (e.g. ${finalRollNo.replace(/[^a-zA-Z0-9]/g,'')}123)`,
     },
     parent: result.parentIsExisting
@@ -464,6 +468,7 @@ router.post('/', wrap(async (req, res) => {
           email: result.parentUser.email,
           password: '(existing account — same as sibling)',
           portal: 'Parent Portal',
+          portalLink: linkFor('parent'),
           existing: true,
         }
       : {
@@ -472,6 +477,7 @@ router.post('/', wrap(async (req, res) => {
           email: result.parentUser?.email || finalParentEmail,
           password: parentPassword,
           portal: 'Parent Portal',
+          portalLink: linkFor('parent'),
           passwordHint: parentPasswordHint,
         },
   } : null;

@@ -179,7 +179,7 @@ export default function PortalManagementPage() {
           {hasEmail ? (
             <div style={{ display:'flex', alignItems:'center', gap:5 }}>
               <span style={{ fontSize:12.5, color:'#374151' }}>{person.email}</span>
-              <button onClick={()=>copyText(person.email,'Email')} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',padding:2 }}>
+              <button aria-label="Copy email" title="Copy email" onClick={()=>copyText(person.email,'Email')} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',padding:2 }}>
                 <Copy size={11}/>
               </button>
             </div>
@@ -195,11 +195,11 @@ export default function PortalManagementPage() {
             <span style={{ fontFamily:'monospace', fontSize:13, fontWeight:700, color:'#0F766E', background:'#F0FDFA', padding:'2px 8px', borderRadius:5, letterSpacing:1 }}>
               {visible ? pw : '••••••••'}
             </span>
-            <button onClick={()=>setShowPassFor(s=>({...s,[person.id]:!visible}))}
+            <button aria-label={visible ? 'Hide password' : 'Show password'} title={visible ? 'Hide password' : 'Show password'} onClick={()=>setShowPassFor(s=>({...s,[person.id]:!visible}))}
               style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',padding:2 }}>
               {visible ? <EyeOff size={13}/> : <Eye size={13}/>}
             </button>
-            <button onClick={()=>copyText(pw,'Password')}
+            <button aria-label="Copy password" title="Copy password" onClick={()=>copyText(pw,'Password')}
               style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',padding:2 }}>
               <Copy size={11}/>
             </button>
@@ -340,7 +340,7 @@ export default function PortalManagementPage() {
                 {hasEmail ? (
                   <>
                     <span style={{ fontSize:12.5, color:'#374151' }}>{resolvedEmail}</span>
-                    <button onClick={()=>copyText(resolvedEmail,'Email')} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',padding:2 }}>
+                    <button aria-label="Copy email" title="Copy email" onClick={()=>copyText(resolvedEmail,'Email')} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',padding:2 }}>
                       <Copy size={11}/>
                     </button>
                   </>
@@ -366,7 +366,7 @@ export default function PortalManagementPage() {
             <span style={{ fontFamily:'monospace', fontSize:13, fontWeight:700, color:'#0F766E', background:'#F0FDFA', padding:'2px 8px', borderRadius:5, letterSpacing:1 }}>
               parent
             </span>
-            <button onClick={()=>copyText(pw,'Password')} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',padding:2 }}>
+            <button aria-label="Copy password" title="Copy password" onClick={()=>copyText(pw,'Password')} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',padding:2 }}>
               <Copy size={11}/>
             </button>
           </div>

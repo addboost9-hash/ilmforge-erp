@@ -55,7 +55,7 @@ export default function StudyMaterialsPage() {
             </div>
             <div className="form-group">
               <label className="form-label">Type</label>
-              <select className="form-select" value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>
+              <select aria-label="Type" className="form-select" value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>
                 <option value="link">🔗 Link / URL</option>
                 <option value="pdf">📄 PDF Document</option>
                 <option value="video">🎬 Video (YouTube)</option>
@@ -64,7 +64,7 @@ export default function StudyMaterialsPage() {
             </div>
             <div className="form-group">
               <label className="form-label">For Class</label>
-              <select className="form-select" value={form.classId} onChange={e=>setForm({...form,classId:e.target.value})}>
+              <select aria-label="For Class" className="form-select" value={form.classId} onChange={e=>setForm({...form,classId:e.target.value})}>
                 <option value="">All Classes</option>
                 {(classes||[]).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               </select>

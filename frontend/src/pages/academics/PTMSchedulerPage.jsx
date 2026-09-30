@@ -95,17 +95,17 @@ function CreatePTMModal({ onClose, onCreated }) {
             </div>
             <div className="form-group">
               <label className="form-label">Date *</label>
-              <input type="date" className="form-control" value={form.date}
+              <input aria-label="Date" type="date" className="form-control" value={form.date}
                 onChange={(e) => setForm({ ...form, date: e.target.value })} />
             </div>
             <div className="form-group">
               <label className="form-label">Start Time *</label>
-              <input type="time" className="form-control" value={form.startTime}
+              <input aria-label="Start Time" type="time" className="form-control" value={form.startTime}
                 onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
             </div>
             <div className="form-group">
               <label className="form-label">End Time *</label>
-              <input type="time" className="form-control" value={form.endTime}
+              <input aria-label="End Time" type="time" className="form-control" value={form.endTime}
                 onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
             </div>
             <div className="form-group">
@@ -115,7 +115,7 @@ function CreatePTMModal({ onClose, onCreated }) {
             </div>
             <div className="form-group">
               <label className="form-label">Slot Duration (minutes)</label>
-              <select className="form-select" value={form.slotDurationMinutes}
+              <select aria-label="Slot Duration (minutes)" className="form-select" value={form.slotDurationMinutes}
                 onChange={(e) => setForm({ ...form, slotDurationMinutes: parseInt(e.target.value, 10) })}>
                 <option value={10}>10 minutes</option>
                 <option value={15}>15 minutes</option>
@@ -187,7 +187,7 @@ function BookSlotModal({ slot, eventId, onClose, onBooked }) {
           {error && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
           <div className="form-group">
             <label className="form-label">Select Student *</label>
-            <select className="form-select" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+            <select aria-label="Select Student" className="form-select" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
               <option value="">-- Choose student --</option>
               {students.map((s) => (
                 <option key={s.id} value={s.id}>{s.name} ({s.rollNo || 'N/A'})</option>
@@ -420,7 +420,7 @@ function SlotManagementTab({ role }) {
           <div className="grid-2" style={{ gap: 16 }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Select PTM Event</label>
-              <select className="form-select" value={selectedEventId}
+              <select aria-label="Select PTM Event" className="form-select" value={selectedEventId}
                 onChange={(e) => setSelectedEventId(e.target.value)}>
                 <option value="">-- Select event --</option>
                 {events.map((ev) => (
@@ -430,7 +430,7 @@ function SlotManagementTab({ role }) {
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Filter by Class</label>
-              <select className="form-select" value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
+              <select aria-label="Filter by Class" className="form-select" value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
                 <option value="">All Classes</option>
                 {classIds.map((cid) => (
                   <option key={cid} value={cid}>Class ID {cid}</option>
@@ -608,7 +608,7 @@ function MyBookingsTab({ role }) {
             <div className="card-body" style={{ paddingTop: 14, paddingBottom: 14 }}>
               <div className="form-group" style={{ marginBottom: 0, maxWidth: 400 }}>
                 <label className="form-label">Select PTM Event</label>
-                <select className="form-select" value={selectedEventId}
+                <select aria-label="Select PTM Event" className="form-select" value={selectedEventId}
                   onChange={(e) => setSelectedEventId(e.target.value)}>
                   {events.map((ev) => (
                     <option key={ev.id} value={ev.id}>{ev.title} — {fmt(ev.date)}</option>

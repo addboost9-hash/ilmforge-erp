@@ -1,6 +1,10 @@
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+
+// Remembers the last failure notice so parallel failures collapse into one.
+let lastNotice = { msg: '', at: 0 };
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -85,6 +89,40 @@ api.interceptors.response.use(
         return Promise.reject(refreshErr);
       } finally {
         isRefreshing = false;
+      }
+    }
+
+    /* ── Tell the user when the SERVER failed ────────────────────────
+       Pages commonly end a read with `.catch(() => [])`, which turns a
+       failed request into an empty list. The screen then shows "no
+       students" when the truth is "the server did not answer" — measured
+       across 20 pages, 18 of them said nothing at all when every call
+       failed. This interceptor runs before those catches, so surfacing it
+       here covers every page at once, including ones never touched.
+
+       Pass `{ silent: true }` on a request to opt out (polling, probes). */
+    if (!err.config?.silent) {
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      const isNetwork = !err.response;
+      const isServer = status >= 500;
+      const isRateLimit = status === 429;
+
+      if (offline || isNetwork || isServer || isRateLimit) {
+        const msg = offline
+          ? 'You are offline. Check your internet connection.'
+          : isRateLimit
+            ? 'Too many requests. Please wait a moment and try again.'
+            : isNetwork
+              ? 'Could not reach the server. Check your connection, then try again.'
+              : 'The server could not complete that request. Please try again.';
+
+        // A page firing six parallel reads must not stack six identical
+        // toasts, so the same message is shown at most once per few seconds.
+        const now = Date.now();
+        if (lastNotice.msg !== msg || now - lastNotice.at > 4000) {
+          lastNotice = { msg, at: now };
+          toast.error(msg, { id: 'api-failure', duration: 5000 });
+        }
       }
     }
 

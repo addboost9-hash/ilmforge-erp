@@ -24,6 +24,48 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json({ success: true, data: cls });
 }));
 
+// PUT /api/v1/classes/:id - rename a class or change its display order.
+// There was no way to correct a class name once created; the only route out
+// was deleting it, which is not possible while students are enrolled.
+router.put('/:id', wrap(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { name, orderNo } = req.body || {};
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ success: false, message: 'A valid class id is required.' });
+  }
+
+  // Scoped to the caller's school, so an id from another school 404s
+  // rather than being renamed.
+  const cls = await prisma.class.findFirst({ where: { id, schoolId: req.schoolId } });
+  if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
+
+  const data = {};
+  if (name !== undefined) {
+    const trimmed = String(name).trim();
+    if (!trimmed) return res.status(400).json({ success: false, message: 'Class name cannot be empty.' });
+
+    const clash = await prisma.class.findFirst({
+      where: { schoolId: req.schoolId, name: trimmed, isActive: true, id: { not: id } },
+      select: { id: true },
+    });
+    if (clash) {
+      return res.status(409).json({ success: false, message: `Another class is already called "${trimmed}".` });
+    }
+    data.name = trimmed;
+  }
+  if (orderNo !== undefined && orderNo !== null && orderNo !== '') {
+    const n = parseInt(orderNo);
+    if (!Number.isFinite(n)) return res.status(400).json({ success: false, message: 'orderNo must be a number.' });
+    data.orderNo = n;
+  }
+  if (!Object.keys(data).length) {
+    return res.status(400).json({ success: false, message: 'Nothing to update.' });
+  }
+
+  const updated = await prisma.class.update({ where: { id }, data });
+  res.json({ success: true, data: updated, message: 'Class updated.' });
+}));
+
 router.post('/:classId/sections', wrap(async (req, res) => {
   const { name } = req.body;
   const classId = parseInt(req.params.classId);

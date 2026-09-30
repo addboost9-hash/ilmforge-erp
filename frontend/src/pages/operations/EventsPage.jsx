@@ -119,14 +119,14 @@ function EventModal({ event, onClose, onSaved }) {
 
             <div className="form-group">
               <label className="form-label">Type</label>
-              <select className="form-select" value={form.type} onChange={set('type')}>
+              <select aria-label="Type" className="form-select" value={form.type} onChange={set('type')}>
                 {EVENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
 
             <div className="form-group">
               <label className="form-label">Status</label>
-              <select className="form-select" value={form.status} onChange={set('status')}>
+              <select aria-label="Status" className="form-select" value={form.status} onChange={set('status')}>
                 <option value="upcoming">Upcoming</option>
                 <option value="ongoing">Ongoing</option>
                 <option value="completed">Completed</option>
@@ -141,7 +141,7 @@ function EventModal({ event, onClose, onSaved }) {
 
             <div className="form-group">
               <label className="form-label">End Date</label>
-              <input className="form-control" type="date" value={form.endDate} onChange={set('endDate')} />
+              <input aria-label="End Date" className="form-control" type="date" value={form.endDate} onChange={set('endDate')} />
             </div>
 
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
@@ -341,7 +341,7 @@ function RegistrationTab() {
         <div className="card" style={{ padding: 20, marginBottom: 0 }}>
           <div className="form-group">
             <label className="form-label">Select Event</label>
-            <select className="form-select" value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)}>
+            <select aria-label="Select Event" className="form-select" value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)}>
               <option value="">— Choose an event —</option>
               {events.map((e) => <option key={e.id} value={e.id}>{e.title} ({fmtDate(e.date)})</option>)}
             </select>
@@ -478,7 +478,7 @@ function ResultsTab() {
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <div className="form-group" style={{ marginBottom: 14 }}>
           <label className="form-label">Select Event</label>
-          <select className="form-select" value={selectedEventId} onChange={(e) => { setSelectedEventId(e.target.value); setResults([{ studentId: '', position: 1, score: '', teamName: '' }]); }}>
+          <select aria-label="Select Event" className="form-select" value={selectedEventId} onChange={(e) => { setSelectedEventId(e.target.value); setResults([{ studentId: '', position: 1, score: '', teamName: '' }]); }}>
             <option value="">— Choose an event —</option>
             {events.map((e) => <option key={e.id} value={e.id}>{e.title} ({fmtDate(e.date)})</option>)}
           </select>
@@ -491,7 +491,7 @@ function ResultsTab() {
               <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-end' }}>
                 <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
                   <label className="form-label">Participant</label>
-                  <select className="form-select" value={row.studentId} onChange={(e) => updateRow(i, 'studentId', e.target.value)}>
+                  <select aria-label="Participant" className="form-select" value={row.studentId} onChange={(e) => updateRow(i, 'studentId', e.target.value)}>
                     <option value="">Select...</option>
                     {participants.map((p) => (
                       <option key={p.id} value={p.studentId}>{p.student?.name}{p.teamName ? ` (${p.teamName})` : ''}</option>
@@ -500,7 +500,7 @@ function ResultsTab() {
                 </div>
                 <div className="form-group" style={{ width: 110, marginBottom: 0 }}>
                   <label className="form-label">Position</label>
-                  <select className="form-select" value={row.position} onChange={(e) => updateRow(i, 'position', parseInt(e.target.value))}>
+                  <select aria-label="Position" className="form-select" value={row.position} onChange={(e) => updateRow(i, 'position', parseInt(e.target.value))}>
                     <option value={1}>1st</option>
                     <option value={2}>2nd</option>
                     <option value={3}>3rd</option>

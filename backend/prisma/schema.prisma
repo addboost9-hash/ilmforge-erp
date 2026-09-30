@@ -8,54 +8,54 @@ datasource db {
 }
 
 model School {
-  id          Int       @id @default(autoincrement())
-  name        String
-  slug        String    @unique
-  logoUrl     String?
-  address     String?
-  city        String?
-  phone       String?
-  email       String    @unique
-  plan           String    @default("free")    // free|starter|standard|premium
-  trialEndsAt    DateTime?
-  status         String    @default("active")   // active|inactive|suspended|trial|expired
-  licenseKey     String?   @unique              // offline license key
-  licenseExpiry  DateTime?                      // when license expires
-  suspendedAt    DateTime?                      // when suspended by platform owner
-  suspendReason  String?                        // reason for suspension
-  maxStudents    Int       @default(100)        // plan limit
-  activatedAt    DateTime?                      // when school was activated
-  lastSeenAt     DateTime?                      // last platform login
-  subdomain    String?
-  settingsJson String?   // JSON blob for theme, payment, general, website settings
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-  users                User[]
-  campuses             Campus[]
-  examTimetables       ExamTimetable[]
-  tests                Test[]
-  quizzes              Quiz[]
+  id                    Int                    @id @default(autoincrement())
+  name                  String
+  slug                  String                 @unique
+  logoUrl               String?
+  address               String?
+  city                  String?
+  phone                 String?
+  email                 String                 @unique
+  plan                  String                 @default("free") // free|starter|standard|premium
+  trialEndsAt           DateTime?
+  status                String                 @default("active") // active|inactive|suspended|trial|expired
+  licenseKey            String?                @unique // offline license key
+  licenseExpiry         DateTime? // when license expires
+  suspendedAt           DateTime? // when suspended by platform owner
+  suspendReason         String? // reason for suspension
+  maxStudents           Int                    @default(100) // plan limit
+  activatedAt           DateTime? // when school was activated
+  lastSeenAt            DateTime? // last platform login
+  subdomain             String?
+  settingsJson          String? // JSON blob for theme, payment, general, website settings
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  deletedAt             DateTime?
+  users                 User[]
+  campuses              Campus[]
+  examTimetables        ExamTimetable[]
+  tests                 Test[]
+  quizzes               Quiz[]
   attendanceCorrections AttendanceCorrection[]
-  leaveBalances        LeaveBalance[]
-  examSettings         ExamSettings?
-  certificateRegistry  CertificateRegistry[]
-  ptmEvents            PTMEvent[]
-  ptmBookings          PTMBooking[]
-  events               SchoolEvent[]
+  leaveBalances         LeaveBalance[]
+  examSettings          ExamSettings?
+  certificateRegistry   CertificateRegistry[]
+  ptmEvents             PTMEvent[]
+  ptmBookings           PTMBooking[]
+  events                SchoolEvent[]
 }
 
 model Campus {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   schoolId  Int
   name      String
   address   String?
   phone     String?
   city      String?
-  isMain    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  school    School   @relation(fields: [schoolId], references: [id])
+  isMain    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  school    School    @relation(fields: [schoolId], references: [id])
   students  Student[]
   staff     Staff[]
 }
@@ -67,7 +67,7 @@ model User {
   name               String
   email              String
   phone              String?
-  role               String    // super_admin|admin|accountant|teacher|parent|student|gatekeeper
+  role               String // super_admin|admin|accountant|teacher|parent|student|gatekeeper
   passwordHash       String
   photoUrl           String?
   phoneVerifiedAt    DateTime?
@@ -82,6 +82,7 @@ model User {
   studentProfile     Student?
   parentProfile      Parent?
   staffProfile       Staff?
+
   @@unique([email, schoolId])
 }
 
@@ -91,7 +92,7 @@ model OtpToken {
   phone     String?
   email     String?
   otpHash   String
-  type      String   // phone|email|reset
+  type      String // phone|email|reset
   expiresAt DateTime
   attempts  Int      @default(0)
   isUsed    Boolean  @default(false)
@@ -99,34 +100,34 @@ model OtpToken {
 }
 
 model AcademicSession {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   schoolId  Int
   name      String
   startDate DateTime
   endDate   DateTime
-  isActive  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   students  Student[]
 }
 
 model Class {
-  id        Int       @id @default(autoincrement())
-  schoolId  Int
-  name      String
-  orderNo   Int       @default(0)
-  isActive  Boolean   @default(true)
+  id             Int            @id @default(autoincrement())
+  schoolId       Int
+  name           String
+  orderNo        Int            @default(0)
+  isActive       Boolean        @default(true)
   classTeacherId Int?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  sections  Section[]
-  students  Student[]
-  subjects  Subject[]
-  feeStructures FeeStructure[]
-  classTeacher Staff? @relation("ClassTeacher", fields: [classTeacherId], references: [id])
-  tests     Test[]
-  exams     Exam[]
-  quizzes   Quiz[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  sections       Section[]
+  students       Student[]
+  subjects       Subject[]
+  feeStructures  FeeStructure[]
+  classTeacher   Staff?         @relation("ClassTeacher", fields: [classTeacherId], references: [id])
+  tests          Test[]
+  exams          Exam[]
+  quizzes        Quiz[]
 }
 
 model Section {
@@ -141,18 +142,18 @@ model Section {
 }
 
 model Subject {
-  id          Int      @id @default(autoincrement())
-  schoolId    Int
-  classId     Int
-  name        String
-  code        String?
-  totalMarks  Int      @default(100)
-  teacherId   Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  class       Class    @relation(fields: [classId], references: [id])
-  examMarks   ExamMark[]
-  tests       Test[]
+  id         Int        @id @default(autoincrement())
+  schoolId   Int
+  classId    Int
+  name       String
+  code       String?
+  totalMarks Int        @default(100)
+  teacherId  Int?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  class      Class      @relation(fields: [classId], references: [id])
+  examMarks  ExamMark[]
+  tests      Test[]
 }
 
 model Department {
@@ -164,65 +165,65 @@ model Department {
 }
 
 model Student {
-  id            Int      @id @default(autoincrement())
-  schoolId      Int
-  campusId      Int
-  userId        Int?     @unique
-  sessionId     Int?
-  rollNo        String?
-  familyNo      String?
-  name          String
-  lastName      String?
-  firstNameUrdu String?
-  lastNameUrdu  String?
-  fatherName    String?
-  fatherNameUrdu      String?
-  fatherCnic          String?
-  fatherQualification String?
-  fatherOccupation    String?
-  motherName    String?
-  motherCnic          String?
-  motherQualification String?
-  motherOccupation    String?
-  motherPhone         String?
-  caste         String?
-  nationality   String?
-  religion      String?
-  gender        String?
-  dob           DateTime?
-  photoUrl      String?
-  province      String?
-  city          String?
-  postalAddress String?
-  email         String?
-  classId       Int?
-  sectionId     Int?
-  status        String   @default("active") // active|inactive|passout
-  admissionDate DateTime @default(now())
-  bFormNo       String?
-  admissionTestMarks  Float?
-  isFreeStudent Boolean  @default(false)
-  address       String?
-  emergencyPhone String?
-  bloodGroup    String?
-  foodDietaryReq      String?
-  allergies     String?
-  childCondition      String?
-  prevSchoolName      String?
+  id                    Int                    @id @default(autoincrement())
+  schoolId              Int
+  campusId              Int
+  userId                Int?                   @unique
+  sessionId             Int?
+  rollNo                String?
+  familyNo              String?
+  name                  String
+  lastName              String?
+  firstNameUrdu         String?
+  lastNameUrdu          String?
+  fatherName            String?
+  fatherNameUrdu        String?
+  fatherCnic            String?
+  fatherQualification   String?
+  fatherOccupation      String?
+  motherName            String?
+  motherCnic            String?
+  motherQualification   String?
+  motherOccupation      String?
+  motherPhone           String?
+  caste                 String?
+  nationality           String?
+  religion              String?
+  gender                String?
+  dob                   DateTime?
+  photoUrl              String?
+  province              String?
+  city                  String?
+  postalAddress         String?
+  email                 String?
+  classId               Int?
+  sectionId             Int?
+  status                String                 @default("active") // active|inactive|passout
+  admissionDate         DateTime               @default(now())
+  bFormNo               String?
+  admissionTestMarks    Float?
+  isFreeStudent         Boolean                @default(false)
+  address               String?
+  emergencyPhone        String?
+  bloodGroup            String?
+  foodDietaryReq        String?
+  allergies             String?
+  childCondition        String?
+  prevSchoolName        String?
   prevSchoolFocalPerson String?
-  prevSchoolPhone     String?
-  prevSchoolAddress   String?
-  prevAdmissionNo     String?
-  prevGrade     String?
-  prevTestGrade String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  deletedAt     DateTime?
-  campus        Campus   @relation(fields: [campusId], references: [id])
-  class         Class?   @relation(fields: [classId], references: [id])
-  section       Section? @relation(fields: [sectionId], references: [id])
-  session       AcademicSession? @relation(fields: [sessionId], references: [id])
-  user          User?    @relation(fields: [userId], references: [id])
+  prevSchoolPhone       String?
+  prevSchoolAddress     String?
+  prevAdmissionNo       String?
+  prevGrade             String?
+  prevTestGrade         String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  deletedAt             DateTime?
+  campus                Campus                 @relation(fields: [campusId], references: [id])
+  class                 Class?                 @relation(fields: [classId], references: [id])
+  section               Section?               @relation(fields: [sectionId], references: [id])
+  session               AcademicSession?       @relation(fields: [sessionId], references: [id])
+  user                  User?                  @relation(fields: [userId], references: [id])
   feeInvoices           FeeInvoice[]
   attendance            Attendance[]
   parents               ParentStudent[]
@@ -239,19 +240,19 @@ model Student {
 }
 
 model Parent {
-  id             Int      @id @default(autoincrement())
-  schoolId       Int
-  userId         Int      @unique
-  cnic           String?
-  occupation     String?
-  phone2         String?
-  address        String?
-  walletBalance  Int      @default(0)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id])
-  students       ParentStudent[]
+  id            Int             @id @default(autoincrement())
+  schoolId      Int
+  userId        Int             @unique
+  cnic          String?
+  occupation    String?
+  phone2        String?
+  address       String?
+  walletBalance Int             @default(0)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  user          User            @relation(fields: [userId], references: [id])
+  students      ParentStudent[]
 }
 
 model ParentStudent {
@@ -269,72 +270,72 @@ model ParentStudent {
 }
 
 model Staff {
-  id           Int      @id @default(autoincrement())
-  schoolId     Int
-  campusId     Int
-  userId       Int      @unique
-  empCode      String?
-  name         String
-  cnic         String?
-  gender       String?
-  dob          DateTime?
-  photoUrl     String?
-  departmentId Int?
-  designation  String?
-  joiningDate  DateTime?
-  salaryType   String   @default("monthly") // monthly|hourly|lecture
-  basicSalary  Int      @default(0)
-  isActive     Boolean  @default(true)
-  notes        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  deletedAt    DateTime?
-  user         User     @relation(fields: [userId], references: [id])
-  campus       Campus   @relation(fields: [campusId], references: [id])
-  department   Department? @relation(fields: [departmentId], references: [id])
-  salaries     SalaryRecord[]
-  attendance   StaffAttendance[]
-  appraisals   StaffAppraisal[]
+  id                 Int                 @id @default(autoincrement())
+  schoolId           Int
+  campusId           Int
+  userId             Int                 @unique
+  empCode            String?
+  name               String
+  cnic               String?
+  gender             String?
+  dob                DateTime?
+  photoUrl           String?
+  departmentId       Int?
+  designation        String?
+  joiningDate        DateTime?
+  salaryType         String              @default("monthly") // monthly|hourly|lecture
+  basicSalary        Int                 @default(0)
+  isActive           Boolean             @default(true)
+  notes              String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
+  user               User                @relation(fields: [userId], references: [id])
+  campus             Campus              @relation(fields: [campusId], references: [id])
+  department         Department?         @relation(fields: [departmentId], references: [id])
+  salaries           SalaryRecord[]
+  attendance         StaffAttendance[]
+  appraisals         StaffAppraisal[]
   payrollAdjustments PayrollAdjustment[]
-  classesAsTeacher Class[] @relation("ClassTeacher")
+  classesAsTeacher   Class[]             @relation("ClassTeacher")
 }
 
 model FeeStructure {
-  id              Int      @id @default(autoincrement())
-  schoolId        Int
-  classId         Int
-  feeTitle        String
-  amount          Int      @default(0)
-  dueDayOfMonth   Int      @default(10)
-  lateFeePerDay   Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  class           Class    @relation(fields: [classId], references: [id])
+  id            Int      @id @default(autoincrement())
+  schoolId      Int
+  classId       Int
+  feeTitle      String
+  amount        Int      @default(0)
+  dueDayOfMonth Int      @default(10)
+  lateFeePerDay Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  class         Class    @relation(fields: [classId], references: [id])
 }
 
 model FeeInvoice {
-  id           Int      @id @default(autoincrement())
-  schoolId     Int
-  campusId     Int
-  studentId    Int
-  classId      Int?
-  feeTitle     String
-  totalAmount  Int      @default(0)
-  discount     Int      @default(0)
-  lateFee      Int      @default(0)
-  paidAmount   Int      @default(0)
-  dueAmount    Int      @default(0)
-  month        String?
-  year         Int?
-  dueDate      DateTime?
-  status       String   @default("unpaid") // unpaid|paid|partial
-  voucherNo    String?
-  isCustomFee  Boolean  @default(false)
-  remarks      String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  student      Student  @relation(fields: [studentId], references: [id])
-  payments     FeePayment[]
+  id          Int          @id @default(autoincrement())
+  schoolId    Int
+  campusId    Int
+  studentId   Int
+  classId     Int?
+  feeTitle    String
+  totalAmount Int          @default(0)
+  discount    Int          @default(0)
+  lateFee     Int          @default(0)
+  paidAmount  Int          @default(0)
+  dueAmount   Int          @default(0)
+  month       String?
+  year        Int?
+  dueDate     DateTime?
+  status      String       @default("unpaid") // unpaid|paid|partial
+  voucherNo   String?
+  isCustomFee Boolean      @default(false)
+  remarks     String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  student     Student      @relation(fields: [studentId], references: [id])
+  payments    FeePayment[]
 
   @@index([schoolId, studentId])
   @@index([schoolId, status])
@@ -355,9 +356,22 @@ model FeePayment {
   receiptNo      String?
   remarks        String?
   createdAt      DateTime @default(now())
-  invoice        FeeInvoice @relation(fields: [invoiceId], references: [id])
+
+  // Corrections. A recorded payment is never edited in place or deleted:
+  // it is voided (which reverses its effect on the invoice) and, for a
+  // correction, a replacement row is written and linked. The mistake stays
+  // on the ledger, which is what an audit of cash handling needs.
+  voidedAt   DateTime?
+  voidedBy   Int?
+  voidReason String?
+  replacesId Int?        @unique
+  replaces   FeePayment? @relation("PaymentCorrection", fields: [replacesId], references: [id])
+  replacedBy FeePayment? @relation("PaymentCorrection")
+
+  invoice FeeInvoice @relation(fields: [invoiceId], references: [id])
 
   @@index([schoolId, paymentDate])
+  @@index([schoolId, voidedAt])
   @@index([schoolId, studentId])
   @@index([invoiceId])
 }
@@ -384,80 +398,82 @@ model ExpenseCategory {
 }
 
 model SalaryRecord {
-  id              Int      @id @default(autoincrement())
-  schoolId        Int
-  staffId         Int
-  month           Int
-  year            Int
-  basic           Int      @default(0)
-  allowances      Int      @default(0)
-  deductionsAbsent Int     @default(0)
-  deductionsLate  Int      @default(0)
-  loanDeduction   Int      @default(0)
-  bonus           Int      @default(0)
-  netSalary       Int      @default(0)
-  status          String   @default("pending") // pending|issued
-  issuedBy        Int?
-  issueDate       DateTime?
-  createdAt       DateTime @default(now())
-  staff           Staff    @relation(fields: [staffId], references: [id])
+  id               Int       @id @default(autoincrement())
+  schoolId         Int
+  staffId          Int
+  month            Int
+  year             Int
+  basic            Int       @default(0)
+  allowances       Int       @default(0)
+  deductionsAbsent Int       @default(0)
+  deductionsLate   Int       @default(0)
+  loanDeduction    Int       @default(0)
+  bonus            Int       @default(0)
+  netSalary        Int       @default(0)
+  status           String    @default("pending") // pending|issued
+  issuedBy         Int?
+  issueDate        DateTime?
+  createdAt        DateTime  @default(now())
+  staff            Staff     @relation(fields: [staffId], references: [id])
 
   @@unique([staffId, month, year])
   @@index([schoolId, month, year])
 }
 
 model Attendance {
-  id         Int      @id @default(autoincrement())
-  schoolId   Int
-  campusId   Int?
-  studentId  Int
-  classId    Int?
-  sectionId  Int?
-  date       DateTime
-  status     String   // present|absent|leave|late
-  method     String   @default("manual") // manual|barcode|biometric|qr
-  markedBy   Int?
-  notified   Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  student    Student  @relation(fields: [studentId], references: [id])
+  id        Int      @id @default(autoincrement())
+  schoolId  Int
+  campusId  Int?
+  studentId Int
+  classId   Int?
+  sectionId Int?
+  date      DateTime
+  status    String // present|absent|leave|late
+  method    String   @default("manual") // manual|barcode|biometric|qr
+  markedBy  Int?
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  student   Student  @relation(fields: [studentId], references: [id])
+
   @@unique([studentId, date])
   @@index([schoolId, date])
   @@index([schoolId, studentId])
 }
 
 model StaffAttendance {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   schoolId  Int
   staffId   Int
   date      DateTime
   checkIn   DateTime?
   checkOut  DateTime?
-  status    String   // present|absent|leave|late
-  method    String   @default("manual")
+  status    String // present|absent|leave|late
+  method    String    @default("manual")
   markedBy  Int?
-  createdAt DateTime @default(now())
-  staff     Staff    @relation(fields: [staffId], references: [id])
+  createdAt DateTime  @default(now())
+  staff     Staff     @relation(fields: [staffId], references: [id])
+
   @@unique([staffId, date])
 }
 
 model Exam {
-  id           Int      @id @default(autoincrement())
-  schoolId     Int
-  campusId     Int?
-  classId      Int?
-  classIds     String?  // JSON array of {classId, className} for multi-class exams
-  sessionId    Int?
-  title        String
-  type         String   @default("test") // test|midterm|final|first_term|second_term
-  term         String?  // 1st|2nd — term label from frontend
-  dateStart    DateTime?
-  dateEnd      DateTime?
-  createdAt    DateTime @default(now())
-  marks        ExamMark[]
-  isPublished  Boolean  @default(false)
-  publishedAt  DateTime?
-  timetable    ExamTimetable[]
-  class        Class?   @relation(fields: [classId], references: [id])
+  id          Int             @id @default(autoincrement())
+  schoolId    Int
+  campusId    Int?
+  classId     Int?
+  classIds    String? // JSON array of {classId, className} for multi-class exams
+  sessionId   Int?
+  title       String
+  type        String          @default("test") // test|midterm|final|first_term|second_term
+  term        String? // 1st|2nd — term label from frontend
+  dateStart   DateTime?
+  dateEnd     DateTime?
+  createdAt   DateTime        @default(now())
+  marks       ExamMark[]
+  isPublished Boolean         @default(false)
+  publishedAt DateTime?
+  timetable   ExamTimetable[]
+  class       Class?          @relation(fields: [classId], references: [id])
 
   @@index([schoolId, classId])
 }
@@ -501,31 +517,31 @@ model HomeworkDiary {
 }
 
 model NotificationLog {
-  id            Int      @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   schoolId      Int
-  type          String   // sms|whatsapp|email|push
+  type          String // sms|whatsapp|email|push
   recipientType String?
   title         String?
   body          String
-  status        String   @default("pending") // pending|sent|failed
+  status        String    @default("pending") // pending|sent|failed
   sentAt        DateTime?
   errorMsg      String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
 }
 
 model Product {
-  id            Int      @id @default(autoincrement())
+  id            Int                @id @default(autoincrement())
   schoolId      Int
   campusId      Int?
   name          String
   barcode       String?
   category      String?
-  purchasePrice Int      @default(0)
-  sellPrice     Int      @default(0)
-  quantity      Int      @default(0)
-  reorderLevel  Int      @default(5)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  purchasePrice Int                @default(0)
+  sellPrice     Int                @default(0)
+  quantity      Int                @default(0)
+  reorderLevel  Int                @default(5)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
   transactions  StockTransaction[]
 }
 
@@ -535,7 +551,7 @@ model StockTransaction {
   schoolId    Int
   studentId   Int?
   quantity    Int
-  type        String   // sale|return|add
+  type        String // sale|return|add
   unitPrice   Int
   totalAmount Int
   date        DateTime @default(now())
@@ -556,33 +572,33 @@ model TransportRoute {
 }
 
 model AdmissionInquiry {
-  id             Int      @id @default(autoincrement())
-  schoolId       Int
-  campusId       Int?
-  name           String
-  phone          String
+  id              Int      @id @default(autoincrement())
+  schoolId        Int
+  campusId        Int?
+  name            String
+  phone           String
   classInterested String?
-  date           DateTime @default(now())
-  status         String   @default("open") // open|contacted|admitted|closed
-  notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  date            DateTime @default(now())
+  status          String   @default("open") // open|contacted|admitted|closed
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model ParentComplaint {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   schoolId    Int
   campusId    Int?
   parentId    Int?
   studentId   Int?
   subject     String
   description String
-  status      String   @default("open") // open|in_progress|resolved
+  status      String    @default("open") // open|in_progress|resolved
   resolvedAt  DateTime?
   adminReply  String?
   repliedAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model AuditLog {
@@ -603,17 +619,17 @@ model AuditLog {
 // the school lived on one device, differed between gates, and was lost when
 // site data was cleared.
 model VisitorLog {
-  id           Int       @id @default(autoincrement())
-  schoolId     Int
-  campusId     Int?
-  visitorName  String
-  phone        String?
-  purpose      String    @default("Meeting")
-  hostName     String?
-  vehicleNo    String?
-  checkinAt    DateTime  @default(now())
-  checkoutAt   DateTime?
-  recordedBy   Int?
+  id          Int       @id @default(autoincrement())
+  schoolId    Int
+  campusId    Int?
+  visitorName String
+  phone       String?
+  purpose     String    @default("Meeting")
+  hostName    String?
+  vehicleNo   String?
+  checkinAt   DateTime  @default(now())
+  checkoutAt  DateTime?
+  recordedBy  Int?
 
   @@index([schoolId, checkinAt])
   @@index([schoolId, checkoutAt])
@@ -677,19 +693,21 @@ model StaffLoan {
   notes              String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
   @@index([schoolId, staffId])
 }
 
 model Noticeboard {
-  id         Int      @id @default(autoincrement())
+  id         Int       @id @default(autoincrement())
   schoolId   Int
   title      String
   message    String
-  targetRole String   @default("all") // all|parent|teacher|student|staff
-  isPinned   Boolean  @default(false)
+  targetRole String    @default("all") // all|parent|teacher|student|staff
+  isPinned   Boolean   @default(false)
   expiresAt  DateTime?
   createdBy  Int?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
+
   @@index([schoolId])
 }
 
@@ -706,11 +724,12 @@ model StudyMaterial {
   fileUrl     String
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+
   @@index([schoolId, classId])
 }
 
 model OnlineClass {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   schoolId        Int
   classId         Int?
   sectionId       Int?
@@ -719,9 +738,10 @@ model OnlineClass {
   title           String
   meetingLink     String?
   scheduledAt     DateTime?
-  durationMinutes Int      @default(60)
-  status          String   @default("scheduled") // scheduled|live|completed|cancelled
-  createdAt       DateTime @default(now())
+  durationMinutes Int       @default(60)
+  status          String    @default("scheduled") // scheduled|live|completed|cancelled
+  createdAt       DateTime  @default(now())
+
   @@index([schoolId, classId])
 }
 
@@ -737,6 +757,7 @@ model LeaveApplication {
   approvedBy    Int?
   approvalCode  String?
   createdAt     DateTime @default(now())
+
   @@index([schoolId, applicantType, applicantId])
 }
 
@@ -750,12 +771,13 @@ model Announcement {
   sentCount  Int      @default(0)
   createdBy  Int?
   createdAt  DateTime @default(now())
+
   @@index([schoolId])
 }
 
 model VideoTutorial {
   id        Int      @id @default(autoincrement())
-  schoolId  Int?     // null = global tutorials for all schools
+  schoolId  Int? // null = global tutorials for all schools
   title     String
   category  String   @default("General")
   videoUrl  String
@@ -765,15 +787,16 @@ model VideoTutorial {
 }
 
 model HolidayEvent {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   schoolId  Int
   title     String
-  eventType String   @default("holiday") // holiday|event|exam|meeting
+  eventType String    @default("holiday") // holiday|event|exam|meeting
   startDate DateTime
   endDate   DateTime?
-  color     String   @default("#E24B4A")
+  color     String    @default("#E24B4A")
   notes     String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+
   @@index([schoolId])
 }
 
@@ -781,7 +804,7 @@ model BehaviorRecord {
   id             Int      @id @default(autoincrement())
   schoolId       Int
   studentId      Int
-  category       String   // positive|negative
+  category       String // positive|negative
   behavior       String
   points         Int      @default(0)
   notes          String?
@@ -789,21 +812,23 @@ model BehaviorRecord {
   parentNotified Boolean  @default(false)
   createdAt      DateTime @default(now())
   student        Student  @relation(fields: [studentId], references: [id])
+
   @@index([schoolId, studentId])
 }
 
 model SchoolTask {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   schoolId    Int
   title       String
   description String?
-  assignedTo  Int?     // staff user id
-  priority    String   @default("medium") // low|medium|high
-  status      String   @default("pending") // pending|in_progress|completed
+  assignedTo  Int? // staff user id
+  priority    String    @default("medium") // low|medium|high
+  status      String    @default("pending") // pending|in_progress|completed
   dueDate     DateTime?
   createdBy   Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
   @@index([schoolId, status])
 }
 
@@ -812,31 +837,32 @@ model Certificate {
   schoolId   Int
   holderType String   @default("student") // student|staff
   holderId   Int
-  certType   String   // leaving|character|dob|experience|appreciation
+  certType   String // leaving|character|dob|experience|appreciation
   serialNo   String
   issuedBy   Int?
   issuedAt   DateTime @default(now())
+
   @@unique([schoolId, serialNo])
   @@index([schoolId, holderType, holderId])
 }
 
 model StaffAppraisal {
-  id            Int      @id @default(autoincrement())
-  schoolId      Int
-  staffId       Int
-  year          Int
-  term          String   @default("Annual")
-  score         Int      @default(0)
-  rating        String   @default("Good") // Excellent|Very Good|Good|Needs Improvement
-  strengths     String?
-  improvements  String?
-  goals         String?
-  reviewerId    Int?
-  status        String   @default("draft") // draft|submitted|finalized
-  appraisalDate DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  staff         Staff    @relation(fields: [staffId], references: [id])
+  id                Int                @id @default(autoincrement())
+  schoolId          Int
+  staffId           Int
+  year              Int
+  term              String             @default("Annual")
+  score             Int                @default(0)
+  rating            String             @default("Good") // Excellent|Very Good|Good|Needs Improvement
+  strengths         String?
+  improvements      String?
+  goals             String?
+  reviewerId        Int?
+  status            String             @default("draft") // draft|submitted|finalized
+  appraisalDate     DateTime           @default(now())
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  staff             Staff              @relation(fields: [staffId], references: [id])
   payrollAdjustment PayrollAdjustment?
 
   @@index([schoolId, staffId])
@@ -844,38 +870,38 @@ model StaffAppraisal {
 }
 
 model PayrollAdjustment {
-  id               Int      @id @default(autoincrement())
-  schoolId         Int
-  appraisalId      Int      @unique
-  staffId          Int
-  oldBasicSalary   Int
-  newBasicSalary   Int
-  incrementPercent Int      @default(0)
-  incrementAmount  Int      @default(0)
-  reason           String?
-  firstApprovalComment String?
+  id                    Int            @id @default(autoincrement())
+  schoolId              Int
+  appraisalId           Int            @unique
+  staffId               Int
+  oldBasicSalary        Int
+  newBasicSalary        Int
+  incrementPercent      Int            @default(0)
+  incrementAmount       Int            @default(0)
+  reason                String?
+  firstApprovalComment  String?
   secondApprovalComment String?
-  applyComment     String?
-  status           String   @default("proposed") // proposed|approved|applied|rolled_back|rejected
-  requiresDualApproval Boolean @default(false)
-  approvalStage    Int      @default(0) // 0 none, 1 first approval complete, 2 fully approved
-  proposedBy       Int?
-  firstApprovedBy  Int?
-  secondApprovedBy Int?
-  approvedBy       Int?
-  appliedBy        Int?
-  rolledBackBy     Int?
-  proposedAt       DateTime @default(now())
-  firstApprovedAt  DateTime?
-  secondApprovedAt DateTime?
-  approvedAt       DateTime?
-  appliedAt        DateTime?
-  rolledBackAt     DateTime?
-  rollbackReason   String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  appraisal        StaffAppraisal @relation(fields: [appraisalId], references: [id])
-  staff            Staff         @relation(fields: [staffId], references: [id])
+  applyComment          String?
+  status                String         @default("proposed") // proposed|approved|applied|rolled_back|rejected
+  requiresDualApproval  Boolean        @default(false)
+  approvalStage         Int            @default(0) // 0 none, 1 first approval complete, 2 fully approved
+  proposedBy            Int?
+  firstApprovedBy       Int?
+  secondApprovedBy      Int?
+  approvedBy            Int?
+  appliedBy             Int?
+  rolledBackBy          Int?
+  proposedAt            DateTime       @default(now())
+  firstApprovedAt       DateTime?
+  secondApprovedAt      DateTime?
+  approvedAt            DateTime?
+  appliedAt             DateTime?
+  rolledBackAt          DateTime?
+  rollbackReason        String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  appraisal             StaffAppraisal @relation(fields: [appraisalId], references: [id])
+  staff                 Staff          @relation(fields: [staffId], references: [id])
 
   @@index([schoolId, status])
   @@index([schoolId, staffId])
@@ -901,16 +927,17 @@ model RolePermission {
 // ═══ v3.2 — BIOMETRIC / FACE / GATEPASS / CRM / SOP / BACKUP ═══
 
 model BiometricDevice {
-  id         Int      @id @default(autoincrement())
+  id         Int       @id @default(autoincrement())
   schoolId   Int
   name       String
-  deviceType String   @default("thumb") // thumb|face|card
+  deviceType String    @default("thumb") // thumb|face|card
   ipAddress  String?
-  port       Int      @default(4370)
+  port       Int       @default(4370)
   location   String?
-  isActive   Boolean  @default(true)
+  isActive   Boolean   @default(true)
   lastSyncAt DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
+
   @@index([schoolId])
 }
 
@@ -920,10 +947,11 @@ model BiometricPunch {
   deviceId   Int?
   personType String   @default("student") // student|staff
   personId   Int
-  method     String   @default("thumb")   // thumb|face|card
+  method     String   @default("thumb") // thumb|face|card
   punchTime  DateTime @default(now())
-  direction  String   @default("in")      // in|out
+  direction  String   @default("in") // in|out
   matched    Boolean  @default(true)
+
   @@index([schoolId, personType, personId])
   @@index([schoolId, punchTime])
 }
@@ -933,118 +961,123 @@ model FaceEnrollment {
   schoolId   Int
   personType String   @default("student")
   personId   Int
-  photoData  String   // base64 face crop
-  descriptor String?  // face-api descriptor JSON (optional)
+  photoData  String // base64 face crop
+  descriptor String? // face-api descriptor JSON (optional)
   enrolledBy Int?
   createdAt  DateTime @default(now())
+
   @@unique([schoolId, personType, personId])
 }
 
 model GatePass {
-  id          Int      @id @default(autoincrement())
-  schoolId    Int
-  studentId   Int
-  parentName  String
-  passCode    String   @unique
-  reason      String?
-  validDate   DateTime @default(now())
-  status      String   @default("active") // active|used|expired
-  usedAt      DateTime?
-  issuedBy    Int?
-  createdAt   DateTime @default(now())
+  id         Int       @id @default(autoincrement())
+  schoolId   Int
+  studentId  Int
+  parentName String
+  passCode   String    @unique
+  reason     String?
+  validDate  DateTime  @default(now())
+  status     String    @default("active") // active|used|expired
+  usedAt     DateTime?
+  issuedBy   Int?
+  createdAt  DateTime  @default(now())
+
   @@index([schoolId, studentId])
 }
 
 model AdmissionLead {
-  id           Int      @id @default(autoincrement())
+  id           Int            @id @default(autoincrement())
   schoolId     Int
   studentName  String
   parentName   String
   phone        String
   classApplied String?
-  source       String   @default("walk-in") // walk-in|call|website|referral
-  stage        String   @default("new")     // new|contacted|visited|admitted|lost
+  source       String         @default("walk-in") // walk-in|call|website|referral
+  stage        String         @default("new") // new|contacted|visited|admitted|lost
   notes        String?
   nextFollowUp DateTime?
   assignedTo   Int?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   followUps    LeadFollowUp[]
+
   @@index([schoolId, stage])
 }
 
 model LeadFollowUp {
-  id        Int      @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   leadId    Int
   note      String
   outcome   String?
   byUserId  Int?
-  createdAt DateTime @default(now())
+  createdAt DateTime      @default(now())
   lead      AdmissionLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 }
 
 model SopDocument {
   id        Int      @id @default(autoincrement())
-  schoolId  Int?     // null = global
+  schoolId  Int? // null = global
   title     String
   category  String   @default("General")
-  content   String   // markdown/html
+  content   String // markdown/html
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model DbBackup {
-  id         Int      @id @default(autoincrement())
-  schoolId   Int
-  fileName   String
-  sizeBytes  Int      @default(0)
+  id           Int      @id @default(autoincrement())
+  schoolId     Int
+  fileName     String
+  sizeBytes    Int      @default(0)
   recordCounts String? // JSON summary
-  createdBy  Int?
-  createdAt  DateTime @default(now())
+  createdBy    Int?
+  createdAt    DateTime @default(now())
 }
 
 model RoboBuddyConfig {
-  id            Int      @id @default(autoincrement())
-  schoolId      Int      @unique
-  botName       String   @default("RoboBuddy")
-  whatsappNumber String?
-  isEnabled     Boolean  @default(false)
-  autoFeeReminder Boolean @default(true)
-  autoAbsentAlert Boolean @default(true)
-  autoResultShare Boolean @default(false)
-  welcomeMessage String  @default("Assalam-o-Alaikum! Main aapke school ka RoboBuddy hoon 🇵🇰")
-  updatedAt     DateTime @updatedAt
+  id              Int      @id @default(autoincrement())
+  schoolId        Int      @unique
+  botName         String   @default("RoboBuddy")
+  whatsappNumber  String?
+  isEnabled       Boolean  @default(false)
+  autoFeeReminder Boolean  @default(true)
+  autoAbsentAlert Boolean  @default(true)
+  autoResultShare Boolean  @default(false)
+  welcomeMessage  String   @default("Assalam-o-Alaikum! Main aapke school ka RoboBuddy hoon 🇵🇰")
+  updatedAt       DateTime @updatedAt
 }
 
 // ═══ v3.3 — CHAT MESSENGER (WhatsApp-style, role-structured) ═══
 
 model Conversation {
-  id          Int      @id @default(autoincrement())
-  schoolId    Int
-  type        String   @default("direct")   // direct | class_broadcast
-  title       String?                        // for broadcasts
-  classId     Int?                           // broadcast target class
-  createdBy   Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           Int                       @id @default(autoincrement())
+  schoolId     Int
+  type         String                    @default("direct") // direct | class_broadcast
+  title        String? // for broadcasts
+  classId      Int? // broadcast target class
+  createdBy    Int
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
   participants ConversationParticipant[]
-  messages    ChatMessage[]
+  messages     ChatMessage[]
+
   @@index([schoolId, updatedAt])
 }
 
 model ConversationParticipant {
-  id             Int @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   conversationId Int
   userId         Int
   lastReadAt     DateTime?
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
   @@unique([conversationId, userId])
   @@index([userId])
 }
 
 model ChatMessage {
-  id             Int      @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   conversationId Int
   senderId       Int
   senderName     String?
@@ -1052,9 +1085,10 @@ model ChatMessage {
   body           String?
   attachmentName String?
   attachmentType String?
-  attachmentData String?  // base64 (max ~2MB enforced in route)
-  createdAt      DateTime @default(now())
+  attachmentData String? // base64 (max ~2MB enforced in route)
+  createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
   @@index([conversationId, createdAt])
 }
 
@@ -1226,30 +1260,30 @@ model CertificateRegistry {
 }
 
 model PaymentTransaction {
-  id            Int      @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   schoolId      Int
   campusId      Int?
   studentId     Int?
   invoiceId     Int?
-  transactionNo String   @unique
+  transactionNo String    @unique
   amount        Int
-  currency      String   @default("PKR")
-  status        String   @default("pending") // pending|paid|failed|refunded
-  paymentMethod String   @default("online")  // cash|card|online|wallet|bank
+  currency      String    @default("PKR")
+  status        String    @default("pending") // pending|paid|failed|refunded
+  paymentMethod String    @default("online") // cash|card|online|wallet|bank
   provider      String?
   providerRef   String?
-  channel       String?  // easypaisa|jazzcash|stripe|bank_transfer|manual
-  purpose       String   @default("fee_payment") // fee_payment|fine|other
+  channel       String? // easypaisa|jazzcash|stripe|bank_transfer|manual
+  purpose       String    @default("fee_payment") // fee_payment|fine|other
   notes         String?
-  metadata      String?  // JSON blob
+  metadata      String? // JSON blob
   initiatedBy   Int?
   processedBy   Int?
   paidAt        DateTime?
   failedAt      DateTime?
   refundedAt    DateTime?
   failureReason String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([schoolId, status, createdAt])
   @@index([schoolId, studentId])
@@ -1257,50 +1291,50 @@ model PaymentTransaction {
 }
 
 model LibraryBook {
-  id             Int      @id @default(autoincrement())
-  schoolId       Int
-  campusId       Int?
-  title          String
-  author         String?
-  isbn           String?
-  category       String?
-  shelfCode      String?
-  accessionNo    String?
-  publisher      String?
-  edition        String?
-  publishedYear  Int?
-  totalCopies    Int      @default(1)
-  availableCopies Int     @default(1)
-  issueDays      Int      @default(14)
-  finePerDay     Int      @default(20)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id              Int      @id @default(autoincrement())
+  schoolId        Int
+  campusId        Int?
+  title           String
+  author          String?
+  isbn            String?
+  category        String?
+  shelfCode       String?
+  accessionNo     String?
+  publisher       String?
+  edition         String?
+  publishedYear   Int?
+  totalCopies     Int      @default(1)
+  availableCopies Int      @default(1)
+  issueDays       Int      @default(14)
+  finePerDay      Int      @default(20)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
+  @@unique([schoolId, accessionNo])
   @@index([schoolId, title])
   @@index([schoolId, category])
-  @@unique([schoolId, accessionNo])
 }
 
 model BookIssue {
-  id           Int      @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   schoolId     Int
   campusId     Int?
   bookId       Int
   studentId    Int?
   staffId      Int?
-  issuedToType String   @default("student") // student|staff
-  issueDate    DateTime @default(now())
+  issuedToType String    @default("student") // student|staff
+  issueDate    DateTime  @default(now())
   dueDate      DateTime
   returnDate   DateTime?
-  status       String   @default("issued") // issued|returned|lost
-  fineAmount   Int      @default(0)
-  finePaid     Int      @default(0)
+  status       String    @default("issued") // issued|returned|lost
+  fineAmount   Int       @default(0)
+  finePaid     Int       @default(0)
   remarks      String?
   issuedBy     Int?
   receivedBy   Int?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([schoolId, bookId, status])
   @@index([schoolId, studentId, status])
@@ -1313,11 +1347,11 @@ model DeviceToken {
   userId       Int
   deviceId     String?
   token        String
-  platform     String   // android|ios|web
+  platform     String // android|ios|web
   appVersion   String?
   isActive     Boolean  @default(true)
   lastSeenAt   DateTime @default(now())
-  subscribedTo String?  // JSON list of topics
+  subscribedTo String? // JSON list of topics
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -1328,41 +1362,42 @@ model DeviceToken {
 // ─── PTM (Parent-Teacher Meeting) ────────────────────────────────────────────
 
 model PTMEvent {
-  id                  Int          @id @default(autoincrement())
+  id                  Int       @id @default(autoincrement())
   schoolId            Int
   title               String
   date                DateTime
   startTime           String
   endTime             String
   venue               String?
-  slotDurationMinutes Int          @default(10)
-  status              String       @default("upcoming")
-  createdAt           DateTime     @default(now())
-  school              School       @relation(fields: [schoolId], references: [id])
+  slotDurationMinutes Int       @default(10)
+  status              String    @default("upcoming")
+  createdAt           DateTime  @default(now())
+  school              School    @relation(fields: [schoolId], references: [id])
   slots               PTMSlot[]
 }
 
 model PTMSlot {
-  id         Int          @id @default(autoincrement())
-  eventId    Int
-  time       String
-  classId    Int?
-  teacherId  Int?
-  isBooked   Boolean      @default(false)
-  event      PTMEvent     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  bookings   PTMBooking[]
+  id        Int          @id @default(autoincrement())
+  eventId   Int
+  time      String
+  classId   Int?
+  teacherId Int?
+  isBooked  Boolean      @default(false)
+  event     PTMEvent     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  bookings  PTMBooking[]
 }
 
 model PTMBooking {
-  id         Int      @id @default(autoincrement())
-  schoolId   Int
-  slotId     Int
-  studentId  Int
-  parentId   Int?
-  notes      String?
-  bookedAt   DateTime @default(now())
-  slot       PTMSlot  @relation(fields: [slotId], references: [id])
-  school     School   @relation(fields: [schoolId], references: [id])
+  id        Int      @id @default(autoincrement())
+  schoolId  Int
+  slotId    Int
+  studentId Int
+  parentId  Int?
+  notes     String?
+  bookedAt  DateTime @default(now())
+  slot      PTMSlot  @relation(fields: [slotId], references: [id])
+  school    School   @relation(fields: [schoolId], references: [id])
+
   @@unique([slotId, studentId])
 }
 
@@ -1393,18 +1428,18 @@ model AlumniProfile {
 // ─── Events & Tournaments ──────────────────────────────────────────────────
 
 model SchoolEvent {
-  id           Int      @id @default(autoincrement())
+  id           Int                @id @default(autoincrement())
   schoolId     Int
   title        String
-  type         String   @default("general")   // sports|cultural|academic|exam|meeting|holiday|general
+  type         String             @default("general") // sports|cultural|academic|exam|meeting|holiday|general
   date         DateTime
   endDate      DateTime?
   venue        String?
   description  String?
-  status       String   @default("upcoming")  // upcoming|ongoing|completed|cancelled
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  school       School   @relation(fields: [schoolId], references: [id])
+  status       String             @default("upcoming") // upcoming|ongoing|completed|cancelled
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  school       School             @relation(fields: [schoolId], references: [id])
   participants EventParticipant[]
 
   @@index([schoolId, date])
@@ -1413,13 +1448,13 @@ model SchoolEvent {
 }
 
 model EventParticipant {
-  id        Int    @id @default(autoincrement())
+  id        Int         @id @default(autoincrement())
   eventId   Int
   studentId Int
   teamName  String?
   position  Int?
   score     String?
-  createdAt DateTime @default(now())
+  createdAt DateTime    @default(now())
   event     SchoolEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
   student   Student     @relation(fields: [studentId], references: [id])
 
@@ -1431,18 +1466,18 @@ model EventParticipant {
 // ─── Notification Templates ───────────────────────────────────────────────
 
 model NotificationTemplate {
-  id          Int      @id @default(autoincrement())
-  schoolId    Int
-  name        String
-  type        String   // sms|whatsapp|email|push|all
-  category    String   // fee_reminder|absent_alert|result_published|birthday|gate_pass|holiday|custom
-  subject     String?  // for email templates
-  body        String
-  isDefault   Boolean  @default(false)
-  isActive    Boolean  @default(true)
-  usageCount  Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  schoolId   Int
+  name       String
+  type       String // sms|whatsapp|email|push|all
+  category   String // fee_reminder|absent_alert|result_published|birthday|gate_pass|holiday|custom
+  subject    String? // for email templates
+  body       String
+  isDefault  Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  usageCount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([schoolId, category])
   @@index([schoolId, type])
@@ -1451,21 +1486,21 @@ model NotificationTemplate {
 // ─── Automation Rules ─────────────────────────────────────────────────────
 
 model AutomationRule {
-  id           Int      @id @default(autoincrement())
-  schoolId     Int
-  name         String
-  trigger      String   // fee_reminder|absent_alert|birthday_wish|daily_collection|result_published|custom
-  channel      String   // sms|whatsapp|email|push|all
-  templateId   Int?
-  isActive     Boolean  @default(true)
-  runDays      String?  // JSON: [5, 10, 15] — days of month to run
-  runTime      String?  // "09:00" HH:MM
-  lastRunAt    DateTime?
+  id            Int       @id @default(autoincrement())
+  schoolId      Int
+  name          String
+  trigger       String // fee_reminder|absent_alert|birthday_wish|daily_collection|result_published|custom
+  channel       String // sms|whatsapp|email|push|all
+  templateId    Int?
+  isActive      Boolean   @default(true)
+  runDays       String? // JSON: [5, 10, 15] — days of month to run
+  runTime       String? // "09:00" HH:MM
+  lastRunAt     DateTime?
   lastRunStatus String? // success|failed|partial
-  totalRuns    Int      @default(0)
-  config       String?  // JSON: extra config per trigger type
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  totalRuns     Int       @default(0)
+  config        String? // JSON: extra config per trigger type
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([schoolId, trigger])
   @@index([schoolId, isActive])

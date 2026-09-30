@@ -153,7 +153,7 @@ export default function ExamSettingsPage() {
           </div>
           <div className="form-group" style={{ marginBottom:0 }}>
             <label className="form-label">Instructions (printed on every admit card)</label>
-            <textarea
+            <textarea aria-label="Instructions (printed on every admit card)"
               className="form-input form-textarea"
               rows={7}
               value={form.admitCardInstructions}
@@ -171,7 +171,7 @@ export default function ExamSettingsPage() {
 
           <div className="form-group">
             <label className="form-label">Fail student if</label>
-            <select
+            <select aria-label="Fail student if"
               className="form-select"
               value={form.failCriteria}
               onChange={e => f('failCriteria', e.target.value)}
@@ -184,7 +184,7 @@ export default function ExamSettingsPage() {
 
           <div className="form-group">
             <label className="form-label">Default Passing Marks (%)</label>
-            <input
+            <input aria-label="Default Passing Marks (%)"
               className="form-input"
               type="number"
               min="1"
@@ -199,7 +199,7 @@ export default function ExamSettingsPage() {
 
           <div className="form-group" style={{ marginBottom:0 }}>
             <label className="form-label">Grading System</label>
-            <select
+            <select aria-label="Grading System"
               className="form-select"
               value={form.gradingSystem}
               onChange={e => f('gradingSystem', e.target.value)}

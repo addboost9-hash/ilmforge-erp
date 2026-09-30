@@ -1,0 +1,186 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   IlmForge — Dashboard design system.
+
+   Scoped to .ilm-dash so it restyles the dashboard without disturbing the
+   ~190 pages that still use the older palette. Everything is a token, so
+   the same sheet can be extended to the rest of the app later without
+   hunting hardcoded hex values.
+
+   No gradients. One border weight. Two radii. Shadows are deliberately
+   almost absent - depth comes from the 1px line, not from glow.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.ilm-dash {
+  /* Brand */
+  --d-primary:      #0F3D33;  /* chalkboard green */
+  --d-primary-soft: #0F3D3314;
+  --d-accent:       #F2A33A;  /* marigold */
+  --d-accent-soft:  #F2A33A22;
+
+  /* Surface */
+  --d-paper:  #F7F8F5;
+  --d-panel:  #FFFFFF;
+  --d-line:   #E3E7E3;
+
+  /* Text */
+  --d-ink:    #16211E;
+  --d-muted:  #5E6B67;
+
+  /* Signal */
+  --d-profit: #1F9D6B;
+  --d-loss:   #D64550;
+
+  /* Shape */
+  --d-r-lg: 14px;
+  --d-r-sm: 8px;
+
+  /* Type */
+  --d-font-head: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+  --d-font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+
+  background: var(--d-paper);
+  color: var(--d-ink);
+  font-family: var(--d-font-body);
+  min-height: 100%;
+}
+
+.ilm-dash h1, .ilm-dash h2, .ilm-dash h3, .ilm-dash .d-head {
+  font-family: var(--d-font-head);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--d-ink);
+  margin: 0;
+}
+
+/* ── Panel ─────────────────────────────────────────────────────────── */
+.ilm-dash .d-panel {
+  background: var(--d-panel);
+  border: 1px solid var(--d-line);
+  border-radius: var(--d-r-lg);
+  padding: 18px;
+}
+.ilm-dash .d-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.ilm-dash .d-panel-title { font-size: 15px; font-weight: 600; font-family: var(--d-font-head); }
+.ilm-dash .d-panel-sub   { font-size: 12px; color: var(--d-muted); }
+
+/* ── Numbers ───────────────────────────────────────────────────────── */
+.ilm-dash .d-metric {
+  font-family: var(--d-font-head);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.ilm-dash .d-metric-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--d-muted);
+  margin-top: 4px;
+}
+.ilm-dash .d-profit { color: var(--d-profit); }
+.ilm-dash .d-loss   { color: var(--d-loss); }
+
+/* ── Grid ──────────────────────────────────────────────────────────── */
+.ilm-dash .d-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.ilm-dash .d-cols-2 { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+
+/* ── Buttons / chips ───────────────────────────────────────────────── */
+.ilm-dash .d-btn {
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 13px;
+  border-radius: var(--d-r-sm);
+  border: 1px solid var(--d-line);
+  background: var(--d-panel);
+  color: var(--d-ink);
+  cursor: pointer;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color .12s, background .12s;
+}
+.ilm-dash .d-btn:hover { border-color: var(--d-primary); }
+.ilm-dash .d-btn-primary {
+  background: var(--d-primary);
+  border-color: var(--d-primary);
+  color: #fff;
+}
+.ilm-dash .d-btn-primary:hover { background: #0c3229; }
+.ilm-dash .d-chip {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--d-line);
+  color: var(--d-muted);
+  white-space: nowrap;
+}
+.ilm-dash .d-chip-accent { background: var(--d-accent-soft); border-color: transparent; color: #7a4d06; }
+
+/* ── States: every widget must be able to say what is happening ────── */
+.ilm-dash .d-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 26px 16px;
+  color: var(--d-muted);
+  font-size: 13px;
+  min-height: 120px;
+}
+.ilm-dash .d-state-title { font-weight: 600; color: var(--d-ink); font-size: 14px; }
+.ilm-dash .d-state-hint  { font-size: 12px; max-width: 34ch; line-height: 1.5; }
+
+.ilm-dash .d-skel {
+  background: linear-gradient(90deg, #eef0ed 25%, #f6f7f5 37%, #eef0ed 63%);
+  background-size: 400% 100%;
+  animation: d-shimmer 1.3s ease-in-out infinite;
+  border-radius: var(--d-r-sm);
+}
+@keyframes d-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+/* ── Motion: one entrance, then nothing until the user acts ────────── */
+.ilm-dash .d-enter { animation: d-rise .34s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes d-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ilm-dash .d-enter, .ilm-dash .d-skel { animation: none; }
+}
+
+/* ── Focus: visible, and not only on mouse ─────────────────────────── */
+.ilm-dash :focus-visible {
+  outline: 2px solid var(--d-primary);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ── Responsive to 375px ───────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .ilm-dash .d-cols-2 { grid-template-columns: 1fr; }
+  .ilm-dash .d-grid   { grid-template-columns: 1fr 1fr; }
+  .ilm-dash .d-panel  { padding: 14px; }
+  .ilm-dash .d-metric { font-size: 22px; }
+}
+@media (max-width: 400px) {
+  .ilm-dash .d-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Print: the board-meeting export ───────────────────────────────── */
+@media print {
+  .ilm-dash { background: #fff; }
+  .ilm-dash .d-panel { break-inside: avoid; border-color: #c9cfc9; }
+  .ilm-dash .d-no-print { display: none !important; }
+}

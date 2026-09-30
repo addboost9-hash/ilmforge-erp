@@ -121,7 +121,7 @@ export default function WebsiteSettingsPage() {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
             <div className="form-group">
               <label className="form-label">Enable Website</label>
-              <select className="form-select" value={form.enableWebsite} onChange={e=>set('enableWebsite',e.target.value)}>
+              <select aria-label="Enable Website" className="form-select" value={form.enableWebsite} onChange={e=>set('enableWebsite',e.target.value)}>
                 <option>No</option><option>Yes</option>
               </select>
             </div>

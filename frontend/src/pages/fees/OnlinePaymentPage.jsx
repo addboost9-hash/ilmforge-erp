@@ -172,7 +172,7 @@ function RecordPaymentModal({ gateway, onClose, onSaved }) {
           </div>
           <div className="form-group">
             <label className="form-label">Payment Date</label>
-            <input className="form-input" type="date" value={form.date}
+            <input aria-label="Payment Date" className="form-input" type="date" value={form.date}
               onChange={e => setForm(f => ({ ...f, date: e.target.value }))}/>
           </div>
         </div>

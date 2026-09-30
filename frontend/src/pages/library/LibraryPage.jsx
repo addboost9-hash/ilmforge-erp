@@ -333,7 +333,7 @@ function CatalogTab() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Category</label>
-                  <select className="form-select" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+                  <select aria-label="Category" className="form-select" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                     <option value="">Select category</option>
                     {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -348,7 +348,7 @@ function CatalogTab() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Quantity</label>
-                  <input className="form-control" type="number" min="1" value={form.totalCopies} onChange={(e) => setForm({ ...form, totalCopies: e.target.value })} />
+                  <input aria-label="Quantity" className="form-control" type="number" min="1" value={form.totalCopies} onChange={(e) => setForm({ ...form, totalCopies: e.target.value })} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Shelf Location</label>
@@ -557,7 +557,7 @@ function IssueReturnTab() {
               {/* Due date */}
               <div className="form-group">
                 <label className="form-label">Due Date</label>
-                <input
+                <input aria-label="Due Date"
                   className="form-control"
                   type="date"
                   value={dueDate}

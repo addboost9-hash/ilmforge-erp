@@ -117,7 +117,7 @@ function UpdateProfileModal({ alumni, onClose, onSaved }) {
             </div>
             <div className="form-group">
               <label className="form-label">Passout Year</label>
-              <select className="form-select" value={form.passoutYear} onChange={set('passoutYear')}>
+              <select aria-label="Passout Year" className="form-select" value={form.passoutYear} onChange={set('passoutYear')}>
                 <option value="">Select Year</option>
                 {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
               </select>
@@ -260,7 +260,7 @@ function InviteModal({ onClose, selectedIds }) {
 
           <div className="form-group">
             <label className="form-label">Channel</label>
-            <select className="form-select" value={form.channel} onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value }))}>
+            <select aria-label="Channel" className="form-select" value={form.channel} onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value }))}>
               <option value="both">Email + SMS</option>
               <option value="email">Email only</option>
               <option value="sms">SMS only</option>
@@ -270,13 +270,13 @@ function InviteModal({ onClose, selectedIds }) {
           {(form.channel === 'both' || form.channel === 'email') && (
             <div className="form-group">
               <label className="form-label">Email Subject</label>
-              <input className="form-control" value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} />
+              <input aria-label="Email Subject" className="form-control" value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} />
             </div>
           )}
 
           <div className="form-group">
             <label className="form-label">Message Body</label>
-            <textarea
+            <textarea aria-label="Message Body"
               className="form-textarea"
               rows={6}
               value={form.message}

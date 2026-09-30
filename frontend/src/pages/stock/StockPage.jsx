@@ -144,14 +144,14 @@ export default function StockPage() {
 
           <div className="form-group">
             <label className="form-label">Product</label>
-            <select className="form-select" value={sellForm.productId} onChange={e=>setSellForm({...sellForm,productId:e.target.value})}>
+            <select aria-label="Product" className="form-select" value={sellForm.productId} onChange={e=>setSellForm({...sellForm,productId:e.target.value})}>
               <option value="">Select Product</option>
               {products.filter(p=>p.quantity>0).map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {p.quantity}) — {money(p.sellPrice)}</option>)}
             </select>
           </div>
           <div className="form-group">
             <label className="form-label">Quantity</label>
-            <input className="form-input" type="number" min="1" value={sellForm.quantity} onChange={e=>setSellForm({...sellForm,quantity:parseInt(e.target.value||1)})}/>
+            <input aria-label="Quantity" className="form-input" type="number" min="1" value={sellForm.quantity} onChange={e=>setSellForm({...sellForm,quantity:parseInt(e.target.value||1)})}/>
           </div>
           <div className="form-group">
             <label className="form-label">Student ID (optional)</label>

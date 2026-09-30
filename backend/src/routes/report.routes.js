@@ -70,7 +70,7 @@ router.get('/students/excel', wrap(async (req, res) => {
 router.get('/fees/income', wrap(async (req, res) => {
   const { month, year } = req.query;
   const payments = await prisma.feePayment.findMany({
-    where: {
+    where: { voidedAt: null,
       schoolId: req.schoolId,
       ...(year && {
         paymentDate: {
@@ -99,7 +99,7 @@ router.get('/fees/balance-sheet', wrap(async (req, res) => {
   const [income, expense] = await Promise.all([
     prisma.feePayment.aggregate({
       _sum: { amountPaid: true },
-      where: { schoolId: req.schoolId, paymentDate: { gte: targetDate, lt: nextDay } },
+      where: { voidedAt: null, schoolId: req.schoolId, paymentDate: { gte: targetDate, lt: nextDay } },
     }),
     prisma.expense.aggregate({
       _sum: { amount: true },
@@ -270,7 +270,7 @@ router.get('/accounting/income-expense', requireFinance, wrap(async (req, res) =
 
   const [payments, expenses] = await Promise.all([
     prisma.feePayment.findMany({
-      where: { schoolId: req.schoolId, paymentDate: dateFilter },
+      where: { voidedAt: null, schoolId: req.schoolId, paymentDate: dateFilter },
       include: {
         invoice: {
           select: { feeTitle: true, month: true, year: true, student: { select: { name: true, rollNo: true } } },
@@ -314,7 +314,7 @@ router.get('/accounting/balance-sheet', requireFinance, wrap(async (req, res) =>
   const [openingIncome, openingExpense, periodPayments, periodExpenses] = await Promise.all([
     prisma.feePayment.aggregate({
       _sum: { amountPaid: true },
-      where: { schoolId: req.schoolId, paymentDate: { lt: periodStart } },
+      where: { voidedAt: null, schoolId: req.schoolId, paymentDate: { lt: periodStart } },
     }),
     prisma.expense.aggregate({
       _sum: { amount: true },
@@ -322,7 +322,7 @@ router.get('/accounting/balance-sheet', requireFinance, wrap(async (req, res) =>
     }),
     prisma.feePayment.aggregate({
       _sum: { amountPaid: true },
-      where: { schoolId: req.schoolId, paymentDate: { gte: periodStart, lte: periodEnd } },
+      where: { voidedAt: null, schoolId: req.schoolId, paymentDate: { gte: periodStart, lte: periodEnd } },
     }),
     prisma.expense.aggregate({
       _sum: { amount: true },
@@ -361,7 +361,7 @@ router.get('/accounting/summary', requireFinance, wrap(async (req, res) => {
   const [collected, expenses, totalStudents, totalDue] = await Promise.all([
     prisma.feePayment.aggregate({
       _sum: { amountPaid: true },
-      where: { schoolId: req.schoolId, paymentDate: { gte: monthStart, lt: monthEnd } },
+      where: { voidedAt: null, schoolId: req.schoolId, paymentDate: { gte: monthStart, lt: monthEnd } },
     }),
     prisma.expense.aggregate({
       _sum: { amount: true },
@@ -410,7 +410,7 @@ router.get('/accounting/debit-credit', requireFinance, wrap(async (req, res) => 
 
   const [payments, expenses] = await Promise.all([
     prisma.feePayment.findMany({
-      where: { schoolId: req.schoolId, paymentDate: dateFilter },
+      where: { voidedAt: null, schoolId: req.schoolId, paymentDate: dateFilter },
       include: {
         invoice: { select: { feeTitle: true, student: { select: { name: true, rollNo: true } } } },
       },
@@ -531,7 +531,7 @@ async function computeDailyBalancesheet(schoolId, accId, date) {
 
   // Payments received by this accountant on the target date
   const todayPayments = await prisma.feePayment.findMany({
-    where: {
+    where: { voidedAt: null,
       schoolId,
       receivedBy: accId,
       paymentDate: { gte: targetStart, lte: targetEnd },
@@ -561,7 +561,7 @@ async function computeDailyBalancesheet(schoolId, accId, date) {
 
   // Previous unsettled payments (between lastSettlement and target-day start)
   const previousPayments = await prisma.feePayment.findMany({
-    where: {
+    where: { voidedAt: null,
       schoolId,
       receivedBy: accId,
       paymentDate: { gte: unsettledSince, lt: targetStart },

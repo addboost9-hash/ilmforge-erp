@@ -24,7 +24,9 @@ const BAR_COLORS = ['#1B2F6E','#0073b7','#059669','#D97706','#7C3AED','#DC2626',
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 /* ── helpers ── */
-const Rs = v => 'Rs. ' + Number(v || 0).toLocaleString('en-PK');
+// Amounts arrive in paisa (Rs 3,500 is 350000); this was printing the
+// stored figure straight out, a hundred times too large.
+const Rs = v => 'Rs. ' + (Number(v || 0) / 100).toLocaleString('en-PK');
 const pct = (n, d) => d ? Math.round((n / d) * 100) : 0;
 
 function today() {

@@ -141,24 +141,24 @@ export default function LeavePage() {
             </div>
             <div className="form-group">
               <label className="form-label">Class</label>
-              <select className="form-select" value={form.classId} onChange={e => setForm(f => ({...f, classId:e.target.value}))}>
+              <select aria-label="Class" className="form-select" value={form.classId} onChange={e => setForm(f => ({...f, classId:e.target.value}))}>
                 <option value="">Select Class</option>
                 {(classes || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div className="form-group">
               <label className="form-label">Leave Type</label>
-              <select className="form-select" value={form.type} onChange={e => setForm(f => ({...f, type:e.target.value}))}>
+              <select aria-label="Leave Type" className="form-select" value={form.type} onChange={e => setForm(f => ({...f, type:e.target.value}))}>
                 {LEAVE_TYPES.map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
             <div className="form-group">
               <label className="form-label">From Date *</label>
-              <input className="form-input" type="date" value={form.from} onChange={e => setForm(f => ({...f, from:e.target.value}))}/>
+              <input aria-label="From Date" className="form-input" type="date" value={form.from} onChange={e => setForm(f => ({...f, from:e.target.value}))}/>
             </div>
             <div className="form-group">
               <label className="form-label">To Date *</label>
-              <input className="form-input" type="date" value={form.to} onChange={e => setForm(f => ({...f, to:e.target.value}))}/>
+              <input aria-label="To Date" className="form-input" type="date" value={form.to} onChange={e => setForm(f => ({...f, to:e.target.value}))}/>
             </div>
             <div className="form-group" style={{ gridColumn:'span 3' }}>
               <label className="form-label">Reason</label>

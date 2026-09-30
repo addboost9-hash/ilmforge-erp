@@ -110,7 +110,7 @@ export default function AnnouncementsPage() {
             </div>
             <div className="form-group">
               <label className="form-label">Audience</label>
-              <select className="form-select" value={form.targetRole} onChange={e=>setForm(f=>({...f,targetRole:e.target.value}))}>
+              <select aria-label="Audience" className="form-select" value={form.targetRole} onChange={e=>setForm(f=>({...f,targetRole:e.target.value}))}>
                 {AUDIENCE_OPTIONS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
               </select>
             </div>

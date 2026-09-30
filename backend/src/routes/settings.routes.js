@@ -58,6 +58,39 @@ router.put('/school', wrap(async (req, res) => {
   res.json({ success: true, data: school });
 }));
 
+// GET /api/v1/settings/portal-links
+// The sign-in link for each role, so the office can look one up later rather
+// than relying on the credentials slip shown once at the time of creation.
+router.get('/portal-links', wrap(async (req, res) => {
+  const school = await prisma.school.findUnique({
+    where: { id: req.schoolId },
+    select: { name: true, slug: true, logoUrl: true },
+  });
+  if (!school) return res.status(404).json({ success: false, message: 'School not found.' });
+
+  const base = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const ROLES = [
+    { role: 'admin',      portal: 'Admin Dashboard',   loginIdLabel: 'Email' },
+    { role: 'teacher',    portal: 'Teacher Portal',    loginIdLabel: 'Email' },
+    { role: 'accountant', portal: 'Accountant Portal', loginIdLabel: 'Email' },
+    { role: 'gatekeeper', portal: 'Gate Portal',       loginIdLabel: 'Email' },
+    { role: 'student',    portal: 'Student Portal',    loginIdLabel: 'Roll number' },
+    { role: 'parent',     portal: 'Parent Portal',     loginIdLabel: 'Phone number' },
+  ];
+
+  res.setHeader('Cache-Control', 'private, no-cache');
+  res.json({
+    success: true,
+    data: {
+      school: { name: school.name, slug: school.slug, logoUrl: school.logoUrl },
+      links: ROLES.map((r) => ({
+        ...r,
+        url: `${base}/login?slug=${school.slug}&role=${r.role}`,
+      })),
+    },
+  });
+}));
+
 router.get('/sessions', wrap(async (req, res) => {
   const sessions = await prisma.academicSession.findMany({ where: { schoolId: req.schoolId }, orderBy: { startDate: 'desc' } });
   res.json({ success: true, data: sessions });

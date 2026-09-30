@@ -4,8 +4,8 @@
  * Responsive: on mobile the branding panel collapses to a compact top bar.
  * All auth logic (login, demo fill, role redirect, toasts) preserved exactly.
  */
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Eye, EyeOff, ArrowRight, Loader2, ShieldCheck, FileDown, UserPlus,
   Mail, Lock,
@@ -13,6 +13,15 @@ import {
 import toast from 'react-hot-toast';
 import useAuthStore from '../../store/auth.store';
 import IlmForgeLogo from '../../components/brand/IlmForgeLogo';
+import api from '../../api/client';
+
+// Which portal a link was issued for. Shown so whoever opens it knows
+// it is theirs; the actual destination is still decided by the role on
+// the account, never by this parameter.
+const PORTAL_LABEL = {
+  teacher: 'Teacher Portal', student: 'Student Portal', parent: 'Parent Portal',
+  accountant: 'Accountant Portal', gatekeeper: 'Gate Portal', admin: 'Admin Dashboard',
+};
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -21,8 +30,38 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
 
-  const schoolLogo = typeof window !== 'undefined' ? localStorage.getItem('schoolLogoPreview') : null;
-  const schoolName = typeof window !== 'undefined' ? localStorage.getItem('registeredSchoolName') : null;
+  const [params] = useSearchParams();
+  const slug = params.get('slug') || (typeof window !== 'undefined' ? localStorage.getItem('schoolSlug') : null);
+  const portalRole = params.get('role');
+
+  // Branding used to come only from localStorage, which is set when a school
+  // registers. That works on the one browser that signed up and nowhere else,
+  // so a portal link opened by a teacher or parent showed the IlmForge brand
+  // instead of their school. Resolve it from the slug in the link instead.
+  const [school, setSchool] = useState(null);
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    api.get('/public/school/' + encodeURIComponent(slug))
+      .then(r => {
+        if (cancelled || !r.data?.data) return;
+        setSchool(r.data.data);
+        // Remember it so the next visit to /login is branded without the
+        // query string, and so the rest of the app can read it.
+        try {
+          localStorage.setItem('schoolSlug', r.data.data.slug || slug);
+          localStorage.setItem('registeredSchoolName', r.data.data.name || '');
+          if (r.data.data.logoUrl) localStorage.setItem('schoolLogoPreview', r.data.data.logoUrl);
+        } catch { /* private mode - branding just will not persist */ }
+      })
+      .catch(() => { /* unknown slug: fall back to the default brand */ });
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  const schoolLogo = school?.logoUrl
+    || (typeof window !== 'undefined' ? localStorage.getItem('schoolLogoPreview') : null);
+  const schoolName = school?.name
+    || (typeof window !== 'undefined' ? localStorage.getItem('registeredSchoolName') : null);
   const brandColor = typeof window !== 'undefined' ? (localStorage.getItem('brandPrimaryColor') || '#0073b7') : '#0073b7';
 
   const handleSubmit = async (e) => {
@@ -105,11 +144,18 @@ export default function LoginPage() {
 
         <div className="ilm-brand-mid" style={{ marginTop: 40, position: 'relative' }}>
           <h2 style={{ fontSize: 28, fontWeight: 800, margin: '0 0 12px', lineHeight: 1.2 }}>
-            Pakistan's Premier School ERP
+            {schoolName || "Pakistan's Premier School ERP"}
           </h2>
           <p style={{ opacity: 0.75, lineHeight: 1.7, fontSize: 15, margin: 0 }}>
-            Complete school management — admissions, fees, attendance, exams, and more in one platform.
+            {schoolName
+              ? (portalRole && PORTAL_LABEL[portalRole]
+                  ? `Sign in to the ${PORTAL_LABEL[portalRole]}.`
+                  : 'Sign in to your school portal.')
+              : 'Complete school management — admissions, fees, attendance, exams, and more in one platform.'}
           </p>
+          {schoolName && school?.city && (
+            <p style={{ opacity: 0.55, fontSize: 13, margin: '8px 0 0' }}>{school.city}</p>
+          )}
         </div>
 
         <div className="ilm-brand-mid" style={{ position: 'relative' }}>
@@ -147,7 +193,7 @@ export default function LoginPage() {
         }}>
           <div style={{ marginBottom: 24 }}>
             <h2 style={{ fontSize: 26, fontWeight: 900, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
-              Welcome Back 👋
+              {portalRole && PORTAL_LABEL[portalRole] ? PORTAL_LABEL[portalRole] : 'Welcome Back 👋'}
             </h2>
             <p style={{ fontSize: 14, color: '#64748B', marginTop: 6 }}>
               Sign in to your school dashboard

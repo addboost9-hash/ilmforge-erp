@@ -31,6 +31,15 @@ export default function BrandedLoginPage() {
   const { login, isLoading } = useAuthStore();
 
   const slug = params.get('slug') || '';
+  // Portal links carry the role they were issued for, so the page can say
+  // which portal it is. Where a person actually lands after signing in is
+  // still decided by the role on their account, never by this parameter.
+  const portalRole = params.get('role') || '';
+  const PORTAL_LABEL = {
+    teacher: 'Teacher Portal', student: 'Student Portal', parent: 'Parent Portal',
+    accountant: 'Accountant Portal', gatekeeper: 'Gate Portal', admin: 'Admin Dashboard',
+  };
+  const portalName = PORTAL_LABEL[portalRole] || '';
   const ref  = params.get('ref')  || '';
 
   const [school,       setSchool]       = useState(null);
@@ -195,7 +204,7 @@ export default function BrandedLoginPage() {
           {/* Heading */}
           <div style={{ marginBottom:28 }}>
             <h2 style={{ fontSize:26, fontWeight:900, color:'#1e3a5f', margin:'0 0 6px' }}>
-              Welcome! 👋
+              {portalName || 'Welcome! 👋'}
             </h2>
             <p style={{ color:'#64748b', fontSize:14, margin:0 }}>
               Sign in to the <strong style={{ color:'#1B2F6E' }}>{schoolName}</strong> portal

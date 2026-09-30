@@ -24,7 +24,10 @@ const CYAN = '#00c0ef';
 /* ─────────────────────────────────────────────────────────
    HELPERS
 ───────────────────────────────────────────────────────── */
-const Rs = v => 'Rs. ' + Number(v || 0).toLocaleString('en-PK');
+// Fee amounts are stored in paisa (Rs 3,500 is 350000). This page was
+// printing the stored figure straight out, so every amount a parent or
+// student saw read a hundred times too large.
+const Rs = v => 'Rs. ' + (Number(v || 0) / 100).toLocaleString('en-PK');
 
 const fmtDate = d =>
   d

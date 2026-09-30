@@ -304,7 +304,7 @@ export default function ChannelSettingsPage() {
             </div>
             <div className="form-group">
               <label className="form-label">Port</label>
-              <select className="form-select" value={mail.smtpPort} onChange={e => setMail({ ...mail, smtpPort: e.target.value })}>
+              <select aria-label="Port" className="form-select" value={mail.smtpPort} onChange={e => setMail({ ...mail, smtpPort: e.target.value })}>
                 <option value="587">587 (TLS/STARTTLS)</option>
                 <option value="465">465 (SSL)</option>
                 <option value="25">25 (Plain)</option>

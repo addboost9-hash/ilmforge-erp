@@ -281,7 +281,7 @@ async function runDailyCollectionReport() {
 
     for (const rule of rules) {
       const payments = await prisma.feePayment.findMany({
-        where: {
+        where: { voidedAt: null,
           schoolId: rule.schoolId,
           paymentDate: { gte: today, lt: tomorrow },
         },

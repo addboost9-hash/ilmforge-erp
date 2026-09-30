@@ -514,7 +514,7 @@ export default function FeeBarcodeCollectionPage() {
               {/* Amount */}
               <div className="form-group">
                 <label className="form-label">Amount to Collect (Rs.) *</label>
-                <input
+                <input aria-label="Amount to Collect (Rs.)"
                   className="form-input"
                   type="number" step="1" min="1"
                   style={{ fontSize:18, fontWeight:700, textAlign:'center', color:'#15803d' }}
@@ -527,7 +527,7 @@ export default function FeeBarcodeCollectionPage() {
               {/* Discount */}
               <div className="form-group">
                 <label className="form-label">Discount / Concession (Rs.)</label>
-                <input
+                <input aria-label="Discount / Concession (Rs.)"
                   className="form-input"
                   type="number" step="1" min="0"
                   value={payForm.discount}
@@ -558,7 +558,7 @@ export default function FeeBarcodeCollectionPage() {
               {/* Notify */}
               <div className="form-group">
                 <label className="form-label">Notify Parent</label>
-                <select className="form-select" value={payForm.notifyVia} onChange={e => setPayForm({ ...payForm, notifyVia: e.target.value })}>
+                <select aria-label="Notify Parent" className="form-select" value={payForm.notifyVia} onChange={e => setPayForm({ ...payForm, notifyVia: e.target.value })}>
                   <option value="whatsapp_sms">WhatsApp + SMS</option>
                   <option value="sms">SMS Only</option>
                   <option value="none">Do Not Notify</option>

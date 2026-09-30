@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { validatePhone, validateCNIC, formatCNIC } from '../../utils/validation';
+import { printAdmissionForm } from './AdmissionFormPrintPage';
 
 /* ═══════════════════════════════════════════════════════
    LIVE PHOTO CAPTURE COMPONENT
@@ -115,7 +116,7 @@ function btnSm(bg) { return { padding:'5px 10px', background:bg, color:'white', 
 import {
   User, GraduationCap, Wallet, Users, ClipboardCheck, CheckCircle2,
   ChevronRight, ChevronLeft, Printer, Copy, KeyRound, Link2, AlertCircle,
-  Calendar, BookOpen, UserCheck, ChevronDown, ChevronUp,
+  Calendar, BookOpen, UserCheck, ChevronDown, ChevronUp, FileText,
 } from 'lucide-react';
 
 const STEPS = [
@@ -230,6 +231,12 @@ export default function AdmissionWizardPage() {
   const { data: classes = [] } = useQuery({
     queryKey: ['wizard-classes'],
     queryFn: () => api.get('/classes').then(r => r.data.data || []),
+  });
+
+  // Needed for the letterhead on the printed admission form.
+  const { data: school } = useQuery({
+    queryKey: ['school-settings'],
+    queryFn: () => api.get('/settings/school').then(r => r.data.data).catch(() => null),
   });
   const selectedClass = classes.find(c => String(c.id) === String(form.classId));
   const sections = selectedClass?.sections || [];
@@ -396,6 +403,24 @@ export default function AdmissionWizardPage() {
   const copyText = (t) => { navigator.clipboard?.writeText(t); };
 
   /* ── Print credentials slip ── */
+  /* Print the student's admission form — the same A4 layout as
+     Admissions > Admission Form Print, pre-filled with what was just
+     entered, so the office has a signed paper record on file. */
+  const printForm = () => {
+    const student = result?.data;
+    if (!student) return;
+    printAdmissionForm(
+      {
+        ...student,
+        // The wizard knows a few fields the created record may not echo back.
+        fatherName:     student.fatherName     ?? form.fatherName,
+        emergencyPhone: student.emergencyPhone ?? form.emergencyPhone,
+        address:        student.address        ?? form.address,
+      },
+      school,
+    );
+  };
+
   const printSlip = () => {
     const c = result?.credentials;
     const s = result?.data;
@@ -495,6 +520,9 @@ export default function AdmissionWizardPage() {
           </>
         )}
         <div className="flex gap-3">
+          <button onClick={printForm} className="flex-1 flex items-center justify-center gap-2 bg-[#1B2F6E] hover:bg-[#16255a] text-white font-semibold py-3 rounded-xl transition">
+            <FileText className="w-4 h-4" /> Print Admission Form
+          </button>
           {c && (
             <button onClick={printSlip} className="flex-1 flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl transition">
               <Printer className="w-4 h-4" /> Print Credentials Slip

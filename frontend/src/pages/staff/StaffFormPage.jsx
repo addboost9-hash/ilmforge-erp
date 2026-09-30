@@ -76,12 +76,13 @@ export default function StaffFormPage() {
   const photoRef = useRef();
 
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', designation: 'Teacher',
+    name: '', email: '', phone: '', designation: 'Teacher', role: 'teacher',
     joiningDate: '', basicSalary: '', salaryType: 'monthly',
     gender: 'male', cnic: '', departmentId: '', dob: '',
   });
   const [createAccount, setCreateAccount] = useState(true);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [issued, setIssued] = useState(null); // access details to hand over after save
 
   // FIX: this form previously had no edit mode at all — /staff/:id/edit
   // rendered a blank "Add Staff" form that always POSTed a brand new
@@ -135,9 +136,18 @@ export default function StaffFormPage() {
       if (photoPreview && staffId) {
         try { localStorage.setItem(`photo_staff_${staffId}`, photoPreview); } catch {}
       }
-      toast.success(isEdit ? 'Staff member updated successfully!' : 'Staff member saved successfully!');
       qc.invalidateQueries({ queryKey: ['staff'] });
-      nav('/staff');
+      // The API returns the portal link, login ID and one-time password.
+      // These used to be discarded and the page navigated away, leaving no
+      // way to tell the new staff member where or how to sign in.
+      const cred = r?.data?.credentials;
+      if (!isEdit && cred) {
+        toast.success('Staff member saved — hand over the access details shown.');
+        setIssued(cred);
+      } else {
+        toast.success(isEdit ? 'Staff member updated successfully!' : 'Staff member saved successfully!');
+        nav('/staff');
+      }
     },
     onError: err => toast.error('Failed to save staff: ' + (err.response?.data?.message || err.message || 'Unknown error')),
   });
@@ -244,11 +254,11 @@ export default function StaffFormPage() {
           </div>
           <div className="form-group">
             <label className="form-label">Date of Birth</label>
-            <input className="form-input" type="date" value={form.dob} onChange={set('dob')}/>
+            <input aria-label="Date of Birth" className="form-input" type="date" value={form.dob} onChange={set('dob')}/>
           </div>
           <div className="form-group">
             <label className="form-label">Gender</label>
-            <select className="form-select" value={form.gender} onChange={set('gender')}>
+            <select aria-label="Gender" className="form-select" value={form.gender} onChange={set('gender')}>
               <option value="male">Male</option>
               <option value="female">Female</option>
             </select>
@@ -274,6 +284,22 @@ export default function StaffFormPage() {
             </label>
             <input className="form-input" placeholder="Teacher, Principal, etc." value={form.designation} onChange={set('designation')}/>
           </div>
+          {/* Designation is a free-text label; this decides the actual login
+              permissions. Every staff account used to be created as a teacher,
+              so an accountant could not open the accountant portal. */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="staff-role">Portal Access Role</label>
+            <select id="staff-role" className="form-select" value={form.role} onChange={set('role')} disabled={isEdit}>
+              <option value="teacher">Teacher — classes, attendance, marks</option>
+              <option value="accountant">Accountant — fees, invoices, expenses</option>
+              <option value="gatekeeper">Gatekeeper — gate passes, visitors, barcode scan</option>
+              <option value="admin">Admin — full access</option>
+            </select>
+            <div style={{ fontSize:11, color:'#64748B', marginTop:4 }}>
+              {isEdit ? 'Role cannot be changed here once the account exists.'
+                      : 'Decides which portal this person sees after signing in.'}
+            </div>
+          </div>
           <div className="form-group">
             <label className="form-label">Department</label>
             {/* FIX: this was a free-text box bound to departmentId, so typing
@@ -292,7 +318,7 @@ export default function StaffFormPage() {
           </div>
           <div className="form-group">
             <label className="form-label">Joining Date</label>
-            <input className="form-input" type="date" value={form.joiningDate} onChange={set('joiningDate')}/>
+            <input aria-label="Joining Date" className="form-input" type="date" value={form.joiningDate} onChange={set('joiningDate')}/>
           </div>
           <div className="form-group">
             <label className="form-label">Basic Salary (Rs.)</label>
@@ -300,7 +326,7 @@ export default function StaffFormPage() {
           </div>
           <div className="form-group">
             <label className="form-label">Salary Type</label>
-            <select className="form-select" value={form.salaryType} onChange={set('salaryType')}>
+            <select aria-label="Salary Type" className="form-select" value={form.salaryType} onChange={set('salaryType')}>
               <option value="monthly">Monthly</option>
               <option value="hourly">Hourly</option>
               <option value="lecture">Lecture-wise</option>
@@ -362,7 +388,7 @@ export default function StaffFormPage() {
                 </div>
                 <div className="form-group" style={{ margin:0 }}>
                   <label className="form-label">Temporary Password</label>
-                  <input className="form-input" value="teacher" disabled style={{ color:'#94a3b8', background:'#f8fafc' }}/>
+                  <input aria-label="Temporary Password" className="form-input" value="teacher" disabled style={{ color:'#94a3b8', background:'#f8fafc' }}/>
                   <div style={{ fontSize:11, color:'#94a3b8', marginTop:4 }}>Staff must change this on first login</div>
                 </div>
               </div>
@@ -385,6 +411,54 @@ export default function StaffFormPage() {
         </button>
         <Link to="/staff" className="btn btn-outline btn-lg">Cancel</Link>
       </div>
+
+      {/* Access details for the new staff member — shown once. */}
+      {issued && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.55)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
+             onClick={e => { if (e.target === e.currentTarget) { setIssued(null); nav('/staff'); } }}>
+          <div style={{ background:'#fff', borderRadius:14, width:'100%', maxWidth:470, boxShadow:'0 24px 60px rgba(0,0,0,0.28)', overflow:'hidden' }}>
+            <div style={{ background:'linear-gradient(135deg,#0F766E,#0D9488)', color:'#fff', padding:'16px 20px' }}>
+              <div style={{ fontWeight:800, fontSize:16 }}>Staff account created</div>
+              <div style={{ fontSize:12.5, opacity:0.9, marginTop:2 }}>{issued.portal} · shown only once</div>
+            </div>
+            <div style={{ padding:'18px 20px' }}>
+              <CredLine label="Portal link" value={issued.portalLink} link />
+              <CredLine label={issued.loginIdLabel || 'Login ID'} value={issued.loginId} />
+              {issued.phone && <CredLine label="Phone" value={issued.phone} />}
+              <CredLine label="Password" value={issued.password} mono />
+              <CredLine label="Employee code" value={issued.empCode} mono />
+              <CredLine label="Role" value={issued.role} />
+              {issued.mustChangePassword && (
+                <div style={{ marginTop:12, background:'#FFFBEB', border:'1px solid #FDE68A', color:'#92400E', borderRadius:8, padding:'9px 12px', fontSize:12.5 }}>
+                  They will be asked to set a new password on first sign-in.
+                </div>
+              )}
+            </div>
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end', padding:'0 20px 18px' }}>
+              <button className="btn btn-outline" onClick={() => {
+                const txt = [issued.schoolName, 'Portal: ' + issued.portalLink, issued.loginIdLabel + ': ' + issued.loginId, 'Password: ' + issued.password, 'Role: ' + issued.role].join(String.fromCharCode(10));
+                navigator.clipboard?.writeText(txt).then(() => toast.success('Access details copied')).catch(() => toast.error('Could not copy'));
+              }}>Copy all</button>
+              <button className="btn btn-teal" onClick={() => { setIssued(null); nav('/staff'); }}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* One labelled, copyable line inside the access-details dialog. */
+function CredLine({ label, value, mono, link }) {
+  if (!value) return null;
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 0', borderBottom:'1px solid #F1F5F9' }}>
+      <div style={{ fontSize:12, color:'#64748B', width:118, flexShrink:0 }}>{label}</div>
+      <div style={{ flex:1, minWidth:0, fontSize:13, fontWeight:600, color:'#0F172A', fontFamily: mono ? 'monospace' : 'inherit', wordBreak:'break-all' }}>
+        {link ? <a href={value} target="_blank" rel="noreferrer" style={{ color:'#0D9488' }}>{value}</a> : value}
+      </div>
+      <button aria-label={'Copy ' + label} className="btn btn-outline btn-sm" style={{ padding:'3px 8px', fontSize:11 }}
+        onClick={() => navigator.clipboard?.writeText(value).then(() => toast.success(label + ' copied')).catch(() => toast.error('Could not copy'))}>Copy</button>
     </div>
   );
 }

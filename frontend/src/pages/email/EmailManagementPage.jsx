@@ -179,7 +179,7 @@ export default function EmailManagementPage() {
             {/* Recipient group selector */}
             <div className="form-group">
               <label className="form-label">Send To *</label>
-              <select className="form-select" value={recipientGroup} onChange={e => setRecipientGroup(e.target.value)}>
+              <select aria-label="Send To" className="form-select" value={recipientGroup} onChange={e => setRecipientGroup(e.target.value)}>
                 {RECIPIENT_GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
               </select>
               {recipientGroup !== 'custom' && (

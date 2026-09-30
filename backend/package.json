@@ -15,7 +15,9 @@
     "db:seed": "node src/utils/seed.js",
     "db:backfill-links": "node src/utils/backfillPortalLinks.js",
     "smoke:api": "node scripts/api-smoke.js",
-    "smoke:smtp": "node scripts/smtp-test.js"
+    "smoke:smtp": "node scripts/smtp-test.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@prisma/client": "^5.7.0",
@@ -32,14 +34,15 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
     "nodemailer": "^6.9.7",
     "prisma": "^5.7.0",
     "twilio": "^4.19.0",
-    "uuid": "^9.0.0",
-    "node-cron": "^3.0.3"
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "vitest": "^5.0.3"
   }
 }

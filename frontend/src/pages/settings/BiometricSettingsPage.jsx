@@ -213,7 +213,7 @@ export default function BiometricSettingsPage() {
 
             <div className="form-group">
               <label className="form-label">Campus ID</label>
-              <input className="form-input" type="number" value={campusId} style={{ width:110 }}
+              <input aria-label="Campus ID" className="form-input" type="number" value={campusId} style={{ width:110 }}
                 onChange={e=>setCampusId(e.target.value)}/>
               <div style={{ fontSize:11.5, color:'#64748B', marginTop:4 }}>Match this with Campus ID in BioSync app</div>
             </div>

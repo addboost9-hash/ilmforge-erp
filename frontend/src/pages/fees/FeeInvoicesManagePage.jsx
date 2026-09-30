@@ -6,6 +6,7 @@
  * PRINT:  Monthly voucher (3-copy) · Admission voucher (heads breakdown) · Receipt
  */
 import { useState } from 'react';
+import { money, toPaisa, rupeesInput } from '../../utils/currency';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import useAuthStore from '../../store/auth.store';
@@ -94,7 +95,7 @@ export default function FeeInvoicesManagePage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['fee-invoices-manage'] }); setModal(null); setSelStudent(null); setHeads([{ name: 'Monthly Tuition Fee', amount: '' }]); },
   });
   const updateInv = useMutation({
-    mutationFn: () => api.put(`/fees/invoices/${modal.inv.id}`, editVals),
+    mutationFn: () => api.put(`/fees/invoices/${modal.inv.id}`, { ...editVals, totalAmount: toPaisa(editVals.totalAmount) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['fee-invoices-manage'] }); setModal(null); },
   });
   const deleteInv = useMutation({
@@ -142,14 +143,14 @@ export default function FeeInvoicesManagePage() {
               <tr key={inv.id} className="border-b border-slate-50">
                 <td className="px-4 py-2.5"><div className="font-bold text-slate-800">{inv.student?.name || inv.studentName}</div><div className="text-[10px] text-slate-400">{inv.student?.rollNo || inv.rollNo}</div></td>
                 <td className="px-4 py-2.5 text-slate-600">{inv.month} {inv.year}</td>
-                <td className="px-4 py-2.5 font-bold">Rs {Number(inv.totalAmount).toLocaleString()}</td>
-                <td className="px-4 py-2.5 text-teal-700">Rs {Number(inv.paidAmount).toLocaleString()}</td>
-                <td className="px-4 py-2.5 text-red-600 font-bold">Rs {Number(inv.dueAmount).toLocaleString()}</td>
+                <td className="px-4 py-2.5 font-bold">{money(inv.totalAmount)}</td>
+                <td className="px-4 py-2.5 text-teal-700">{money(inv.paidAmount)}</td>
+                <td className="px-4 py-2.5 text-red-600 font-bold">{money(inv.dueAmount)}</td>
                 <td className="px-4 py-2.5"><span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${sc[inv.status] || sc.pending}`}>{inv.status?.toUpperCase()}</span></td>
                 <td className="px-4 py-2.5">
                   <div className="flex gap-1.5">
                     <button title="Print voucher" onClick={() => printInvoice(inv)} className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-teal-600 hover:border-teal-300"><Printer className="w-3.5 h-3.5" /></button>
-                    <button title="Edit" onClick={() => { setModal({ mode: 'edit', inv }); setEditVals({ totalAmount: inv.totalAmount, status: inv.status, dueDate: inv.dueDate?.slice(0, 10) }); }}
+                    <button title="Edit" onClick={() => { setModal({ mode: 'edit', inv }); setEditVals({ totalAmount: rupeesInput(inv.totalAmount), status: inv.status, dueDate: inv.dueDate?.slice(0, 10) }); }}
                       className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300"><Pencil className="w-3.5 h-3.5" /></button>
                     <button title="Delete (unpaid only)" onClick={() => confirm('Delete this invoice?') && deleteInv.mutate(inv.id)}
                       className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-300"><Trash2 className="w-3.5 h-3.5" /></button>
