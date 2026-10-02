@@ -156,8 +156,17 @@ router.get('/overview', wrap(async (req, res) => {
   const windowRevenue = series.reduce((t, m) => t + m.revenue, 0);
   const windowExpense = series.reduce((t, m) => t + m.expense, 0);
 
+  /* An invoice can show more paid than billed when it was raised with the
+     wrong unit (rupees saved as paisa) before that was fixed. Counting such
+     money as "collected" produced rates like 3333%, and a perfect health
+     score on bad data. Cap the rate and tell the admin which to check. */
+  const overpaidInvoices = await prisma.feeInvoice.count({
+    where: { schoolId, paidAmount: { gt: prisma.feeInvoice.fields.totalAmount } },
+  }).catch(() => 0);
+
+  const rawCollection = pct(collected, billed);
   const metrics = {
-    collectionRate: pct(collected, billed),
+    collectionRate: rawCollection == null ? null : Math.min(100, rawCollection),
     attendanceRate: pct(presentCount, attendanceTotal),
     retention: students + withdrawn > 0 ? pct(students, students + withdrawn) : null,
     staffAttendance: pct(staffPresent, staffTotal),
@@ -226,6 +235,7 @@ router.get('/overview', wrap(async (req, res) => {
         series,
       },
       explanation,
+      dataQuality: { overpaidInvoices },
       capabilities: {
         ...caps,
         // Reported against months that have BOTH fees and expenses, which is

@@ -1,55 +1,52 @@
 /* ═══════════════════════════════════════════════════════════════════════
    IlmForge — Dashboard design system.
 
-   Scoped to .ilm-dash so it restyles the dashboard without disturbing the
-   ~190 pages that still use the older palette. Everything is a token, so
-   the same sheet can be extended to the rest of the app later without
-   hunting hardcoded hex values.
-
-   No gradients. One border weight. Two radii. Shadows are deliberately
-   almost absent - depth comes from the 1px line, not from glow.
+   Same visual language as the Reports Hub: a navy-to-blue banner, vivid
+   gradient feature cards, category cards with a coloured header band, and
+   white rounded panels with a soft navy shadow. Scoped to .ilm-dash so
+   the rest of the app is untouched. Every colour is a token.
    ═══════════════════════════════════════════════════════════════════════ */
 
 .ilm-dash {
-  /* Brand */
-  --d-primary:      #0F3D33;  /* chalkboard green */
-  --d-primary-soft: #0F3D3314;
-  --d-accent:       #F2A33A;  /* marigold */
-  --d-accent-soft:  #F2A33A22;
+  /* Brand — the Reports Hub navy and blue */
+  --d-primary:      #1B2F6E;
+  --d-primary-2:    #0073b7;
+  --d-primary-soft: #1B2F6E12;
+  --d-accent:       #F59E0B;
+  --d-accent-soft:  #F59E0B22;
 
   /* Surface */
-  --d-paper:  #F7F8F5;
+  --d-paper:  #ECF0F5;          /* the app's content background */
   --d-panel:  #FFFFFF;
-  --d-line:   #E3E7E3;
+  --d-line:   #E2E8F0;
+  --d-shadow: 0 4px 20px rgba(27, 47, 110, 0.08);
+  --d-shadow-hover: 0 12px 40px rgba(27, 47, 110, 0.15);
 
   /* Text */
-  --d-ink:    #16211E;
-  --d-muted:  #5E6B67;
+  --d-ink:    #1E293B;
+  --d-muted:  #64748B;
+  --d-on-color: #FFFFFF;
 
   /* Signal */
-  --d-profit: #1F9D6B;
-  --d-loss:   #D64550;
+  --d-profit: #059669;
+  --d-loss:   #DC2626;
 
-  /* Work families — one hue per kind of job, used on shortcuts and KPIs */
-  --d-att:      #0E7C86;  --d-att-soft:    #0E7C8617;
-  --d-fee:      #1F7A4D;  --d-fee-soft:    #1F7A4D17;
-  --d-exam:     #5B4BD6;  --d-exam-soft:   #5B4BD617;
-  --d-people:   #B5591C;  --d-people-soft: #B5591C17;
-  --d-comm:     #2563A8;  --d-comm-soft:   #2563A817;
-  --d-admin:    #5E6B67;  --d-admin-soft:  #5E6B6717;
-
-  /* Hero band */
-  --d-hero-ink:   #F4F1E8;   /* chalk */
-  --d-hero-muted: #B9CBC4;
-  --d-hero-line:  #FFFFFF1F;
+  /* Work families: [solid, gradient end, soft] — same hues as the hub */
+  --d-att:    #0F766E;  --d-att-2:    #0D9488;  --d-att-soft:    #0F766E14;
+  --d-fee:    #059669;  --d-fee-2:    #10B981;  --d-fee-soft:    #05966914;
+  --d-exam:   #7C3AED;  --d-exam-2:   #A855F7;  --d-exam-soft:   #7C3AED14;
+  --d-people: #1B2F6E;  --d-people-2: #0073B7;  --d-people-soft: #1B2F6E14;
+  --d-comm:   #D97706;  --d-comm-2:   #F59E0B;  --d-comm-soft:   #D9770614;
+  --d-admin:  #DC2626;  --d-admin-2:  #EF4444;  --d-admin-soft:  #DC262614;
 
   /* Shape */
-  --d-r-lg: 14px;
-  --d-r-sm: 8px;
+  --d-r-lg: 16px;
+  --d-r-md: 14px;
+  --d-r-sm: 10px;
 
-  /* Type */
-  --d-font-head: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
-  --d-font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  /* Type — the app's own faces */
+  --d-font-head: 'Poppins', 'Source Sans Pro', 'Segoe UI', system-ui, sans-serif;
+  --d-font-body: 'Source Sans Pro', 'Inter', 'Segoe UI', system-ui, sans-serif;
 
   background: var(--d-paper);
   color: var(--d-ink);
@@ -59,7 +56,7 @@
 
 .ilm-dash h1, .ilm-dash h2, .ilm-dash h3, .ilm-dash .d-head {
   font-family: var(--d-font-head);
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--d-ink);
   margin: 0;
@@ -68,9 +65,10 @@
 /* ── Panel ─────────────────────────────────────────────────────────── */
 .ilm-dash .d-panel {
   background: var(--d-panel);
-  border: 1px solid var(--d-line);
+  border: 1px solid transparent;
   border-radius: var(--d-r-lg);
-  padding: 18px;
+  box-shadow: var(--d-shadow);
+  padding: 18px 20px;
 }
 .ilm-dash .d-panel-head {
   display: flex;
@@ -79,15 +77,16 @@
   gap: 12px;
   margin-bottom: 14px;
 }
-.ilm-dash .d-panel-title { font-size: 15px; font-weight: 600; font-family: var(--d-font-head); }
-.ilm-dash .d-panel-sub   { font-size: 12px; color: var(--d-muted); }
+.ilm-dash .d-panel-title { font-size: 15.5px; font-weight: 700; font-family: var(--d-font-head); color: var(--d-primary); }
+.ilm-dash .d-panel-sub   { font-size: 12.5px; color: var(--d-muted); }
 
 /* ── Numbers ───────────────────────────────────────────────────────── */
 .ilm-dash .d-metric {
   font-family: var(--d-font-head);
-  font-size: 26px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
   line-height: 1.1;
+  color: var(--d-ink);
   font-variant-numeric: tabular-nums;
 }
 .ilm-dash .d-metric-label {
@@ -95,6 +94,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--d-muted);
+  font-weight: 600;
   margin-top: 4px;
 }
 .ilm-dash .d-profit { color: var(--d-profit); }
@@ -104,33 +104,36 @@
 .ilm-dash .d-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
-.ilm-dash .d-cols-2 { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+.ilm-dash .d-cols-2 { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.ilm-dash .d-cols-3 { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* ── Buttons / chips ───────────────────────────────────────────────── */
 .ilm-dash .d-btn {
   font: inherit;
   font-size: 13px;
-  padding: 7px 13px;
+  font-weight: 600;
+  padding: 7px 14px;
   border-radius: var(--d-r-sm);
   border: 1px solid var(--d-line);
   background: var(--d-panel);
   color: var(--d-ink);
   cursor: pointer;
-  min-height: 34px;
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: border-color .12s, background .12s;
+  text-decoration: none;
+  transition: border-color .15s, background .15s, transform .15s;
 }
-.ilm-dash .d-btn:hover { border-color: var(--d-primary); }
+.ilm-dash .d-btn:hover { border-color: var(--d-primary-2); }
 .ilm-dash .d-btn-primary {
-  background: var(--d-primary);
-  border-color: var(--d-primary);
-  color: #fff;
+  background: linear-gradient(135deg, var(--d-primary), var(--d-primary-2));
+  border-color: transparent;
+  color: var(--d-on-color);
 }
-.ilm-dash .d-btn-primary:hover { background: #0c3229; }
+.ilm-dash .d-btn-primary:hover { filter: brightness(1.08); }
 .ilm-dash .d-chip {
   font-size: 11px;
   padding: 3px 9px;
@@ -139,78 +142,111 @@
   color: var(--d-muted);
   white-space: nowrap;
 }
-.ilm-dash .d-chip-accent { background: var(--d-accent-soft); border-color: transparent; color: #7a4d06; }
+.ilm-dash .d-chip-accent { background: var(--d-accent-soft); border-color: transparent; color: #92400E; }
 
-/* ── Hero band: greeting + what is left to do today ────────────────── */
+/* ── Banner (same as the Reports Hub header) ───────────────────────── */
 .ilm-dash .d-hero {
-  background: var(--d-primary);
-  color: var(--d-hero-ink);
-  border-radius: var(--d-r-lg);
-  padding: 22px 22px 20px;
-  border-bottom: 3px solid var(--d-accent);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
-  gap: 22px;
+  background: linear-gradient(135deg, var(--d-primary), var(--d-primary-2));
+  color: var(--d-on-color);
+  border-radius: var(--d-r-md);
+  padding: 20px 24px;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
-.ilm-dash .d-hero h1 { color: var(--d-hero-ink); font-size: 25px; text-wrap: balance; }
-.ilm-dash .d-hero-sub { color: var(--d-hero-muted); font-size: 13px; margin-top: 4px; }
-.ilm-dash .d-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-.ilm-dash .d-hero .d-btn { background: transparent; color: var(--d-hero-ink); border-color: var(--d-hero-line); }
-.ilm-dash .d-hero .d-btn:hover { border-color: var(--d-accent); }
-.ilm-dash .d-hero .d-btn-accent { background: var(--d-accent); color: #2b1a02; border-color: var(--d-accent); font-weight: 600; }
-.ilm-dash .d-hero .d-btn-accent:hover { background: #f5b257; }
+.ilm-dash .d-hero-id { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.ilm-dash .d-hero-mark {
+  width: 48px; height: 48px; border-radius: 12px; flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.15);
+  display: grid; place-items: center;
+}
+.ilm-dash .d-hero h1 { color: var(--d-on-color); font-size: 22px; text-wrap: balance; }
+.ilm-dash .d-hero-sub { color: rgba(255, 255, 255, 0.82); font-size: 13px; margin-top: 2px; }
+.ilm-dash .d-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ilm-dash .d-hero .d-btn {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--d-on-color);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.ilm-dash .d-hero .d-btn:hover { background: rgba(255, 255, 255, 0.24); }
+.ilm-dash .d-hero .d-btn-accent { background: var(--d-on-color); color: var(--d-primary); border-color: transparent; }
+.ilm-dash .d-hero .d-btn-accent:hover { background: #F1F5F9; }
 
-.ilm-dash .d-today { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.ilm-dash .d-today-item {
-  border: 1px solid var(--d-hero-line);
-  border-radius: var(--d-r-sm);
-  padding: 12px 13px;
-  color: inherit;
-  text-decoration: none;
+/* ── Feature cards: Today (same as "Today's Summary") ─────────────── */
+.ilm-dash .d-feature {
+  position: relative;
+  overflow: hidden;
   display: grid;
-  gap: 4px;
-  transition: border-color .12s, background .12s;
+  gap: 6px;
+  align-content: start;
+  padding: 20px 22px;
+  border-radius: var(--d-r-md);
+  color: var(--d-on-color);
+  text-decoration: none;
+  background: linear-gradient(135deg, var(--tone), var(--tone-2));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  transition: transform .2s, box-shadow .2s;
+  min-width: 0;
 }
-.ilm-dash .d-today-item:hover { border-color: var(--d-accent); background: #FFFFFF0D; }
-.ilm-dash .d-today-label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--d-hero-muted); }
-.ilm-dash .d-today-value { font-family: var(--d-font-head); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
-.ilm-dash .d-today-note { font-size: 12px; color: var(--d-hero-muted); }
-.ilm-dash .d-today-note.is-todo { color: var(--d-accent); font-weight: 600; }
-.ilm-dash .d-bar { height: 4px; border-radius: 4px; background: var(--d-hero-line); overflow: hidden; }
-.ilm-dash .d-bar > span { display: block; height: 100%; background: var(--d-accent); border-radius: 4px; }
+.ilm-dash .d-feature:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18); }
+.ilm-dash .d-feature-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.ilm-dash .d-feature-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.18);
+}
+.ilm-dash .d-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  padding: 3px 8px; border-radius: 99px;
+  background: rgba(255, 255, 255, 0.22); color: var(--d-on-color);
+  white-space: nowrap;
+}
+.ilm-dash .d-badge.is-live { background: #22C55E; }
+.ilm-dash .d-badge.is-todo { background: var(--d-accent); color: #3B2300; }
+.ilm-dash .d-feature-title { font-family: var(--d-font-head); font-weight: 700; font-size: 15px; margin-top: 6px; }
+.ilm-dash .d-feature-value { font-family: var(--d-font-head); font-weight: 800; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.ilm-dash .d-feature-sub { font-size: 12.5px; color: rgba(255, 255, 255, 0.85); }
+.ilm-dash .d-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ilm-dash .d-pill { background: rgba(255, 255, 255, 0.16); border-radius: 8px; padding: 5px 10px; font-size: 11.5px; font-weight: 700; }
+.ilm-dash .d-bar { height: 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.22); overflow: hidden; margin-top: 4px; }
+.ilm-dash .d-bar > span { display: block; height: 100%; background: var(--d-on-color); border-radius: 6px; transition: width .6s ease; }
+.ilm-dash .d-feature-go { position: absolute; right: 16px; bottom: 16px; opacity: .7; }
+
+/* ── Work-family tones ─────────────────────────────────────────────── */
+.ilm-dash .d-tone-att    { --tone: var(--d-att);    --tone-2: var(--d-att-2);    --tone-soft: var(--d-att-soft); }
+.ilm-dash .d-tone-fee    { --tone: var(--d-fee);    --tone-2: var(--d-fee-2);    --tone-soft: var(--d-fee-soft); }
+.ilm-dash .d-tone-exam   { --tone: var(--d-exam);   --tone-2: var(--d-exam-2);   --tone-soft: var(--d-exam-soft); }
+.ilm-dash .d-tone-people { --tone: var(--d-people); --tone-2: var(--d-people-2); --tone-soft: var(--d-people-soft); }
+.ilm-dash .d-tone-comm   { --tone: var(--d-comm);   --tone-2: var(--d-comm-2);   --tone-soft: var(--d-comm-soft); }
+.ilm-dash .d-tone-admin  { --tone: var(--d-admin);  --tone-2: var(--d-admin-2);  --tone-soft: var(--d-admin-soft); }
 
 /* ── Quick actions ─────────────────────────────────────────────────── */
-.ilm-dash .d-tone-att    { --tone: var(--d-att);    --tone-soft: var(--d-att-soft); }
-.ilm-dash .d-tone-fee    { --tone: var(--d-fee);    --tone-soft: var(--d-fee-soft); }
-.ilm-dash .d-tone-exam   { --tone: var(--d-exam);   --tone-soft: var(--d-exam-soft); }
-.ilm-dash .d-tone-people { --tone: var(--d-people); --tone-soft: var(--d-people-soft); }
-.ilm-dash .d-tone-comm   { --tone: var(--d-comm);   --tone-soft: var(--d-comm-soft); }
-.ilm-dash .d-tone-admin  { --tone: var(--d-admin);  --tone-soft: var(--d-admin-soft); }
-
-.ilm-dash .d-qa-grid { display: grid; gap: 10px; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.ilm-dash .d-qa-grid { display: grid; gap: 12px; grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .ilm-dash .d-qa {
   display: grid;
   gap: 3px;
   align-content: start;
-  padding: 14px 13px 13px;
+  padding: 14px;
   border: 1px solid var(--d-line);
-  border-radius: var(--d-r-sm);
+  border-radius: 12px;
   text-decoration: none;
   color: var(--d-ink);
   background: var(--d-panel);
-  transition: border-color .12s, transform .12s, background .12s;
+  transition: border-color .15s, transform .15s, box-shadow .15s;
   min-width: 0;
 }
-.ilm-dash .d-qa:hover { border-color: var(--tone); background: var(--tone-soft); transform: translateY(-1px); }
+.ilm-dash .d-qa:hover { border-color: var(--tone); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(27, 47, 110, 0.10); }
 .ilm-dash .d-qa-icon {
-  width: 38px; height: 38px; border-radius: 10px;
+  width: 42px; height: 42px; border-radius: 11px;
   display: grid; place-items: center;
-  background: var(--tone-soft); color: var(--tone);
-  margin-bottom: 7px;
+  background: linear-gradient(135deg, var(--tone), var(--tone-2));
+  color: var(--d-on-color);
+  box-shadow: 0 4px 10px var(--tone-soft);
+  margin-bottom: 8px;
 }
-.ilm-dash .d-qa:hover .d-qa-icon { background: var(--tone); color: #fff; }
-.ilm-dash .d-qa-label { font-weight: 600; font-size: 13.5px; }
+.ilm-dash .d-qa-label { font-weight: 700; font-size: 13.5px; }
 .ilm-dash .d-qa-hint  { font-size: 11.5px; color: var(--d-muted); line-height: 1.35; }
 
 .ilm-dash .d-qa-picker { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -224,18 +260,79 @@
   cursor: pointer;
 }
 .ilm-dash .d-qa-pick svg { color: var(--tone); }
-.ilm-dash .d-qa-pick.is-on { border-color: var(--tone); background: var(--tone-soft); color: var(--d-ink); font-weight: 600; }
+.ilm-dash .d-qa-pick.is-on { border-color: var(--tone); background: var(--tone-soft); color: var(--d-ink); font-weight: 700; }
 .ilm-dash .d-qa-pick:disabled { opacity: .45; cursor: not-allowed; }
 .ilm-dash .d-qa-tick { margin-left: 2px; }
 
-/* KPI icon chip picks up the same families */
+/* ── KPI cards ─────────────────────────────────────────────────────── */
+.ilm-dash .d-kpi {
+  display: flex; align-items: center; gap: 12px;
+  text-decoration: none;
+  transition: transform .15s, box-shadow .15s;
+}
+.ilm-dash .d-kpi:hover { transform: translateY(-2px); box-shadow: var(--d-shadow-hover); }
 .ilm-dash .d-kpi-icon {
+  width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--tone, var(--d-primary)), var(--tone-2, var(--d-primary-2)));
+  color: var(--d-on-color);
+}
+.ilm-dash .d-kpi-body { min-width: 0; }
+
+/* ── Needs attention ───────────────────────────────────────────────── */
+.ilm-dash .d-alerts { display: grid; gap: 8px; }
+.ilm-dash .d-alert {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border-radius: 12px;
+  background: var(--tone-soft); color: var(--d-ink);
+  text-decoration: none; border: 1px solid transparent;
+  transition: border-color .15s;
+}
+.ilm-dash .d-alert:hover { border-color: var(--tone); }
+.ilm-dash .d-alert-dot {
   width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
   display: grid; place-items: center;
-  background: var(--tone-soft, var(--d-primary-soft)); color: var(--tone, var(--d-primary));
+  background: var(--tone); color: var(--d-on-color);
 }
-.ilm-dash a.d-panel { transition: border-color .12s; }
-.ilm-dash a.d-panel:hover { border-color: var(--tone, var(--d-primary)); }
+.ilm-dash .d-alert-text { flex: 1; min-width: 0; font-size: 13.5px; }
+.ilm-dash .d-alert-text strong { font-weight: 700; }
+.ilm-dash .d-alert-go { font-size: 12.5px; font-weight: 700; color: var(--tone); white-space: nowrap; }
+
+/* ── Module categories (same as the hub's category cards) ──────────── */
+.ilm-dash .d-cats { display: grid; gap: 14px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ilm-dash .d-cat {
+  background: var(--d-panel);
+  border-radius: var(--d-r-lg);
+  overflow: hidden;
+  box-shadow: var(--d-shadow);
+  transition: transform .2s, box-shadow .2s;
+}
+.ilm-dash .d-cat:hover { transform: translateY(-3px); box-shadow: var(--d-shadow-hover); }
+.ilm-dash .d-cat-head {
+  background: linear-gradient(135deg, var(--tone), var(--tone-2));
+  color: var(--d-on-color);
+  padding: 14px 18px;
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--d-font-head); font-weight: 700; font-size: 14.5px;
+}
+.ilm-dash .d-cat-head-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: grid; place-items: center; background: rgba(255, 255, 255, 0.18);
+}
+.ilm-dash .d-cat-list { list-style: none; margin: 0; padding: 8px 10px 12px; display: grid; }
+.ilm-dash .d-cat-list a {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px; border-radius: 8px;
+  color: var(--d-ink); text-decoration: none; font-size: 13.5px;
+  border-bottom: 1px solid #F1F5F9;
+}
+.ilm-dash .d-cat-list li:last-child a { border-bottom: 0; }
+.ilm-dash .d-cat-list a:hover { background: var(--tone-soft); color: var(--tone); }
+.ilm-dash .d-cat-list a::before {
+  content: ''; width: 0; height: 0; flex-shrink: 0;
+  border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+  border-left: 7px solid var(--tone);
+}
 
 /* ── States: every widget must be able to say what is happening ────── */
 .ilm-dash .d-state {
@@ -250,60 +347,77 @@
   font-size: 13px;
   min-height: 120px;
 }
-.ilm-dash .d-state-title { font-weight: 600; color: var(--d-ink); font-size: 14px; }
-.ilm-dash .d-state-hint  { font-size: 12px; max-width: 34ch; line-height: 1.5; }
+.ilm-dash .d-state-title { font-weight: 700; color: var(--d-ink); font-size: 14px; }
+.ilm-dash .d-state-hint  { font-size: 12.5px; max-width: 36ch; line-height: 1.5; }
 
 .ilm-dash .d-skel {
-  background: linear-gradient(90deg, #eef0ed 25%, #f6f7f5 37%, #eef0ed 63%);
+  background: linear-gradient(90deg, #E8EDF4 25%, #F4F7FB 37%, #E8EDF4 63%);
   background-size: 400% 100%;
   animation: d-shimmer 1.3s ease-in-out infinite;
   border-radius: var(--d-r-sm);
 }
 @keyframes d-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 
+.ilm-dash .d-updated { font-size: 12px; color: rgba(255, 255, 255, 0.8); display: inline-flex; align-items: center; gap: 6px; }
+
+.ilm-dash .d-spin { animation: d-turn 1s linear infinite; }
+@keyframes d-turn { to { transform: rotate(360deg); } }
+
 /* ── Motion: one entrance, then nothing until the user acts ────────── */
 .ilm-dash .d-enter { animation: d-rise .34s cubic-bezier(.2,.7,.3,1) both; }
 @keyframes d-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .ilm-dash .d-enter, .ilm-dash .d-skel { animation: none; }
+  .ilm-dash .d-enter, .ilm-dash .d-skel, .ilm-dash .d-spin { animation: none; }
+  .ilm-dash .d-feature, .ilm-dash .d-qa, .ilm-dash .d-cat, .ilm-dash .d-kpi { transition: none; }
 }
 
 /* ── Focus: visible, and not only on mouse ─────────────────────────── */
 .ilm-dash :focus-visible {
-  outline: 2px solid var(--d-primary);
+  outline: 2px solid var(--d-primary-2);
   outline-offset: 2px;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 /* ── Responsive to 375px ───────────────────────────────────────────── */
 @media (max-width: 1250px) {
   .ilm-dash .d-qa-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .ilm-dash .d-grid    { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ilm-dash .d-cats    { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
-  .ilm-dash .d-hero { grid-template-columns: 1fr; }
+  .ilm-dash .d-cols-3 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 700px) {
-  .ilm-dash .d-cols-2 { grid-template-columns: 1fr; }
+  .ilm-dash .d-cols-2 { grid-template-columns: minmax(0, 1fr); }
   .ilm-dash .d-qa-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .ilm-dash .d-today { grid-template-columns: 1fr; }
-  .ilm-dash .d-hero { padding: 18px 16px; }
-  .ilm-dash .d-grid   { grid-template-columns: 1fr 1fr; }
+  .ilm-dash .d-grid   { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ilm-dash .d-cats   { grid-template-columns: minmax(0, 1fr); }
   .ilm-dash .d-panel  { padding: 14px; }
-  .ilm-dash .d-metric { font-size: 22px; }
+  .ilm-dash .d-metric { font-size: 20px; }
+  .ilm-dash .d-hero   { padding: 16px; }
 }
 @media (max-width: 480px) {
   .ilm-dash .d-qa-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (max-width: 400px) {
-  .ilm-dash .d-grid { grid-template-columns: 1fr; }
+@media (max-width: 380px) {
+  .ilm-dash .d-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ── Print: the board-meeting export ───────────────────────────────── */
 @media print {
   .ilm-dash { background: #fff; }
-  .ilm-dash .d-panel { break-inside: avoid; border-color: #c9cfc9; }
+  .ilm-dash .d-panel, .ilm-dash .d-cat { break-inside: avoid; box-shadow: none; border: 1px solid #CBD5E1; }
   .ilm-dash .d-no-print { display: none !important; }
-  .ilm-dash .d-hero { background: #fff; color: #000; border: 1px solid #c9cfc9; }
-  .ilm-dash .d-hero h1, .ilm-dash .d-hero-sub, .ilm-dash .d-today-label, .ilm-dash .d-today-note { color: #000; }
+  .ilm-dash .d-hero, .ilm-dash .d-feature { background: #fff; color: #000; border: 1px solid #CBD5E1; box-shadow: none; }
+  .ilm-dash .d-hero h1, .ilm-dash .d-hero-sub, .ilm-dash .d-feature-sub, .ilm-dash .d-pill { color: #000; }
+}
+
+/* KPI values stay on one line: "Rs 43,750" must not break after "Rs". */
+.ilm-dash .d-kpi .d-metric { font-size: 21px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ilm-dash .d-kpi .d-metric-label { white-space: nowrap; }
+@media (max-width: 1400px) { .ilm-dash .d-kpi .d-metric { font-size: 18px; } .ilm-dash .d-kpi { gap: 10px; } }
+@media (max-width: 560px) {
+  .ilm-dash .d-hero-mark { display: none; }
+  .ilm-dash .d-hero h1 { font-size: 19px; }
 }

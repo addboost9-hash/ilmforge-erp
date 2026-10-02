@@ -603,10 +603,18 @@ and bonafide certificates. `/certificates/registry` keeps a record of everything
 
 **Sidebar → Smart Dashboard**
 
-**The green band at the top** — today's to-do list: how many students and staff have been
-marked present or absent so far (in orange: how many are still not marked), and the fee
-collected today. Click any of them to go and finish it. The buttons underneath open
-Mark attendance, Collect fee and New admission directly.
+**The blue banner** — your school, the date, and when the figures were last updated
+(they refresh by themselves every two minutes; the round-arrow icon refreshes now). Its
+buttons open **Mark attendance**, **Collect fee** and **Admission** directly.
+
+**The three Today cards** — student attendance (teal), staff attendance (blue) and fee
+collected today (purple). A **TO DO** badge means some people are still not marked; the
+bar fills as the register is completed. Click a card to go and finish it.
+
+**Needs attention** — appears only when something is actually outstanding: students not
+yet marked, unpaid invoices, or invoices that show **more paid than billed** (usually an
+amount typed in the wrong unit — open the invoice and correct its total). When nothing
+is outstanding it says *All clear*.
 
 **Quick actions** — twelve large shortcuts to the daily jobs (Mark attendance, Collect
 fee, Exam Vault, New admission, Scan ID cards, Generate fee, Defaulters and so on).
@@ -633,7 +641,14 @@ The figures always add up exactly to the total change.
 Some panels will say *"N more months of data needed"* on a new school. This is normal:
 they switch on by themselves once there is enough history to be accurate.
 
-**Export PDF** in the green band produces a clean copy for board meetings.
+**Fee income forecast** — once fee income has been recorded in three different months,
+a dashed trend line projects the next three months and says whether income is moving up
+or down. It is a guide, not a promise.
+
+**All modules** — every area of the school in four coloured groups (Daily work, Money,
+Academics, Reports), the same style as the Reports Hub.
+
+**Export PDF** in the blue banner produces a clean copy for board meetings.
 
 ---
 
