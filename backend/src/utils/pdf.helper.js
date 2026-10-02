@@ -212,4 +212,56 @@ const generateMarksheetHTML = ({ school, student, exam, marks = [] }) => {
   </body></html>`;
 };
 
-module.exports = { generateFeeVoucherHTML, generateMarksheetHTML };
+/* ══════════════════════════════════════════════════════
+   PAYMENT RECEIPT — two copies (parent + school) of one payment
+══════════════════════════════════════════════════════ */
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const METHOD = { cash: 'Cash', card: 'Card', online: 'Online / bank transfer', wallet: 'Parent wallet', bank: 'Bank', cheque: 'Cheque' };
+
+const generateReceiptHTML = ({ school, student, invoice, payment }) => {
+  const primary = school.primaryColor || '#1E3A5F';
+  const voided = !!payment.voidedAt;
+  const row = (k, v, strong) => `<tr><td style="padding:6px 10px;border:1px solid #E2E8F0;font-size:11px;color:#64748B;width:38%;">${k}</td><td style="padding:6px 10px;border:1px solid #E2E8F0;font-size:12px;${strong ? 'font-weight:700;' : ''}">${v}</td></tr>`;
+
+  const copy = (name) => `
+  <div style="border:1px solid #CBD5E1;border-radius:10px;padding:18px;max-width:620px;margin:0 auto;position:relative;">
+    ${schoolHeader(school)}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="background:${primary};color:#fff;font-size:11px;font-weight:700;padding:3px 12px;border-radius:99px;">FEE RECEIPT</span>
+      <span style="font-size:11px;color:#64748B;">Receipt #: <strong>${esc(payment.receiptNo || payment.id)}</strong> · ${esc(name)}</span>
+    </div>
+    ${voided ? `<div style="background:#FEE2E2;color:#B91C1C;font-weight:800;text-align:center;padding:6px;border-radius:6px;margin-bottom:10px;">VOID — ${esc(payment.voidReason || 'cancelled')}</div>` : ''}
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+      ${row('Student', esc(student.name), true)}
+      ${row('Roll No', esc(student.rollNo || '—'))}
+      ${row("Father's Name", esc(student.fatherName || '—'))}
+      ${row('Class / Section', `${esc(student.class?.name || '—')} — ${esc(student.section?.name || '—')}`)}
+      ${row('For', `${esc(invoice.feeTitle || 'Fee')}${invoice.month ? ` (${esc(invoice.month)} ${esc(invoice.year || '')})` : ''}`)}
+      ${row('Date', fmtDate(payment.paymentDate))}
+      ${row('Method', esc(METHOD[payment.method] || payment.method || 'Cash'))}
+      ${payment.transactionRef ? row('Reference', esc(payment.transactionRef)) : ''}
+    </table>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+      <tr style="background:#DCFCE7;"><td style="padding:9px 10px;font-weight:700;color:#15803D;">Amount received</td><td style="padding:9px 10px;text-align:right;font-weight:900;font-size:16px;color:#15803D;">${money(payment.amountPaid)}</td></tr>
+      ${payment.discount > 0 ? `<tr><td style="padding:6px 10px;color:#0D9488;">Discount given</td><td style="padding:6px 10px;text-align:right;color:#0D9488;">${money(payment.discount)}</td></tr>` : ''}
+      <tr><td style="padding:6px 10px;color:#64748B;">Invoice total</td><td style="padding:6px 10px;text-align:right;">${money(invoice.totalAmount)}</td></tr>
+      <tr style="background:${invoice.dueAmount > 0 ? '#FEF3C7' : '#F0FDF4'};"><td style="padding:8px 10px;font-weight:700;">Still due on this invoice</td><td style="padding:8px 10px;text-align:right;font-weight:800;">${money(invoice.dueAmount)}</td></tr>
+    </table>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;padding-top:10px;border-top:1px dashed #CBD5E1;">
+      <p style="font-size:10px;color:#94A3B8;margin:0;">Computer generated receipt.</p>
+      <div style="text-align:right;"><div style="border-bottom:1px solid #374151;width:110px;margin:18px 0 3px;"></div><p style="font-size:10px;color:#64748B;margin:0;">Received by</p></div>
+    </div>
+  </div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt ${esc(payment.receiptNo || payment.id)} — ${esc(school.name)}</title>
+  <style>${baseCss(primary)}</style></head><body style="padding:16px;">
+    <div class="no-print" style="text-align:right;margin-bottom:12px;">
+      <button onclick="window.print()" style="background:${primary};color:#fff;border:none;padding:8px 20px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;">Print Receipt</button>
+    </div>
+    ${copy('Parent copy')}
+    <div style="margin:12px 0;border-bottom:2px dashed #CBD5E1;"></div>
+    ${copy('School copy')}
+  </body></html>`;
+};
+
+module.exports = { generateFeeVoucherHTML, generateMarksheetHTML, generateReceiptHTML };

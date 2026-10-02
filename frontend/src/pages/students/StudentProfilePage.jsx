@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
+import { openServerDocument } from '../../utils/print';
 import { compressPhoto } from '../../utils/photo';
 import toast from 'react-hot-toast';
 import {
@@ -595,9 +596,9 @@ export default function StudentProfilePage() {
                         <td style={{color:inv.dueAmount>0?'#DC2626':'#059669',fontWeight:700}}>{money(inv.dueAmount)}</td>
                         <td><span className={`badge ${inv.status==='paid'?'badge-green':inv.status==='partial'?'badge-amber':'badge-red'}`}>{inv.status}</span></td>
                         <td>
-                          <a href={`/api/v1/pdf/voucher/${inv.id}`} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline btn-icon" aria-label={`Print voucher for ${inv.feeTitle}`}>
+                          <button type="button" onClick={() => openServerDocument(`/pdf/voucher/${inv.id}`, { title: 'Fee voucher' }).catch(() => toast.error('The voucher could not be opened. Try again.'))} className="btn btn-sm btn-outline btn-icon" aria-label={`Print voucher for ${inv.feeTitle}`}>
                             <Printer size={12}/>
-                          </a>
+                          </button>
                         </td>
                       </tr>
                     ))}

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
-const { generateFeeVoucherHTML, generateMarksheetHTML } = require('../utils/pdf.helper');
+const { generateFeeVoucherHTML, generateMarksheetHTML, generateReceiptHTML } = require('../utils/pdf.helper');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // Ownership: PM('reports') is a generic per-module gate keyed on role+module —
@@ -31,12 +31,27 @@ async function assertCanViewStudentDoc(req, res, student) {
 router.get('/voucher/:invoiceId', wrap(async (req, res) => {
   const invoice = await prisma.feeInvoice.findFirst({
     where: { id: parseInt(req.params.invoiceId), schoolId: req.schoolId },
-    include: { student: true, payments: { orderBy: { createdAt: 'desc' } } }
+    include: { student: { include: { class: true, section: true } }, payments: { orderBy: { createdAt: 'desc' } } }
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice not found.' });
   if (!(await assertCanViewStudentDoc(req, res, invoice.student))) return;
   const school = await prisma.school.findUnique({ where: { id: req.schoolId } });
   const html = generateFeeVoucherHTML({ school, student: invoice.student, invoice, payments: invoice.payments });
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+}));
+
+// GET /api/v1/pdf/receipt/:paymentId
+// The fee screens linked here for receipts, but the route never existed.
+router.get('/receipt/:paymentId', wrap(async (req, res) => {
+  const payment = await prisma.feePayment.findFirst({
+    where: { id: parseInt(req.params.paymentId), schoolId: req.schoolId },
+    include: { invoice: { include: { student: { include: { class: true, section: true } } } } },
+  });
+  if (!payment) return res.status(404).json({ success: false, message: 'Payment not found.' });
+  if (!(await assertCanViewStudentDoc(req, res, payment.invoice.student))) return;
+  const school = await prisma.school.findUnique({ where: { id: req.schoolId } });
+  const html = generateReceiptHTML({ school, student: payment.invoice.student, invoice: payment.invoice, payment });
   res.setHeader('Content-Type', 'text/html');
   res.send(html);
 }));

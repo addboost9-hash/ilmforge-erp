@@ -15,6 +15,34 @@
  * print dialog.
  */
 
+import api from '../api/client';
+
+/* Show a document the server builds (fee voucher, receipt, mark sheet).
+   These live on the API server and need the sign-in token, so a plain
+   <a href="/api/v1/..."> cannot work: on the live site it points at the
+   website instead of the API (404), and it would carry no token anyway.
+   The window is opened first, in the click's own tick, so it is not
+   blocked; if it is blocked regardless, the document is printed instead. */
+export async function openServerDocument(path, { title = 'Document' } = {}) {
+  const w = window.open('', '_blank');
+  if (w && w.document) {
+    w.document.write('<p style="font:15px system-ui,sans-serif;padding:32px;color:#475569">Loading…</p>');
+  }
+  try {
+    const { data } = await api.get(path, { responseType: 'text', transformResponse: (r) => r });
+    if (w && !w.closed) {
+      w.document.open();
+      w.document.write(data);
+      w.document.close();
+    } else {
+      printHTML(data, { title });
+    }
+  } catch (err) {
+    if (w && !w.closed) w.close();
+    throw err;
+  }
+}
+
 /* Opening a window must happen in the same tick as the click, or the
    browser treats it as an unsolicited popup and blocks it. Anything that
    needs awaiting has to be done BEFORE calling this. If the window is

@@ -710,6 +710,15 @@ router.get('/payments', requireFinanceRole, wrap(async (req, res) => {
     prisma.feePayment.count({ where }),
   ]);
 
+  // receivedBy has no relation in the schema, so look the names up here;
+  // the daily balance sheet showed "User #1" without them.
+  const receiverIds = [...new Set(payments.map((p) => p.receivedBy).filter(Boolean))];
+  const receivers = receiverIds.length
+    ? await prisma.user.findMany({ where: { id: { in: receiverIds } }, select: { id: true, name: true, email: true, role: true } })
+    : [];
+  const byId = new Map(receivers.map((u) => [u.id, u]));
+  payments.forEach((p) => { p.receivedByUser = byId.get(p.receivedBy) || null; });
+
   // Voided rows stay in the list so the correction is visible to whoever
   // is reconciling the day's cash, but they are not money collected, so
   // they are excluded from the total the dashboard also reports.

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { openServerDocument } from '../../utils/print';
 import {
   Barcode, X, DollarSign, Printer, CheckCircle, User,
   RefreshCw, ZapIcon, Receipt, CreditCard, Smartphone, Wallet,
@@ -91,7 +92,7 @@ export default function FeeBarcodeCollectionPage() {
       const receipt = r.data.data?.receiptNo || '';
       toast.success(`Payment recorded! Receipt: ${receipt}`);
       setTodayCount(c => c + 1);
-      setTodayTotal(t => t + (r.data.data?.amountPaid || 0));
+      setTodayTotal(t => t + (r.data.data?.payment?.amountPaid || 0));
       qc.invalidateQueries(['barcode-today-stats']);
       /* refresh student invoices */
       if (studentData?.student?.id) {
@@ -100,7 +101,8 @@ export default function FeeBarcodeCollectionPage() {
           .catch(() => {});
       }
       if (payForm.printReceipt && receipt) {
-        window.open(`/api/v1/pdf/receipt/${r.data.data?.paymentId || receipt}`, '_blank');
+        openServerDocument(`/pdf/receipt/${r.data.data?.payment?.id}`, { title: `Receipt ${receipt}` })
+          .catch(() => toast.error('Payment saved, but the receipt could not be opened. Reprint it from the daily balance sheet.'));
       }
       setModalOpen(false);
       setCollectAll(false);
@@ -410,14 +412,16 @@ export default function FeeBarcodeCollectionPage() {
                                 </button>
                               )}
                               {inv.voucherNo && (
-                                <a
-                                  href={`/api/v1/pdf/voucher/${inv.id}`}
-                                  target="_blank" rel="noreferrer"
+                                <button
+                                  type="button"
+                                  onClick={() => openServerDocument(`/pdf/voucher/${inv.id}`, { title: 'Fee voucher' })
+                                    .catch(() => toast.error('The voucher could not be opened. Try again.'))}
                                   className="btn btn-sm btn-outline btn-icon"
                                   title="Print Voucher"
+                                  aria-label="Print voucher"
                                 >
                                   <Printer size={12}/>
-                                </a>
+                                </button>
                               )}
                             </div>
                           </td>

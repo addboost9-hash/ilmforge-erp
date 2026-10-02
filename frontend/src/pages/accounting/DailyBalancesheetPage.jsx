@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { openServerDocument } from '../../utils/print';
 import {
   BarChart2, Calendar, Users, DollarSign, ChevronRight, ChevronDown,
   Printer, CheckCircle, X, RefreshCw, ArrowLeft, Wallet, CreditCard,
@@ -488,13 +489,14 @@ export default function DailyBalancesheetPage() {
                           <td style={{ fontWeight:700, color:'#15803d' }}>{money(p.amountPaid)}</td>
                           <td>
                             {p.receiptNo && (
-                              <a
-                                href={`/api/v1/pdf/receipt/${p.id}`}
-                                target="_blank" rel="noreferrer"
-                                style={{ color:'#0D9488', fontSize:11, display:'flex', alignItems:'center', gap:3 }}
+                              <button
+                                type="button"
+                                onClick={() => openServerDocument(`/pdf/receipt/${p.id}`, { title: `Receipt ${p.receiptNo}` })
+                                  .catch(() => toast.error('The receipt could not be opened. Try again.'))}
+                                style={{ color:'#0D9488', fontSize:11, display:'flex', alignItems:'center', gap:3, background:'none', border:0, padding:0, cursor:'pointer', font:'inherit' }}
                               >
                                 <Receipt size={11}/> {p.receiptNo}
-                              </a>
+                              </button>
                             )}
                           </td>
                         </tr>

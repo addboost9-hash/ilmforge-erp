@@ -180,7 +180,7 @@ router.get('/preview-roll', wrap(async (req, res) => {
 }));
 
 // GET /api/v1/students/class-sections
-// Returns [{classId, className, sectionId, sectionName, studentCount}]
+// Returns [{classId, className, sectionId, sectionName, studentCount, maleCount, femaleCount, newThisMonth}]
 // for all active students grouped by class+section — used by Students page
 router.get('/class-sections', wrap(async (req, res) => {
   const { schoolId } = req;
@@ -189,11 +189,14 @@ router.get('/class-sections', wrap(async (req, res) => {
   const students = await prisma.student.findMany({
     where: { schoolId, status: 'active', deletedAt: null },
     select: {
-      classId: true, sectionId: true,
+      classId: true, sectionId: true, gender: true, admissionDate: true, createdAt: true,
       class:   { select: { id: true, name: true } },
       section: { select: { id: true, name: true } },
     },
   });
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
   // Group by classId + sectionId
   const map = new Map();
@@ -207,9 +210,20 @@ router.get('/class-sections', wrap(async (req, res) => {
         sectionId:   s.sectionId     || null,
         sectionName: s.section?.name || '',
         studentCount: 0,
+        maleCount: 0,
+        femaleCount: 0,
+        newThisMonth: 0,
       });
     }
-    map.get(key).studentCount++;
+    const row = map.get(key);
+    row.studentCount++;
+    // Gender is stored "Male" by the admission form and "male" by older
+    // imports; the Students page showed Boys 0 / Girls 0 because these
+    // counts were never sent at all.
+    const g = String(s.gender || '').trim().toLowerCase();
+    if (g === 'male' || g === 'm' || g === 'boy') row.maleCount++;
+    else if (g === 'female' || g === 'f' || g === 'girl') row.femaleCount++;
+    if (new Date(s.admissionDate || s.createdAt) >= monthStart) row.newThisMonth++;
   }
 
   const data = Array.from(map.values()).sort((a, b) => {

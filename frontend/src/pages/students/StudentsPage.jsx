@@ -595,7 +595,7 @@ export default function StudentsPage() {
           </div>
           <button
             style={{ ...btnTeal, gap: 7 }}
-            onClick={() => window.open('/api/v1/reports/admission-form', '_blank')}
+            onClick={() => navigate('/admissions/form-print')}
           >
             <FileText size={14} />
             Admission Form
