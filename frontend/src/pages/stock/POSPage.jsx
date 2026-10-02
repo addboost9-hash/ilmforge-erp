@@ -226,12 +226,12 @@ export default function POSPage() {
                     <div style={{ fontSize:11, color:'#64748b' }}>{Rs(i.salePrice)} each</div>
                   </div>
                   <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                    <button onClick={() => updateQty(i.id,-1)} style={{ width:24, height:24, borderRadius:6, border:'1.5px solid #d1fae5', background:'white', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#0f766e' }}><Minus size={11}/></button>
+                    <button aria-label="Decrease quantity" onClick={() => updateQty(i.id,-1)} style={{ width:24, height:24, borderRadius:6, border:'1.5px solid #d1fae5', background:'white', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#0f766e' }}><Minus size={11}/></button>
                     <span style={{ fontSize:13, fontWeight:800, minWidth:22, textAlign:'center', color:'#1e3a5f' }}>{i.qty}</span>
-                    <button onClick={() => updateQty(i.id,1)} style={{ width:24, height:24, borderRadius:6, border:'1.5px solid #d1fae5', background:'#f0fdfa', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#0f766e' }}><Plus size={11}/></button>
+                    <button aria-label="Increase quantity" onClick={() => updateQty(i.id,1)} style={{ width:24, height:24, borderRadius:6, border:'1.5px solid #d1fae5', background:'#f0fdfa', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#0f766e' }}><Plus size={11}/></button>
                   </div>
                   <div style={{ fontWeight:800, fontSize:13.5, color:'#0f766e', minWidth:68, textAlign:'right' }}>{Rs(i.qty * Number(i.salePrice))}</div>
-                  <button onClick={() => setCart(c => c.filter(x => x.id !== i.id))} style={{ background:'none', border:'none', cursor:'pointer', color:'#f87171', padding:2, display:'flex', alignItems:'center' }}><Trash2 size={14}/></button>
+                  <button aria-label="Delete" onClick={() => setCart(c => c.filter(x => x.id !== i.id))} style={{ background:'none', border:'none', cursor:'pointer', color:'#f87171', padding:2, display:'flex', alignItems:'center' }}><Trash2 size={14}/></button>
                 </div>
               ))
             )}

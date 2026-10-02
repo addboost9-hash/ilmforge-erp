@@ -301,7 +301,7 @@ export default function StudentPromotionPage() {
                   <strong>{successInfo.passout}</strong> marked passout
                 </div>
               </div>
-              <button onClick={() => setSuccessInfo(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
+              <button aria-label="Close" onClick={() => setSuccessInfo(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
                 <X size={16} />
               </button>
             </div>
@@ -693,7 +693,7 @@ export default function StudentPromotionPage() {
                 </div>
               </div>
               {!execute.isPending && (
-                <button onClick={() => setConfirmModal(false)}
+                <button aria-label="Close" onClick={() => setConfirmModal(false)}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4 }}>
                   <X size={18} />
                 </button>

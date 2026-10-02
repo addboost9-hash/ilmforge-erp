@@ -484,7 +484,7 @@ export default function FeeBarcodeCollectionPage() {
                   </div>
                 )}
               </div>
-              <button onClick={() => setModalOpen(false)} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8' }}>
+              <button aria-label="Close" onClick={() => setModalOpen(false)} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8' }}>
                 <X size={18}/>
               </button>
             </div>

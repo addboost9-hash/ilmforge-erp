@@ -164,9 +164,15 @@ router.post('/generate', requireFinanceRole, wrap(async (req, res) => {
 router.get('/invoices', requireFinanceRole, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { classId, status, month, year, search, page = 1, limit = 25 } = req.query;
+  // One student's invoices. The accountant portal asked for these as
+  // ?student=<id>, which this route ignored, so it listed the newest 50
+  // invoices of the whole school under whichever student was selected - and
+  // "Pay Now" could record a payment against someone else's child.
+  const oneStudent = parseInt(req.query.studentId ?? req.query.student);
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const where = {
     schoolId, ...(campusId && { campusId }),
+    ...(Number.isFinite(oneStudent) && { studentId: oneStudent }),
     ...(classId && { classId: parseInt(classId) }),
     ...(status && { status }),
     ...(month && { month }),
@@ -541,7 +547,7 @@ router.post('/structures', requireFinanceRole, wrap(async (req, res) => {
 // of the module's status values), and feeTitle summarised from the heads.
 router.post('/invoices', requireFinanceRole, wrap(async (req, res) => {
   const { studentId, month, year, heads = [], dueDate, remarks } = req.body;
-  if (!studentId || !heads.length) return res.status(400).json({ success: false, message: 'Student aur kam az kam ek head required.' });
+  if (!studentId || !heads.length) return res.status(400).json({ success: false, message: 'Choose a student and add at least one fee head.' });
   const student = await prisma.student.findFirst({ where: { id: parseInt(studentId), schoolId: req.schoolId } });
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
   const total = heads.reduce((a, h) => a + (parseInt(h.amount) || 0), 0);
@@ -555,6 +561,9 @@ router.post('/invoices', requireFinanceRole, wrap(async (req, res) => {
       year: parseInt(year) || new Date().getFullYear(),
       totalAmount: total, paidAmount: 0, dueAmount: total, status: 'unpaid',
       dueDate: dueDate ? new Date(dueDate) : new Date(Date.now() + 10 * 864e5),
+      // Keep the itemised heads (amounts in paisa) so the printed voucher
+      // can list Admission, Annual, Uniform... instead of one lump sum.
+      remarks: JSON.stringify(heads.map((h) => ({ name: String(h.name || ''), amount: parseInt(h.amount) || 0 }))),
     }
   });
   await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_CREATED', resource: 'fee_invoice', resourceId: inv.id, details: JSON.stringify({ total, heads }) } }).catch(() => null);

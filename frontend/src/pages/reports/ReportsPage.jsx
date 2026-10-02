@@ -143,7 +143,7 @@ function ErrorToast({ message, onClose }) {
     }}>
       <AlertCircle size={18} color="#DC2626" style={{ flexShrink:0 }}/>
       <div style={{ flex:1, fontSize:13, color:'#991B1B', fontWeight:500 }}>{message}</div>
-      <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#9CA3AF', padding:0 }}>
+      <button aria-label="Close" onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#9CA3AF', padding:0 }}>
         <X size={15}/>
       </button>
     </div>

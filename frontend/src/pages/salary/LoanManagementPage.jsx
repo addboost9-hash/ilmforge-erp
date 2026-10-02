@@ -240,7 +240,7 @@ export default function LoanManagementPage() {
             <h3 style={{ margin: 0, fontSize: 15, color: '#1E3A5F', fontWeight: 600 }}>
               <Plus size={16} style={{ marginRight: 6 }} />New Loan Application
             </h3>
-            <button className="btn btn-ghost" style={{ padding: '4px 8px' }} onClick={() => setShowForm(false)}>
+            <button aria-label="Close" className="btn btn-ghost" style={{ padding: '4px 8px' }} onClick={() => setShowForm(false)}>
               <X size={16} />
             </button>
           </div>

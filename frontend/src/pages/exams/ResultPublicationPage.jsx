@@ -73,7 +73,7 @@ function ConfirmModal({ exam, onConfirm, onCancel, loading, publishStep }) {
           border: `1px solid ${sendSms ? '#BBF7D0' : '#E2E8F0'}`,
           transition: 'all 0.15s',
         }}>
-          <button
+          <button aria-label="Select"
             onClick={() => setSendSms(s => !s)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0,
               color: sendSms ? '#0F766E' : '#D1D5DB', display: 'inline-flex', marginTop: 1 }}
@@ -442,7 +442,7 @@ export default function ResultPublicationPage() {
                 <thead>
                   <tr>
                     <th style={{ width: 40 }}>
-                      <button
+                      <button aria-label="Select"
                         onClick={toggleAll}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: allSelected ? '#0F766E' : '#D1D5DB', display: 'inline-flex' }}
                       >
@@ -468,7 +468,7 @@ export default function ResultPublicationPage() {
                     return (
                       <tr key={exam.id} style={{ background: isSelected ? '#F0FDF9' : undefined }}>
                         <td>
-                          <button
+                          <button aria-label="Select"
                             onClick={() => toggleSelect(exam.id)}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: isSelected ? '#0F766E' : '#D1D5DB', display: 'inline-flex' }}
                           >

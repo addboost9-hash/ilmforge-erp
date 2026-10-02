@@ -180,7 +180,7 @@ function ExamModal({ classes = [], initial = null, onClose, onSubmit, isSubmitti
       <div style={{ background: '#fff', borderRadius: 12, padding: 28, width: '100%', maxWidth: 580, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: NAVY }}>{initial ? 'Edit Exam' : 'Add Exam'}</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={18} /></button>
+          <button aria-label="Close" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={18} /></button>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
@@ -492,7 +492,7 @@ function ExamSetupTab() {
                           <button style={{ background: '#059669', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Word</button>
                         </td>
                         <td>
-                          <button
+                          <button aria-label="Delete"
                             style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
                             onClick={() => { if (window.confirm('Delete this exam?')) del.mutate(e.id); }}
                           >
@@ -500,7 +500,7 @@ function ExamSetupTab() {
                           </button>
                         </td>
                         <td>
-                          <button
+                          <button aria-label="Show more"
                             className="btn btn-outline btn-sm"
                             style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                             onClick={() => setExpandedRow(isExpanded ? null : e.id)}
@@ -672,7 +672,7 @@ function DateSheetTab() {
                       </button>
                       <button style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>PDF</button>
                       <button style={{ background: '#059669', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Word</button>
-                      <button style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}>
+                      <button aria-label="Delete" style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}>
                         <Trash2 size={11} />
                       </button>
                       <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><Bell size={14} /></button>
@@ -959,7 +959,7 @@ function SyllabusTab() {
                   <button style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>PDF</button>
                 </td>
                 <td>
-                  <button style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}>
+                  <button aria-label="Delete" style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}>
                     <Trash2 size={11} />
                   </button>
                 </td>
@@ -1189,7 +1189,7 @@ function QuestionBankTab() {
                           </button>
                         </td>
                         <td>
-                          <button className="btn btn-outline btn-sm" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => { setExpandedClass(isExpanded ? null : cls.id); if (!isExpanded) fetchBankPapers(cls.id); }}>
+                          <button aria-label="Show more" className="btn btn-outline btn-sm" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => { setExpandedClass(isExpanded ? null : cls.id); if (!isExpanded) fetchBankPapers(cls.id); }}>
                             {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                           </button>
                         </td>
@@ -1601,7 +1601,7 @@ function ResultsTab({ onPublishSuccess }) {
                                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, border: `1.5px solid ${TEAL}`, background: 'transparent', cursor: 'pointer', color: TEAL }}>
                                     <Check size={13} />
                                   </button>
-                                  <button onClick={() => setEditingGradeIdx(null)}
+                                  <button aria-label="Close" onClick={() => setEditingGradeIdx(null)}
                                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, border: '1.5px solid #EF4444', background: 'transparent', cursor: 'pointer', color: '#EF4444' }}>
                                     <X size={13} />
                                   </button>
@@ -1623,7 +1623,7 @@ function ResultsTab({ onPublishSuccess }) {
                                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, border: '1.5px solid #0073b7', background: 'transparent', cursor: 'pointer', color: '#0073b7' }}>
                                     <Edit3 size={12} />
                                   </button>
-                                  <button onClick={() => handleChange({ grades: config.grades.filter((_, i) => i !== idx) })}
+                                  <button aria-label="Delete" onClick={() => handleChange({ grades: config.grades.filter((_, i) => i !== idx) })}
                                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, border: '1.5px solid #EF4444', background: 'transparent', cursor: 'pointer', color: '#EF4444' }}>
                                     <Trash2 size={12} />
                                   </button>

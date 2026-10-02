@@ -19,7 +19,7 @@ import {
   Bot, X, Calendar,
   ShieldCheck, BarChart2, Database, ClipboardList,
   ShoppingCart,
-  CalendarDays, Rocket, Truck, Link2,
+  CalendarDays, Rocket, Truck, Link2, Upload,
   TrendingUp, BookMarked, Globe, QrCode, UserPlus, Receipt, Award,
   BookOpenCheck,
 } from 'lucide-react';
@@ -100,8 +100,10 @@ const NAV = [
     items: [
       { to: '/settings',        icon: Settings,    label: 'School Settings' },
       { to: '/settings/portal-links', icon: Link2, label: 'Portal Links',  roles: ['super_admin','admin'] },
+      { to: '/settings/import-export', icon: Upload, label: 'Import & Export', roles: ['super_admin','admin'] },
       { to: '/launch-setup',    icon: Rocket,      label: 'Quick Setup',       roles: ['super_admin','admin'] },
       { to: '/settings/backup', icon: Database,    label: 'Backup & Restore',  roles: ['super_admin','admin'] },
+      { to: '/manual',          icon: BookOpen,    label: 'User Manual' },
     ],
   },
 ];
@@ -446,7 +448,7 @@ export default function AdminLayout() {
     // Students
     { label: 'All Students', desc: 'View student roster', path: '/hub/students', icon: '👨‍🎓', group: 'Students' },
     { label: 'Admit New Student', desc: 'Admission wizard', path: '/hub/students?tab=admit', icon: '📋', group: 'Students' },
-    { label: 'Bulk Import Students', desc: 'Import from Excel/CSV', path: '/students/bulk-import', icon: '📁', group: 'Students' },
+    { label: 'Import & Export Records', desc: 'Students and staff from Excel; move a school', path: '/settings/import-export', icon: '📁', group: 'Students' },
     { label: 'Admissions CRM', desc: 'Lead pipeline', path: '/admissions/crm', icon: '🎯', group: 'Students' },
     { label: 'Student Promotion', desc: 'Promote to next class', path: '/students/promote', icon: '⬆️', group: 'Students' },
     { label: 'Student Health Records', desc: 'Medical info', path: '/student-health', icon: '🏥', group: 'Students' },
@@ -684,10 +686,13 @@ export default function AdminLayout() {
 
   /* ── IlmForge route label map ── */
   const ROUTE_LABELS = {
+  'import-export': 'Import & Export',
+  'bulk-import':   'Import & Export',
     'dashboard':       'Smart Dashboard',
     'academics':       'Curriculum Planner',
     'academics-hub':   'Curriculum Planner',
     'examination':     'Exam Vault',
+    'manual':          'User Manual',
     'attendance-hub':  'Attendance Tracker',
     'attendance':      'Attendance Tracker',
     'fee-management':  'Invoicing Hub',

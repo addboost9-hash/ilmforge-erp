@@ -798,7 +798,7 @@ function AdminQuizPage() {
                 onChange={(e) => updateQuestion(i, 'q', e.target.value)}
               />
               {questions.length > 1 && (
-                <button
+                <button aria-label="Close"
                   onClick={() => removeQuestion(i)}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: 4, flexShrink: 0 }}
                 >

@@ -161,12 +161,12 @@ export default function AcademicCalendarPage() {
           {/* Month navigation */}
           <div className="card" style={{ marginBottom:14 }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px' }}>
-              <button onClick={prevMonth} style={{ background:'none', border:'none', cursor:'pointer', padding:6, borderRadius:8, color:'#374151' }}><ChevronLeft size={20}/></button>
+              <button aria-label="Previous" onClick={prevMonth} style={{ background:'none', border:'none', cursor:'pointer', padding:6, borderRadius:8, color:'#374151' }}><ChevronLeft size={20}/></button>
               <div style={{ textAlign:'center' }}>
                 <div style={{ fontSize:18, fontWeight:800, color:'#1e3a5f' }}>{MONTHS[month]} {year}</div>
                 <div style={{ fontSize:12, color:'#64748b' }}>{monthEvents.length} event{monthEvents.length!==1?'s':''} this month</div>
               </div>
-              <button onClick={nextMonth} style={{ background:'none', border:'none', cursor:'pointer', padding:6, borderRadius:8, color:'#374151' }}><ChevronRight size={20}/></button>
+              <button aria-label="Next" onClick={nextMonth} style={{ background:'none', border:'none', cursor:'pointer', padding:6, borderRadius:8, color:'#374151' }}><ChevronRight size={20}/></button>
             </div>
 
             {/* Day labels */}
@@ -225,7 +225,7 @@ export default function AcademicCalendarPage() {
                         <div style={{ fontSize:11, color:'#64748b', marginTop:4 }}>{ti.label}{e.isHoliday ? ' · Holiday' : ''}</div>
                       </div>
                       {e.source !== 'holiday' && (
-                        <button onClick={() => { if(window.confirm('Delete this event?')) delEvent.mutate(e); }}
+                        <button aria-label="Delete" onClick={() => { if(window.confirm('Delete this event?')) delEvent.mutate(e); }}
                           style={{ background:'none', border:'none', cursor:'pointer', color:'#dc2626', padding:4 }}>
                           <Trash2 size={14}/>
                         </button>
@@ -243,9 +243,9 @@ export default function AcademicCalendarPage() {
           {/* Year navigation */}
           <div className="card" style={{ marginBottom:12 }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-              <button onClick={() => setYear(y=>y-1)} style={{ background:'none', border:'none', cursor:'pointer', color:'#374151' }}><ChevronLeft size={16}/></button>
+              <button aria-label="Previous" onClick={() => setYear(y=>y-1)} style={{ background:'none', border:'none', cursor:'pointer', color:'#374151' }}><ChevronLeft size={16}/></button>
               <span style={{ fontWeight:700, color:'#1e3a5f', fontSize:16 }}>{year}</span>
-              <button onClick={() => setYear(y=>y+1)} style={{ background:'none', border:'none', cursor:'pointer', color:'#374151' }}><ChevronRight size={16}/></button>
+              <button aria-label="Next" onClick={() => setYear(y=>y+1)} style={{ background:'none', border:'none', cursor:'pointer', color:'#374151' }}><ChevronRight size={16}/></button>
             </div>
           </div>
 

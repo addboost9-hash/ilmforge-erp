@@ -465,7 +465,7 @@ function AcademicCalendarTab() {
           <div style={{ background: '#fff', borderRadius: 12, padding: 28, width: '100%', maxWidth: 460, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: NAVY }}>Add Key Date</h2>
-              <button onClick={() => setShowEditModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={18} /></button>
+              <button aria-label="Close" onClick={() => setShowEditModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={18} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
@@ -679,7 +679,7 @@ function TextbooksExpanded({ classId, className }) {
                 <td style={{ padding: '8px 10px', color: '#64748B' }}>{b.publisher}</td>
                 <td style={{ padding: '8px 10px', color: '#64748B' }}>{b.edition}</td>
                 <td style={{ padding: '8px 10px' }}>
-                  <button
+                  <button aria-label="Delete"
                     onClick={() => removeBook(b.id)}
                     style={{ background: '#FEE2E2', color: RED, border: 'none', borderRadius: 5, padding: '3px 7px', cursor: 'pointer', fontSize: 11 }}
                   >
@@ -959,7 +959,7 @@ function LessonPlanViewModal({ plan, onClose }) {
         {/* Modal Header */}
         <div style={{ padding: '16px 24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontWeight: 800, fontSize: 17, color: TEAL }}>Lesson Plan</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={20} /></button>
+          <button aria-label="Close" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={20} /></button>
         </div>
 
         <div style={{ padding: 24 }}>
@@ -1631,7 +1631,7 @@ function ViewLessonPlanTab() {
 
                         {/* Delete */}
                         <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                          <button
+                          <button aria-label="Delete"
                             onClick={() => handleDelete(unit.id)}
                             style={{ background: 'transparent', color: TEAL, border: `1.5px solid ${TEAL}`, borderRadius: 5, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}
                           >

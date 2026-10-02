@@ -148,7 +148,7 @@ export default function FeeDefaultersPage() {
           </p>
         </div>
         <div style={{display:'flex', gap:8}}>
-          <button className="btn btn-outline btn-sm" onClick={() => refetch()}><RefreshCw size={13}/></button>
+          <button aria-label="Refresh" className="btn btn-outline btn-sm" onClick={() => refetch()}><RefreshCw size={13}/></button>
           <button className="btn btn-outline btn-sm" onClick={() => printDefaultersReport(invoices, localStorage.getItem('registeredSchoolName') || 'IlmForge School')}>
             <Printer size={13}/> Print Report
           </button>

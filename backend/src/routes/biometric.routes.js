@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { markPresentFromDevice } = require('../services/attendanceMark.service');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // Devices CRUD
@@ -60,21 +61,18 @@ router.post('/punch', wrap(async (req, res) => {
     data: { schoolId: req.schoolId, deviceId: deviceId ? parseInt(deviceId) : null, personType, personId: pid, method, direction }
   });
 
-  // 🔗 LINKED: auto attendance mark (student, first IN punch of day = present)
-  let attendance = null;
+  // First IN punch of the day marks the student present - in the same
+  // record the register uses, so the day is never counted twice.
+  let marked = { created: false };
   if (personType === 'student' && direction === 'in') {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
     const student = await prisma.student.findUnique({ where: { id: pid } });
     if (student) {
-      const existing = await prisma.attendance.findFirst({ where: { schoolId: req.schoolId, studentId: pid, date: { gte: today } } });
-      if (!existing) {
-        attendance = await prisma.attendance.create({
-          data: { schoolId: req.schoolId, campusId: student.campusId, studentId: pid, classId: student.classId, date: new Date(), status: 'present', method }
-        }).catch(() => null);
-      }
+      marked = await markPresentFromDevice({
+        schoolId: req.schoolId, student, method: 'biometric', markedBy: req.user?.id,
+      });
     }
   }
-  res.status(201).json({ success: true, data: punch, attendanceMarked: !!attendance });
+  res.status(201).json({ success: true, data: punch, attendanceMarked: marked.created });
 }));
 
 // Live punch feed (today)

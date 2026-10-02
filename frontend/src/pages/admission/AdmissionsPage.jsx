@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { compressPhoto } from '../../utils/photo';
 import { UserPlus, Search, Calendar, TrendingUp, Users, AlertCircle, Camera, Upload, X, Hash, RefreshCw } from 'lucide-react';
 
 export default function AdmissionsPage() {
@@ -45,13 +46,14 @@ export default function AdmissionsPage() {
   };
 
   const admit = useMutation({
-    mutationFn: d => api.post('/students', d),
-    onSuccess: (r) => {
-      // Save photo to localStorage keyed by student ID — auto-used in ID cards & documents
-      const studentId = r?.data?.data?.id;
-      if (photoPreview && studentId) {
-        try { localStorage.setItem(`photo_student_${studentId}`, photoPreview); } catch {}
-      }
+    // The photo goes on the student record. It used to be kept only in
+    // this browser's storage, so no other device, ID card or certificate
+    // ever saw it.
+    mutationFn: async d => api.post('/students', {
+      ...d,
+      ...(photoPreview ? { photoUrl: await compressPhoto(photoPreview) } : {}),
+    }),
+    onSuccess: () => {
       toast.success('Student admitted successfully! 🎉');
       nav('/students');
     },
@@ -144,7 +146,7 @@ export default function AdmissionsPage() {
               </div>
               {/* Remove photo button */}
               {photoPreview && (
-                <button type="button"
+                <button aria-label="Close" type="button"
                   onClick={() => setPhotoPreview(null)}
                   style={{ position:'absolute', top:-6, right:-6, width:20, height:20, borderRadius:'50%', background:'#EF4444', border:'2px solid #fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
                   <X size={10} color="#fff"/>

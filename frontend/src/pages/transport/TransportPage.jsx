@@ -249,7 +249,7 @@ export default function TransportPage() {
                   <div style={{ fontWeight:700, color:'#1e3a5f', fontSize:14, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.name}</div>
                   <div style={{ fontSize:11.5, color:'#64748b' }}>{r.vehicleNo ? `Vehicle: ${r.vehicleNo}` : 'No vehicle assigned'}</div>
                 </div>
-                <button className="btn btn-sm btn-icon" style={{ background:'#FEF2F2', border:'1px solid #FECACA', color:'#B91C1C', flexShrink:0 }}
+                <button aria-label="Delete" className="btn btn-sm btn-icon" style={{ background:'#FEF2F2', border:'1px solid #FECACA', color:'#B91C1C', flexShrink:0 }}
                   onClick={()=>{ if(confirm('Delete route "'+r.name+'"?')) remove.mutate(r.id); }}>
                   <Trash2 size={12}/>
                 </button>

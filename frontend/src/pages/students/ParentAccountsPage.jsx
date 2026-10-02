@@ -412,7 +412,7 @@ export default function ParentAccountsPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
-            {search && <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }} onClick={() => setSearch('')}><X size={14} /></button>}
+            {search && <button aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }} onClick={() => setSearch('')}><X size={14} /></button>}
           </div>
 
           {/* Parents Table */}
@@ -768,7 +768,7 @@ export default function ParentAccountsPage() {
                 <div style={{ fontWeight: 800, fontSize: 15, color: '#1E3A5F' }}>Connected Students</div>
                 <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{studentsModal.name}</div>
               </div>
-              <button className="modal-close" onClick={() => setStudentsModal(null)}>
+              <button aria-label="Close" className="modal-close" onClick={() => setStudentsModal(null)}>
                 <X size={18} />
               </button>
             </div>

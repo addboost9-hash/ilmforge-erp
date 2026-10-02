@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
+import { compressPhoto } from '../../utils/photo';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, FileText, Printer, User, CreditCard,
@@ -373,10 +374,23 @@ export default function StudentProfilePage() {
     queryFn: () => api.get('/settings/school').then(r => r.data.data),
   });
 
-  /* Load photo from localStorage (saved during admission) */
-  const savedPhoto = typeof window !== 'undefined'
-    ? localStorage.getItem(`photo_student_${id}`)
-    : null;
+  /* The photo lives on the student record. Older versions kept it only in
+     the browser that did the admission, so check there too and offer to
+     move it onto the record. */
+  const savedPhoto = (() => {
+    try { return localStorage.getItem(`photo_student_${id}`); } catch { return null; }
+  })();
+  const qcProfile = useQueryClient();
+  const photoInput = useRef(null);
+  const savePhoto = useMutation({
+    mutationFn: async (src) => api.put('/students/' + id, { photoUrl: src ? await compressPhoto(src) : null }),
+    onSuccess: (_r, src) => {
+      try { localStorage.removeItem(`photo_student_${id}`); } catch {}
+      qcProfile.invalidateQueries({ queryKey: ['student', id] });
+      toast.success(src ? 'Photo saved. It now appears on ID cards and certificates.' : 'Photo removed');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || err.message || 'The photo could not be saved.'),
+  });
 
   if (isLoading) return <div className="loading-center"><div className="spinner"/></div>;
   if (!s) return <div className="page-content"><div className="card" style={{textAlign:'center',padding:40}}>Student not found.</div></div>;
@@ -424,12 +438,9 @@ export default function StudentProfilePage() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 36, overflow: 'hidden', flexShrink: 0,
         }}>
-          {savedPhoto
-            ? <img src={savedPhoto} alt={s.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-            : (s.photoUrl
-                ? <img src={s.photoUrl} alt={s.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-                : '👤')
-          }
+          {(s.photoUrl || savedPhoto)
+            ? <img src={s.photoUrl || savedPhoto} alt={s.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+            : '👤'}
         </div>
 
         <div style={{flex: 1, minWidth: 180}}>
@@ -449,12 +460,27 @@ export default function StudentProfilePage() {
               </span>
             )}
           </div>
-          {!savedPhoto && !s.photoUrl && (
-            <div style={{marginTop:6,fontSize:11.5,color:'rgba(255,255,255,0.55)',display:'flex',alignItems:'center',gap:5}}>
-              <Camera size={12}/>
-              <span>No photo — <Link to="/admissions" style={{color:'rgba(255,255,255,0.75)'}}>upload when admitting</Link> or via ID Cards page</span>
-            </div>
-          )}
+          <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+            <input ref={photoInput} type="file" accept="image/*" aria-label="Student photo" style={{display:'none'}}
+              onChange={e => { const f = e.target.files?.[0]; if (f) savePhoto.mutate(f); e.target.value = ''; }}/>
+            <button type="button" onClick={() => photoInput.current?.click()} disabled={savePhoto.isPending}
+              style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:11.5,fontWeight:600,padding:'4px 10px',
+                      borderRadius:999,border:'1px solid rgba(255,255,255,0.45)',background:'rgba(255,255,255,0.12)',color:'#fff',cursor:'pointer'}}>
+              <Camera size={12}/> {savePhoto.isPending ? 'Saving…' : s.photoUrl ? 'Change photo' : 'Add photo'}
+            </button>
+            {s.photoUrl && (
+              <button type="button" onClick={() => savePhoto.mutate(null)} disabled={savePhoto.isPending}
+                style={{fontSize:11.5,padding:'4px 8px',borderRadius:999,border:'none',background:'transparent',color:'rgba(255,255,255,0.7)',cursor:'pointer'}}>
+                Remove
+              </button>
+            )}
+            {!s.photoUrl && savedPhoto && (
+              <button type="button" onClick={() => savePhoto.mutate(savedPhoto)} disabled={savePhoto.isPending}
+                style={{fontSize:11.5,fontWeight:600,padding:'4px 10px',borderRadius:999,border:'none',background:'#F2A33A',color:'#16211E',cursor:'pointer'}}>
+                This photo is only on this computer: save it to the record
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>

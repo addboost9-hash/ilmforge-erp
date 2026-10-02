@@ -219,7 +219,7 @@ function MarkAttendanceTab({ classes }) {
               max={today} />
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'flex-end', paddingBottom: 1 }}>
-            <button className="btn btn-outline btn-sm" onClick={() => { refetchStudents(); }}>
+            <button aria-label="Refresh" className="btn btn-outline btn-sm" onClick={() => { refetchStudents(); }}>
               <RefreshCw size={13} />
             </button>
             <button className="btn btn-teal"
@@ -455,7 +455,7 @@ function ReportTab({ classes }) {
             </select>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', paddingBottom: 1 }}>
-            <button className="btn btn-outline btn-sm" onClick={() => refetch()}><RefreshCw size={13} /></button>
+            <button aria-label="Refresh" className="btn btn-outline btn-sm" onClick={() => refetch()}><RefreshCw size={13} /></button>
           </div>
         </div>
       </div>

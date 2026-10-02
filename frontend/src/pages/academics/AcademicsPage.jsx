@@ -178,7 +178,7 @@ function HomeworkTab() {
                     background: '#f0fdf4', color: '#059669',
                     padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
                   }}>Active</span>
-                  <button
+                  <button aria-label="Delete"
                     onClick={() => { if (window.confirm('Delete this homework?')) delMut.mutate(hw.id); }}
                     style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}
                   >
@@ -200,7 +200,7 @@ function HomeworkTab() {
           <div style={{ background: '#fff', borderRadius: 12, padding: 28, width: '100%', maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: NAVY }}>Assign Homework</h2>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={18} /></button>
+              <button aria-label="Close" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={18} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
@@ -347,7 +347,7 @@ function StudyMaterialsTab() {
                     style={{ background: '#EEF2FF', color: '#4F46E5', border: '1px solid #C7D2FE', borderRadius: 5, padding: '6px 10px', cursor: 'pointer', fontWeight: 600, fontSize: 12, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Download size={12} />
                   </a>
-                  <button onClick={() => { if (window.confirm('Delete?')) delMut.mutate(m.id); }}
+                  <button aria-label="Delete" onClick={() => { if (window.confirm('Delete?')) delMut.mutate(m.id); }}
                     style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '6px 10px', fontSize: 12, cursor: 'pointer' }}>
                     <Trash2 size={12} />
                   </button>
@@ -365,7 +365,7 @@ function StudyMaterialsTab() {
           <div style={{ background: '#fff', borderRadius: 12, padding: 28, width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: NAVY }}>Upload Study Material</h2>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={18} /></button>
+              <button aria-label="Close" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={18} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
@@ -504,7 +504,7 @@ function OnlineClassesTab() {
                     ) : '—'}
                   </td>
                   <td>
-                    <button onClick={() => { if (window.confirm('Delete?')) delMut.mutate(oc.id); }}
+                    <button aria-label="Delete" onClick={() => { if (window.confirm('Delete?')) delMut.mutate(oc.id); }}
                       style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}>
                       <Trash2 size={12} />
                     </button>
@@ -522,7 +522,7 @@ function OnlineClassesTab() {
           <div style={{ background: '#fff', borderRadius: 12, padding: 28, width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: NAVY }}>Add Online Class Link</h2>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={18} /></button>
+              <button aria-label="Close" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={18} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>

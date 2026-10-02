@@ -14,10 +14,12 @@
  *   - OPERATIONAL_CHECKLIST (8 items)
  */
 import { useState } from 'react';
+import toast from 'react-hot-toast';
+import api from '../../api/client';
 import {
   BookOpen, CheckCircle, AlertTriangle, Info, Printer,
   Search, ChevronDown, ChevronRight, Users, DollarSign,
-  Award, Settings, Phone, Star, Zap, PlayCircle, ClipboardCheck,
+  Award, Settings, Phone, Star, Zap, PlayCircle, ClipboardCheck, Download,
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════
@@ -364,7 +366,7 @@ const SECTIONS = [
         title: 'Staff Attendance & Appraisals',
         steps: [
           { n:1, text:'Staff → Attendance → mark daily present/absent/leave' },
-          { n:2, text:'Sync attendance automatically from a biometric device (Settings → Biometric)' },
+          { n:2, text:'Staff are marked on Attendance → Staff Attendance (fingerprint machines cannot send punches in yet — see Attendance Devices)' },
           { n:3, text:'Leave applications are submitted through the staff portal — admins approve/reject them' },
           { n:4, text:'Appraisals: Staff → Appraisals → performance rating + remarks' },
           { n:5, text:'The annual appraisal report supports increment decisions' },
@@ -566,11 +568,13 @@ const SECTIONS = [
       {
         title: 'The dashboard',
         steps: [
-          { n:1, text:'School health: a score out of 100 with the reason for it shown underneath' },
-          { n:2, text:'Anything not yet recorded is left out of the score rather than counted as zero' },
-          { n:3, text:'"Why this result?" explains the change month to month, and the parts always add up exactly' },
-          { n:4, text:'Panels saying "N more months of data needed" switch on by themselves as history builds' },
-          { n:5, text:'"Export as PDF" produces a clean copy for board meetings' },
+          { n:1, text:'Green band at the top: students and staff marked today (orange = still not marked) and fee collected today. Click any to finish it' },
+          { n:2, text:'Quick actions: 12 big shortcuts (Mark attendance, Collect fee, Exam Vault, New admission...). Click "Customise" to choose your own, up to 12' },
+          { n:3, text:'School health: a score out of 100 with the reason for it shown underneath' },
+          { n:4, text:'Anything not yet recorded is left out of the score rather than counted as zero' },
+          { n:5, text:'"Why this result?" explains the change month to month, and the parts always add up exactly' },
+          { n:6, text:'Panels saying "N more months of data needed" switch on by themselves as history builds' },
+          { n:7, text:'"Export PDF" in the green band produces a clean copy for board meetings' },
         ],
       },
     ],
@@ -632,6 +636,111 @@ const SECTIONS = [
   },
 
   /* ──────────────────────────────────────────
+     IMPORT, EXPORT & PHOTOS
+  ────────────────────────────────────────── */
+  {
+    id: 'records',
+    icon: '📥',
+    color: '#15803D',
+    title: 'Import, Export & Photos',
+    desc: 'Add many students and staff from Excel, move a school to another server, student photos',
+    chapters: [
+      {
+        title: 'Download the Excel template',
+        download: true,
+        steps: [
+          { n:1, text:'Click "Download template" below, or go to Sidebar → Import & Export → Download template' },
+          { n:2, text:'The workbook has four sheets: Read me, Classes, Students and Staff' },
+          { n:3, text:'Signed in as admin, your existing classes come already filled in on the Classes sheet' },
+          { n:4, text:'Each sheet starts with a grey "Example" row — it is never imported, so leave it or delete it' },
+        ],
+        note: 'Without signing in, a blank copy is at ilmforge-erp.vercel.app/IlmForge-Import-Template.xlsx',
+      },
+      {
+        title: 'Fill and import students and staff',
+        steps: [
+          { n:1, text:'Students sheet — required: Student Name, Father Name, Class. Also: Gender, Date of Birth, B-Form, Section, Parent Phone, Parent Email, Address, Blood Group, Admission Date' },
+          { n:2, text:'Staff sheet — required: Name, and a Phone or Email. Also: Designation, Role, CNIC, Department, Joining Date, Monthly Salary (Rs)' },
+          { n:3, text:'Leave Roll No and Employee Code blank — IlmForge creates them (e.g. C5A-26-001, TCH-26-0019)' },
+          { n:4, text:'Dates are day first: 14/03/2014 is 14 March. Type phones as 03001234567' },
+          { n:5, text:'Sidebar → Import & Export → Choose Excel file. "Check before importing" lists every problem by sheet, row and column. Nothing is saved yet' },
+          { n:6, text:'Click "Import". Then click "Download login details" straight away — it lists every new username and password' },
+        ],
+        tip: 'Importing the same file twice is safe: anyone already in the school is skipped. Brothers and sisters with the same parent phone share one parent account.',
+      },
+      {
+        title: 'Moving a school to another server',
+        steps: [
+          { n:1, text:'On the old server: Sidebar → Import & Export → Export records. You get one Excel file in the same format as the template' },
+          { n:2, text:'On the new server: sign in as admin → Import & Export → choose that file → check → import' },
+          { n:3, text:'Classes, students (with parents) and staff are recreated, each with a new login' },
+        ],
+        warning: 'Fees, attendance and exam marks are not part of this file. Use Settings → Backup & Restore to move the whole database.',
+      },
+      {
+        title: 'Student and staff photos',
+        steps: [
+          { n:1, text:'Student: Student Registry → open the student → "Add photo" (or "Change photo")' },
+          { n:2, text:'Staff: Staff Directory → Edit → click the "Add Photo" box → Save' },
+          { n:3, text:'Or on ID Cards: click the photo spot on a card row and choose a picture' },
+          { n:4, text:'Any phone or camera picture works — it is shrunk automatically to about 40 KB' },
+          { n:5, text:'The same photo then appears on the ID card, character certificate, leaving certificate and the portal' },
+        ],
+        tip: 'If a page says a photo is saved only on this computer, click "Save to records" (ID Cards) or "save it to the record" (student profile) so every computer sees it.',
+      },
+    ],
+  },
+
+  /* ──────────────────────────────────────────
+     ATTENDANCE DEVICES
+  ────────────────────────────────────────── */
+  {
+    id: 'devices',
+    icon: '📷',
+    color: '#0E7C86',
+    title: 'Attendance Devices',
+    desc: 'ID card scanner, webcam, photo check-in, fingerprint machines — what works and how to set it up',
+    chapters: [
+      {
+        title: 'Handheld QR / barcode scanner (recommended)',
+        steps: [
+          { n:1, text:'Buy any USB or Bluetooth "1D/2D" barcode scanner that reads QR and Code 39 (about Rs 4,000–9,000). No driver needed' },
+          { n:2, text:'Plug it into the gate computer. Test in Notepad: scanning a card should type the roll number and go to a new line' },
+          { n:3, text:'Sign in to IlmForge → Attendance → Barcode scan (/attendance/barcode) → click once in the scan box' },
+          { n:4, text:'Scan each student ID card. The name and photo appear and the student is marked present' },
+        ],
+        note: 'A scan never overwrites a teacher\'s "Leave" or "Absent", and scanning the same card twice is ignored. Each student has one record per day.',
+      },
+      {
+        title: 'Webcam or laptop camera',
+        steps: [
+          { n:1, text:'Any USB webcam (720p) or laptop camera works. Good light helps' },
+          { n:2, text:'Attendance → Barcode scan → "Start Camera" → allow camera access' },
+          { n:3, text:'Hold the ID card 15–25 cm from the camera — it is read automatically' },
+        ],
+        warning: 'Use Chrome or Edge, and the https:// address. Browsers refuse the camera on plain http.',
+      },
+      {
+        title: 'Photo check-in and face recognition',
+        steps: [
+          { n:1, text:'Attendance Tracker → Photo Check-in shows the class photos. The person on duty taps a student\'s photo to mark them present' },
+          { n:2, text:'It does not recognise faces by itself and needs no camera' },
+          { n:3, text:'Add student photos first (Import, Export & Photos → Student and staff photos)' },
+        ],
+        note: 'Automatic face recognition is not part of IlmForge yet.',
+      },
+      {
+        title: 'Fingerprint machines (ZKTeco, eSSL)',
+        steps: [
+          { n:1, text:'A physical fingerprint machine cannot yet send its punches to IlmForge by itself' },
+          { n:2, text:'Do not buy one expecting it to mark attendance in IlmForge — use ID card scanning at the gate instead' },
+          { n:3, text:'If you already own one: put its daily log in a sheet with columns date (YYYY-MM-DD), rollNo, status, save as CSV, and load it on Attendance → Excel import' },
+        ],
+      },
+    ],
+  },
+
+  /* ──────────────────────────────────────────
      10. SETTINGS
   ────────────────────────────────────────── */
   {
@@ -666,12 +775,11 @@ const SECTIONS = [
         title: 'SOPs, Biometric & Admin Roles',
         steps: [
           { n:1, text:'SOPs: Settings → SOPs → store standard operating procedure documents' },
-          { n:2, text:'Biometric: Settings → Biometric → connect a device for staff/student attendance' },
+          { n:2, text:'Biometric: Settings → Biometric lists devices; a physical machine cannot send punches in yet (see Attendance Devices)' },
           { n:3, text:'Admin Roles: create multiple admins with scoped permissions' },
           { n:4, text:'Audit log: tracks which user changed what — for accountability' },
           { n:5, text:'Users: reset password, deactivate, re-assign roles' },
         ],
-        tip: 'Biometric attendance fully automates staff salary deductions.',
       },
     ],
   },
@@ -717,6 +825,35 @@ function Step({ n, text }) {
   );
 }
 
+/* Signed-in admins get the template with their own classes filled in; anyone
+   else (or if the server is unreachable) gets the blank copy on the website. */
+function TemplateDownload() {
+  const [busy, setBusy] = useState(false);
+  const get = async () => {
+    setBusy(true);
+    try {
+      const res = await api.get('/bulk/template', { responseType: 'blob' });
+      const href = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = href; a.download = 'ilmforge-import-template.xlsx';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 2000);
+      toast.success('Template downloaded — your classes are filled in');
+    } catch {
+      const a = document.createElement('a');
+      a.href = '/IlmForge-Import-Template.xlsx'; a.download = 'IlmForge-Import-Template.xlsx';
+      document.body.appendChild(a); a.click(); a.remove();
+      toast.success('Blank template downloaded');
+    } finally { setBusy(false); }
+  };
+  return (
+    <button type="button" onClick={get} disabled={busy}
+      style={{ display:'inline-flex', alignItems:'center', gap:8, margin:'6px 0 4px', padding:'9px 16px', borderRadius:8, border:'none', background:'#15803D', color:'#fff', fontWeight:700, fontSize:13, cursor: busy ? 'wait' : 'pointer' }}>
+      <Download size={15} /> {busy ? 'Preparing…' : 'Download template'}
+    </button>
+  );
+}
+
 function Chapter({ chapter, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen || false);
   return (
@@ -729,6 +866,7 @@ function Chapter({ chapter, defaultOpen }) {
       {open && (
         <div style={{ padding:'16px 20px', borderTop:'1px solid #E5E7EB' }}>
           {chapter.steps && chapter.steps.map(s => <Step key={s.n} {...s}/>)}
+          {chapter.download && <TemplateDownload />}
 
           {chapter.isTable && chapter.content && (
             <div style={{ overflowX:'auto', marginTop:6 }}>

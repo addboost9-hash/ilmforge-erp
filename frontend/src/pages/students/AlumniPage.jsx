@@ -82,7 +82,7 @@ function UpdateProfileModal({ alumni, onClose, onSaved }) {
       <div className="modal modal-lg">
         <div className="modal-header">
           <span className="modal-title">Update Alumni Profile — {alumni.name}</span>
-          <button className="btn btn-ghost btn-sm btn-icon" onClick={onClose}><X size={16} /></button>
+          <button aria-label="Close" className="btn btn-ghost btn-sm btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
 
         <div className="modal-body">
@@ -164,7 +164,7 @@ function ProfileModal({ alumni, onClose }) {
       <div className="modal modal-lg">
         <div className="modal-header" style={{ background: color, color: '#fff' }}>
           <span className="modal-title" style={{ color: '#fff' }}>{alumni.name} — Full Profile</span>
-          <button className="btn btn-ghost btn-sm btn-icon" onClick={onClose} style={{ color: '#fff' }}><X size={16} /></button>
+          <button aria-label="Close" className="btn btn-ghost btn-sm btn-icon" onClick={onClose} style={{ color: '#fff' }}><X size={16} /></button>
         </div>
         <div className="modal-body">
           {/* Avatar + header */}
@@ -249,7 +249,7 @@ function InviteModal({ onClose, selectedIds }) {
       <div className="modal modal-lg">
         <div className="modal-header">
           <span className="modal-title">Send Annual Function Invitation</span>
-          <button className="btn btn-ghost btn-sm btn-icon" onClick={onClose}><X size={16} /></button>
+          <button aria-label="Close" className="btn btn-ghost btn-sm btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
         <div className="modal-body">
           {selectedIds?.length > 0 && (

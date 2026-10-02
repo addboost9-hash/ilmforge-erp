@@ -53,7 +53,7 @@ export default function LicenseBanner() {
         <Key size={12} /> Renew Now
       </a>
       {!isExpired && (
-        <button onClick={() => setDismissed(true)}
+        <button aria-label="Close" onClick={() => setDismissed(true)}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color, padding: 2 }}>
           <X size={14} />
         </button>

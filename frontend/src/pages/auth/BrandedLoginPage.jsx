@@ -243,7 +243,7 @@ export default function BrandedLoginPage() {
                 autoComplete="current-password"
                 style={{ width:'100%', padding:'12px 46px 12px 14px', border:'2px solid #e2e8f0', borderRadius:10, fontSize:14, color:'#1e293b', background:'#f8fafc', outline:'none', fontFamily:'inherit', boxSizing:'border-box', transition:'all .15s' }}
               />
-              <button type="button" onClick={() => setShowPw(s => !s)}
+              <button aria-label="Show or hide" type="button" onClick={() => setShowPw(s => !s)}
                 style={{ position:'absolute', right:14, top:36, background:'none', border:'none', cursor:'pointer', color:'#94a3b8' }}>
                 {showPw ? <EyeOff size={18}/> : <Eye size={18}/>}
               </button>

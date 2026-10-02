@@ -199,7 +199,7 @@ export default function AdminsPage() {
             <div className="form-group" style={{ position:'relative' }}>
               <label className="form-label">Password *</label>
               <input className="form-input" type={showPw?'text':'password'} placeholder="Min 8 characters" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} style={{ paddingRight:38 }}/>
-              <button type="button" onClick={()=>setShowPw(s=>!s)} style={{ position:'absolute', right:10, top:30, background:'none', border:'none', cursor:'pointer', color:'#94A3B8' }}>
+              <button aria-label="Show or hide" type="button" onClick={()=>setShowPw(s=>!s)} style={{ position:'absolute', right:10, top:30, background:'none', border:'none', cursor:'pointer', color:'#94A3B8' }}>
                 {showPw?<EyeOff size={14}/>:<Eye size={14}/>}
               </button>
             </div>

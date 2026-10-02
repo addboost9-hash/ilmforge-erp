@@ -488,6 +488,9 @@ function StudentExamCard({ exam }) {
           <div style={{ fontSize: 12, color: '#6B7280' }}>
             {fmtDate(exam.dateStart || exam.date || exam.examDate || exam.createdAt)}
           </div>
+          {obtainedNum == null && (
+            <div style={{ fontSize: 12, marginTop: 3, color: '#94A3B8' }}>Marks not entered yet</div>
+          )}
           {obtainedNum != null && (
             <div style={{ fontSize: 12.5, marginTop: 3, fontWeight: 700 }}>
               <span style={{ color: gc.c }}>{obtainedNum}</span>

@@ -72,7 +72,9 @@ export default function LoginPage() {
     const isPhone = /^[0-9+\-\s()]+$/.test(identifier) && identifier.replace(/\D/g,'').length >= 10;
     const credentials = isPhone
       ? { phone: identifier.replace(/[^0-9+]/g,''), password: form.password }
-      : { email: identifier.toLowerCase(), password: form.password };
+      // Only an email address is lowercased. Students sign in with their roll
+      // number ("NURA-26-016"), and lowercasing it made every one of them fail.
+      : { email: identifier.includes('@') ? identifier.toLowerCase() : identifier, password: form.password };
     const res = await login(credentials);
     if (res.success) {
       const role = res.data.user?.role;
@@ -223,7 +225,7 @@ export default function LoginPage() {
                 onFocus={e => { e.target.style.borderColor = brandColor; e.target.style.boxShadow = `0 0 0 4px ${brandColor}1a`; }}
                 onBlur={e => { e.target.style.borderColor = '#E2E8F0'; e.target.style.boxShadow = 'none'; }}
               />
-              <button type="button" onClick={() => setShowPw(s => !s)}
+              <button aria-label="Show or hide" type="button" onClick={() => setShowPw(s => !s)}
                 style={{ position: 'absolute', right: 14, top: 40, background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
                 {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
               </button>

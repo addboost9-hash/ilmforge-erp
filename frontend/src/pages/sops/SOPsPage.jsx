@@ -642,7 +642,7 @@ function ViewManualModal({ sop, onClose }) {
             >
               <Download size={13} /> Download PDF
             </button>
-            <button
+            <button aria-label="Close"
               onClick={onClose}
               style={{ ...btn({ background: 'rgba(255,255,255,0.15)', color: '#fff', padding: '6px 10px', borderRadius: '50%' }) }}
             >
@@ -799,7 +799,7 @@ function TutorialModal({ sop, onClose }) {
             <Play size={16} color="#fff" />
             <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Tutorial</span>
           </div>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button aria-label="Close" onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <X size={14} />
           </button>
         </div>

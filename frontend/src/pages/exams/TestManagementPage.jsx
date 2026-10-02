@@ -637,7 +637,7 @@ function MarksEntryTab({ classes }) {
                       </td>
                       <td style={{ fontWeight: 600, color: '#111827' }}>{s.name}</td>
                       <td style={{ textAlign: 'center' }}>
-                        <button
+                        <button aria-label="Select"
                           onClick={() => setMark(s.id, 'absent', !absent)}
                           style={{
                             background: 'none', border: 'none', cursor: 'pointer',

@@ -1,129 +1,110 @@
+/**
+ * IlmForge — import and export school records as Excel.
+ *
+ *   GET  /bulk/template   blank workbook to fill in (school's classes pre-filled)
+ *   GET  /bulk/export     this school's classes, students and staff
+ *   POST /bulk/validate   check an uploaded workbook; writes nothing
+ *   POST /bulk/import     import one chunk of validated rows
+ *
+ * Mounted behind protect + ADMIN_ONLY in app.js. The work itself lives in
+ * services/records.service.js.
+ *
+ * Replaces the earlier CSV-only student import, which ignored the section,
+ * created no portal accounts, gave every student a "BLK-..." roll number,
+ * and created duplicates when the same file was imported twice.
+ */
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const records = require('../services/records.service');
+
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
-const normalizeText = (v) => String(v || '').trim();
+const MAX_ROWS = 5000;      // per file
+const MAX_CHUNK = 50;       // per import request
 
-const validateRows = (rows, classes, fallbackClassId) => {
-  const classNameMap = new Map(classes.map(c => [normalizeText(c.name).toLowerCase(), c]));
-  const errors = [];
-  const warnings = [];
-
-  rows.forEach((r, idx) => {
-    const rowNo = idx + 1;
-    const name = normalizeText(r.name);
-    const className = normalizeText(r.className);
-
-    if (!name) errors.push({ row: rowNo, field: 'name', message: 'Name is required.' });
-
-    if (className) {
-      const cls = classNameMap.get(className.toLowerCase());
-      if (!cls) {
-        errors.push({ row: rowNo, field: 'className', message: `Class '${className}' not found.` });
-      }
-    } else if (!fallbackClassId) {
-      warnings.push({ row: rowNo, field: 'className', message: 'Class not provided; student will be imported without class.' });
-    }
-
-    if (r.phone && !/^[0-9+\-\s]{7,20}$/.test(String(r.phone))) {
-      warnings.push({ row: rowNo, field: 'phone', message: 'Phone format looks invalid.' });
-    }
-
-    if (r.dob && Number.isNaN(new Date(r.dob).getTime())) {
-      errors.push({ row: rowNo, field: 'dob', message: 'Invalid date of birth.' });
-    }
-  });
-
-  return { errors, warnings };
+const sendWorkbook = async (res, wb, filename) => {
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  await wb.xlsx.write(res);
+  res.end();
 };
 
-// POST /api/v1/bulk/students/validate
-router.post('/students/validate', wrap(async (req, res) => {
-  const { rows = [], classId } = req.body;
-  if (!Array.isArray(rows)) return res.status(400).json({ success: false, message: 'rows array required.' });
+const fileSlug = (s) => String(s || 'school').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 
-  const classes = await prisma.class.findMany({ where: { schoolId: req.schoolId }, include: { sections: true } });
-  const { errors, warnings } = validateRows(rows, classes, classId);
-
-  res.json({
-    success: true,
-    data: {
-      totalRows: rows.length,
-      validRows: Math.max(0, rows.length - errors.length),
-      invalidRows: errors.length,
-      errors,
-      warnings,
-    },
-  });
+// GET /api/v1/bulk/template
+router.get('/template', wrap(async (req, res) => {
+  const wb = await records.buildTemplate(req.schoolId);
+  await sendWorkbook(res, wb, 'ilmforge-import-template.xlsx');
 }));
 
-// POST /api/v1/bulk/students — rows: [{name, fatherName, gender, dob, className, section, phone}]
-router.post('/students', wrap(async (req, res) => {
-  const { rows, classId, createPortalAccounts = false } = req.body;
-  if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ success: false, message: 'rows array required.' });
-  if (rows.length > 500) return res.status(400).json({ success: false, message: 'Max 500 rows per import.' });
+// GET /api/v1/bulk/export
+router.get('/export', wrap(async (req, res) => {
+  const school = await prisma.school.findUnique({ where: { id: req.schoolId }, select: { name: true } });
+  const { wb, counts } = await records.buildExport(req.schoolId);
 
-  const classes = await prisma.class.findMany({ where: { schoolId: req.schoolId }, include: { sections: true } });
-  const findClass = (nm) => classes.find(c => c.name.toLowerCase().trim() === String(nm || '').toLowerCase().trim());
+  // This file holds every student's and staff member's personal details, so
+  // who downloaded it is recorded.
+  await prisma.auditLog.create({
+    data: {
+      schoolId: req.schoolId, userId: req.user.id,
+      action: 'RECORDS_EXPORTED', resource: 'school',
+      details: JSON.stringify(counts),
+    },
+  }).catch(() => null);
 
-  const { errors } = validateRows(rows, classes, classId);
-  if (errors.length) {
+  const date = new Date().toISOString().slice(0, 10);
+  await sendWorkbook(res, wb, `${fileSlug(school?.name)}-records-${date}.xlsx`);
+}));
+
+// POST /api/v1/bulk/validate   body: { file: <base64 .xlsx> }
+router.post('/validate', wrap(async (req, res) => {
+  const { file } = req.body || {};
+  if (!file || typeof file !== 'string') {
+    return res.status(400).json({ success: false, message: 'Choose an Excel file (.xlsx) to check.' });
+  }
+
+  let raw;
+  try {
+    raw = await records.parseWorkbook(file);
+  } catch (e) {
+    if (e.status === 400) return res.status(400).json({ success: false, message: e.message });
+    throw e;
+  }
+
+  const total = raw.students.length + raw.staff.length + raw.classes.length;
+  if (total === 0) {
     return res.status(400).json({
       success: false,
-      message: 'Validation failed for one or more rows.',
-      errors,
+      message: 'No records found. Use the IlmForge template, or make sure the first row holds column headings such as "Student Name" and "Class".',
+    });
+  }
+  if (total > MAX_ROWS) {
+    return res.status(400).json({
+      success: false,
+      message: `This file has ${total} rows. Split it into files of ${MAX_ROWS} rows or fewer.`,
     });
   }
 
-  let imported = 0, failed = [];
-  const report = {
-    importedRows: [],
-    failedRows: [],
-  };
-  for (const [i, r] of rows.entries()) {
-    try {
-      if (!r.name) throw new Error('name missing');
-      const cls = r.className ? findClass(r.className) : (classId ? classes.find(c => c.id === parseInt(classId)) : null);
-      const count = await prisma.student.count({ where: { schoolId: req.schoolId } });
-      const student = await prisma.student.create({
-        data: {
-          schoolId: req.schoolId, campusId: req.campusId || 1,
-          name: r.name.trim(), fatherName: r.fatherName || null, gender: r.gender || null,
-          dob: r.dob ? new Date(r.dob) : null,
-          classId: cls?.id || null,
-          rollNo: `BLK-${Date.now().toString(36)}-${count + 1}`,
-          emergencyPhone: r.phone || null,
-        }
-      });
-      imported++;
-      report.importedRows.push({ row: i + 1, studentId: student.id, name: student.name, classId: student.classId });
-    } catch (e) { failed.push({ row: i + 1, name: r.name, error: e.message }); }
-  }
-  report.failedRows = failed;
-
-  await prisma.auditLog.create({
-    data: {
-      schoolId: req.schoolId,
-      userId: req.user.id,
-      action: 'BULK_IMPORT_STUDENTS',
-      resource: 'student',
-    }
-  }).catch(() => null);
-
-  res.json({ success: true, imported, failed, report, createPortalAccounts });
+  const result = await records.validate(req.schoolId, raw);
+  res.json({ success: true, data: result });
 }));
 
-// GET /api/v1/bulk/students/template
-router.get('/students/template', (req, res) => {
-  const template = [
-    ['name', 'fatherName', 'gender', 'dob', 'className', 'section', 'phone'],
-    ['Ali Khan', 'Ahmed Khan', 'male', '2012-05-20', 'Class 5', 'A', '03001234567'],
-  ];
-  const csv = template.map(r => r.join(',')).join('\n');
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="student_bulk_template.csv"');
-  res.send(csv);
-});
+// POST /api/v1/bulk/import   body: { classes?, students?, staff? }  (one chunk)
+router.post('/import', wrap(async (req, res) => {
+  const { classes = [], students = [], staff = [] } = req.body || {};
+  const size = classes.length + students.length + staff.length;
+  if (!size) return res.status(400).json({ success: false, message: 'Nothing to import in this request.' });
+  if (students.length + staff.length > MAX_CHUNK) {
+    return res.status(400).json({ success: false, message: `Send at most ${MAX_CHUNK} people per request.` });
+  }
+
+  const results = await records.importChunk(
+    { schoolId: req.schoolId, campusId: req.campusId, actorUserId: req.user.id },
+    { classes, students, staff },
+  );
+  res.json({ success: true, data: results });
+}));
 
 module.exports = router;

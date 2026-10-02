@@ -362,7 +362,7 @@ export default function SyllabusPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, background: '#1B2F6E', color: '#fff', padding: '2px 9px', borderRadius: 4 }}>Unit {idx + 1}</span>
                     {form.units.length > 1 && (
-                      <button
+                      <button aria-label="Close"
                         onClick={() => removeUnit(idx)}
                         style={{ marginLeft: 'auto', background: '#FEE2E2', border: 'none', borderRadius: 5, padding: '3px 7px', cursor: 'pointer', color: '#DC2626' }}
                       >
@@ -506,7 +506,7 @@ export default function SyllabusPage() {
                     >
                       <Printer size={11} /> Print
                     </button>
-                    <button
+                    <button aria-label="Delete"
                       style={{ background: '#FEE2E2', border: 'none', borderRadius: 6, padding: '4px 9px', cursor: 'pointer', color: '#DC2626' }}
                       onClick={() => { if (window.confirm('Delete this syllabus?')) deleteMutation.mutate(syl.id); }}
                     >

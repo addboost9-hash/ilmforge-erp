@@ -3,13 +3,10 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const { contains: ciContains, equals: ciEquals } = require('../utils/search');
 const bcrypt = require('bcryptjs');
+const { createStaff } = require('../services/staff.service');
+const { checkPhoto } = require('../utils/photo');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
-const generateTempPassword = () => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  const pick = () => chars[Math.floor(Math.random() * chars.length)];
-  return `Tch#${pick()}${pick()}${pick()}${pick()}${pick()}${pick()}`;
-};
 
 /* ═══ Departments ═══════════════════════════════════════════
    The Department model has always existed (Staff.departmentId points at it,
@@ -92,104 +89,24 @@ router.get('/', wrap(async (req, res) => {
 }));
 
 /* ── Auto-generate staff employee code ─────────────────── */
-async function generateEmpCode(schoolId, designation) {
-  // Prefix based on designation
-  const d = (designation || '').toUpperCase();
-  let prefix = 'STF';
-  if      (d.includes('TEACHER') || d.includes('TUTOR'))    prefix = 'TCH';
-  else if (d.includes('PRINCIPAL') || d.includes('HEAD'))   prefix = 'PRI';
-  else if (d.includes('ADMIN') || d.includes('MANAGER'))    prefix = 'ADM';
-  else if (d.includes('ACCOUNT') || d.includes('FINANCE'))  prefix = 'ACC';
-  else if (d.includes('SUPPORT') || d.includes('PEON'))     prefix = 'SPT';
-  else if (d.includes('GUARD') || d.includes('SECURITY'))   prefix = 'GRD';
-  else if (d.includes('LIBRARIAN'))                         prefix = 'LIB';
-  else if (d.includes('DRIVER'))                            prefix = 'DRV';
 
-  // Count all staff in school → sequential across entire school
-  const count = await prisma.staff.count({ where: { schoolId } });
-  const seq   = String(count + 1).padStart(4, '0');
-  const yr    = new Date().getFullYear().toString().slice(-2);
-
-  return `${prefix}-${yr}-${seq}`;   // e.g. TCH-26-0001, ADM-26-0002
-}
-
+// Staff creation lives in services/staff.service.js, shared with the Excel import.
 router.post('/', wrap(async (req, res) => {
-  const { name, email, phone, departmentId, designation, joiningDate, basicSalary, salaryType, cnic, gender, dob, role: requestedRole } = req.body;
-
-  // Staff logins were hardcoded to 'teacher' regardless of designation, so an
-  // accountant or gatekeeper received a teacher's permissions and could not
-  // reach their own portal. Honour an explicit role, otherwise infer it from
-  // the designation, and fall back to teacher.
-  const STAFF_ROLES = ['teacher', 'accountant', 'gatekeeper', 'admin'];
-  const inferRole = (d) => {
-    const t = String(d || '').toLowerCase();
-    if (t.includes('account') || t.includes('cashier') || t.includes('bursar')) return 'accountant';
-    if (t.includes('gate') || t.includes('security') || t.includes('guard')) return 'gatekeeper';
-    if (t.includes('principal') || t.includes('head') || t.includes('director') || t.includes('admin')) return 'admin';
-    return 'teacher';
-  };
-  const staffRole = STAFF_ROLES.includes(requestedRole) ? requestedRole : inferRole(designation);
-  if (!name || !email) return res.status(400).json({ success: false, message: 'Name and email required.' });
-
-  const tempPassword = generateTempPassword();
-  const passwordHash = await bcrypt.hash(tempPassword, 12);
-  const empCode = await generateEmpCode(req.schoolId, designation);
-
-  // Ensure we have a valid campusId — tenant middleware auto-resolves, but be safe
-  const campusId = req.campusId;
-  if (!campusId) {
-    return res.status(400).json({
-      success: false,
-      message: 'No campus found for this school. Please create a campus first in Settings → Campuses.',
+  try {
+    const out = await createStaff(
+      { schoolId: req.schoolId, campusId: req.campusId, actorUserId: req.user?.id },
+      req.body,
+    );
+    res.status(201).json({
+      success: true,
+      data: { user: out.user, staff: out.staff },
+      tempPassword: out.tempPassword,
+      credentials: out.credentials,
     });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ success: false, message: err.message });
+    throw err;
   }
-
-  const result = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: { schoolId: req.schoolId, campusId, name, email, phone, role: staffRole, passwordHash, mustChangePassword: true }
-    });
-    const staff = await tx.staff.create({
-      data: {
-        schoolId: req.schoolId, campusId,
-        userId: user.id, name, cnic, gender,
-        dob: dob ? new Date(dob) : null,
-        departmentId: departmentId ? parseInt(departmentId) : null,
-        designation, empCode,
-        joiningDate: joiningDate ? new Date(joiningDate) : null,
-        basicSalary: basicSalary ? parseInt(basicSalary) : 0,
-        salaryType: salaryType || 'monthly',
-      }
-    });
-    return { user, staff };
-  });
-
-  // Hand back everything the school needs to give this person access.
-  // Previously only tempPassword came back and the UI discarded it, so a new
-  // staff member had no way to learn where or how to sign in.
-  const school = await prisma.school.findUnique({ where: { id: req.schoolId }, select: { slug: true, name: true } });
-  const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-  const ROLE_LABEL = { teacher: 'Teacher Portal', accountant: 'Accountant Portal', gatekeeper: 'Gate Portal', admin: 'Admin Dashboard' };
-
-  res.status(201).json({
-    success: true,
-    data: result,
-    tempPassword,
-    credentials: {
-      // Tagged with the role so the login page can name the portal it
-      // belongs to. The destination after sign-in still comes from the
-      // account's own role, never from this parameter.
-      portalLink: `${FRONTEND_URL}/login?slug=${school?.slug || ''}&role=${staffRole}`,
-      loginId: email,
-      loginIdLabel: 'Email',
-      phone: phone || null,
-      password: tempPassword,
-      role: staffRole,
-      portal: ROLE_LABEL[staffRole] || 'Staff Portal',
-      empCode,
-      schoolName: school?.name || '',
-      mustChangePassword: true,
-    },
-  });
 }));
 
 router.get('/stats', wrap(async (req, res) => {
@@ -222,10 +139,18 @@ router.get('/:id', wrap(async (req, res) => {
 // silently creating a duplicate staff+user record on every "edit").
 router.put('/:id', wrap(async (req, res) => {
   const id = parseInt(req.params.id);
-  const { name, email, phone, departmentId, designation, joiningDate, basicSalary, salaryType, cnic, gender, dob } = req.body;
+  const { name, email, phone, departmentId, designation, joiningDate, basicSalary, salaryType, cnic, gender, dob, photoUrl } = req.body;
 
   const existing = await prisma.staff.findFirst({ where: { id, schoolId: req.schoolId } });
   if (!existing) return res.status(404).json({ success: false, message: 'Staff not found.' });
+
+  // Staff photos could never be saved: this update ignored the field, so a
+  // teacher's photo added on the ID Cards page vanished on the next visit.
+  let photo;
+  if (photoUrl !== undefined) {
+    photo = checkPhoto(photoUrl);
+    if (photo.error) return res.status(400).json({ success: false, message: photo.error });
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     if (existing.userId && (name !== undefined || email !== undefined || phone !== undefined)) {
@@ -250,6 +175,7 @@ router.put('/:id', wrap(async (req, res) => {
         ...(joiningDate  !== undefined && { joiningDate: joiningDate ? new Date(joiningDate) : null }),
         ...(basicSalary  !== undefined && { basicSalary: basicSalary ? parseInt(basicSalary) : 0 }),
         ...(salaryType   !== undefined && { salaryType }),
+        ...(photo                      && { photoUrl: photo.value }),
       },
       include: { department: true },
     });

@@ -29,7 +29,7 @@ function OnboardingBanner({ onDismiss }) {
       <div style={{ position:'absolute', top:-30, right:-30, width:120, height:120, borderRadius:'50%', background:'rgba(255,255,255,0.06)' }}/>
       <div style={{ position:'absolute', bottom:-20, right:80, width:80, height:80, borderRadius:'50%', background:'rgba(255,255,255,0.04)' }}/>
 
-      <button onClick={onDismiss} style={{
+      <button aria-label="Close" onClick={onDismiss} style={{
         position:'absolute', top:12, right:12, background:'rgba(255,255,255,0.15)',
         border:'none', borderRadius:'50%', width:28, height:28, cursor:'pointer',
         display:'flex', alignItems:'center', justifyContent:'center', color:'#fff',

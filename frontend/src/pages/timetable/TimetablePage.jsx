@@ -667,7 +667,7 @@ export default function TimetablePage() {
                         </td>
                         {/* Delete */}
                         <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                          <button
+                          <button aria-label="Delete"
                             onClick={() => deletePeriodRow(idx)}
                             disabled={deletingIds.has(p.id)}
                             style={{

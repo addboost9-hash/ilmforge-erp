@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../config/prisma');
 const phoneUtil = require('../utils/phone');
+const { equals: ciEquals } = require('../utils/search');
 const { sendSMS } = require('./sms.service');
 const { sendEmail, sendWelcomeEmail, sendOTPEmail, sendSchoolReadyEmail } = require('./email.service');
 
@@ -410,8 +411,15 @@ const login = async ({ email, phone, password }) => {
   // candidate and lets the password decide which school the person belongs
   // to; a wrong-tenant row simply fails bcrypt and is skipped.
   if (!user && identifier) {
+    // Case does not matter to a person typing a roll number. Generated roll
+    // numbers are upper case, so "nura-26-016" is also tried as "NURA-26-016";
+    // on PostgreSQL the match is fully case-insensitive.
+    const roll = identifier.trim();
     const candidates = await prisma.student.findMany({
-      where: { rollNo: identifier.trim(), deletedAt: null, NOT: { userId: null } },
+      where: {
+        OR: [{ rollNo: ciEquals(roll) }, { rollNo: roll.toUpperCase() }],
+        deletedAt: null, NOT: { userId: null },
+      },
       select: { userId: true },
       take: 20,
     });
@@ -439,7 +447,22 @@ const login = async ({ email, phone, password }) => {
     throw { status: 401, message: 'Invalid credentials.' };
   }
 
-  if (!user.phoneVerifiedAt) throw { status: 403, message: 'Phone not verified. Please verify your phone number.', code: 'PHONE_UNVERIFIED', userId: user.id };
+  if (!user.phoneVerifiedAt) {
+    /* Staff added by the school are vouched for by the school, exactly as
+       students and parents are at admission. The Add Staff form never set
+       phoneVerifiedAt, so every teacher, accountant and gatekeeper it
+       created was turned away here with "Phone not verified" - and the SMS
+       code that would unlock them depends on SMS being configured.
+       A Staff record means an admin created this account, so it is
+       verified now (once), which also unlocks accounts created before this
+       fix without a data migration. Self-registered school owners have no
+       Staff record and still go through phone verification. */
+    const createdBySchool = await prisma.staff.findFirst({ where: { userId: user.id }, select: { id: true } });
+    if (!createdBySchool) {
+      throw { status: 403, message: 'Phone not verified. Please verify your phone number.', code: 'PHONE_UNVERIFIED', userId: user.id };
+    }
+    await prisma.user.update({ where: { id: user.id }, data: { phoneVerifiedAt: new Date() } });
+  }
 
   // Update last login
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });

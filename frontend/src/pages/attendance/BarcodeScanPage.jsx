@@ -99,6 +99,69 @@ export default function BarcodeScanPage() {
     return () => stopCamera();
   }, [stopCamera]);
 
+  /* ── Reading codes from the camera ─────────────────────────────────────────
+     The camera used to open and show video, but nothing ever looked at the
+     frames, so holding an ID card up to it did nothing. Now a few times a
+     second a frame is decoded: with the browser's own BarcodeDetector where
+     it exists (Chrome, Edge, Android), otherwise with jsQR, which reads the
+     QR code printed on both faces of every IlmForge ID card. */
+  const handleScanRef = useRef(null);
+  handleScanRef.current = handleScan;
+  const lastCodeRef = useRef({ code: '', at: 0 });
+
+  useEffect(() => {
+    if (!cameraOn) return undefined;
+    let stopped = false;
+    let timer = null;
+    let detector = null;
+    let jsQR = null;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    const setup = async () => {
+      try {
+        if ('BarcodeDetector' in window) {
+          const formats = await window.BarcodeDetector.getSupportedFormats();
+          const want = ['qr_code', 'code_39', 'code_128'].filter(f => formats.includes(f));
+          if (want.length) detector = new window.BarcodeDetector({ formats: want });
+        }
+      } catch { detector = null; }
+      if (!detector) jsQR = (await import('jsqr')).default;
+    };
+
+    const tick = async () => {
+      if (stopped) return;
+      const v = videoRef.current;
+      if (v && v.readyState >= 2 && v.videoWidth) {
+        let code = null;
+        try {
+          if (detector) {
+            const found = await detector.detect(v);
+            code = found[0]?.rawValue || null;
+          } else if (jsQR) {
+            canvas.width = v.videoWidth;
+            canvas.height = v.videoHeight;
+            ctx.drawImage(v, 0, 0);
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' })?.data || null;
+          }
+        } catch { code = null; }
+
+        // The same card stays in view for a second or two; count it once.
+        const now = Date.now();
+        if (code && !(code === lastCodeRef.current.code && now - lastCodeRef.current.at < 4000)) {
+          lastCodeRef.current = { code, at: now };
+          try { navigator.vibrate?.(60); } catch { /* not supported */ }
+          handleScanRef.current?.(code);
+        }
+      }
+      timer = setTimeout(tick, 250);
+    };
+
+    setup().then(tick);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [cameraOn]);
+
   // ── Load today's barcode entries from backend ─────────────────────────────
   const loadEntries = useCallback(async () => {
     setEntriesLoading(true);
@@ -149,8 +212,8 @@ export default function BarcodeScanPage() {
   }
 
   // ── Handle barcode scan ────────────────────────────────────────────────────
-  async function handleScan() {
-    const barcode = inputVal.trim();
+  async function handleScan(fromCamera) {
+    const barcode = String(fromCamera ?? inputVal).trim();
     if (!barcode) return;
 
     setScanning(true);
@@ -392,7 +455,7 @@ export default function BarcodeScanPage() {
               }}
             />
             <button
-              onClick={handleScan}
+              onClick={() => handleScan()}
               disabled={scanning || !inputVal.trim()}
               style={{
                 background: scanning ? '#FB923C' : 'linear-gradient(135deg,#F97316,#EA580C)',

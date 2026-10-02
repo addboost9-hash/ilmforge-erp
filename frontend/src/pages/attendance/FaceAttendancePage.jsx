@@ -1,5 +1,10 @@
 /**
- * IlmForge — Face Recognition Attendance (Webcam Kiosk)
+ * IlmForge — Photo Check-in (webcam kiosk)
+ *
+ * NOTE: this does not recognise faces automatically. Enrolment stores each
+ * student's photo; at the kiosk the operator taps the matching photo and the
+ * student is marked present. Automatic recognition would need a face-matching
+ * model, which is not part of IlmForge today. The UI says so plainly.
  * ═══════════════════════════════════════════════════════
  * Mode 1: ENROLL — select student → webcam photo capture → save
  * Mode 2: KIOSK  — camera on → student shows their face →
@@ -80,10 +85,10 @@ export default function FaceAttendancePage() {
       {/* Mode switch */}
       <div className="flex gap-2">
         <button onClick={() => setMode('kiosk')} className={`${btn} ${mode === 'kiosk' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/25' : 'bg-white border border-slate-200 text-slate-600'}`}>
-          <ScanFace className="w-4 h-4 inline mr-1.5" />Recognition Kiosk
+          <ScanFace className="w-4 h-4 inline mr-1.5" />Check-in Kiosk
         </button>
         <button onClick={() => setMode('enroll')} className={`${btn} ${mode === 'enroll' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/25' : 'bg-white border border-slate-200 text-slate-600'}`}>
-          <UserPlus className="w-4 h-4 inline mr-1.5" />Enroll Faces ({enrolledStudents.length})
+          <UserPlus className="w-4 h-4 inline mr-1.5" />Enrol Photos ({enrolledStudents.length})
         </button>
       </div>
 
@@ -114,7 +119,7 @@ export default function FaceAttendancePage() {
             <div className="mt-3 flex items-center gap-3 bg-white/10 rounded-xl p-2.5">
               <img src={captured} alt="captured" className="w-16 h-12 rounded-lg object-cover" />
               <span className="text-xs text-slate-300 flex-1">Photo captured — now select the student and tap Enroll</span>
-              <button onClick={() => setCaptured(null)} className="text-slate-400 hover:text-white"><RefreshCw className="w-4 h-4" /></button>
+              <button aria-label="Retake photo" onClick={() => setCaptured(null)} className="text-slate-400 hover:text-white"><RefreshCw className="w-4 h-4" /></button>
             </div>
           )}
         </div>
@@ -143,12 +148,12 @@ export default function FaceAttendancePage() {
               className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm py-3 rounded-xl disabled:opacity-40 transition">
               {enroll.isPending ? 'Saving…' : `✓ Enroll ${selStudent?.name || 'Student'}`}
             </button>
-            <p className="text-[10px] text-slate-400 mt-2">The photo and face data will be saved. face-api.js descriptors are ready as an optional plug-in.</p>
+            <p className="text-[10px] text-slate-400 mt-2">The photo is saved for the check-in kiosk.</p>
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 p-5">
             <h3 className="font-bold text-slate-800 text-sm mb-1">Enrolled Students — tap to mark</h3>
-            <p className="text-[11px] text-slate-400 mb-3">Have the student look at the camera and tap their name → attendance marks PRESENT automatically. (face-api.js models can be added for auto-match)</p>
+            <p className="text-[11px] text-slate-400 mb-3">Find the student's photo below and tap it. They are marked present. The camera is for checking the person in front of you against their photo; it does not identify students by itself.</p>
             <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto">
               {enrolledStudents.map(e => (
                 <button key={e.personId} onClick={() => recognizeMark.mutate(e.personId)}
@@ -159,7 +164,7 @@ export default function FaceAttendancePage() {
                   <div className="min-w-0"><div className="text-xs font-bold text-slate-700 truncate">{e.person.name}</div><div className="text-[10px] text-slate-400">{e.person.rollNo}</div></div>
                 </button>
               ))}
-              {!enrolledStudents.length && <p className="col-span-2 text-xs text-slate-400 text-center py-8">First enroll students using "Enroll Faces" mode</p>}
+              {!enrolledStudents.length && <p className="col-span-2 text-xs text-slate-400 text-center py-8">First enrol students using "Enrol Photos"</p>}
             </div>
           </div>
         )}

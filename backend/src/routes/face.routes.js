@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { markPresentFromDevice } = require('../services/attendanceMark.service');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // Enroll a face (photo + optional descriptor from face-api.js)
@@ -57,20 +58,16 @@ router.post('/recognize-mark', wrap(async (req, res) => {
   const punch = await prisma.biometricPunch.create({
     data: { schoolId: req.schoolId, personType, personId: pid, method: 'face', direction: 'in' }
   });
-  let attendance = null;
+  let marked = { created: false };
   if (personType === 'student') {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
     const student = await prisma.student.findUnique({ where: { id: pid } });
     if (student) {
-      const existing = await prisma.attendance.findFirst({ where: { schoolId: req.schoolId, studentId: student.id, date: { gte: today } } });
-      if (!existing) {
-        attendance = await prisma.attendance.create({
-          data: { schoolId: req.schoolId, campusId: student.campusId, studentId: student.id, classId: student.classId, date: new Date(), status: 'present', method: 'face' }
-        }).catch(() => null);
-      }
+      marked = await markPresentFromDevice({
+        schoolId: req.schoolId, student, method: 'face', markedBy: req.user?.id,
+      });
     }
   }
-  res.json({ success: true, punch: punch.id, attendanceMarked: !!attendance });
+  res.json({ success: true, punch: punch.id, attendanceMarked: marked.created });
 }));
 
 module.exports = router;

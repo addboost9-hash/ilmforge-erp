@@ -108,7 +108,7 @@ function EventModal({ event, onClose, onSaved }) {
       <div className="modal modal-lg">
         <div className="modal-header">
           <span className="modal-title">{event ? 'Edit Event' : 'Add New Event'}</span>
-          <button className="btn btn-ghost btn-sm btn-icon" onClick={onClose}><X size={16} /></button>
+          <button aria-label="Close" className="btn btn-ghost btn-sm btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
         <div className="modal-body">
           <div className="grid-2" style={{ gap: 14 }}>
@@ -515,7 +515,7 @@ function ResultsTab() {
                   <label className="form-label">Team</label>
                   <input className="form-control" value={row.teamName} onChange={(e) => updateRow(i, 'teamName', e.target.value)} placeholder="Optional" />
                 </div>
-                <button className="btn btn-danger btn-sm btn-icon" style={{ marginBottom: 1 }} onClick={() => removeRow(i)} disabled={results.length === 1}>
+                <button aria-label="Close" className="btn btn-danger btn-sm btn-icon" style={{ marginBottom: 1 }} onClick={() => removeRow(i)} disabled={results.length === 1}>
                   <X size={14} />
                 </button>
               </div>
@@ -672,9 +672,9 @@ function CalendarTab() {
       <div className="card" style={{ flex: 1, padding: 0, minWidth: 0 }}>
         {/* Month navigation */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--border-light)' }}>
-          <button className="btn btn-ghost btn-icon btn-sm" onClick={prevMonth}><ChevronLeft size={16} /></button>
+          <button aria-label="Previous" className="btn btn-ghost btn-icon btn-sm" onClick={prevMonth}><ChevronLeft size={16} /></button>
           <span style={{ fontWeight: 700, fontSize: 15 }}>{MONTHS[calMonth - 1]} {calYear}</span>
-          <button className="btn btn-ghost btn-icon btn-sm" onClick={nextMonth}><ChevronRight size={16} /></button>
+          <button aria-label="Next" className="btn btn-ghost btn-icon btn-sm" onClick={nextMonth}><ChevronRight size={16} /></button>
         </div>
 
         {isLoading ? (
@@ -761,7 +761,7 @@ function CalendarTab() {
         <div className="card" style={{ width: 280, flexShrink: 0, padding: 0 }}>
           <div style={{ background: getTypeInfo(sideEvent.type).color, padding: '14px 16px', borderRadius: '6px 6px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{sideEvent.title}</span>
-            <button className="btn btn-ghost btn-icon btn-sm" style={{ color: '#fff' }} onClick={() => setSideEvent(null)}><X size={14} /></button>
+            <button aria-label="Close" className="btn btn-ghost btn-icon btn-sm" style={{ color: '#fff' }} onClick={() => setSideEvent(null)}><X size={14} /></button>
           </div>
           <div style={{ padding: '14px 16px' }}>
             {[

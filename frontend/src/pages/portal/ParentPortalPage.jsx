@@ -1204,11 +1204,11 @@ function AttendanceTab({ attendLoading, myAttendance, dayMap, attendMonth, atten
     <div>
       <div className="card" style={{ background:'#fff', borderRadius:12, border:'1px solid #E5E7EB', padding:'16px 20px', marginBottom:12 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-          <button onClick={onPrevMonth} style={{ background:'#F1F5F9', border:'none', borderRadius:8, width:36, height:36, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <button aria-label="Previous" onClick={onPrevMonth} style={{ background:'#F1F5F9', border:'none', borderRadius:8, width:36, height:36, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <ChevronLeft size={18} color="#374151"/>
           </button>
           <div style={{ fontWeight:700, fontSize:15, color:'#1B2F6E' }}>{MONTHS[attendMonth]} {attendYear}</div>
-          <button onClick={onNextMonth} style={{ background:'#F1F5F9', border:'none', borderRadius:8, width:36, height:36, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <button aria-label="Next" onClick={onNextMonth} style={{ background:'#F1F5F9', border:'none', borderRadius:8, width:36, height:36, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <ChevronRight size={18} color="#374151"/>
           </button>
         </div>

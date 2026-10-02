@@ -105,7 +105,7 @@ export default function NoticeboardPage() {
                       {n.expiresAt ? new Date(n.expiresAt).toLocaleDateString('en-PK') : '—'}
                     </td>
                     <td>
-                      <button className="btn btn-sm btn-icon" style={{ background:'#FEF2F2', border:'1px solid #FECACA', color:'#B91C1C' }}
+                      <button aria-label="Delete" className="btn btn-sm btn-icon" style={{ background:'#FEF2F2', border:'1px solid #FECACA', color:'#B91C1C' }}
                         onClick={() => { if(confirm('Delete notice?')) del.mutate(n.id); }}>
                         <Trash2 size={12}/>
                       </button>

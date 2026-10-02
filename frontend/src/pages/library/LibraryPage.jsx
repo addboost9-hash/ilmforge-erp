@@ -313,7 +313,7 @@ function CatalogTab() {
           <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span className="modal-title">{editBook ? 'Edit Book' : 'Add New Book'}</span>
-              <button onClick={closeModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <button aria-label="Close" onClick={closeModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 <X size={18} />
               </button>
             </div>
@@ -516,7 +516,7 @@ function IssueReturnTab() {
                 {selectedMember && (
                   <div style={{ marginTop: 6, padding: '6px 10px', background: 'var(--primary-light)', borderRadius: 4, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{selectedMember.name || selectedMember.studentName}</span>
-                    <button onClick={() => { setSelectedMember(null); setMemberSearch(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--stat-red)' }}><X size={12} /></button>
+                    <button aria-label="Close" onClick={() => { setSelectedMember(null); setMemberSearch(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--stat-red)' }}><X size={12} /></button>
                   </div>
                 )}
               </div>
@@ -549,7 +549,7 @@ function IssueReturnTab() {
                 {selectedBook && (
                   <div style={{ marginTop: 6, padding: '6px 10px', background: '#d4edda', borderRadius: 4, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontWeight: 600, color: '#155724' }}>{selectedBook.title}</span>
-                    <button onClick={() => { setSelectedBook(null); setBookSearch(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--stat-red)' }}><X size={12} /></button>
+                    <button aria-label="Close" onClick={() => { setSelectedBook(null); setBookSearch(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--stat-red)' }}><X size={12} /></button>
                   </div>
                 )}
               </div>

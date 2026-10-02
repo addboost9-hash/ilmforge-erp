@@ -33,8 +33,8 @@ export default function AttendanceHub() {
         { id: 'barcode',   label: 'Barcode Scan',      hint: 'ID card scanning',        render: L(BarcodeScan) },
         { id: 'reports',   label: 'Reports',           hint: 'Monthly summaries',       render: L(AttendanceReport) },
         { id: 'awards',    label: 'Awards',            hint: '100% attendance',         render: L(AttendanceAwards) },
-        { id: 'biometric', label: 'Thumb Device',      hint: 'ZKTeco + live punches',   render: L(BiometricPage) },
-        { id: 'face',      label: 'Face Recognition',  hint: 'Webcam kiosk',            render: L(FacePage) },
+        { id: 'biometric', label: 'Thumb Device',      hint: 'Device list + punches',   render: L(BiometricPage) },
+        { id: 'face',      label: 'Photo Check-in',    hint: 'Tap the student’s photo',            render: L(FacePage) },
       ]}
     />
   );

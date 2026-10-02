@@ -177,7 +177,7 @@ export default function EmailSettingsPage() {
               <label className="form-label">SMTP Password / App Password</label>
               <div style={{ position: 'relative' }}>
                 <input className="form-input" type={showPass ? 'text' : 'password'} value={form.smtpPass} onChange={e => setForm({...form, smtpPass: e.target.value})} placeholder="••••••••••••" style={{ paddingRight: 40 }} />
-                <button type="button" onClick={() => setShowPass(s => !s)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
+                <button aria-label="Show or hide" type="button" onClick={() => setShowPass(s => !s)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
                   {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>

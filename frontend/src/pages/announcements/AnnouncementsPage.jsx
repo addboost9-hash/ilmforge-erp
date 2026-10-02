@@ -184,7 +184,7 @@ function AnnCard({ a, index=0, onDel }) {
             fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:999,
             background:'#dbeafe', color:'#0073b7',
           }}>{(AUDIENCE_LABEL[a.targetRole] || a.targetRole || 'All').toUpperCase()}</span>
-          <button className="btn btn-sm btn-icon" style={{ background:'#FEF2F2',border:'1px solid #FECACA',color:'#B91C1C' }} onClick={()=>onDel(a.id)}>
+          <button aria-label="Delete" className="btn btn-sm btn-icon" style={{ background:'#FEF2F2',border:'1px solid #FECACA',color:'#B91C1C' }} onClick={()=>onDel(a.id)}>
             <Trash2 size={12}/>
           </button>
         </div>

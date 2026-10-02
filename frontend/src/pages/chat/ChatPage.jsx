@@ -121,7 +121,7 @@ export default function ChatPage() {
         <div className={`w-full md:w-80 border-r border-slate-100 flex flex-col ${mobileThread ? 'hidden md:flex' : 'flex'}`}>
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
             <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-2"><MessageCircle className="w-4 h-4 text-teal-600" /> Messenger</h3>
-            <button onClick={() => setShowNew(true)} className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center hover:bg-teal-700 transition"><Plus className="w-4 h-4" /></button>
+            <button aria-label="Add" onClick={() => setShowNew(true)} className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center hover:bg-teal-700 transition"><Plus className="w-4 h-4" /></button>
           </div>
           <div className="flex-1 overflow-y-auto">
             {convos.length === 0 ? (
@@ -175,7 +175,7 @@ export default function ChatPage() {
           {active ? (<>
             {/* Thread header */}
             <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
-              <button onClick={() => setMobileThread(false)} className="md:hidden p-1 text-slate-500"><ChevronLeft className="w-5 h-5" /></button>
+              <button aria-label="Back" onClick={() => setMobileThread(false)} className="md:hidden p-1 text-slate-500"><ChevronLeft className="w-5 h-5" /></button>
               <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[11px] font-extrabold"
                 style={{ background: active.type === 'class_broadcast' ? '#EA580C' : (roleColor[active.otherRole] || '#0D9488') }}>
                 {active.type === 'class_broadcast' ? <Megaphone className="w-4 h-4" /> : (active.title || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
@@ -228,7 +228,7 @@ export default function ChatPage() {
                   <div className="flex items-center gap-2 bg-teal-50 border border-teal-100 rounded-xl px-3 py-2 mb-2 text-xs">
                     {attach.type.startsWith('image/') ? <ImageIcon className="w-4 h-4 text-teal-600" /> : <FileText className="w-4 h-4 text-teal-600" />}
                     <span className="font-bold text-slate-700 truncate flex-1">{attach.name}</span>
-                    <button onClick={() => setAttach(null)}><X className="w-4 h-4 text-slate-400" /></button>
+                    <button aria-label="Close" onClick={() => setAttach(null)}><X className="w-4 h-4 text-slate-400" /></button>
                   </div>
                 )}
                 <div className="flex items-end gap-2">
@@ -239,7 +239,7 @@ export default function ChatPage() {
                   <textarea value={text} onChange={e => setText(e.target.value)} rows={1} placeholder="Type a message…"
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (text || attach) send.mutate(); } }}
                     className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-teal-500 resize-none max-h-28" />
-                  <button onClick={() => send.mutate()} disabled={(!text && !attach) || send.isPending}
+                  <button aria-label="Send" onClick={() => send.mutate()} disabled={(!text && !attach) || send.isPending}
                     className="p-2.5 rounded-xl bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40 transition shadow-lg shadow-teal-600/25">
                     <Send className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
                   </button>
@@ -262,7 +262,7 @@ export default function ChatPage() {
           <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-extrabold text-slate-800 text-sm">New Conversation</h3>
-              <button onClick={() => setShowNew(false)}><X className="w-4 h-4 text-slate-400" /></button>
+              <button aria-label="Close" onClick={() => setShowNew(false)}><X className="w-4 h-4 text-slate-400" /></button>
             </div>
             {['teacher', 'admin', 'super_admin'].includes(user?.role) && classes.length > 0 && (
               <div className="p-3 border-b border-slate-100">

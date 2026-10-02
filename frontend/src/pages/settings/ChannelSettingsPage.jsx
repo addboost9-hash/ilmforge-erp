@@ -51,7 +51,7 @@ function SecretField({ label, value, onChange, placeholder }) {
       <label className="form-label">{label}</label>
       <div style={{ position: 'relative' }}>
         <input className="form-input" type={show ? 'text' : 'password'} value={value} onChange={onChange} placeholder={placeholder} style={{ paddingRight: 40 }} />
-        <button type="button" onClick={() => setShow(s => !s)}
+        <button aria-label="Show or hide" type="button" onClick={() => setShow(s => !s)}
           style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
           {show ? <EyeOff size={14} /> : <Eye size={14} />}
         </button>

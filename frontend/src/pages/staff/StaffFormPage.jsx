@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { compressPhoto } from '../../utils/photo';
 import { Save, ArrowLeft, UserPlus, Camera, Upload, X, Hash, ChevronDown, ChevronUp, User, Briefcase, Shield } from 'lucide-react';
 
 /* Preview emp code format based on designation */
@@ -82,6 +83,9 @@ export default function StaffFormPage() {
   });
   const [createAccount, setCreateAccount] = useState(true);
   const [photoPreview, setPhotoPreview] = useState(null);
+  // Only send the photo when it was changed here, so saving an edit does
+  // not re-upload the same picture every time.
+  const [photoDirty, setPhotoDirty] = useState(false);
   const [issued, setIssued] = useState(null); // access details to hand over after save
 
   // FIX: this form previously had no edit mode at all — /staff/:id/edit
@@ -113,6 +117,8 @@ export default function StaffFormPage() {
       departmentId: existingStaff.departmentId ? String(existingStaff.departmentId) : '',
       dob: existingStaff.dob ? existingStaff.dob.slice(0, 10) : '',
     });
+    setPhotoPreview(existingStaff.photoUrl || null);
+    setPhotoDirty(false);
   }, [existingStaff]);
 
   const empCodePreview = useMemo(() => previewEmpCode(form.designation), [form.designation]);
@@ -125,17 +131,19 @@ export default function StaffFormPage() {
     if (!file.type.startsWith('image/')) return toast.error('Please select an image file');
     if (file.size > 3*1024*1024) return toast.error('Photo must be less than 3MB');
     const reader = new FileReader();
-    reader.onload = ev => setPhotoPreview(ev.target.result);
+    reader.onload = ev => { setPhotoPreview(ev.target.result); setPhotoDirty(true); };
     reader.readAsDataURL(file);
   };
 
   const save = useMutation({
-    mutationFn: d => isEdit ? api.put(`/staff/${id}`, d) : api.post('/staff', d),
+    mutationFn: async d => {
+      // The photo goes on the staff record (it used to stay in this browser only).
+      const body = photoDirty
+        ? { ...d, photoUrl: photoPreview ? await compressPhoto(photoPreview) : null }
+        : d;
+      return isEdit ? api.put(`/staff/${id}`, body) : api.post('/staff', body);
+    },
     onSuccess: (r) => {
-      const staffId = isEdit ? id : r?.data?.data?.id;
-      if (photoPreview && staffId) {
-        try { localStorage.setItem(`photo_staff_${staffId}`, photoPreview); } catch {}
-      }
       qc.invalidateQueries({ queryKey: ['staff'] });
       // The API returns the portal link, login ID and one-time password.
       // These used to be discarded and the page navigated away, leaving no
@@ -203,7 +211,8 @@ export default function StaffFormPage() {
           </div>
           {photoPreview && (
             <button type="button"
-              onClick={() => setPhotoPreview(null)}
+              aria-label="Remove photo"
+              onClick={() => { setPhotoPreview(null); setPhotoDirty(true); }}
               style={{ position:'absolute', top:-6, right:-6, width:20, height:20, borderRadius:'50%', background:'#EF4444', border:'2px solid #fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
               <X size={10} color="#fff"/>
             </button>

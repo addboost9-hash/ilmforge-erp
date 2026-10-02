@@ -196,13 +196,14 @@ export function printFeeVoucher({ student, invoice, school }) {
   // undefined, so every printed fee voucher showed "undefined <year>".
   const monthLabel = invoice?.month ? `${invoice.month} ${invoice?.year || ''}` : '—';
   const dueDate = invoice?.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-PK') : '—';
-  const total = Number(invoice?.dueAmount || invoice?.totalAmount || 0);
+  // Stored in paisa; shown in rupees. This printed 325,000 for a Rs 3,250 due.
+  const total = Number(invoice?.dueAmount || invoice?.totalAmount || 0) / 100;
   const isPaid = invoice?.status === 'paid';
 
   // Build fee heads rows
   const heads = invoice?.heads || invoice?.feeHeads || [];
   const headsRows = heads.length > 0
-    ? heads.map(h => `<tr><td>${h.name || h.feeHeadName || '—'}</td><td style="text-align:right;font-weight:700">Rs. ${Number(h.amount||0).toLocaleString('en-PK')}</td></tr>`).join('')
+    ? heads.map(h => `<tr><td>${h.name || h.feeHeadName || '—'}</td><td style="text-align:right;font-weight:700">Rs. ${(Number(h.amount||0) / 100).toLocaleString('en-PK')}</td></tr>`).join('')
     : `<tr><td>Monthly Fee</td><td style="text-align:right;font-weight:700">Rs. ${total.toLocaleString('en-PK')}</td></tr>`;
 
   const copyHtml = (copyLabel) => `

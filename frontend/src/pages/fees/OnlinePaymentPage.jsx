@@ -127,7 +127,7 @@ function RecordPaymentModal({ gateway, onClose, onSaved }) {
           <div style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>
             {gateway.icon} Record {gateway.label} Payment
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={18}/></button>
+          <button aria-label="Close" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={18}/></button>
         </div>
 
         {/* Student */}
@@ -262,7 +262,7 @@ function GatewayCard({ gw, settings, onRecord }) {
         )}
 
         {/* How to pay — expandable */}
-        <button
+        <button aria-label="Show more"
           onClick={() => setExpanded(v => !v)}
           style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: gw.color, fontWeight: 600, marginBottom: expanded ? 10 : 0, padding: 0 }}>
           {expanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}

@@ -7,7 +7,8 @@
  * instead of scrolling a wall of coloured tiles.
  *
  * Structure, top to bottom:
- *   greeting + export           who you are, what day, and a board-ready print
+ *   hero band                   greeting, and what is still left to do today
+ *   quick actions               the daily jobs, chosen by the admin
  *   health ring (hero)          the one memorable element, self-explaining
  *   KPI row                     today's operational facts
  *   money                       revenue vs expense over the window
@@ -19,7 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   Printer, Users, UserCheck, Wallet, AlertTriangle, GraduationCap,
-  TrendingUp, ArrowRight,
+  TrendingUp, ArrowRight, ClipboardCheck, UserPlus,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -32,6 +33,7 @@ import { printSection } from '../../utils/print';
 import WidgetShell from '../../components/dashboard/WidgetShell';
 import HealthRing from '../../components/dashboard/HealthRing';
 import DriverBars from '../../components/dashboard/DriverBars';
+import QuickActions from '../../components/dashboard/QuickActions';
 import '../../styles/dashboard-tokens.css';
 
 /* Shortcuts. Keeps every destination the old dashboard exposed reachable in
@@ -49,12 +51,12 @@ const MODULES = [
     { label: 'Defaulters',      to: '/fees/defaulters' },
     { label: 'Expenses',        to: '/expenses' },
     { label: 'Accounts',        to: '/accounts' },
-    { label: 'Payroll',         to: '/staff/payroll' },
+    { label: 'Payroll',         to: '/payroll' },
   ]},
   { group: 'Academics', items: [
-    { label: 'Exams',           to: '/exams' },
+    { label: 'Exam Vault',      to: '/examination' },
     { label: 'Timetable',       to: '/timetable' },
-    { label: 'Results',         to: '/exams/results' },
+    { label: 'Publish results', to: '/exams/publication' },
     { label: 'ID cards',        to: '/id-cards' },
     { label: 'Certificates',    to: '/certificates' },
   ]},
@@ -68,6 +70,8 @@ const MODULES = [
 ];
 
 const greet = (name) => `Assalam-o-Alaikum, ${name || 'there'}`;
+
+const pctOf = (a, b) => (b > 0 ? Math.min(100, Math.round((a / b) * 100)) : 0);
 
 export default function AdminDashboard() {
   const { user } = useAuthStore();
@@ -99,12 +103,42 @@ export default function AdminDashboard() {
   });
 
   const KPIS = [
-    { label: 'Students',        value: k.students ?? '—',                 to: '/students',         Icon: Users },
-    { label: 'Staff',           value: k.staff ?? '—',                    to: '/staff',            Icon: GraduationCap },
-    { label: 'Collected today', value: moneyShort(k.collectedToday),      to: '/fees/collect',     Icon: Wallet },
-    { label: 'This month',      value: moneyShort(k.collectedThisMonth),  to: '/fees/collection-report', Icon: TrendingUp },
-    { label: 'Outstanding',     value: moneyShort(k.outstanding),         to: '/fees/defaulters',  Icon: AlertTriangle, warn: k.outstanding > 0 },
-    { label: 'Unpaid invoices', value: k.defaulters ?? '—',               to: '/fees/invoices',    Icon: UserCheck },
+    { label: 'Students',        value: k.students ?? '—',                 to: '/students',         Icon: Users,         tone: 'people' },
+    { label: 'Staff',           value: k.staff ?? '—',                    to: '/staff',            Icon: GraduationCap, tone: 'people' },
+    { label: 'Collected today', value: moneyShort(k.collectedToday),      to: '/hub/fees?tab=collect', Icon: Wallet,    tone: 'fee' },
+    { label: 'This month',      value: moneyShort(k.collectedThisMonth),  to: '/fees/collection-report', Icon: TrendingUp, tone: 'fee' },
+    { label: 'Outstanding',     value: moneyShort(k.outstanding),         to: '/fees/defaulters',  Icon: AlertTriangle, tone: 'fee', warn: k.outstanding > 0 },
+    { label: 'Unpaid invoices', value: k.defaulters ?? '—',               to: '/fees/invoices',    Icon: UserCheck,     tone: 'fee' },
+  ];
+
+  /* What is still left to do today. */
+  const tStu = k.today?.students || { marked: 0 };
+  const tStaff = k.today?.staff || { marked: 0 };
+  const stuLeft = Math.max(0, (k.students || 0) - tStu.marked);
+  const staffLeft = Math.max(0, (k.staff || 0) - tStaff.marked);
+  const TODAY = [
+    {
+      label: 'Student attendance',
+      value: isLoading ? '…' : `${tStu.marked} / ${k.students ?? 0}`,
+      note: isLoading ? '' : stuLeft > 0 ? `${stuLeft} not marked yet` : `${tStu.present || 0} present · ${tStu.absent || 0} absent`,
+      todo: !isLoading && stuLeft > 0,
+      pct: pctOf(tStu.marked, k.students),
+      to: '/attendance',
+    },
+    {
+      label: 'Staff attendance',
+      value: isLoading ? '…' : `${tStaff.marked} / ${k.staff ?? 0}`,
+      note: isLoading ? '' : staffLeft > 0 ? `${staffLeft} not marked yet` : `${tStaff.present || 0} present`,
+      todo: !isLoading && staffLeft > 0,
+      pct: pctOf(tStaff.marked, k.staff),
+      to: '/attendance/staff',
+    },
+    {
+      label: 'Fee collected today',
+      value: isLoading ? '…' : moneyShort(k.collectedToday),
+      note: isLoading ? '' : `${moneyShort(k.collectedThisMonth)} this month`,
+      to: '/hub/fees?tab=collect',
+    },
   ];
 
   const net = fin.net ?? 0;
@@ -112,24 +146,39 @@ export default function AdminDashboard() {
   return (
     <div className="ilm-dash" id="admin-dashboard" style={{ padding: 18 }}>
 
-      {/* ── Greeting ─────────────────────────────────────────────── */}
-      <header className="d-enter" style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
-        gap: 14, flexWrap: 'wrap', marginBottom: 16,
-      }}>
+      {/* ── Hero: greeting + today ──────────────────────────────── */}
+      <header className="d-hero d-enter" style={{ marginBottom: 14 }}>
         <div>
-          <h1 style={{ fontSize: 23 }}>{greet(user?.name?.split(' ')[0])}</h1>
-          <div className="d-panel-sub" style={{ marginTop: 3 }}>{today}</div>
+          <h1>{greet(user?.name?.split(' ')[0])}</h1>
+          <div className="d-hero-sub">{today}</div>
+          <div className="d-hero-actions d-no-print">
+            <Link className="d-btn d-btn-accent" to="/attendance"><ClipboardCheck size={15} /> Mark attendance</Link>
+            <Link className="d-btn" to="/hub/fees?tab=collect"><Wallet size={15} /> Collect fee</Link>
+            <Link className="d-btn" to="/admissions/wizard"><UserPlus size={15} /> Admission</Link>
+            <button
+              className="d-btn"
+              onClick={() => printSection(document.getElementById('admin-dashboard'), {
+                title: `Dashboard — ${new Date().toLocaleDateString('en-PK')}`,
+              })}
+            >
+              <Printer size={15} /> Export PDF
+            </button>
+          </div>
         </div>
-        <button
-          className="d-btn d-no-print"
-          onClick={() => printSection(document.getElementById('admin-dashboard'), {
-            title: `Dashboard — ${new Date().toLocaleDateString('en-PK')}`,
-          })}
-        >
-          <Printer size={14} /> Export as PDF
-        </button>
+        <div className="d-today" aria-label="Today">
+          {TODAY.map(t => (
+            <Link key={t.label} to={t.to} className="d-today-item">
+              <span className="d-today-label">{t.label}</span>
+              <span className="d-today-value">{t.value}</span>
+              {t.pct !== undefined && <span className="d-bar" aria-hidden="true"><span style={{ width: `${t.pct}%` }} /></span>}
+              <span className={`d-today-note ${t.todo ? 'is-todo' : ''}`}>{t.note}</span>
+            </Link>
+          ))}
+        </div>
       </header>
+
+      {/* ── Quick actions ────────────────────────────────────────── */}
+      <QuickActions userId={user?.id} />
 
       {/* ── Hero: health ─────────────────────────────────────────── */}
       <div className="d-enter" style={{ marginBottom: 14 }}>
@@ -147,8 +196,8 @@ export default function AdminDashboard() {
 
       {/* ── KPIs ─────────────────────────────────────────────────── */}
       <div className="d-grid" style={{ marginBottom: 14 }}>
-        {KPIS.map(({ label, value, to, Icon, warn }) => (
-          <Link key={label} to={to} className="d-panel" style={{ textDecoration: 'none', display: 'block' }}>
+        {KPIS.map(({ label, value, to, Icon, warn, tone }) => (
+          <Link key={label} to={to} className={`d-panel d-tone-${tone}`} style={{ textDecoration: 'none', display: 'block' }}>
             {isLoading ? (
               <div style={{ display: 'grid', gap: 8 }}>
                 <div className="d-skel" style={{ height: 22, width: '60%' }} />
@@ -158,7 +207,7 @@ export default function AdminDashboard() {
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div className="d-metric" style={warn ? { color: 'var(--d-loss)' } : undefined}>{value}</div>
-                  <Icon size={15} style={{ color: 'var(--d-muted)', flexShrink: 0, marginTop: 4 }} />
+                  <span className="d-kpi-icon"><Icon size={15} /></span>
                 </div>
                 <div className="d-metric-label">{label}</div>
               </>

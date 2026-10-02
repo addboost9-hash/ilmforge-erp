@@ -76,7 +76,7 @@ function HealthModal({ student, onClose }) {
               {student.class?.name}{student.section ? ` · ${student.section.name}` : ''} · Roll {student.rollNo || '—'}
             </p>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }}>
+          <button aria-label="Close" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }}>
             <X size={18} />
           </button>
         </div>

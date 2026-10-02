@@ -151,7 +151,7 @@ export default function ClassesPage() {
                               <button className="btn btn-sm btn-success" onClick={saveEdit} disabled={renameClass.isPending}>
                                 <Check size={12} /> Save
                               </button>
-                              <button className="btn btn-sm btn-outline" onClick={() => setEditing(null)}>
+                              <button aria-label="Close" className="btn btn-sm btn-outline" onClick={() => setEditing(null)}>
                                 <X size={12} />
                               </button>
                             </div>

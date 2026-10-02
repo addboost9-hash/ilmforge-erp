@@ -221,7 +221,7 @@ export default function HolidayCalendarPage() {
                     </td>
                     <td style={{ fontSize:12, color:'#6B7280', maxWidth:200 }}>{h.desc || '—'}</td>
                     <td>
-                      <button className="btn btn-sm btn-icon" style={{ background:'#FEF2F2', border:'1px solid #FECACA', color:'#B91C1C' }}
+                      <button aria-label="Delete" className="btn btn-sm btn-icon" style={{ background:'#FEF2F2', border:'1px solid #FECACA', color:'#B91C1C' }}
                         onClick={() => { if (confirm('Remove this holiday?')) deleteHoliday.mutate(h.id); }}>
                         <Trash2 size={12}/>
                       </button>

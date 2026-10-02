@@ -28,7 +28,7 @@ function DateStrip({ selected, onChange }) {
 
   return (
     <div style={{ display:'flex', gap:8, alignItems:'center', padding:'12px 0' }}>
-      <button onClick={() => { const d=new Date(selected); d.setDate(d.getDate()-1); onChange(fmtDate(d)); }} style={{ background:'none', border:'none', cursor:'pointer', color:'#64748b' }}>
+      <button aria-label="Previous" onClick={() => { const d=new Date(selected); d.setDate(d.getDate()-1); onChange(fmtDate(d)); }} style={{ background:'none', border:'none', cursor:'pointer', color:'#64748b' }}>
         <ChevronLeft size={18}/>
       </button>
       {days.map(d => {
@@ -51,7 +51,7 @@ function DateStrip({ selected, onChange }) {
           </div>
         );
       })}
-      <button onClick={() => { const d=new Date(selected); d.setDate(d.getDate()+1); onChange(fmtDate(d)); }} style={{ background:'none', border:'none', cursor:'pointer', color:'#64748b' }}>
+      <button aria-label="Next" onClick={() => { const d=new Date(selected); d.setDate(d.getDate()+1); onChange(fmtDate(d)); }} style={{ background:'none', border:'none', cursor:'pointer', color:'#64748b' }}>
         <ChevronRight size={18}/>
       </button>
     </div>
@@ -87,7 +87,7 @@ function SubjectCard({ subject, entry, color, onAdd, onDelete }) {
             <div style={{ fontSize:11, color:'#94a3b8', marginTop:4 }}>Added By: {entry.teacher?.name || entry.addedBy || 'Teacher'}</div>
             <div style={{ display:'flex', gap:6, marginTop:8 }}>
               <span style={{ fontSize:10, background:'#dcfce7', color:'#15803d', padding:'2px 8px', borderRadius:99, fontWeight:700 }}>✓ Assigned</span>
-              <button onClick={() => onDelete(entry.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'#dc2626', marginLeft:'auto' }}>
+              <button aria-label="Delete" onClick={() => onDelete(entry.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'#dc2626', marginLeft:'auto' }}>
                 <Trash2 size={13}/>
               </button>
             </div>

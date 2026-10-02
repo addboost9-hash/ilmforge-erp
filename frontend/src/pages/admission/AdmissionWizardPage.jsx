@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { validatePhone, validateCNIC, formatCNIC } from '../../utils/validation';
 import { printAdmissionForm } from './AdmissionFormPrintPage';
+import { compressPhoto } from '../../utils/photo';
 
 /* ═══════════════════════════════════════════════════════
    LIVE PHOTO CAPTURE COMPONENT
@@ -329,6 +330,13 @@ export default function AdmissionWizardPage() {
     setSubmitting(true);
     const loadingToast = toast.loading('Submitting admission...');
     try {
+      // Shrink the photo to passport size first; a camera frame or phone
+      // picture is several MB, which is far more than an ID card needs.
+      let photo = null;
+      if (form.photoBase64) {
+        try { photo = await compressPhoto(form.photoBase64); }
+        catch { photo = null; toast('The photo could not be processed, so the student was admitted without one. Add it later from their profile.'); }
+      }
       const payload = {
         // Basic
         name: form.name,
@@ -380,7 +388,7 @@ export default function AdmissionWizardPage() {
         emergencyPhone: form.emergencyPhone,
         parentEmail: form.parentEmail || null,
         parentCnic: form.parentCnic || null,
-        photoUrl: form.photoBase64 || null,
+        photoUrl: photo,
         // Fee
         createPortalAccounts: form.createPortalAccounts,
         generateFirstInvoice: form.generateFirstInvoice && !form.isFreeStudent,
@@ -494,7 +502,7 @@ export default function AdmissionWizardPage() {
                 <div className="text-[11px] font-semibold text-teal-700 uppercase tracking-wide">School Portal Link</div>
                 <div className="text-sm font-mono text-slate-700 truncate">{c.portalLink}</div>
               </div>
-              <button onClick={() => copyText(c.portalLink)} className="p-2 rounded-lg hover:bg-teal-100 text-teal-600"><Copy className="w-4 h-4" /></button>
+              <button aria-label="Copy" onClick={() => copyText(c.portalLink)} className="p-2 rounded-lg hover:bg-teal-100 text-teal-600"><Copy className="w-4 h-4" /></button>
             </div>
             <div className="bg-white border-l-4 border-teal-500 border border-slate-200 rounded-2xl p-5 mb-3 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
@@ -1185,7 +1193,7 @@ function CredRow({ label, value, onCopy, mono }) {
       <span className="text-xs text-slate-500">{label}</span>
       <div className="flex items-center gap-2">
         <code className={`text-sm ${mono ? 'font-mono bg-slate-100 px-2.5 py-1 rounded-lg font-bold text-slate-800' : 'text-slate-700'}`}>{value}</code>
-        <button onClick={() => onCopy(value)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-teal-600"><Copy className="w-3.5 h-3.5" /></button>
+        <button aria-label="Copy" onClick={() => onCopy(value)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-teal-600"><Copy className="w-3.5 h-3.5" /></button>
       </div>
     </div>
   );

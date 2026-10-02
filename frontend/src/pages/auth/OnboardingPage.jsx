@@ -751,7 +751,7 @@ export default function OnboardingPage() {
               <div style={{ background:`${primaryColor}15`, border:`1px solid ${primaryColor}30`, borderRadius:10, padding:'12px 16px', marginBottom:24, display:'flex', alignItems:'center', gap:10 }}>
                 <Globe size={16} color={primaryColor}/>
                 <span style={{ flex:1, fontSize:13, color:'#F1F5F9', fontFamily:'monospace' }}>{schoolUrl}</span>
-                <button onClick={()=>{ navigator.clipboard.writeText(schoolUrl); toast.success('URL copied!'); }}
+                <button aria-label="Copy" onClick={()=>{ navigator.clipboard.writeText(schoolUrl); toast.success('URL copied!'); }}
                   style={{ background:'none',border:'none',cursor:'pointer',color:primaryColor }}><Copy size={14}/></button>
               </div>
 

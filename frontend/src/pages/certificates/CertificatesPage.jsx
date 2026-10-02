@@ -57,6 +57,13 @@ const getCertHTML = (type, person, school, extras = {}) => {
       ${extras.isReprint ? `<span style="font-size:10px;font-weight:800;color:#B91C1C;background:#FEE2E2;padding:2px 10px;border-radius:20px;letter-spacing:1px;">DUPLICATE COPY</span>` : ''}
     </div>` : '';
 
+  /* The person's photo from their record, top right as on a printed
+     Pakistani school certificate. Only shown when one has been uploaded;
+     a certificate without one is laid out exactly as before. */
+  const photoHtml = person?.photoUrl && /^data:image\//.test(person.photoUrl)
+    ? `<img src="${person.photoUrl}" alt="" style="width:78px;height:96px;object-fit:cover;border:1px solid #CBD5E1;border-radius:3px;margin-left:auto;flex-shrink:0;"/>`
+    : '';
+
   const header = (accentColor) => `
     ${serialLine}
     <div style="display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:3px solid ${accentColor};margin-bottom:18px;">
@@ -65,6 +72,7 @@ const getCertHTML = (type, person, school, extras = {}) => {
         <h1 style="font-size:20px;font-weight:900;color:#111827;margin:0 0 3px;">${sName}</h1>
         ${addr ? `<p style="margin:0;color:#6B7280;font-size:11px;">${addr}${phone ? ' · ' + phone : ''}</p>` : ''}
       </div>
+      ${photoHtml}
     </div>`;
 
   const sig = `
@@ -683,7 +691,7 @@ export default function CertificatesPage() {
                   onChange={e => { setSearch(e.target.value); setSelected(null); }}
                 />
                 {search && (
-                  <button
+                  <button aria-label="Close"
                     onClick={() => setSearch('')}
                     style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', color:'#9CA3AF' }}>
                     <X size={13}/>

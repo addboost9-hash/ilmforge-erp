@@ -165,7 +165,7 @@ import LicenseRenewalPage      from './pages/settings/LicenseRenewalPage';
 import AdmissionCRMPage        from './pages/crm/AdmissionCRMPage';
 import GatePassPage            from './pages/gatepass/GatePassPage';
 import SOPsPage                from './pages/sops/SOPsPage';
-import BulkImportPage          from './pages/students/BulkImportPage';
+import RecordsImportExportPage from './pages/students/RecordsImportExportPage';
 import RoboBuddyPage           from './pages/robobuddy/RoboBuddyPage';
 import FeeInvoicesManagePage   from './pages/fees/FeeInvoicesManagePage';
 
@@ -175,6 +175,7 @@ import LessonPlanPage           from './pages/academics/LessonPlanPage';
 import SchemeOfStudiesPage      from './pages/academics/SchemeOfStudiesPage';
 import AcademicCalendarNewPage  from './pages/academics/AcademicCalendarPage';
 import PayrollPage              from './pages/staff/PayrollPage';
+import FeeCollectionReportPage  from './pages/fees/FeeCollectionReportPage';
 // v3.8 new modules
 import WorksheetGeneratorPage   from './pages/academics/WorksheetGeneratorPage';
 import MCQGeneratorPage         from './pages/exams/MCQGeneratorPage';
@@ -603,9 +604,11 @@ export default function App() {
             <Route path="/admissions/crm"             element={<AdmissionCRMPage />} />
             <Route path="/gate-passes"                element={<GatePassPage />} />
             <Route path="/sops"                       element={<SOPsPage />} />
-            <Route path="/students/bulk-import"       element={<BulkImportPage />} />
+            <Route path="/students/bulk-import"       element={<RecordsImportExportPage />} />
+            <Route path="/settings/import-export"     element={<RecordsImportExportPage />} />
             <Route path="/robobuddy"                  element={<RoboBuddyPage />} />
             <Route path="/fees/invoices"              element={<FeeInvoicesManagePage />} />
+            <Route path="/fees/collection-report"     element={<FeeCollectionReportPage />} />
             {/* FeeManagementPage duplicated FeeStructurePage/FeeDefaultersPage/
                 FeeCollectionReportPage and most of its tabs called nonexistent
                 backend endpoints (/fees/challans-summary, /fees/challans/generate,

@@ -44,6 +44,11 @@ app.use(cors({
     cb(new Error('CORS: origin not allowed'));
   },
   credentials: true,
+  // The frontend runs on another origin (Vercel vs Render), and browsers hide
+  // Content-Disposition from cross-origin scripts unless it is exposed - so
+  // every download fell back to a generic filename instead of e.g.
+  // "demo-school-records-2026-10-02.xlsx".
+  exposedHeaders: ['Content-Disposition'],
 }));
 
 // ─── Compression ──────────────────────────────────────────────────────────────

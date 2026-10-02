@@ -401,7 +401,7 @@ export default function SubjectsPage() {
                 <Trash2 size={20} />
                 Delete Subject
               </h3>
-              <button
+              <button aria-label="Close"
                 className="btn"
                 style={{ padding: '0.25rem 0.5rem' }}
                 onClick={() => setDeleteConfirm(null)}

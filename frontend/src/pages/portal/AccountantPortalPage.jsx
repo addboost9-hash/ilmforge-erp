@@ -45,7 +45,9 @@ const NAVY = '#1B2F6E';
 const CYAN = '#00c0ef';
 
 /* ─── helpers ──────────────────────────────────────────────────────────── */
-const Rs = (v) => `Rs. ${Number(v || 0).toLocaleString('en-PK')}`;
+// Every amount on this portal (fees, expenses, salaries) is stored in paisa.
+// It was printed straight out, so dues and totals read 100 times too large.
+const Rs = (v) => `Rs. ${(Number(v || 0) / 100).toLocaleString('en-PK')}`;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d) =>
   new Date(d).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -855,7 +857,7 @@ function FeeCollectionTab({ user }) {
   const { data: invoices = [], isLoading: loadingInvoices } = useQuery({
     queryKey: ['student-invoices', selectedStudent?.id],
     queryFn: () =>
-      api.get('/fees/invoices', { params: { student: selectedStudent.id, limit: 50 } }).then((r) => r.data.data || []),
+      api.get('/fees/invoices', { params: { studentId: selectedStudent.id, limit: 50 } }).then((r) => r.data.data || []),
     enabled: !!selectedStudent?.id,
     staleTime: 30_000,
     retry: false,
@@ -867,10 +869,15 @@ function FeeCollectionTab({ user }) {
     // ... } (see fee.routes.js). Every "Confirm Payment" click here 404'd,
     // making the Accountant Portal's core "Collect Fee" feature a dead end.
     mutationFn: ({ invoiceId, amount, note }) => {
-      const numAmount = Number(amount);
-      if (!numAmount || numAmount <= 0) throw new Error('Enter a valid payment amount');
-      if (numAmount > 1000000) throw new Error('Amount seems too high — please verify');
-      return api.post('/fees/payments', { invoiceId, amountPaid: numAmount, method: 'cash' });
+      // `amount` is what the accountant typed, in rupees; `amountPaisa` is the
+      // full due when they left the box empty. The typed figure used to be
+      // sent as paisa, so a Rs 3,500 payment was recorded as Rs 35.
+      const paisa = amount.paisa != null
+        ? amount.paisa
+        : Math.round(Number(amount.rupees) * 100);
+      if (!paisa || paisa <= 0) throw new Error('Enter a valid payment amount');
+      if (paisa > 1000000 * 100) throw new Error('Amount seems too high — please verify');
+      return api.post('/fees/payments', { invoiceId, amountPaid: paisa, method: 'cash' });
     },
     onSuccess: (res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['student-invoices', selectedStudent?.id] });
@@ -879,7 +886,20 @@ function FeeCollectionTab({ user }) {
       // Auto-print receipt
       const inv = invoices.find(i => i.id === vars.invoiceId);
       if (inv && selectedStudent) {
-        printFeeVoucher({ student: selectedStudent, invoice: { ...inv, status: 'paid', dueAmount: 0 }, school: { name: 'IlmForge School' } });
+        // The receipt states what is actually left to pay. It used to say
+        // "paid, nothing due" even after a part payment, and named the
+        // school "IlmForge School".
+        const result = res?.data?.data || {};
+        const { school: authSchool } = useAuthStore.getState();
+        printFeeVoucher({
+          student: selectedStudent,
+          invoice: {
+            ...inv,
+            status: result.newStatus || inv.status,
+            dueAmount: result.newDue != null ? result.newDue : inv.dueAmount,
+          },
+          school: { name: authSchool?.name || localStorage.getItem('registeredSchoolName') || 'School' },
+        });
       }
       setPayAmount('');
       setPayNote('');
@@ -935,7 +955,7 @@ function FeeCollectionTab({ user }) {
               <div style={{ fontWeight: 800, fontSize: 15, color: NAVY }}>{selectedStudent.name}</div>
               <div style={{ fontSize: 12, color: '#64748B' }}>Roll {selectedStudent.rollNo} · {selectedStudent.class?.name}</div>
             </div>
-            <button
+            <button aria-label="Close"
               onClick={() => { setSelectedStudent(null); setSearch(''); setPayingId(null); }}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
             >
@@ -979,7 +999,7 @@ function FeeCollectionTab({ user }) {
                           type="number"
                           value={payAmount}
                           onChange={(e) => setPayAmount(e.target.value)}
-                          placeholder={String(inv.dueAmount || '')}
+                          placeholder={String((inv.dueAmount || 0) / 100)}
                           style={{ width: '100%', border: '1px solid #CBD5E1', borderRadius: 7, padding: '7px 10px', fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }}
                         />
                       </div>
@@ -993,7 +1013,11 @@ function FeeCollectionTab({ user }) {
                         />
                       </div>
                       <button
-                        onClick={() => payMutation.mutate({ invoiceId: inv.id, amount: payAmount || inv.dueAmount, note: payNote })}
+                        onClick={() => payMutation.mutate({
+                          invoiceId: inv.id,
+                          amount: payAmount ? { rupees: payAmount } : { paisa: inv.dueAmount },
+                          note: payNote,
+                        })}
                         disabled={payMutation.isPending}
                         style={{ background: payMutation.isPending ? '#94A3B8' : '#059669', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 16px', fontWeight: 700, fontSize: 13, cursor: payMutation.isPending ? 'not-allowed' : 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
                       >
@@ -1035,7 +1059,8 @@ function ExpenseLogTab({ user }) {
 
   const addMutation = useMutation({
     mutationFn: () =>
-      api.post('/expenses', { category, amount: Number(amount), description, date }),
+      // Rupees typed -> paisa stored, as the main Expenses page does.
+      api.post('/expenses', { category, amount: Math.round(Number(amount) * 100), description, date }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses-today'] });
       queryClient.invalidateQueries({ queryKey: ['bs-expenses'] });
@@ -1264,12 +1289,12 @@ function PaymentHistoryTab({ user }) {
 
             {totalPages > 1 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-                <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+                <button aria-label="Previous" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
                   style={{ background: 'none', border: '1px solid #CBD5E1', borderRadius: 6, padding: '5px 8px', cursor: page === 0 ? 'not-allowed' : 'pointer', color: page === 0 ? '#CBD5E1' : '#475569' }}>
                   <ChevronLeft size={14} />
                 </button>
                 <span style={{ fontSize: 12, color: '#64748B' }}>Page {page + 1} of {totalPages}</span>
-                <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
+                <button aria-label="Next" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
                   style={{ background: 'none', border: '1px solid #CBD5E1', borderRadius: 6, padding: '5px 8px', cursor: page === totalPages - 1 ? 'not-allowed' : 'pointer', color: page === totalPages - 1 ? '#CBD5E1' : '#475569' }}>
                   <ChevronRight size={14} />
                 </button>

@@ -48,7 +48,7 @@ export default function ProfilePage() {
               <div style={{ width:88, height:88, borderRadius:'50%', background:'linear-gradient(135deg,#0D9488,#0F766E)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto', color:'#fff', fontWeight:800, fontSize:32, border:'3px solid #CCFBF1' }}>
                 {user?.name?.charAt(0)||'A'}
               </div>
-              <button style={{ position:'absolute', bottom:0, right:0, width:28, height:28, borderRadius:'50%', background:'#1E3A5F', border:'2px solid #fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <button aria-label="Change photo" style={{ position:'absolute', bottom:0, right:0, width:28, height:28, borderRadius:'50%', background:'#1E3A5F', border:'2px solid #fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
                 <Camera size={13} color="#fff"/>
               </button>
             </div>
@@ -120,7 +120,7 @@ export default function ProfilePage() {
                     <input className="form-input" type={showPw[f.field]?'text':'password'} placeholder="••••••••"
                       value={pwForm[f.key]} onChange={e=>setPwForm({...pwForm,[f.key]:e.target.value})}
                       style={{ paddingRight:40 }}/>
-                    <button type="button" onClick={()=>setShowPw(s=>({...s,[f.field]:!s[f.field]}))}
+                    <button aria-label="Show or hide" type="button" onClick={()=>setShowPw(s=>({...s,[f.field]:!s[f.field]}))}
                       style={{ position:'absolute', right:10, top:30, background:'none', border:'none', cursor:'pointer', color:'#94A3B8' }}>
                       {showPw[f.field] ? <EyeOff size={15}/> : <Eye size={15}/>}
                     </button>

@@ -16,7 +16,8 @@ import { Plus, Pencil, Trash2, Printer, Search, X, Receipt } from 'lucide-react'
 const esc = (s) => String(s ?? '—').replace(/</g, '&lt;');
 export function printHeadsVoucher({ student, school, heads, month, year, dueDate, voucherNo, title = 'FEE VOUCHER' }) {
   const color = school?.themeColor || '#0D9488';
-  const total = heads.reduce((a, h) => a + (parseInt(h.amount) || 0), 0);
+  // Head amounts are stored in paisa.
+  const total = heads.reduce((a, h) => a + (parseInt(h.amount) || 0), 0) / 100;
   const copies = ['BANK COPY', 'SCHOOL COPY', 'PARENT COPY'];
   const block = (label) => `
     <div class="v">
@@ -28,7 +29,7 @@ export function printHeadsVoucher({ student, school, heads, month, year, dueDate
       <div class="st"><div><span>Student</span><b>${esc(student?.name)}</b></div><div><span>Roll</span><b>${esc(student?.rollNo)}</b></div>
         <div><span>Class</span><b>${esc(student?.class?.name || student?.className)}</b></div><div><span>Father</span><b>${esc(student?.fatherName)}</b></div></div>
       <table><thead><tr><th>Fee Head</th><th style="text-align:right">Rs</th></tr></thead>
-        <tbody>${heads.map(h => `<tr><td>${esc(h.name)}</td><td style="text-align:right">${Number(h.amount).toLocaleString()}</td></tr>`).join('')}</tbody>
+        <tbody>${heads.map(h => `<tr><td>${esc(h.name)}</td><td style="text-align:right">${(Number(h.amount) / 100).toLocaleString('en-PK')}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td>TOTAL PAYABLE</td><td style="text-align:right">Rs ${total.toLocaleString()}</td></tr></tfoot></table>
       <div class="sig"><div>Depositor</div><div>Cashier / Bank</div></div>
     </div>`;
@@ -91,7 +92,12 @@ export default function FeeInvoicesManagePage() {
   });
 
   const insertInv = useMutation({
-    mutationFn: () => api.post('/fees/invoices', { studentId: selStudent.id, heads: heads.filter(h => h.name && h.amount) }),
+    // Amounts are typed in rupees and stored in paisa, like every other
+    // money form. They were sent as typed, so a Rs 5,000 invoice became Rs 50.
+    mutationFn: () => api.post('/fees/invoices', {
+      studentId: selStudent.id,
+      heads: heads.filter(h => h.name && h.amount).map(h => ({ name: h.name, amount: toPaisa(h.amount) })),
+    }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['fee-invoices-manage'] }); setModal(null); setSelStudent(null); setHeads([{ name: 'Monthly Tuition Fee', amount: '' }]); },
   });
   const updateInv = useMutation({
@@ -169,7 +175,7 @@ export default function FeeInvoicesManagePage() {
           <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-extrabold text-slate-800 text-sm">{modal.mode === 'insert' ? '➕ New Invoice (custom heads)' : `✏️ Edit Invoice #${modal.inv.id}`}</h3>
-              <button onClick={() => setModal(null)}><X className="w-4 h-4 text-slate-400" /></button>
+              <button aria-label="Close" onClick={() => setModal(null)}><X className="w-4 h-4 text-slate-400" /></button>
             </div>
 
             {modal.mode === 'insert' ? (<>
@@ -192,7 +198,7 @@ export default function FeeInvoicesManagePage() {
                 <div key={i} className="flex gap-2 mb-2">
                   <input className={input} placeholder="Head name" value={h.name} onChange={e => setHeads(hs => hs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
                   <input className={input + ' w-32'} type="number" placeholder="Rs" value={h.amount} onChange={e => setHeads(hs => hs.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))} />
-                  <button onClick={() => setHeads(hs => hs.filter((_, j) => j !== i))} className="text-slate-300 hover:text-red-500"><X className="w-4 h-4" /></button>
+                  <button aria-label="Close" onClick={() => setHeads(hs => hs.filter((_, j) => j !== i))} className="text-slate-300 hover:text-red-500"><X className="w-4 h-4" /></button>
                 </div>
               ))}
               <button onClick={() => setHeads(hs => [...hs, { name: '', amount: '' }])} className="text-xs font-bold text-teal-600 mb-3">+ Add head</button>

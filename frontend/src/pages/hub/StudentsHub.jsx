@@ -19,7 +19,7 @@ const AdmissionWizardPage = lazy(() => import('../admission/AdmissionWizardPage'
 const AdmissionInquiries  = lazy(() => import('../admission/AdmissionInquiriesPage'));
 const BirthdaysPage       = lazy(() => import('../students/BirthdaysPage'));
 const IDCardsPage         = lazy(() => import('../idcards/IDCardsPage'));
-const BulkImportPage      = lazy(() => import('../students/BulkImportPage'));
+const BulkImportPage      = lazy(() => import('../students/RecordsImportExportPage'));
 const AnalyticsPage       = lazy(() => import('../analytics/StudentAnalyticsPage'));
 const AdmissionCRMPage    = lazy(() => import('../crm/AdmissionCRMPage'));
 const AlumniPage          = lazy(() => import('../students/AlumniPage'));
@@ -49,7 +49,7 @@ const TABS = [
   { id:'idcards',    label:'ID Cards',        icon:CreditCard,    color:'#0891b2', render:L(IDCardsPage),         desc:'Print student ID cards' },
   { id:'birthdays',  label:'Birthdays',       icon:Gift,          color:'#db2777', render:L(BirthdaysPage),       desc:'Today\'s student birthdays' },
   { id:'attendance', label:'Att. Calendar',   icon:Calendar,      color:'#dc2626', render:L(AttCalendar),         desc:'Annual P/A/H calendar' },
-  { id:'bulk',       label:'Bulk Import',     icon:Upload,        color:'#64748b', render:L(BulkImportPage),      desc:'Import from Excel/CSV' },
+  { id:'bulk',       label:'Import & Export', icon:Upload,        color:'#64748b', render:L(BulkImportPage),      desc:'Students and staff from Excel' },
   { id:'analytics',  label:'Analytics',       icon:BarChart2,     color:'#0073b7', render:L(AnalyticsPage),       desc:'Performance trends & charts' },
   { id:'reports',    label:'Info Reports',    icon:FileText,      color:'#374151', render:L(StudentInfoRep),      desc:'Printable student lists' },
   { id:'form',       label:'Adm. Form',       icon:Printer,       color:'#7c3aed', render:L(AdmFormPrint),        desc:'Print blank/filled forms' },
@@ -111,7 +111,7 @@ export default function StudentsHub() {
             </button>
             <button onClick={() => setActiveId('bulk')}
               style={{ background:'rgba(255,255,255,0.15)', color:'white', border:'1px solid rgba(255,255,255,0.3)', padding:'8px 14px', borderRadius:9, fontWeight:600, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
-              <Upload size={14}/> Bulk Import
+              <Upload size={14}/> Import &amp; Export
             </button>
           </div>
         </div>

@@ -230,7 +230,7 @@ export default function BiometricSettingsPage() {
               <div style={{ display:'flex', gap:8 }}>
                 <span style={{ color:'#94A3B8', width:90, flexShrink:0 }}>Server URL:</span>
                 <span style={{ fontFamily:'monospace', fontWeight:700, wordBreak:'break-all' }}>{hostUrl}</span>
-                <button style={{ background:'none',border:'none',cursor:'pointer',color:'#0D9488',padding:0,flexShrink:0 }}
+                <button aria-label="Copy" style={{ background:'none',border:'none',cursor:'pointer',color:'#0D9488',padding:0,flexShrink:0 }}
                   onClick={()=>copy(hostUrl,'Server URL')}><Copy size={10}/></button>
               </div>
               <div style={{ display:'flex', gap:8 }}>
@@ -240,7 +240,7 @@ export default function BiometricSettingsPage() {
               <div style={{ display:'flex', gap:8 }}>
                 <span style={{ color:'#94A3B8', width:90, flexShrink:0 }}>Bio Token:</span>
                 <span style={{ fontFamily:'monospace', fontSize:10.5, wordBreak:'break-all' }}>{token.slice(0,16)}…</span>
-                <button style={{ background:'none',border:'none',cursor:'pointer',color:'#0D9488',padding:0,flexShrink:0 }}
+                <button aria-label="Copy" style={{ background:'none',border:'none',cursor:'pointer',color:'#0D9488',padding:0,flexShrink:0 }}
                   onClick={()=>copy(token,'Token')}><Copy size={10}/></button>
               </div>
             </div>

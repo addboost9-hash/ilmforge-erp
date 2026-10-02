@@ -57,7 +57,7 @@ export default function RegistrationSuccessModal({ onboarding, onClose, onGoToLo
       <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-y-auto">
         {/* Header */}
         <div className="relative bg-gradient-to-br from-teal-600 to-teal-700 rounded-t-3xl px-6 pt-8 pb-6 text-center">
-          <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white transition"><X className="w-4 h-4" /></button>
+          <button aria-label="Close" onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white transition"><X className="w-4 h-4" /></button>
           {schoolLogo ? (
             <img src={schoolLogo} alt={onboarding.schoolName} className="w-16 h-16 object-cover rounded-2xl mx-auto mb-3 ring-4 ring-white/10 border-2 border-white/35" />
           ) : (

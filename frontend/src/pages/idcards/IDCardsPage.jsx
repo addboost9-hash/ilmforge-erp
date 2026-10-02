@@ -6,9 +6,10 @@
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { compressPhoto } from '../../utils/photo';
 import { TEMPLATES, templateById, DEFAULT_RULES } from './cardTemplates';
 import {
   CreditCard, Users, Award, Printer, Search, Settings,
@@ -256,6 +257,8 @@ export default function IDCardsPage() {
   const [template, setTemplate] = useState('portrait');
   const [selected, setSelected] = useState([]);
   const [photoMap, setPhotoMap] = useState({});
+  const [localIds, setLocalIds] = useState([]); // ids whose photo came from this browser only
+  const qc = useQueryClient();
   const [preview,  setPreview]  = useState(null);
 
   const fileRefs = useRef({});
@@ -285,6 +288,7 @@ export default function IDCardsPage() {
     if (Object.keys(loaded).length > 0) {
       setPhotoMap(prev => ({ ...loaded, ...prev })); // prev (manually uploaded) takes priority
     }
+    setLocalIds(Object.keys(loaded).map(Number));
   }, [raw, type]);
 
   /* working search */
@@ -305,12 +309,40 @@ export default function IDCardsPage() {
   const toggleOne = id => setSelected(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
   const toggleAll = () => setSelected(allChecked?[]:people.map(p=>p.id));
 
-  const uploadPhoto = useCallback((id, file) => {
+  /* The camera button on a row saves the photo to the person's record, so
+     it appears on certificates and every later print, not just this one.
+     It used to live only in this page's memory and this browser. */
+  const uploadPhoto = useCallback(async (id, file) => {
     if (!file) return;
-    const r = new FileReader();
-    r.onload = ev => setPhotoMap(m=>({...m,[id]:ev.target.result}));
-    r.readAsDataURL(file);
-  }, []);
+    try {
+      const small = await compressPhoto(file);
+      setPhotoMap(m => ({ ...m, [id]: small }));
+      await api.put(`/${type === 'student' ? 'students' : 'staff'}/${id}`, { photoUrl: small });
+      toast.success('Photo saved to the record');
+      qc.invalidateQueries({ queryKey: [type] });
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'The photo could not be saved.');
+    }
+  }, [type, qc]);
+
+  /* Photos saved by older versions live only in this browser. Offer to move
+     them onto the records so every device and document can use them. */
+  const localOnly = (raw || []).filter(p => !p.photoUrl && photoMap[p.id] && localIds.includes(p.id));
+  const [rescuing, setRescuing] = useState(false);
+  const rescueLocalPhotos = async () => {
+    setRescuing(true);
+    let saved = 0;
+    for (const p of localOnly) {
+      try {
+        const small = await compressPhoto(photoMap[p.id]);
+        await api.put(`/${type === 'student' ? 'students' : 'staff'}/${p.id}`, { photoUrl: small }, { silent: true });
+        saved++;
+      } catch { /* leave it local; the count below says how many moved */ }
+    }
+    setRescuing(false);
+    qc.invalidateQueries({ queryKey: [type] });
+    toast.success(`${saved} of ${localOnly.length} photos saved to the records`);
+  };
 
   const opts = {
     primary, secondary,
@@ -482,7 +514,7 @@ export default function IDCardsPage() {
               <Eye size={13} color={primary}/>
               <span style={{ fontSize:12.5, fontWeight:700, color:'#374151' }}>Live Preview</span>
               {preview && (
-                <button onClick={()=>setPreview(null)} style={{ marginLeft:'auto', background:'none', border:'none', cursor:'pointer', color:'#9CA3AF' }}>
+                <button aria-label="Retake photo" onClick={()=>setPreview(null)} style={{ marginLeft:'auto', background:'none', border:'none', cursor:'pointer', color:'#9CA3AF' }}>
                   <RotateCcw size={12}/>
                 </button>
               )}
@@ -516,6 +548,18 @@ export default function IDCardsPage() {
 
         {/* ═══ RIGHT PEOPLE LIST ═══ */}
         <div>
+          {localOnly.length > 0 && (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap',
+                          background:'#F2A33A22', borderRadius:8, padding:'10px 12px', marginBottom:10, fontSize:13 }}>
+              <span>
+                <strong>{localOnly.length} {localOnly.length === 1 ? 'photo is' : 'photos are'} saved only on this computer.</strong>{' '}
+                Save them to the records so they appear on certificates and on other devices.
+              </span>
+              <button className="btn btn-primary btn-sm" onClick={rescueLocalPhotos} disabled={rescuing}>
+                {rescuing ? 'Saving…' : 'Save to records'}
+              </button>
+            </div>
+          )}
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
             {/* Search */}
             <div style={{ position:'relative', flex:1 }}>
@@ -523,7 +567,7 @@ export default function IDCardsPage() {
               <input className="form-input" style={{ paddingLeft:30 }}
                 placeholder={`Search ${type==='staff'?'staff':'student'} — name, roll no, father, class...`}
                 value={search} onChange={e=>{ setSearch(e.target.value); setSelected([]); }}/>
-              {search && <button onClick={()=>setSearch('')} style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', color:'#9CA3AF' }}><X size={13}/></button>}
+              {search && <button aria-label="Clear search" onClick={()=>setSearch('')} style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', color:'#9CA3AF' }}><X size={13}/></button>}
             </div>
             <button className="btn btn-outline btn-sm" onClick={toggleAll}>
               {allChecked?<><X size={12}/> Deselect All</>:<><CheckSquare size={12}/> Select All</>}

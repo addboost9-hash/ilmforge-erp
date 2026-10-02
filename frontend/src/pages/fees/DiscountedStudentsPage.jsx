@@ -210,7 +210,7 @@ export default function DiscountedStudentsPage() {
                   <div style={{ fontSize:12, color:'#64748B', marginTop:1 }}>Search student and apply fee discount</div>
                 </div>
               </div>
-              <button onClick={() => setShowModal(false)} style={{ background:'none', border:'none', cursor:'pointer', color:'#9CA3AF' }}>
+              <button aria-label="Close" onClick={() => setShowModal(false)} style={{ background:'none', border:'none', cursor:'pointer', color:'#9CA3AF' }}>
                 <X size={18} />
               </button>
             </div>
@@ -257,7 +257,7 @@ export default function DiscountedStudentsPage() {
                       {selectedStudent.rollNo && <span style={{ color:'#64748B', marginLeft:6 }}>· {selectedStudent.rollNo}</span>}
                       {selectedStudent.class?.name && <span style={{ color:'#64748B', marginLeft:6 }}>· {selectedStudent.class.name}</span>}
                     </div>
-                    <button
+                    <button aria-label="Close"
                       onClick={() => { setSelectedStudent(null); setStudentSearch(''); }}
                       style={{ background:'none', border:'none', cursor:'pointer', color:'#9CA3AF' }}
                     >

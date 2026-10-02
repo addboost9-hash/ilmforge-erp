@@ -242,7 +242,7 @@ export default function AttendanceExcelPage() {
                     {parsed.rows.length} rows — {validRows.length} valid, {errorRows.length} with errors
                   </div>
                 </div>
-                <button onClick={clearUpload} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
+                <button aria-label="Close" onClick={clearUpload} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
                   <X size={16} />
                 </button>
               </div>

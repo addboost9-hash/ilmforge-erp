@@ -19,6 +19,9 @@ export default defineConfig({
       workbox: {
         // Pre-cache the app shell
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // A link to a downloadable file (the Excel import template, a PDF)
+        // must reach the file, not be answered with the app shell.
+        navigateFallbackDenylist: [/^\/api\//, /\.[a-z0-9]{2,5}$/i],
         // Skip waiting & claim clients immediately
         skipWaiting: true,
         clientsClaim: true,

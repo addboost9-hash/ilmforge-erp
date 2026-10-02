@@ -172,6 +172,66 @@ On the success screen:
 **Admissions → Admission Form Print** → choose **Blank Form** → **Print Blank Form**.
 Useful for walk-in enquiries and for keeping printed forms at the front desk.
 
+### Adding many students and staff from Excel
+
+**Sidebar → Import & Export** (`/settings/import-export`)
+
+1. Click **Download template**. You get an Excel workbook with three sheets: **Classes**,
+   **Students** and **Staff**. Your existing classes are already filled in.
+2. Fill in the **Students** and **Staff** sheets, one person per row. Columns marked * are
+   required. Leave **Roll No** and **Employee Code** blank and IlmForge creates them.
+3. Click **Choose Excel file** and pick the filled workbook.
+4. Read **Check before importing**. It lists every problem by sheet, row and column, for
+   example *Class "Class 404" does not exist*. Nothing is saved yet.
+5. Click **Import [n] records**. A progress bar shows the import as it runs.
+6. Click **Download login details** straight away. It lists every new username and password.
+
+> Dates are day first: **14/03/2014** is 14 March. Type phones as **03001234567**.
+> Brothers and sisters with the same parent phone share one parent account.
+> Importing the same file twice is safe; anyone already in the school is skipped.
+
+**Where to get the template**
+
+| From | How |
+|---|---|
+| Inside IlmForge (best: your classes are pre-filled) | **Import & Export → Download template** |
+| The in-app manual | **Sidebar → User Manual → Import, Export & Photos → Download template** |
+| Without signing in | https://ilmforge-erp.vercel.app/IlmForge-Import-Template.xlsx (blank; type your class names) |
+
+**What goes in each column** (* = required)
+
+| Sheet | Columns |
+|---|---|
+| Classes | Class\*, Sections (e.g. `A, B`), Order |
+| Students | Roll No (leave blank), Student Name\*, Father Name\*, Gender, Date of Birth, B-Form No, Class\*, Section, Parent Phone, Parent Email, Mother Name, Address, Religion, Blood Group, Admission Date, Status |
+| Staff | Employee Code (leave blank), Name\*, Designation, Role, Phone or Email\*, CNIC, Gender, Date of Birth, Department, Joining Date, Monthly Salary (Rs), Salary Type |
+
+Each sheet's first row is a grey **Example** row; leave it or delete it, it is never imported.
+The class typed for a student must exist on the Classes sheet or already be in IlmForge.
+
+### Adding or changing a photo
+
+Open the student's profile (**Student Registry** › click the student) and click
+**Add photo** (or **Change photo**). Pick a picture from the computer or phone.
+
+The photo is saved once, on the student's record, and appears everywhere automatically:
+ID card, leaving, character and bonafide certificates, the admission form, result cards
+and the student and parent portals. Large phone photos are shrunk automatically.
+
+For staff, add the photo in **Staff Directory** › edit the person, or with the small
+camera button on their row in **ID Cards**.
+
+> If a profile shows **"This photo is only on this computer"**, the photo was taken with
+> an older version of IlmForge and never reached the record. Click that button once to
+> save it properly.
+
+### Moving a school to another server
+
+On the old server, open **Import & Export** and click **Export records**. On the new server,
+import that same file. Classes, sections, students, parents and staff move across, with their
+roll numbers and employee codes. Fee history, attendance and exam marks are not included, and
+everyone gets a new password in the login details sheet.
+
 ### Finding and managing students
 
 **Sidebar → Student Registry** (`/students`) — search by name, roll number or father name.
@@ -206,13 +266,74 @@ classes still need doing today.
 
 The school may use any of these instead of marking by hand:
 
-| Method | Where |
-|---|---|
-| Biometric device | `/attendance/biometric-attendance` |
-| Face recognition | `/attendance/face-attendance` |
-| Barcode / ID card scan | `/attendance/barcode` |
-| Excel import | `/attendance/excel` |
-| Period-wise (per subject) | `/attendance/period` |
+| Method | Where | Status |
+|---|---|---|
+| ID card scan (QR / barcode) | `/attendance/barcode` | Works: handheld scanner or camera |
+| Photo check-in | `/attendance/face-attendance` | Works, but a person taps the photo; it does not recognise faces |
+| Fingerprint device | `/attendance/biometric-attendance` | Screen works; a physical machine cannot send punches in yet |
+| Spreadsheet import (CSV) | `/attendance/excel` | Works: columns `date` (YYYY-MM-DD), `rollNo`, `status` |
+| Period-wise (per subject) | `/attendance/period` | Works |
+
+Whatever the method, a student gets **one** attendance record per day. A scan or punch
+marks a student present only if nobody has marked them yet, so it never overwrites a
+teacher's "Leave" or "Absent".
+
+### Setting up ID card scanning at the gate
+
+Every student ID card printed from **ID Cards** carries a QR code and a barcode of the
+student's **roll number**. Scanning either one marks the student present.
+
+**Option A — a handheld scanner (recommended for a busy gate)**
+
+1. Buy any USB or Bluetooth barcode scanner that reads **QR codes and Code 39**
+   (sold as "1D/2D scanner"; roughly Rs 4,000–9,000). It must work in
+   "keyboard mode" (HID), which nearly all of them do out of the box. No driver is needed.
+2. Plug it into the gate computer. To test, open Notepad and scan a card: the roll number
+   should appear followed by a new line. If it doesn't add a new line, scan the
+   "Enter suffix / CR" setting code in the scanner's own booklet.
+3. Sign in to IlmForge on that computer and open **Attendance → Barcode scan**
+   (`/attendance/barcode`). Click once in the scan box.
+4. Scan cards. Each scan shows the student's name and photo and marks them present.
+   Scanning the same card twice is ignored.
+
+**Option B — a webcam or the computer's own camera**
+
+1. Use any USB webcam (720p is enough) or a laptop camera. Place the card about
+   15–25 cm from the camera, in good light.
+2. Open **Attendance → Barcode scan** and click **Start Camera**. Allow camera access when
+   the browser asks. The page must be opened over `https://` (the live site is), or the
+   browser will refuse the camera.
+3. Hold the card up; the page reads it by itself, about four times a second.
+
+Use Google Chrome or Microsoft Edge. Staff ID cards are not read by this screen; mark
+staff on **Staff Attendance**.
+
+### Photo check-in (no face recognition)
+
+**Attendance Tracker → Photo Check-in** shows the photos of a class. The person on duty taps a
+student's photo to mark them present. It does **not** recognise faces by itself, and
+no camera is needed. Add student photos first (see *Adding or changing a photo*).
+
+Automatic face recognition is not part of IlmForge yet. It would need a separate
+recognition model and good-quality enrolment photos; ask your IlmForge contact if your
+school wants it.
+
+### Fingerprint machines
+
+The **Biometric Attendance** screen can list your devices and records punches entered
+through it, but a physical fingerprint machine (ZKTeco, eSSL and similar) **cannot yet
+send its punches to IlmForge by itself**. Until that link is added:
+
+- Do not buy a fingerprint machine expecting it to mark attendance in IlmForge.
+- If you already own one, you can copy its daily log into a spreadsheet with the columns
+  `date` (YYYY-MM-DD), `rollNo` and `status` (present/absent/leave/late), save it as CSV and
+  load it on **Attendance → Excel import**. For daily use, ID card scanning at the gate is
+  far less work.
+
+When the device link is added, setting up a machine will be: enter the machine's serial
+number in IlmForge, then on the machine set **Comm → Cloud server (ADMS)** to the
+IlmForge server address. Each person's ID on the machine must be their roll number
+(students) or employee code (staff).
 
 ### Correcting a mistake
 
@@ -482,6 +603,17 @@ and bonafide certificates. `/certificates/registry` keeps a record of everything
 
 **Sidebar → Smart Dashboard**
 
+**The green band at the top** — today's to-do list: how many students and staff have been
+marked present or absent so far (in orange: how many are still not marked), and the fee
+collected today. Click any of them to go and finish it. The buttons underneath open
+Mark attendance, Collect fee and New admission directly.
+
+**Quick actions** — twelve large shortcuts to the daily jobs (Mark attendance, Collect
+fee, Exam Vault, New admission, Scan ID cards, Generate fee, Defaulters and so on).
+Click **Customise** to choose your own: tap a shortcut to add or remove it (up to 12),
+then **Done**. **Reset** goes back to the standard set. Your choice is remembered on
+that computer for your login.
+
 **School health** — a score out of 100 with the reasons underneath it. Each line shows
 what was measured against the target, so you can see immediately which one is pulling the
 score down. If something has not been recorded yet, it is left out rather than counted
@@ -501,7 +633,7 @@ The figures always add up exactly to the total change.
 Some panels will say *"N more months of data needed"* on a new school. This is normal:
 they switch on by themselves once there is enough history to be accurate.
 
-**Export as PDF** at the top right produces a clean copy for board meetings.
+**Export PDF** in the green band produces a clean copy for board meetings.
 
 ---
 

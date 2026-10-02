@@ -94,6 +94,21 @@ router.get('/overview', wrap(async (req, res) => {
     }).catch(() => 0),
   ]);
 
+  // Today's registers, so the dashboard can say what is still left to do.
+  const [studentsToday, staffToday] = await Promise.all([
+    prisma.attendance.groupBy({
+      by: ['status'], where: { schoolId, date: { gte: today, lt: tomorrow } }, _count: { id: true },
+    }).catch(() => []),
+    prisma.staffAttendance.groupBy({
+      by: ['status'], where: { schoolId, date: { gte: today, lt: tomorrow } }, _count: { id: true },
+    }).catch(() => []),
+  ]);
+  const tally = (rows) => rows.reduce((t, r) => {
+    t.marked += r._count.id;
+    t[r.status] = (t[r.status] || 0) + r._count.id;
+    return t;
+  }, { marked: 0 });
+
   // Expense category names, so drivers read "Electricity" not "id 4".
   const categories = await prisma.expenseCategory
     .findMany({ where: { schoolId }, select: { id: true, name: true } })
@@ -200,6 +215,7 @@ router.get('/overview', wrap(async (req, res) => {
         outstanding,
         defaulters,
         invoices: invoiceAgg._count || 0,
+        today: { students: tally(studentsToday), staff: tally(staffToday) },
       },
       health: { ...health, weights: DEFAULT_WEIGHTS, targets: TARGETS, metrics },
       finance: {

@@ -615,7 +615,7 @@ function StudentAttendanceTab() {
                       </button>
                     </td>
                     <td style={{ padding: '10px 14px' }}>
-                      <button
+                      <button aria-label="Show more"
                         style={{
                           background: 'none',
                           border: '1px solid #D1D5DB',

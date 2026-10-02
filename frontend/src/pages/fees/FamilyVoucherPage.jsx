@@ -209,7 +209,7 @@ function PayModal({ invoice, student, onClose, onPaid }) {
       <div style={{ background:'#fff',borderRadius:14,padding:28,width:380,boxShadow:'0 8px 40px rgba(0,0,0,0.18)' }}>
         <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18 }}>
           <div style={{ fontWeight:700,fontSize:15,color:'#0F4C45' }}>Collect Payment</div>
-          <button onClick={onClose} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF' }}><X size={18}/></button>
+          <button aria-label="Close" onClick={onClose} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF' }}><X size={18}/></button>
         </div>
         <div style={{ fontSize:13,color:'#374151',marginBottom:14 }}>
           <strong>{student.name}</strong> — {invoice.feeTitle} ({invoice.month} {invoice.year})
@@ -288,7 +288,7 @@ function PayAllModal({ students, invoices, onClose, onPaid }) {
       <div style={{ background:'#fff',borderRadius:14,padding:28,width:440,boxShadow:'0 8px 40px rgba(0,0,0,0.18)',maxHeight:'80vh',overflowY:'auto' }}>
         <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18 }}>
           <div style={{ fontWeight:700,fontSize:15,color:'#0F4C45' }}>Pay All Family Fees</div>
-          <button onClick={onClose} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF' }}><X size={18}/></button>
+          <button aria-label="Close" onClick={onClose} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF' }}><X size={18}/></button>
         </div>
 
         <div style={{ background:'#FEF3C7',border:'1px solid #FCD34D',borderRadius:9,padding:'10px 14px',marginBottom:16,fontSize:13 }}>

@@ -108,7 +108,7 @@ export default function PWAInstallPrompt() {
             style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 20px', background: '#f5c518', border: 'none', borderRadius: 10, color: '#1B2F6E', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
             <Download size={16} /> Install App
           </button>
-          <button onClick={handleDismiss}
+          <button aria-label="Close" onClick={handleDismiss}
             style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.15)', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <X size={16} />
           </button>
@@ -129,7 +129,7 @@ export default function PWAInstallPrompt() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div style={{ fontWeight: 800, fontSize: 16 }}>📱 Install on iPhone</div>
-          <button onClick={handleDismiss} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, padding: '6px 10px', color: 'white', cursor: 'pointer' }}>
+          <button aria-label="Close" onClick={handleDismiss} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, padding: '6px 10px', color: 'white', cursor: 'pointer' }}>
             <X size={16} />
           </button>
         </div>

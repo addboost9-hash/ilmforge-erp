@@ -3,6 +3,7 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const { contains: ciContains, equals: ciEquals } = require('../utils/search');
 const phoneUtil = require('../utils/phone');
+const { checkPhoto } = require('../utils/photo');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // GET /api/v1/students
@@ -141,37 +142,9 @@ router.get('/', wrap(async (req, res) => {
   res.json({ success: true, data: students, total, page: parseInt(page), pages: Math.ceil(total / takeNum) });
 }));
 
-/* ── Auto-generate student roll number ──────────────────── */
-async function generateRollNo(schoolId, classId, sectionId) {
-  // Get class & section info
-  const cls = classId ? await prisma.class.findUnique({ where: { id: parseInt(classId) } }) : null;
-  const sec = sectionId ? await prisma.section.findUnique({ where: { id: parseInt(sectionId) } }) : null;
-
-  // Build class prefix: Nursery→NUR, KG→KG, Class 1→C1, Class 10→C10
-  let prefix = 'STU';
-  if (cls) {
-    const n = cls.name.toUpperCase();
-    if      (n.includes('NURSERY')) prefix = 'NUR';
-    else if (n.includes('KG'))       prefix = 'KG';
-    else if (n.includes('CLASS'))    prefix = 'C' + n.replace(/[^0-9]/g, '');
-    else                             prefix = n.replace(/\s+/g, '').slice(0, 3);
-  }
-
-  // Add section letter
-  const secLetter = sec ? sec.name.toUpperCase().charAt(0) : '';
-  prefix = prefix + secLetter;   // e.g. C5A, KGA, NURA
-
-  // Get current year suffix (last 2 digits)
-  const yr = new Date().getFullYear().toString().slice(-2);
-
-  // Count existing students in same class+section to get next number
-  const count = await prisma.student.count({
-    where: { schoolId, ...(classId && { classId: parseInt(classId) }), ...(sectionId && { sectionId: parseInt(sectionId) }) }
-  });
-  const seq = String(count + 1).padStart(3, '0');
-
-  return `${prefix}-${yr}-${seq}`;   // e.g. C5A-26-001, KGA-26-003
-}
+// Roll number generation and the admission itself live in
+// services/admission.service.js, shared with the Excel import.
+const { admitStudent, generateRollNo } = require('../services/admission.service');
 
 // POST /api/v1/students
 /* ═══════════════════════════════════════════════════════════════════
@@ -181,308 +154,17 @@ async function generateRollNo(schoolId, classId, sectionId) {
    Optionally: assigns first month fee invoice + transport.
    Returns credentials so frontend can show/print them.
    ═══════════════════════════════════════════════════════════════════ */
-const bcrypt = require('bcryptjs');
-const genPassword = (len = 8) => {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-};
-const slugify = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
-
 router.post('/', wrap(async (req, res) => {
-  const { schoolId, campusId } = req;
-  const {
-    name, lastName, fatherName, motherName, gender, dob, classId, sectionId, sessionId,
-    rollNo, phone, address, bFormNo, emergencyPhone,
-    parentEmail, parentCnic, teacherId,
-    createPortalAccounts = true,       // ← auto-create student + parent portal users
-    generateFirstInvoice  = false,     // ← optionally generate this month's fee invoice
-    monthlyFee,
-    // New extended fields
-    familyNo, firstNameUrdu, lastNameUrdu, fatherNameUrdu,
-    fatherCnic, fatherQualification, fatherOccupation,
-    motherCnic, motherQualification, motherOccupation, motherPhone,
-    caste, nationality, religion, province, city, postalAddress, email,
-    admissionTestMarks, bloodGroup, foodDietaryReq, allergies, childCondition,
-    prevSchoolName, prevSchoolFocalPerson, prevSchoolPhone, prevSchoolAddress,
-    prevAdmissionNo, prevGrade, prevTestGrade,
-    // Fee discounts
-    feeDiscounts,
-  } = req.body;
-  if (!name) return res.status(400).json({ success: false, message: 'Student name is required.' });
-
-  const finalRollNo = rollNo && rollNo.trim() ? rollNo.trim()
-    : await generateRollNo(schoolId, classId, sectionId);
-
-  const school = await prisma.school.findUnique({ where: { id: schoolId } });
-  const slug = school?.slug || 'school';
-
-  // Generate credentials up-front
-  // Parent password: last 5 digits of emergency phone + "123" (memorable for parents)
-  // e.g. phone 0346-5146609 → "46609123"
-  const parentPassword = emergencyPhone
-    ? emergencyPhone.replace(/[^0-9]/g, '').slice(-5) + '123'
-    : genPassword();
-  // Student password: roll number (computed after) — placeholder for now, overridden below
-  // We will set it after finalRollNo is determined
-  const studentPassword = finalRollNo.replace(/[^a-zA-Z0-9]/g, '') + '123';
-
-  // Use rollNo in email — add short unique suffix to prevent collision on same name/rollNo
-  const uniq = Date.now().toString(36).slice(-4); // 4-char base36 timestamp suffix
-  const studentEmail = `${slugify(name)}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}@${slug}.student`;
-
-  // Check if student email already taken — add suffix if needed
-  const existingStudentEmail = await prisma.user.findFirst({ where: { schoolId, email: studentEmail } });
-  const safeStudentEmail = existingStudentEmail
-    ? `${slugify(name)}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}.${uniq}@${slug}.student`
-    : studentEmail;
-
-  // Parent email: use phone as unique identifier (works for siblings — same phone = same email = found & reused)
-  const normalizedPhone = (emergencyPhone || '').replace(/\D/g, '').slice(-10);
-  const finalParentEmail = (parentEmail && parentEmail.trim())
-    ? parentEmail.trim().toLowerCase()
-    : normalizedPhone
-      ? `${slugify(fatherName || 'parent')}.${normalizedPhone}@${slug}.parent`
-      : `${slugify(fatherName || 'parent')}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}@${slug}.parent`;
-
-  // Check if parent email already taken (same parent, different child — sibling case)
-  const existingParentByEmail = finalParentEmail
-    ? await prisma.user.findFirst({ where: { schoolId, email: finalParentEmail, role: 'parent', deletedAt: null } })
-    : null;
-
-  // Resolve campusId — auto-create Main Campus if school has none
-  let resolvedCampusId = campusId || (req.body.campusId ? parseInt(req.body.campusId) : null);
-  if (!resolvedCampusId) {
-    const existingCampus = await prisma.campus.findFirst({
-      where: { schoolId },
-      orderBy: [{ isMain: 'desc' }, { id: 'asc' }],
-      select: { id: true },
-    });
-    if (existingCampus) {
-      resolvedCampusId = existingCampus.id;
-    } else {
-      const newCampus = await prisma.campus.create({
-        data: { schoolId, name: 'Main Campus', isMain: true },
-      });
-      resolvedCampusId = newCampus.id;
-    }
+  try {
+    const out = await admitStudent(
+      { schoolId: req.schoolId, campusId: req.campusId, actorUserId: req.user.id },
+      req.body,
+    );
+    res.status(201).json({ success: true, data: out.student, credentials: out.credentials, invoice: out.invoice });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ success: false, message: err.message });
+    throw err;
   }
-
-  // Pre-compute bcrypt hashes OUTSIDE transaction — bcrypt is slow (~200ms each)
-  // Doing this inside the transaction caused timeout > 5000ms
-  const [studentPasswordHash, parentPasswordHash] = await Promise.all([
-    bcrypt.hash(studentPassword, 10),
-    bcrypt.hash(parentPassword,  10),
-  ]);
-
-  const result = await prisma.$transaction(async (tx) => {
-    // 1) Student record
-    const student = await tx.student.create({
-      data: {
-        schoolId,
-        campusId: resolvedCampusId,
-        name, lastName: lastName || null,
-        fatherName, motherName, gender,
-        dob: dob ? new Date(dob) : null,
-        classId:   classId   ? parseInt(classId)   : null,
-        sectionId: sectionId ? parseInt(sectionId) : null,
-        sessionId: sessionId ? parseInt(sessionId) : null,
-        rollNo: finalRollNo,
-        address, bFormNo, emergencyPhone,
-        // Extended fields
-        familyNo:             familyNo             || null,
-        firstNameUrdu:        firstNameUrdu        || null,
-        lastNameUrdu:         lastNameUrdu         || null,
-        fatherNameUrdu:       fatherNameUrdu       || null,
-        fatherCnic:           fatherCnic           || null,
-        fatherQualification:  fatherQualification  || null,
-        fatherOccupation:     fatherOccupation     || null,
-        motherCnic:           motherCnic           || null,
-        motherQualification:  motherQualification  || null,
-        motherOccupation:     motherOccupation     || null,
-        motherPhone:          motherPhone          || null,
-        caste:                caste                || null,
-        nationality:          nationality          || null,
-        religion:             religion             || null,
-        province:             province             || null,
-        city:                 city                 || null,
-        postalAddress:        postalAddress        || null,
-        email:                email                || null,
-        admissionTestMarks:   admissionTestMarks   != null ? parseFloat(admissionTestMarks) : null,
-        bloodGroup:           bloodGroup           || null,
-        foodDietaryReq:       foodDietaryReq       || null,
-        allergies:            allergies            || null,
-        childCondition:       childCondition       || null,
-        prevSchoolName:       prevSchoolName       || null,
-        prevSchoolFocalPerson:prevSchoolFocalPerson|| null,
-        prevSchoolPhone:      prevSchoolPhone      || null,
-        prevSchoolAddress:    prevSchoolAddress    || null,
-        prevAdmissionNo:      prevAdmissionNo      || null,
-        prevGrade:            prevGrade            || null,
-        prevTestGrade:        prevTestGrade        || null,
-      },
-      include: { class: true, section: true }
-    });
-
-    let studentUser = null, parentUser = null, parentRec = null;
-
-    if (createPortalAccounts) {
-      // 2) Student portal User
-      studentUser = await tx.user.create({
-        data: {
-          schoolId, campusId: student.campusId,
-          name, email: safeStudentEmail,
-          phone: null, // Don't store parent phone on student — causes confusion
-          role: 'student',
-          passwordHash: studentPasswordHash,
-          phoneVerifiedAt: new Date(),
-          mustChangePassword: false,
-        }
-      });
-      await tx.student.update({ where: { id: student.id }, data: { userId: studentUser.id } });
-
-      // 3) Parent portal User — reuse existing parent (same phone OR same email)
-      const existingParentUser = emergencyPhone
-        ? await tx.user.findFirst({
-            where: { schoolId, role: 'parent', deletedAt: null,
-              OR: [
-                // Every format this number may already be stored as. Matching only
-                // the literal string and its digits meant a sibling admitted as
-                // 0348... did not find a parent saved as +9234..., creating a
-                // second account for the same real person.
-                ...phoneUtil.variants(emergencyPhone).map((v) => ({ phone: v })),
-                ...(finalParentEmail ? [{ email: finalParentEmail }] : []),
-              ]
-            }
-          })
-        : existingParentByEmail;
-
-      if (existingParentUser) {
-        parentUser = existingParentUser; // sibling — reuse same parent account
-        parentRec = await tx.parent.findFirst({ where: { schoolId, userId: parentUser.id } });
-        if (!parentRec) {
-          parentRec = await tx.parent.create({
-            data: { schoolId, userId: parentUser.id, cnic: parentCnic || null, address: address || null }
-          });
-        }
-      } else {
-        parentUser = await tx.user.create({
-          data: {
-            schoolId, campusId: student.campusId,
-            name: fatherName || `Parent of ${name}`,
-            email: finalParentEmail,
-            // Stored canonically (+92XXXXXXXXXX) so later lookups and phone logins
-            // match regardless of how the next screen formats it.
-            phone: phoneUtil.canonical(emergencyPhone) || emergencyPhone || null,
-            role: 'parent',
-            passwordHash: parentPasswordHash,
-            phoneVerifiedAt: new Date(),
-            mustChangePassword: false,
-          }
-        });
-        parentRec = await tx.parent.create({
-          data: { schoolId, userId: parentUser.id, cnic: parentCnic || null, address: address || null }
-        });
-      }
-
-      if (parentRec) {
-        await tx.parentStudent.upsert({
-          where: { parentId_studentId: { parentId: parentRec.id, studentId: student.id } },
-          update: {},
-          create: { schoolId, parentId: parentRec.id, studentId: student.id },
-        });
-      }
-    }
-
-    // 4) Optional: first fee invoice (linked flow)
-    let invoice = null;
-    if (generateFirstInvoice) {
-      const now    = new Date();
-      const monthName = now.toLocaleString('default', { month: 'long' }); // "July"
-      const amount = parseInt(monthlyFee) || 0;
-      if (amount > 0) {
-        const vNo = `ADM-${String(student.id).padStart(4,'0')}-${now.getFullYear()}`;
-        invoice = await tx.feeInvoice.create({
-          data: {
-            schoolId, campusId: student.campusId, studentId: student.id,
-            classId: student.classId,
-            feeTitle: `Monthly Fee Of ${monthName}`,
-            month: monthName, year: now.getFullYear(),
-            totalAmount: amount, paidAmount: 0, dueAmount: amount,
-            status: 'unpaid', voucherNo: vNo,
-            dueDate: new Date(now.getFullYear(), now.getMonth(), 10),
-          }
-        }).catch(() => null);
-      }
-    }
-
-    // 4b) Assign teacher to class if provided and class has none
-    if (teacherId && classId) {
-      const cls = await tx.class.findUnique({ where: { id: parseInt(classId) }, select: { classTeacherId: true } });
-      if (cls && !cls.classTeacherId) {
-        await tx.class.update({ where: { id: parseInt(classId) }, data: { classTeacherId: parseInt(teacherId) } }).catch(() => null);
-      }
-    }
-
-    // 5) Audit log
-    await tx.auditLog.create({
-      data: {
-        schoolId, userId: req.user.id,
-        action: 'STUDENT_ADMITTED',
-        resource: 'student', resourceId: student.id,
-        details: JSON.stringify({ name, rollNo: finalRollNo, portalAccounts: createPortalAccounts }),
-      }
-    }).catch(() => null);
-
-    return { student, studentUser, parentUser, parentRec, invoice, parentIsExisting: !!(!parentRec && parentUser) };
-  }, { timeout: 30000, maxWait: 35000 }); // 30s timeout — bcrypt moved outside
-
-  // Build credentials payload for frontend popup / print
-  const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-  const portalLink = `${FRONTEND_URL}/login?slug=${slug}`;
-  // A link per role, so the student and the parent each get one that opens
-  // their own branded portal rather than a shared generic login.
-  const linkFor = (role) => `${FRONTEND_URL}/login?slug=${slug}&role=${role}`;
-  const parentPasswordHint = emergencyPhone
-    ? `Last 5 digits of phone + 123 (e.g. ${emergencyPhone.replace(/[^0-9]/g,'').slice(-5)}123)`
-    : null;
-  // `loginId` is what the school should actually hand over. The parent signs
-  // in with their phone number — that is what they remember — while the
-  // synthetic .parent/.student address stays as an internal unique key and is
-  // returned as `email` for anything that still reads it.
-  const parentLoginPhone = phoneUtil.canonical(emergencyPhone);
-  const credentials = createPortalAccounts ? {
-    portalLink,
-    student: {
-      loginId: finalRollNo,
-      loginIdLabel: 'Roll number',
-      email: safeStudentEmail,
-      password: studentPassword,
-      portal: 'Student Portal',
-      portalLink: linkFor('student'),
-      passwordHint: `Roll number + 123 (e.g. ${finalRollNo.replace(/[^a-zA-Z0-9]/g,'')}123)`,
-    },
-    parent: result.parentIsExisting
-      ? {
-          loginId: parentLoginPhone || result.parentUser.phone || result.parentUser.email,
-          loginIdLabel: parentLoginPhone ? 'Phone number' : 'Email',
-          email: result.parentUser.email,
-          password: '(existing account — same as sibling)',
-          portal: 'Parent Portal',
-          portalLink: linkFor('parent'),
-          existing: true,
-        }
-      : {
-          loginId: parentLoginPhone || finalParentEmail,
-          loginIdLabel: parentLoginPhone ? 'Phone number' : 'Email',
-          email: result.parentUser?.email || finalParentEmail,
-          password: parentPassword,
-          portal: 'Parent Portal',
-          portalLink: linkFor('parent'),
-          passwordHint: parentPasswordHint,
-        },
-  } : null;
-
-  res.status(201).json({ success: true, data: result.student, credentials, invoice: result.invoice });
 }));
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -936,6 +618,20 @@ router.get('/:id', wrap(async (req, res) => {
     }
   }
 
+  // The gate portal never needs a student's full record (it verifies gate
+  // passes and scans ID cards), and this record carries fees, medical notes
+  // and family CNICs.
+  if (req.user?.role === 'gatekeeper') {
+    return res.status(403).json({ success: false, message: 'Access denied for this student.' });
+  }
+
+  // Teachers may see the student, but not their fees: /fees/student/:id
+  // already refuses teachers, and this record was handing them the same
+  // invoices anyway.
+  if (req.user?.role === 'teacher') {
+    delete student.feeInvoices;
+  }
+
   res.json({ success: true, data: student });
 }));
 
@@ -956,6 +652,11 @@ router.put('/:id', wrap(async (req, res) => {
   ];
   const data = {};
   allowed.forEach(k => { if (req.body[k] !== undefined) data[k] = req.body[k]; });
+  if (data.photoUrl !== undefined) {
+    const photo = checkPhoto(data.photoUrl);
+    if (photo.error) return res.status(400).json({ success: false, message: photo.error });
+    data.photoUrl = photo.value;
+  }
   if (data.dob) data.dob = new Date(data.dob);
   if (data.classId) data.classId = parseInt(data.classId);
   if (data.sectionId) data.sectionId = parseInt(data.sectionId);

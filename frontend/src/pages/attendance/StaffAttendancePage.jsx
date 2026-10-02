@@ -228,7 +228,7 @@ export default function StaffAttendancePage() {
                   {date} — {staff.length} staff members
                 </p>
               </div>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff' }}>
+              <button aria-label="Close" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff' }}>
                 <X size={20} />
               </button>
             </div>

@@ -145,7 +145,7 @@ function ErrorToast({ message, onClose }) {
     }}>
       <AlertCircle size={18} color="#DC2626" style={{ flexShrink: 0 }}/>
       <div style={{ flex: 1, fontSize: 13, color: '#991B1B', fontWeight: 500 }}>{message}</div>
-      <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#9CA3AF', padding:0, lineHeight:1 }}>
+      <button aria-label="Close" onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#9CA3AF', padding:0, lineHeight:1 }}>
         <X size={15}/>
       </button>
     </div>
@@ -166,7 +166,7 @@ function FilterModal({ title, fields, classOptions, onClose, onGenerate, loading
       <div className="card" style={{ width:420, maxWidth:'95vw', padding:24 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
           <div style={{ fontWeight:800, fontSize:15, color:'#1E3A5F' }}>{title}</div>
-          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#94A3B8' }}><X size={18}/></button>
+          <button aria-label="Close" onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#94A3B8' }}><X size={18}/></button>
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:20 }}>
           {fields.map(f => {

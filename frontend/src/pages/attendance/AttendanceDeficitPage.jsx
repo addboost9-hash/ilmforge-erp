@@ -284,7 +284,7 @@ export default function AttendanceDeficitPage() {
               <thead>
                 <tr>
                   <th style={{ width: 40 }}>
-                    <button onClick={toggleSelectAll} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
+                    <button onClick={toggleSelectAll} aria-label={allBelowSelected ? 'Unselect all' : 'Select all'} aria-pressed={allBelowSelected} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
                       {allBelowSelected ? <CheckSquare size={16} color="#2563EB" /> : <Square size={16} color="#94A3B8" />}
                     </button>
                   </th>
@@ -310,6 +310,8 @@ export default function AttendanceDeficitPage() {
                         {belowThreshold && (
                           <button
                             onClick={() => toggleSelect(r.studentId)}
+                            aria-label={`Select ${r.name || r.studentName || 'student'}`}
+                            aria-pressed={selected.has(r.studentId)}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
                           >
                             {selected.has(r.studentId)

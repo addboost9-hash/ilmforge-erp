@@ -679,7 +679,7 @@ export default function LandingPage() {
           {FAQS.map((faq, i) => (
             <Reveal key={i} delay={i*50}>
               <div style={{ background:'#fff', border:'1px solid #E8EDF3', borderRadius:12, marginBottom:10, overflow:'hidden' }}>
-                <button
+                <button aria-label="Show more"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   style={{ width:'100%', textAlign:'left', padding:'17px 20px', background:'none', border:'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, fontSize:14, fontWeight:600, color:NAVY, fontFamily:'inherit' }}>
                   {faq.q}
