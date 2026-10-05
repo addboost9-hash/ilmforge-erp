@@ -75,6 +75,9 @@ export default function LoginPage() {
       // Only an email address is lowercased. Students sign in with their roll
       // number ("NURA-26-016"), and lowercasing it made every one of them fail.
       : { email: identifier.includes('@') ? identifier.toLowerCase() : identifier, password: form.password };
+    // The school this page belongs to decides between accounts when the same
+    // email or phone exists in more than one school.
+    if (slug) credentials.schoolSlug = slug;
     const res = await login(credentials);
     if (res.success) {
       const role = res.data.user?.role;
@@ -279,10 +282,10 @@ export default function LoginPage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <Link to="/apply-admission" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 10, background: '#F0FDFA', border: '1.5px solid #99F6E4', color: '#0F766E', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>
+            <Link to={slug ? `/s/${encodeURIComponent(slug)}/apply` : '/apply-admission'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 10, background: '#F0FDFA', border: '1.5px solid #99F6E4', color: '#0F766E', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>
               <UserPlus size={14} /> Apply for Admission
             </Link>
-            <Link to="/fee-voucher" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 10, background: '#FFFBEB', border: '1.5px solid #FDE68A', color: '#B45309', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>
+            <Link to={slug ? `/s/${encodeURIComponent(slug)}/fees` : '/fee-voucher'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 10, background: '#FFFBEB', border: '1.5px solid #FDE68A', color: '#B45309', fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}>
               <FileDown size={14} /> Download Fee Slip
             </Link>
           </div>

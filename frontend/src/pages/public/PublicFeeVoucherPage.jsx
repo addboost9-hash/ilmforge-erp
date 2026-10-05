@@ -15,6 +15,8 @@ import toast from 'react-hot-toast';
 import api from '../../api/client';
 import QRCode from 'qrcode';
 import { ArrowLeft, Lock, Search, Printer, Download, MessageSquare, FileText, CheckCircle } from 'lucide-react';
+import { useSchoolSlug, usePublicSchool, rememberSchool } from '../../utils/schoolLinks';
+import { SchoolNotFound, SchoolLoading } from './PublicShell';
 
 /* ── helpers ──────────────────────────────────────────────── */
 // Fee amounts are stored in paisa (Rs 3,500 is 350000). This page was
@@ -282,6 +284,13 @@ function VoucherCopy({ label, labelColor, student, invoice, school, bankDetails,
 
 /* ── Main Page ─────────────────────────────────────────────── */
 export default function PublicFeeVoucherPage() {
+  // The school comes from the link (/s/<slug>/fees). Without it the lookup
+  // cannot know which school's roll numbers to search, and used to fail
+  // with "Student not found" on any device that had not opened the
+  // school's sign-in page before.
+  const { slug, fromUrl } = useSchoolSlug();
+  const { data: brandSchool, isLoading: schoolLoading, isError: schoolError } = usePublicSchool(slug);
+  useEffect(() => { if (brandSchool && fromUrl) rememberSchool(brandSchool); }, [brandSchool, fromUrl]);
   const [rollId,         setRollId]         = useState('');
   const [loading,        setLoading]        = useState(false);
   const [student,        setStudent]        = useState(null);
@@ -298,8 +307,7 @@ export default function PublicFeeVoucherPage() {
     if (!rollId.trim()) return toast.error('Please enter your Roll ID');
     setLoading(true);
     try {
-      const slug = localStorage.getItem('schoolSlug') || '';
-      const res  = await api.get(`/public/fees/by-roll/${encodeURIComponent(rollId.trim())}${slug ? `?schoolSlug=${slug}` : ''}`);
+      const res  = await api.get(`/public/fees/by-roll/${encodeURIComponent(rollId.trim())}?schoolSlug=${encodeURIComponent(slug)}`, { silent: true });
       const payload = res.data.data || {};
       setStudent(payload.student || null);
       setInvoices(payload.invoices || []);
@@ -309,8 +317,13 @@ export default function PublicFeeVoucherPage() {
       const unpaid = (payload.invoices || []).find(i => i.status !== 'paid') || payload.invoices?.[0];
       setSelected(unpaid || null);
       setStep(2);
-    } catch {
-      toast.error('Student not found. Check your Roll ID.');
+    } catch (err) {
+      const status = err.response?.status;
+      toast.error(status === 404
+        ? 'No student with this roll number at this school. Check the roll number on the ID card or a previous voucher.'
+        : status === 429
+          ? 'Too many tries. Please wait a minute and try again.'
+          : 'Could not look up the voucher right now. Please try again.');
     } finally { setLoading(false); }
   };
 
@@ -358,19 +371,26 @@ export default function PublicFeeVoucherPage() {
       `Month: ${selected?.month ? mName(selected.month) : '—'} ${selected?.year || ''}\n` +
       `Amount Due: *${Rs(selected?.dueAmount || selected?.totalAmount)}*\n` +
       `Due Date: ${fmtDate(selected?.dueDate)}\n\n` +
-      `View voucher: ${window.location.origin}/fee-voucher`
+      `View voucher: ${window.location.origin}/s/${encodeURIComponent(slug)}/fees`
     );
     const waUrl = phone ? `https://wa.me/92${phone.slice(-10)}?text=${msg}` : `https://wa.me/?text=${msg}`;
     window.open(waUrl, '_blank');
   };
 
-  const logo       = localStorage.getItem('schoolLogoPreview');
-  const schoolName = school?.name || localStorage.getItem('registeredSchoolName') || 'IlmForge School';
+  if (!slug) return <SchoolNotFound missing then="/fees" />;
+  if (schoolLoading) return <SchoolLoading />;
+  if (schoolError || !brandSchool) return <SchoolNotFound then="/fees" />;
+
+  const logo       = school?.logoUrl || brandSchool.logoUrl;
+  const schoolName = school?.name || brandSchool.name;
+  const brandFrom  = brandSchool.brand?.primary || '#1B2F6E';
+  const brandTo    = brandSchool.brand?.secondary || '#0073b7';
+  const schoolPage = `/s/${encodeURIComponent(brandSchool.slug)}`;
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f0f4f8 0%, #e8f4fd 100%)', fontFamily: "'Inter', system-ui, sans-serif" }}>
       {/* Header */}
-      <div style={{ background: 'linear-gradient(135deg, #1B2F6E 0%, #0073b7 100%)', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 2px 12px rgba(0,0,0,0.15)' }}>
+      <div style={{ background: `linear-gradient(135deg, ${brandFrom} 0%, ${brandTo} 100%)`, padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 2px 12px rgba(0,0,0,0.15)' }}>
         {logo
           ? <img src={logo} alt="" style={{ width: 46, height: 46, borderRadius: 10, objectFit: 'cover', border: '2px solid rgba(255,255,255,0.4)' }} />
           : <div style={{ width: 46, height: 46, borderRadius: 11, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🎓</div>
@@ -379,8 +399,8 @@ export default function PublicFeeVoucherPage() {
           <div style={{ color: '#fff', fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}>{schoolName}</div>
           <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 1 }}>Fee Voucher Download</div>
         </div>
-        <Link to="/login" style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.75)', fontSize: 12.5, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8 }}>
-          <ArrowLeft size={13}/> Back to Login
+        <Link to={schoolPage} style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.85)', fontSize: 12.5, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 8 }}>
+          <ArrowLeft size={13}/> School page
         </Link>
       </div>
 

@@ -74,7 +74,7 @@ export default function BrandedLoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.email || !form.password) return toast.error('Please enter your email and password');
-    const res = await login({ email: form.email, password: form.password });
+    const res = await login({ email: form.email, password: form.password, ...(slug && { schoolSlug: slug }) });
     if (res.success) {
       navigate('/dashboard');
     } else {
@@ -275,11 +275,11 @@ export default function BrandedLoginPage() {
 
           {/* Quick links */}
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            <Link to="/apply-admission" className="link-btn"
+            <Link to={slug ? `/s/${encodeURIComponent(slug)}/apply` : '/apply-admission'} className="link-btn"
               style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, background:'#f0f4ff', color:'#1B2F6E', padding:'11px 20px', borderRadius:10, textDecoration:'none', fontSize:13.5, fontWeight:700, transition:'all .15s', border:'1px solid #dbeafe' }}>
               🎓 Apply for Admission
             </Link>
-            <Link to="/fee-voucher" className="link-btn"
+            <Link to={slug ? `/s/${encodeURIComponent(slug)}/fees` : '/fee-voucher'} className="link-btn"
               style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, background:'#fffbeb', color:'#92400e', padding:'11px 20px', borderRadius:10, textDecoration:'none', fontSize:13.5, fontWeight:700, transition:'all .15s', border:'1px solid #fde68a' }}>
               📄 Fee Voucher Download
             </Link>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../../api/client';
+import useAuthStore from '../../store/auth.store';
 import { Save, Check, Palette } from 'lucide-react';
 
 const THEMES = [
@@ -57,7 +58,7 @@ export default function ThemeSettingsPage() {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
         <div>
           <h1 className="page-title">Theme Settings</h1>
-          <p className="page-subtitle">Customize the color theme of your EduForge Pro portal</p>
+          <p className="page-subtitle">Choose your school's colours. They are used on your portal and on your public pages: school page, admission form and fee slip.</p>
         </div>
         <button className="btn btn-teal" onClick={applyTheme}>
           <Save size={15}/> Apply Theme
@@ -147,7 +148,7 @@ export default function ThemeSettingsPage() {
               {/* Sidebar strip */}
               <div style={{ background: THEMES.find(t=>t.name===selectedTheme)?.primary||customPrimary, padding:'8px 12px', display:'flex', alignItems:'center', gap:8 }}>
                 <div style={{ width:20,height:20,borderRadius:5,background:'rgba(255,255,255,0.2)' }}/>
-                <div style={{ color:'#fff', fontSize:11.5, fontWeight:600 }}>EduForge Pro</div>
+                <div style={{ color:'#fff', fontSize:11.5, fontWeight:600 }}>{(useAuthStore.getState().school?.name) || 'Your School'}</div>
               </div>
               {/* Content strip */}
               <div style={{ padding:'10px 12px', background:'#F8FAFC' }}>

@@ -1,208 +1,262 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+/**
+ * IlmForge — online admission form for one school.
+ *
+ *   /s/<slug>/apply      (and the older /apply-admission?slug=<slug>)
+ *
+ * The school comes from the link, never from a guess: the form shows that
+ * school's name, logo, campuses and classes, and the application is saved
+ * to that school only (POST /public/admissions/<slug>). The office sees it
+ * at once in the admin bell and under Admissions › Admission Inquiries.
+ *
+ * It used to post to an endpoint that requires a signed-in finance user, so
+ * no application from this page ever arrived — at any school.
+ */
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { CheckCircle2, Send, RefreshCw, Printer } from 'lucide-react';
 import api from '../../api/client';
-import { ArrowLeft, CheckCircle, Send } from 'lucide-react';
+import { useSchoolSlug, usePublicSchool, rememberSchool } from '../../utils/schoolLinks';
+import { PublicShell, SchoolNotFound, SchoolLoading } from './PublicShell';
+
+const EMPTY = {
+  studentName: '', gender: '', dob: '', classId: '', classInterested: '', campusId: '',
+  fatherName: '', fatherPhone: '', fatherCnic: '', fatherEmail: '', address: '',
+  previousSchool: '', message: '', website: '',
+};
+
+const newSum = () => {
+  const a = 2 + Math.floor(Math.random() * 8);
+  const b = 1 + Math.floor(Math.random() * 9);
+  return { a, b };
+};
+
+/* Same rules the server applies, so most mistakes are caught before sending. */
+function check(f, { hasClasses, campusCount }) {
+  const e = {};
+  if (f.studentName.trim().length < 2) e.studentName = "Enter the student's full name.";
+  if (!f.fatherName.trim()) e.fatherName = "Enter the father's or guardian's name.";
+  const core = f.fatherPhone.replace(/\D/g, '').slice(-10);
+  if (!/^3\d{9}$/.test(core)) e.fatherPhone = 'Enter a mobile number like 03001234567.';
+  if (hasClasses ? !f.classId : !f.classInterested.trim()) e.classId = 'Choose the class you are applying for.';
+  if (campusCount > 1 && !f.campusId) e.campusId = 'Choose a campus.';
+  const cnic = f.fatherCnic.replace(/\D/g, '');
+  if (cnic && cnic.length !== 13) e.fatherCnic = 'CNIC must have 13 digits.';
+  if (f.fatherEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.fatherEmail.trim())) e.fatherEmail = 'Enter a valid email address, or leave it empty.';
+  return e;
+}
+
+const fmtCnic = (v) => {
+  const d = v.replace(/\D/g, '').slice(0, 13);
+  if (d.length <= 5) return d;
+  if (d.length <= 12) return `${d.slice(0, 5)}-${d.slice(5)}`;
+  return `${d.slice(0, 5)}-${d.slice(5, 12)}-${d.slice(12)}`;
+};
+
+/* Map the server's field names onto this form's. */
+const SERVER_FIELD = { phone: 'fatherPhone', email: 'fatherEmail', cnic: 'fatherCnic' };
+
+/* Declared at module level: a component defined inside the page would be a
+   new type on every render, and each keystroke would remount the input. */
+function Field({ name, label, req, hint, span2, error, children }) {
+  return (
+    <div className={`ps-field ${span2 ? 'span-2' : ''} ${error ? 'has-error' : ''}`} data-field={name}>
+      <label className="ps-label" htmlFor={`f-${name}`}>{label}{req && <span className="req" aria-hidden="true">*</span>}</label>
+      {children}
+      {error ? <span className="ps-error" id={`e-${name}`}>{error}</span> : hint ? <span className="ps-hint">{hint}</span> : null}
+    </div>
+  );
+}
 
 export default function PublicAdmissionPage() {
-  const nav = useNavigate();
-  const [form, setForm] = useState({
-    name: '', fatherName: '', gender: '', dob: '',
-    fatherEmail: '', fatherCnic: '', fatherPhone: '', address: '',
-    classInterested: '', campusId: '1',
-  });
-  const [captchaAnswer, setCaptchaAnswer] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const { slug, fromUrl } = useSchoolSlug();
+  const { data: school, isLoading, isError } = usePublicSchool(slug);
+  const [form, setForm] = useState(EMPTY);
+  const [errors, setErrors] = useState({});
+  const [sum, setSum] = useState(newSum);
+  const [answer, setAnswer] = useState('');
+  const [sending, setSending] = useState(false);
+  const [problem, setProblem] = useState('');
+  const [done, setDone] = useState(null);
 
-  // Simple math captcha
-  const [n1] = useState(() => Math.floor(Math.random() * 9) + 1);
-  const [n2] = useState(() => Math.floor(Math.random() * 9) + 1);
-  const correctCaptcha = String(n1 + n2);
+  useEffect(() => { if (school && fromUrl) rememberSchool(school); }, [school, fromUrl]);
+  useEffect(() => { if (school?.name) document.title = `Admission — ${school.name}`; }, [school?.name]);
 
-  const handleSubmit = async (e) => {
+  const classes = school?.classes || [];
+  const campuses = school?.campuses || [];
+  const hasClasses = classes.length > 0;
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  if (!slug) return <SchoolNotFound missing then="/apply" />;
+  if (isLoading) return <SchoolLoading />;
+  if (isError || !school) return <SchoolNotFound then="/apply" />;
+
+  const schoolPage = { to: `/s/${encodeURIComponent(school.slug)}`, label: 'School page' };
+  const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setErrors((e) => ({ ...e, [k]: undefined })); };
+
+  const submit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.fatherPhone) return toast.error('Student name and father phone are required');
-    if (captchaAnswer !== correctCaptcha) return toast.error('Incorrect captcha answer');
-    setLoading(true);
+    setProblem('');
+    const found = check(form, { hasClasses, campusCount: campuses.length });
+    if (String(sum.a + sum.b) !== answer.trim()) found.captcha = 'That answer is not right. Please try again.';
+    setErrors(found);
+    if (Object.keys(found).length) {
+      const first = document.querySelector(`[data-field="${Object.keys(found)[0]}"]`);
+      first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    setSending(true);
     try {
-      await api.post('/admissions/inquiries', {
-        name: form.name,
-        phone: form.fatherPhone,
-        classInterested: form.classInterested,
-        notes: `Father: ${form.fatherName} | CNIC: ${form.fatherCnic} | Email: ${form.fatherEmail} | DOB: ${form.dob} | Address: ${form.address}`,
-      });
-      setSubmitted(true);
+      const { data } = await api.post(`/public/admissions/${encodeURIComponent(school.slug)}`, form, { silent: true });
+      setDone({ ...data.data, studentName: form.studentName, phone: form.fatherPhone });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Submission failed. Please try again.');
+      const res = err.response?.data;
+      if (res?.errors) {
+        const mapped = {};
+        for (const [k, v] of Object.entries(res.errors)) mapped[SERVER_FIELD[k] || k] = v;
+        setErrors(mapped);
+      }
+      setProblem(res?.message || (err.response ? 'The application could not be sent. Please try again.' : 'Could not reach the school’s server. Check your internet connection and try again.'));
+      setSum(newSum()); setAnswer('');
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   };
 
-  if (submitted) {
+  if (done) {
     return (
-      <div style={{ minHeight:'100vh', background:'#F0F4F8', display:'flex', alignItems:'center', justifyContent:'center', padding:20, fontFamily:"'Inter',system-ui,sans-serif" }}>
-        <div style={{ maxWidth:480, width:'100%', background:'#fff', borderRadius:16, padding:'40px 36px', textAlign:'center', boxShadow:'0 8px 32px rgba(0,0,0,0.1)' }}>
-          <div style={{ width:80,height:80,borderRadius:'50%',background:'#DCFCE7',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px' }}>
-            <CheckCircle size={40} color="#15803D"/>
-          </div>
-          <h2 style={{ fontSize:22,fontWeight:800,color:'#1E3A5F',marginBottom:8 }}>Application Submitted! ✅</h2>
-          <p style={{ color:'#64748B',fontSize:14,lineHeight:1.7,marginBottom:24 }}>
-            Your admission request for <strong>{form.name}</strong> has been submitted successfully.
-            The school will contact you at <strong>{form.fatherPhone}</strong> shortly.
+      <PublicShell school={school} title="Admission application" back={schoolPage} narrow>
+        <section className="ps-card ps-success" aria-live="polite">
+          <span className="ps-success-mark"><CheckCircle2 size={38} /></span>
+          <h1 style={{ fontSize: 22 }}>{done.duplicate ? 'Already received' : 'Application received'}</h1>
+          <p style={{ margin: 0, color: 'var(--ps-muted)', lineHeight: 1.6 }}>
+            {done.duplicate
+              ? `${school.name} already has this application. You do not need to send it again.`
+              : `Thank you. ${school.name} has received the application for ${done.studentName} and will contact you on ${done.phone}.`}
           </p>
-          <div style={{ background:'#F0FDF9',border:'1px solid #CCFBF1',borderRadius:10,padding:14,marginBottom:24,textAlign:'left' }}>
-            <div style={{ fontSize:12,fontWeight:700,color:'#0F766E',marginBottom:8 }}>Application Details</div>
-            <div style={{ fontSize:12.5,color:'#374151',lineHeight:1.8 }}>
-              <div><strong>Student:</strong> {form.name}</div>
-              <div><strong>Father:</strong> {form.fatherName}</div>
-              <div><strong>Class:</strong> {form.classInterested || 'Not specified'}</div>
-              <div><strong>Phone:</strong> {form.fatherPhone}</div>
-            </div>
+          <div>
+            <div className="ps-hint" style={{ marginBottom: 6 }}>Your reference number</div>
+            <div className="ps-ref">{done.reference}</div>
           </div>
-          <Link to="/login" style={{ display:'inline-flex',alignItems:'center',gap:8,background:'#1E3A5F',color:'#fff',padding:'11px 24px',borderRadius:9,textDecoration:'none',fontSize:13.5,fontWeight:700 }}>
-            <ArrowLeft size={15}/> Back to Login
-          </Link>
-        </div>
-      </div>
+          <p className="ps-hint" style={{ margin: 0 }}>Keep this number. Quote it when you call or visit the school.</p>
+          {done.schoolPhone && <p style={{ margin: 0, fontSize: 14 }}>School phone: <strong className="ps-select">{done.schoolPhone}</strong></p>}
+          <div className="ps-row">
+            <button type="button" className="ps-btn is-ghost" onClick={() => window.print()}><Printer size={16} /> Print</button>
+            <button type="button" className="ps-btn is-ghost" onClick={() => { setDone(null); setForm({ ...EMPTY, fatherName: form.fatherName, fatherPhone: form.fatherPhone, fatherCnic: form.fatherCnic, fatherEmail: form.fatherEmail, address: form.address }); setSum(newSum()); setAnswer(''); }}>
+              Apply for another child
+            </button>
+            <Link to={schoolPage.to} className="ps-btn">Back to school page</Link>
+          </div>
+        </section>
+      </PublicShell>
     );
   }
 
+  const inputProps = (name) => ({
+    id: `f-${name}`,
+    'aria-invalid': errors[name] ? 'true' : undefined,
+    'aria-describedby': errors[name] ? `e-${name}` : undefined,
+  });
+
   return (
-    <div style={{ minHeight:'100vh', background:'#F0F4F8', fontFamily:"'Inter',system-ui,sans-serif" }}>
-      {/* Header */}
-      <div style={{ background:'linear-gradient(135deg,#6B21A8,#4A1580)', padding:'14px 20px', display:'flex', alignItems:'center', gap:14 }}>
-        <div style={{ width:42,height:42,borderRadius:11,background:'rgba(255,255,255,0.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>🎓</div>
-        <div>
-          <div style={{ color:'#fff',fontWeight:800,fontSize:16 }}>EduForge Pro</div>
-          <div style={{ color:'rgba(255,255,255,0.65)',fontSize:12 }}>Apply for Admission</div>
-        </div>
-        <Link to="/login" style={{ marginLeft:'auto',color:'rgba(255,255,255,0.7)',fontSize:13,textDecoration:'none',display:'flex',alignItems:'center',gap:5 }}>
-          <ArrowLeft size={13}/> Back to Login
-        </Link>
-      </div>
+    <PublicShell school={school} title="Apply for admission" back={schoolPage} narrow>
+      <section className="ps-card">
+        <h1 style={{ fontSize: 21, marginBottom: 4 }}>Admission application</h1>
+        <p style={{ margin: 0, color: 'var(--ps-muted)', fontSize: 14 }}>
+          Fill this form and {school.name} will contact you. Fields marked <span style={{ color: 'var(--ps-error)' }}>*</span> are required.
+        </p>
+      </section>
 
-      <div style={{ maxWidth:620, margin:'32px auto', padding:'0 16px 32px' }}>
-        {/* School logo + title */}
-        <div style={{ textAlign:'center', marginBottom:24 }}>
-          <div style={{ width:80,height:80,borderRadius:'50%',background:'linear-gradient(135deg,#6B21A8,#4A1580)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px',fontSize:34 }}>🎓</div>
-          <h1 style={{ fontSize:22,fontWeight:800,color:'#1E3A5F',marginBottom:4 }}>EduForge Pro</h1>
-          <p style={{ color:'#64748B',fontSize:13.5 }}>Apply for admission</p>
-        </div>
+      <form className="ps-card ps-form" onSubmit={submit} noValidate>
+        {problem && <div className="ps-alert" role="alert">{problem}</div>}
 
-        <div style={{ background:'#fff',borderRadius:14,padding:'28px 28px',boxShadow:'0 4px 20px rgba(0,0,0,0.08)' }}>
-          <form onSubmit={handleSubmit}>
-
-            {/* Campus */}
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>Select a campus</label>
-              <select style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#fff',fontFamily:'inherit',outline:'none' }}
-                value={form.campusId} onChange={e=>setForm({...form,campusId:e.target.value})}>
-                <option value="1">Main Campus</option>
+        <div className="ps-section">
+          <div className="ps-section-title">Student</div>
+          <div className="ps-grid">
+            <Field name="studentName" error={errors.studentName} label="Student's full name" req span2>
+              <input className="ps-input" {...inputProps('studentName')} autoComplete="off" value={form.studentName} onChange={(e) => set('studentName', e.target.value)} placeholder="e.g. Ayesha Khan" />
+            </Field>
+            <Field name="gender" error={errors.gender} label="Gender">
+              <select className="ps-select-input" {...inputProps('gender')} value={form.gender} onChange={(e) => set('gender', e.target.value)}>
+                <option value="">Select</option><option value="male">Male</option><option value="female">Female</option>
               </select>
-            </div>
+            </Field>
+            <Field name="dob" error={errors.dob} label="Date of birth">
+              <input type="date" className="ps-input" {...inputProps('dob')} max={today} value={form.dob} onChange={(e) => set('dob', e.target.value)} />
+            </Field>
+            <Field name="classId" error={errors.classId} label="Class applying for" req>
+              {hasClasses ? (
+                <select className="ps-select-input" {...inputProps('classId')} value={form.classId} onChange={(e) => set('classId', e.target.value)}>
+                  <option value="">Select class</option>
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              ) : (
+                <input className="ps-input" {...inputProps('classId')} value={form.classInterested} onChange={(e) => { set('classInterested', e.target.value); set('classId', ''); }} placeholder="e.g. Class 5, KG, Nursery" />
+              )}
+            </Field>
+            {campuses.length > 1 && (
+              <Field name="campusId" error={errors.campusId} label="Campus" req>
+                <select className="ps-select-input" {...inputProps('campusId')} value={form.campusId} onChange={(e) => set('campusId', e.target.value)}>
+                  <option value="">Select campus</option>
+                  {campuses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
+            )}
+            <Field name="previousSchool" error={errors.previousSchool} label="Previous school" hint="Leave empty if this is the first school." span2={campuses.length <= 1}>
+              <input className="ps-input" {...inputProps('previousSchool')} value={form.previousSchool} onChange={(e) => set('previousSchool', e.target.value)} />
+            </Field>
+          </div>
+        </div>
 
-            {/* Student Name */}
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>Student Name *</label>
-              <input style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#fff',fontFamily:'inherit',outline:'none',boxSizing:'border-box' }}
-                placeholder="Student Name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>
-            </div>
+        <div className="ps-section">
+          <div className="ps-section-title">Parent / guardian</div>
+          <div className="ps-grid">
+            <Field name="fatherName" error={errors.fatherName} label="Father / guardian name" req>
+              <input className="ps-input" {...inputProps('fatherName')} autoComplete="name" value={form.fatherName} onChange={(e) => set('fatherName', e.target.value)} />
+            </Field>
+            <Field name="fatherPhone" error={errors.fatherPhone} label="Mobile number" req hint="The school will call or WhatsApp this number.">
+              <input className="ps-input" {...inputProps('fatherPhone')} inputMode="tel" autoComplete="tel" value={form.fatherPhone} onChange={(e) => set('fatherPhone', e.target.value)} placeholder="03001234567" />
+            </Field>
+            <Field name="fatherCnic" error={errors.fatherCnic} label="CNIC">
+              <input className="ps-input" {...inputProps('fatherCnic')} inputMode="numeric" value={form.fatherCnic} onChange={(e) => set('fatherCnic', fmtCnic(e.target.value))} placeholder="35202-1234567-1" />
+            </Field>
+            <Field name="fatherEmail" error={errors.fatherEmail} label="Email">
+              <input type="email" className="ps-input" {...inputProps('fatherEmail')} autoComplete="email" value={form.fatherEmail} onChange={(e) => set('fatherEmail', e.target.value)} />
+            </Field>
+            <Field name="address" error={errors.address} label="Home address" span2>
+              <input className="ps-input" {...inputProps('address')} autoComplete="street-address" value={form.address} onChange={(e) => set('address', e.target.value)} />
+            </Field>
+            <Field name="message" error={errors.message} label="Anything the school should know?" span2>
+              <textarea className="ps-textarea" {...inputProps('message')} value={form.message} onChange={(e) => set('message', e.target.value)} maxLength={500} />
+            </Field>
+          </div>
+        </div>
 
-            {/* Father Name */}
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>Father Name</label>
-              <input style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#fff',fontFamily:'inherit',outline:'none',boxSizing:'border-box' }}
-                placeholder="Father Name" value={form.fatherName} onChange={e=>setForm({...form,fatherName:e.target.value})}/>
-            </div>
+        {/* Hidden from people; form-filling bots fill it and are ignored. */}
+        <div className="ps-honey" aria-hidden="true">
+          <label htmlFor="f-website">Website</label>
+          <input id="f-website" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => set('website', e.target.value)} />
+        </div>
 
-            {/* Roll ID — auto generated hint */}
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>Roll ID</label>
-              <input style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#F8FAFC',fontFamily:'inherit',outline:'none',boxSizing:'border-box',color:'#94A3B8' }}
-                value="Auto Generated" disabled/>
-            </div>
-
-            {/* DOB */}
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>Select Birthday</label>
-              <input type="date" style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#fff',fontFamily:'inherit',outline:'none',boxSizing:'border-box' }}
-                value={form.dob} onChange={e=>setForm({...form,dob:e.target.value})}/>
-            </div>
-
-            {/* Gender */}
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>Gender</label>
-              <select style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#fff',fontFamily:'inherit',outline:'none' }}
-                value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})}>
-                <option value="">Gender</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-              </select>
-            </div>
-
-            {/* Class interested */}
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>Class Interested</label>
-              <input style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#fff',fontFamily:'inherit',outline:'none',boxSizing:'border-box' }}
-                placeholder="e.g. Class 5, KG, Nursery" value={form.classInterested} onChange={e=>setForm({...form,classInterested:e.target.value})}/>
-            </div>
-
-            {/* Father Email */}
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>Father Email Address</label>
-              <input type="email" style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#fff',fontFamily:'inherit',outline:'none',boxSizing:'border-box' }}
-                placeholder="Father Email Address" value={form.fatherEmail} onChange={e=>setForm({...form,fatherEmail:e.target.value})}/>
-            </div>
-
-            {/* Father CNIC */}
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>Father CNIC Number (without dashes)</label>
-              <input style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#fff',fontFamily:'inherit',outline:'none',boxSizing:'border-box' }}
-                placeholder="Father CNIC Number (without dashes)" value={form.fatherCnic} onChange={e=>setForm({...form,fatherCnic:e.target.value})}/>
-            </div>
-
-            {/* Father Phone */}
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>Father Phone Number *</label>
-              <input style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#fff',fontFamily:'inherit',outline:'none',boxSizing:'border-box' }}
-                placeholder="Father Phone Number" value={form.fatherPhone} onChange={e=>setForm({...form,fatherPhone:e.target.value})} required/>
-            </div>
-
-            {/* Address */}
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>Full Home Address</label>
-              <input style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#fff',fontFamily:'inherit',outline:'none',boxSizing:'border-box' }}
-                placeholder="Full Home Address" value={form.address} onChange={e=>setForm({...form,address:e.target.value})}/>
-            </div>
-
-            {/* Captcha */}
-            <div style={{ marginBottom:18 }}>
-              <label style={{ display:'block',fontSize:12.5,fontWeight:600,color:'#374151',marginBottom:5 }}>
-                Are you a human? What is {n1} + {n2}?
-                <button type="button" onClick={() => { /* refresh captcha */ }}
-                  style={{ background:'none',border:'none',cursor:'pointer',marginLeft:6,color:'#0D9488' }}>🔄</button>
-              </label>
-              <input style={{ width:'100%',padding:'9px 12px',border:'1.5px solid #E2E8F0',borderRadius:8,fontSize:13,background:'#fff',fontFamily:'inherit',outline:'none',boxSizing:'border-box' }}
-                placeholder="Type answer here..." value={captchaAnswer} onChange={e=>setCaptchaAnswer(e.target.value)} required/>
-            </div>
-
-            {/* Submit */}
-            <button type="submit" disabled={loading}
-              style={{ width:'100%',padding:'13px',borderRadius:9,border:'none',background:'linear-gradient(90deg,#6B21A8,#4A1580)',color:'#fff',fontSize:14.5,fontWeight:700,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:8 }}>
-              <Send size={16}/> {loading ? 'Submitting...' : 'Submit Admission Request ✓'}
+        <div className={`ps-field ${errors.captcha ? 'has-error' : ''}`} data-field="captcha">
+          <label className="ps-label" htmlFor="f-captcha">Quick check: what is {sum.a} + {sum.b}?<span className="req" aria-hidden="true">*</span></label>
+          <div className="ps-captcha">
+            <span className="ps-captcha-q" aria-hidden="true">{sum.a} + {sum.b} =</span>
+            <input id="f-captcha" className="ps-input" style={{ width: 110 }} inputMode="numeric" value={answer} onChange={(e) => { setAnswer(e.target.value); setErrors((x) => ({ ...x, captcha: undefined })); }} aria-invalid={errors.captcha ? 'true' : undefined} />
+            <button type="button" className="ps-btn is-ghost" onClick={() => { setSum(newSum()); setAnswer(''); }} aria-label="New question">
+              <RefreshCw size={15} />
             </button>
-
-            {/* Go Back */}
-            <div style={{ textAlign:'center',marginTop:14 }}>
-              <Link to="/login" style={{ display:'inline-flex',alignItems:'center',gap:6,background:'#15803D',color:'#fff',padding:'9px 20px',borderRadius:8,textDecoration:'none',fontSize:13,fontWeight:600 }}>
-                ← Go Back
-              </Link>
-            </div>
-          </form>
+          </div>
+          {errors.captcha && <span className="ps-error">{errors.captcha}</span>}
         </div>
-      </div>
-    </div>
+
+        <button type="submit" className="ps-btn is-block" disabled={sending}>
+          <Send size={17} /> {sending ? 'Sending…' : 'Send application'}
+        </button>
+        <p className="ps-hint" style={{ margin: 0, textAlign: 'center' }}>
+          Your details go only to {school.name}.
+        </p>
+      </form>
+    </PublicShell>
   );
 }

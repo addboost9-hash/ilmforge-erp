@@ -181,6 +181,14 @@ export default function AdminDashboard() {
         go: 'Check invoices',
       });
     }
+    const newApplications = d.admissions?.open || 0;
+    if (newApplications > 0) {
+      alerts.push({
+        tone: 'people', Icon: UserPlus, to: '/admissions/inquiries',
+        text: <><strong>{plural(newApplications, 'new admission application', 'new admission applications')}</strong> waiting for a call back. Applications from your online form arrive here automatically.</>,
+        go: 'Review',
+      });
+    }
     if (stuLeft > 0 && k.students > 0) {
       alerts.push({
         tone: 'att', Icon: ClipboardCheck, to: '/attendance',
@@ -292,7 +300,7 @@ export default function AdminDashboard() {
       {!isLoading && !error && alerts.length === 0 && (
         <div className="d-panel d-enter d-no-print" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
           <CheckCircle2 size={18} style={{ color: 'var(--d-profit)' }} />
-          <span style={{ fontSize: 13.5 }}><strong>All clear.</strong> Attendance is marked and no invoice needs checking.</span>
+          <span style={{ fontSize: 13.5 }}><strong>All clear.</strong> Attendance is marked, no application is waiting and no invoice needs checking.</span>
         </div>
       )}
 

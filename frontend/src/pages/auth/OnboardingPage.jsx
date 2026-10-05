@@ -487,7 +487,7 @@ export default function OnboardingPage() {
         <div style={{ padding:'20px 32px 0', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>
             <div style={{ width:32,height:32,borderRadius:9,background:'linear-gradient(135deg,#0D9488,#0369A1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16 }}>🎓</div>
-            <span style={{ fontWeight:700, fontSize:15, color:'#F1F5F9' }}>EduForge Pro</span>
+            <span style={{ fontWeight:700, fontSize:15, color:'#F1F5F9' }}>IlmForge</span>
             <span style={{ marginLeft:'auto', fontSize:12, color:'rgba(255,255,255,0.3)' }}>Setup Wizard</span>
           </div>
           <StepBar current={step}/>
@@ -732,11 +732,11 @@ export default function OnboardingPage() {
                   <div style={{ width:34,height:34,borderRadius:'50%',background:'#0D9488',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16 }}>📧</div>
                   <div>
                     <div style={{ fontSize:12,fontWeight:700,color:'#5EEAD4' }}>Email Sent to: {user?.email}</div>
-                    <div style={{ fontSize:10.5,color:'#4B5563' }}>EduForge Pro — Credentials Delivery</div>
+                    <div style={{ fontSize:10.5,color:'#4B5563' }}>IlmForge — Credentials Delivery</div>
                   </div>
                 </div>
                 <div style={{ background:'rgba(13,148,136,0.08)', border:'1px solid rgba(13,148,136,0.2)', borderRadius:'4px 12px 12px 12px', padding:'12px 14px', fontSize:12.5, color:'#D1FAE5', lineHeight:1.9 }}>
-                  <strong>Subject:</strong> 🎉 Your School "{authSchool?.name}" is Ready on EduForge Pro!<br/><br/>
+                  <strong>Subject:</strong> 🎉 Your School "{authSchool?.name}" is Ready on IlmForge!<br/><br/>
                   🏫 <strong>School:</strong> {authSchool?.name}<br/>
                   🌐 <strong>Login URL:</strong> <span style={{ color:'#5EEAD4' }}>{schoolUrl}/login</span><br/>
                   📧 <strong>Email:</strong> {user?.email}<br/>
@@ -744,7 +744,7 @@ export default function OnboardingPage() {
                   ⏰ 3-day free trial — upgrade anytime<br/>
                   💬 <strong>Support:</strong> +92 300 1234567
                 </div>
-                <div style={{ fontSize:10.5, color:'#374151', marginTop:6, textAlign:'right' }}>✉️ Sent via EduForge Pro</div>
+                <div style={{ fontSize:10.5, color:'#374151', marginTop:6, textAlign:'right' }}>✉️ Sent via IlmForge</div>
               </div>
 
               {/* Your school URL */}

@@ -42,6 +42,7 @@ export default function RegistrationSuccessModal({ onboarding, onClose, onGoToLo
         <h1>🏫 ${onboarding.schoolName}</h1><p>School Registration Credentials — IlmForge ERP</p>
       </div>
       <div class="lnk"><div class="l">Your Unique School Login Link</div><div class="v">${onboarding.schoolLink}</div></div>
+      ${onboarding.schoolPage ? `<div class="lnk"><div class="l">Your School Page (share with parents: admission form, fee slip)</div><div class="v">${onboarding.schoolPage}</div></div>` : ''}
       <div class="row"><span class="k">Admin Email</span><span class="v">${onboarding.adminEmail}</span></div>
       <div class="row"><span class="k">Admin Password</span><span class="v">${onboarding.adminPassword}</span></div>
       <div class="row"><span class="k">School ID (slug)</span><span class="v">${onboarding.schoolSlug}</span></div>
@@ -100,6 +101,24 @@ export default function RegistrationSuccessModal({ onboarding, onClose, onGoToLo
             </div>
             <p className="text-[11px] text-slate-400 mt-1.5">↗ Open and verify it — this is your school's branded login page</p>
           </div>
+
+          {onboarding.schoolPage && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Link2 className="w-4 h-4 text-teal-600" />
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Your School Page</span>
+                <span className="text-[10px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-bold">Share with parents</span>
+              </div>
+              <div className="flex items-center gap-2 bg-slate-50 border-2 border-sky-200 rounded-xl p-3">
+                <code className="flex-1 text-xs font-mono text-slate-700 break-all">{onboarding.schoolPage}</code>
+                <button onClick={() => copy('page', onboarding.schoolPage)} aria-label="Copy school page link"
+                  className="shrink-0 p-2 rounded-lg bg-white border border-slate-200 hover:border-teal-400 text-slate-500 hover:text-teal-600 transition" title="Copy link">
+                  {copied === 'page' ? <CheckCircle2 className="w-4 h-4 text-teal-600" /> : <Copy className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1.5">Parents apply for admission and download fee slips here. Find it any time under Portal Links.</p>
+            </div>
+          )}
 
           {/* Credentials */}
           <div className="border border-slate-200 rounded-xl overflow-hidden">

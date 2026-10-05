@@ -638,6 +638,62 @@ const SECTIONS = [
   },
 
   /* ──────────────────────────────────────────
+     ONLINE ADMISSIONS & SCHOOL LINKS
+  ────────────────────────────────────────── */
+  {
+    id: 'school-links',
+    icon: '🌐',
+    color: '#0073b7',
+    title: 'Online Admissions & School Links',
+    desc: "Your school's own web pages, the online admission form, and how applications reach the office",
+    chapters: [
+      {
+        title: "Your school's own links",
+        steps: [
+          { n:1, text:'Every school has its own web name, e.g. future-foundation-school' },
+          { n:2, text:'School page: ilmforge-erp.vercel.app/s/<web name> — apply, fee slip and sign-in in one place' },
+          { n:3, text:'Admission form: …/s/<web name>/apply · Fee slip: …/s/<web name>/fees' },
+          { n:4, text:"Each page shows only your school's name, logo, colours, classes and campuses" },
+          { n:5, text:'Find them in Sidebar → Portal Links → Share with families: Copy, Open or QR code' },
+          { n:6, text:'Admission form → QR code → Print "Admissions open" poster: an A4 poster with your logo and QR code' },
+        ],
+        tip: 'Put the school page link in your WhatsApp groups, Facebook page and on banners. One link covers everything.',
+      },
+      {
+        title: 'When a parent applies online',
+        steps: [
+          { n:1, text:'The parent fills the form and gets a reference number like ADM-00042' },
+          { n:2, text:'The bell at the top of every admin page shows a red count: open it to see the application' },
+          { n:3, text:'The dashboard "Needs attention" list shows new applications waiting for a call back' },
+          { n:4, text:"An email goes to the school's registered email address (when email is set up)" },
+          { n:5, text:'If IlmForge is open, a short message pops up within a minute' },
+        ],
+        note: "Another school's form can never send an application to you. Each form sends only to its own school.",
+      },
+      {
+        title: 'Following up and admitting',
+        steps: [
+          { n:1, text:'Admissions → Admission Inquiries: new applications are under "New"' },
+          { n:2, text:'Click the arrow to see everything the parent wrote' },
+          { n:3, text:'Call or WhatsApp the parent with one click; set the status to Contacted, Admitted or Closed' },
+          { n:4, text:'Click "Admit": the admission wizard opens with the details filled in and the class chosen' },
+          { n:5, text:'After admitting, the inquiry is marked Admitted automatically' },
+          { n:6, text:'Walk-in and phone enquiries: "Add inquiry", so every enquiry is in one list' },
+        ],
+      },
+      {
+        title: 'Changing your web name',
+        steps: [
+          { n:1, text:'Sidebar → Portal Links → "Change web name"' },
+          { n:2, text:'Use small letters, numbers and single dashes, e.g. future-foundation' },
+          { n:3, text:'Save, then share the new links' },
+        ],
+        warning: 'Links already shared with the old name (WhatsApp, banners, QR codes) stop working after a change.',
+      },
+    ],
+  },
+
+  /* ──────────────────────────────────────────
      IMPORT, EXPORT & PHOTOS
   ────────────────────────────────────────── */
   {

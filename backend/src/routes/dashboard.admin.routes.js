@@ -164,6 +164,10 @@ router.get('/overview', wrap(async (req, res) => {
     where: { schoolId, paidAmount: { gt: prisma.feeInvoice.fields.totalAmount } },
   }).catch(() => 0);
 
+  // Applications from the school's online admission form (and any typed in
+  // by the office) that nobody has followed up yet.
+  const openAdmissions = await prisma.admissionInquiry.count({ where: { schoolId, status: 'open' } }).catch(() => 0);
+
   const rawCollection = pct(collected, billed);
   const metrics = {
     collectionRate: rawCollection == null ? null : Math.min(100, rawCollection),
@@ -236,6 +240,7 @@ router.get('/overview', wrap(async (req, res) => {
       },
       explanation,
       dataQuality: { overpaidInvoices },
+      admissions: { open: openAdmissions },
       capabilities: {
         ...caps,
         // Reported against months that have BOTH fees and expenses, which is

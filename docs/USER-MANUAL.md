@@ -237,6 +237,58 @@ everyone gets a new password in the login details sheet.
 **Sidebar → Student Registry** (`/students`) — search by name, roll number or father name.
 Toggle **Active** / **Inactive**. **Promotion** moves a whole class up at session change.
 
+### Online admissions: your school's own admission form
+
+Every school on IlmForge has its own **web name** and its own pages. For Future Foundation
+School, for example:
+
+| Page | Link | Who uses it |
+|---|---|---|
+| School page | `ilmforge-erp.vercel.app/s/future-foundation-school` | Anyone — one link for everything |
+| Admission form | `…/s/future-foundation-school/apply` | Parents applying for admission |
+| Fee slip | `…/s/future-foundation-school/fees` | Parents printing a fee voucher by roll number |
+
+Each page shows **your** school's name, logo and colours, lists **your** classes and
+campuses, and sends everything to **your** school only. Another school's form can never
+send an application to you, and yours never to them.
+
+**Where to find your links:** **Sidebar → Portal Links** (`/settings/portal-links`), under
+*Share with families*. Each link has **Copy**, **Open** and **QR code**. The admission form's
+QR panel also has **Print "Admissions open" poster** — an A4 poster with your logo, name,
+QR code and phone number for the gate, the notice board or a banner.
+
+**A parent applies** on the admission form: student's name, class, father's name and mobile
+number are required; date of birth, CNIC, email, address and previous school are optional.
+They get a reference number such as **ADM-00042** on screen.
+
+**The school is told at once:**
+
+1. The **bell** at the top of every admin page shows a red count of new items. Open it to
+   see *New admission application — Online form* with the child's name, class and phone.
+2. The dashboard's **Needs attention** says *"1 new admission application waiting for a
+   call back"*.
+3. An email goes to the school's registered email address (when email is set up).
+4. If the office has IlmForge open, a short message pops up within a minute.
+
+**Following it up:** **Admissions → Admission Inquiries** (`/admissions/inquiries`). New
+applications are under **New**. For each one you can:
+
+- click the arrow to see everything the parent wrote;
+- **call** or **WhatsApp** the parent with one click;
+- change the status to **Contacted**, **Admitted** or **Closed**;
+- click **Admit** — the admission wizard opens with the child's and father's details
+  already filled in and the class chosen. After admitting, the inquiry is marked
+  **Admitted** by itself.
+
+Walk-in and phone enquiries can be added with **Add inquiry**, so every enquiry is in one list.
+
+**Changing your web name:** on Portal Links, **Change web name**, e.g. from
+`future-foundation-school` to `future-foundation`. Use small letters, numbers and single
+dashes. Links you already shared with the old name stop working, so share the new ones.
+
+> The old address `/apply-admission` without a school name asks the parent *which school*
+> instead of guessing. Always share your school's own link.
+
 ---
 
 <a name="part-4"></a>
@@ -502,7 +554,9 @@ Everyone at the school gets their own portal, branded with your school's name an
 
 **Sidebar → Portal Links** (`/settings/portal-links`)
 
-This page lists the sign-in link for every role, with what each person signs in with:
+The top of the page has your public links (school page, admission form, fee slip — see
+*Online admissions* in Part 3). Below them, the sign-in link for every role, with what each
+person signs in with:
 
 | Portal | Signs in with |
 |---|---|

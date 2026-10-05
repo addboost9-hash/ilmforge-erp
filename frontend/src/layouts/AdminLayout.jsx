@@ -3,6 +3,7 @@
  * Matches reference screenshot: #1B2F6E sidebar, white header, #ecf0f5 content
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import NotificationBell from '../components/NotificationBell';
 import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import useAuthStore from '../store/auth.store';
 import useLanguageStore from '../store/language.store';
@@ -1260,32 +1261,8 @@ export default function AdminLayout() {
             {/* Language Toggle */}
             <LanguageToggle />
 
-            {/* Notification bell with red dot */}
-            <button
-              aria-label="Notifications"
-              onClick={() => navigate('/notifications')}
-              style={{
-                width: 36, height: 36, borderRadius: 6,
-                border: '1px solid #dee2e6', background: '#fff',
-                cursor: 'pointer', display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                color: '#666', position: 'relative', transition: 'all .12s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#0073b7'; e.currentTarget.style.color = '#0073b7'; e.currentTarget.style.background = '#e8f4fd'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#dee2e6'; e.currentTarget.style.color = '#666'; e.currentTarget.style.background = '#fff'; }}
-            >
-              <div style={{position:'relative',display:'inline-flex'}}>
-                <Bell size={18}/>
-                <span style={{
-                  position:'absolute',top:-3,right:-3,
-                  background:'#DC2626',color:'white',
-                  borderRadius:'50%',width:14,height:14,
-                  fontSize:8,fontWeight:700,
-                  display:'flex',alignItems:'center',justifyContent:'center',
-                  border:'1.5px solid white',
-                }}>3</span>
-              </div>
-            </button>
+            {/* Notification bell: real alerts (admissions, complaints, leave) */}
+            <NotificationBell />
 
             {/* Academic session badge */}
             <div

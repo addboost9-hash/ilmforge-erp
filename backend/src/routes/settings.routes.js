@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { validateSlug } = require('../utils/slug');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // ---------------------------------------------------------------------------
@@ -64,7 +65,7 @@ router.put('/school', wrap(async (req, res) => {
 router.get('/portal-links', wrap(async (req, res) => {
   const school = await prisma.school.findUnique({
     where: { id: req.schoolId },
-    select: { name: true, slug: true, logoUrl: true },
+    select: { name: true, slug: true, logoUrl: true, phone: true, city: true, address: true },
   });
   if (!school) return res.status(404).json({ success: false, message: 'School not found.' });
 
@@ -82,13 +83,40 @@ router.get('/portal-links', wrap(async (req, res) => {
   res.json({
     success: true,
     data: {
-      school: { name: school.name, slug: school.slug, logoUrl: school.logoUrl },
+      school: { name: school.name, slug: school.slug, logoUrl: school.logoUrl, phone: school.phone, city: school.city, address: school.address },
       links: ROLES.map((r) => ({
         ...r,
         url: `${base}/login?slug=${school.slug}&role=${r.role}`,
       })),
     },
   });
+}));
+
+// PUT /api/v1/settings/portal-links/slug  { slug }
+// Lets the school choose its own web name, e.g. "future-foundation" in
+// ilmforge-erp.vercel.app/s/future-foundation. Links shared with the old
+// name stop working, which the page says before saving.
+router.put('/portal-links/slug', wrap(async (req, res) => {
+  const slug = String(req.body?.slug || '').trim().toLowerCase();
+  const problem = validateSlug(slug);
+  if (problem) return res.status(400).json({ success: false, message: problem });
+
+  const current = await prisma.school.findUnique({ where: { id: req.schoolId }, select: { slug: true } });
+  if (current?.slug === slug) return res.json({ success: true, data: { slug } });
+
+  const taken = await prisma.school.findFirst({ where: { slug, NOT: { id: req.schoolId } }, select: { id: true } });
+  if (taken) {
+    return res.status(409).json({
+      success: false,
+      message: 'Another school already uses that name. Try adding your city or area, e.g. ' + slug + '-lahore.',
+    });
+  }
+
+  const school = await prisma.school.update({ where: { id: req.schoolId }, data: { slug }, select: { slug: true } });
+  await prisma.auditLog.create({
+    data: { schoolId: req.schoolId, userId: req.user.id, action: 'SCHOOL_LINK_CHANGED', resource: 'school', resourceId: req.schoolId },
+  }).catch(() => { /* the change itself succeeded */ });
+  res.json({ success: true, data: school });
 }));
 
 router.get('/sessions', wrap(async (req, res) => {

@@ -196,4 +196,74 @@ router.get('/stats', wrap(async (req, res) => {
   });
 }));
 
+/**
+ * GET /api/v1/dashboard/alerts
+ * What the bell in the admin header shows: things that arrived and still
+ * need someone in the office to act. Read state is kept by the browser
+ * (last time the bell was opened), so this only reports what is open.
+ */
+const ALERT_ROLES = ['super_admin', 'admin', 'principal'];
+const fmtDay = (d) => new Date(d).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' });
+
+router.get('/alerts', wrap(async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-cache');
+  if (!ALERT_ROLES.includes(req.user?.role)) {
+    return res.json({ success: true, data: { items: [], counts: { admissions: 0, complaints: 0, leaves: 0 } } });
+  }
+  const schoolId = req.schoolId;
+  const [admissions, admissionCount, complaints, complaintCount, leaves, leaveCount] = await Promise.all([
+    prisma.admissionInquiry.findMany({
+      where: { schoolId, status: 'open' }, orderBy: { createdAt: 'desc' }, take: 15,
+      select: { id: true, name: true, phone: true, classInterested: true, notes: true, createdAt: true },
+    }),
+    prisma.admissionInquiry.count({ where: { schoolId, status: 'open' } }),
+    prisma.parentComplaint.findMany({
+      where: { schoolId, status: 'open' }, orderBy: { createdAt: 'desc' }, take: 10,
+      select: { id: true, subject: true, createdAt: true },
+    }).catch(() => []),
+    prisma.parentComplaint.count({ where: { schoolId, status: 'open' } }).catch(() => 0),
+    prisma.leaveApplication.findMany({
+      where: { schoolId, status: 'pending' }, orderBy: { createdAt: 'desc' }, take: 10,
+      select: { id: true, applicantType: true, applicantId: true, fromDate: true, toDate: true, createdAt: true },
+    }).catch(() => []),
+    prisma.leaveApplication.count({ where: { schoolId, status: 'pending' } }).catch(() => 0),
+  ]);
+
+  // Names for leave requests (applicantId points at a student or a staff row).
+  const ids = (type) => leaves.filter((l) => l.applicantType === type).map((l) => l.applicantId);
+  const [students, staff] = await Promise.all([
+    ids('student').length ? prisma.student.findMany({ where: { schoolId, id: { in: ids('student') } }, select: { id: true, name: true } }) : [],
+    ids('staff').length ? prisma.staff.findMany({ where: { schoolId, id: { in: ids('staff') } }, select: { id: true, name: true } }) : [],
+  ]);
+  const nameOf = (l) => (l.applicantType === 'staff' ? staff : students).find((p) => p.id === l.applicantId)?.name;
+
+  const items = [
+    ...admissions.map((a) => ({
+      type: 'admission',
+      id: `admission-${a.id}`,
+      title: 'New admission application',
+      body: [a.name, a.classInterested, a.phone].filter(Boolean).join(' · '),
+      online: /^Source: Online admission form/.test(a.notes || ''),
+      at: a.createdAt,
+      link: '/admissions/inquiries',
+    })),
+    ...complaints.map((c) => ({
+      type: 'complaint', id: `complaint-${c.id}`, title: 'New parent complaint', body: c.subject, at: c.createdAt, link: '/complaints',
+    })),
+    ...leaves.map((l) => ({
+      type: 'leave',
+      id: `leave-${l.id}`,
+      title: l.applicantType === 'staff' ? 'Staff leave request' : 'Student leave request',
+      body: `${nameOf(l) || 'Unknown'} · ${fmtDay(l.fromDate)} – ${fmtDay(l.toDate)}`,
+      at: l.createdAt,
+      link: '/leaves',
+    })),
+  ].sort((x, y) => new Date(y.at) - new Date(x.at)).slice(0, 25);
+
+  res.json({
+    success: true,
+    data: { items, counts: { admissions: admissionCount, complaints: complaintCount, leaves: leaveCount } },
+  });
+}));
+
 module.exports = router;

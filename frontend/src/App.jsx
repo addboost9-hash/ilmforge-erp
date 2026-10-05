@@ -8,6 +8,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import AdminLayout from './layouts/AdminLayout';
 import LandingPage from './pages/public/LandingPage';
 import PublicAdmissionPage from './pages/public/PublicAdmissionPage';
+import SchoolHomePage from './pages/public/SchoolHomePage';
 import PublicFeeVoucherPage from './pages/public/PublicFeeVoucherPage';
 import LoginPage from './pages/auth/LoginPage';
 import BrandedLoginPage from './pages/auth/BrandedLoginPage';
@@ -350,6 +351,10 @@ export default function App() {
           <Route path="/change-password-required" element={<AuthedAny><ForcePasswordChangePage /></AuthedAny>} />
           <Route path="/apply-admission"   element={<PublicAdmissionPage />} />
           <Route path="/fee-voucher"       element={<PublicFeeVoucherPage />} />
+          {/* A school's own public pages, by its web name (slug). */}
+          <Route path="/s/:slug"           element={<SchoolHomePage />} />
+          <Route path="/s/:slug/apply"     element={<PublicAdmissionPage />} />
+          <Route path="/s/:slug/fees"      element={<PublicFeeVoucherPage />} />
           {/* Platform Owner Control — Hidden URL, key-protected */}
           <Route path="/platform-control"  element={<PlatformControlPage />} />
           <Route path="/suspended"         element={<SuspendedPage />} />

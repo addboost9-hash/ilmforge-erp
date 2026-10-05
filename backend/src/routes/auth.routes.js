@@ -95,11 +95,11 @@ router.post('/verify-email', wrap(async (req, res) => {
 // Throttled in app.js by IP + account, failed attempts only — see the note at
 // the top of this file for why a plain per-IP limit does not work here.
 router.post('/login', wrap(async (req, res) => {
-  const { email, phone, password } = req.body;
+  const { email, phone, password, schoolSlug } = req.body;
   if (!password || (!email && !phone)) {
     return res.status(400).json({ success: false, message: 'Email/phone and password are required.' });
   }
-  const data = await authService.login({ email, phone, password });
+  const data = await authService.login({ email, phone, password, schoolSlug });
   res.json({ success: true, data });
 }));
 
@@ -185,8 +185,10 @@ router.get('/me', authMiddleware, wrap(async (req, res) => {
     include: { school: { include: { campuses: true } } }
   });
   if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
-  const { passwordHash, ...safe } = user;
-  res.json({ success: true, data: safe });
+  const { passwordHash, school, ...safe } = user;
+  // Only the safe school fields: the full row carries the WhatsApp gateway
+  // token and the licence key (see authService.publicSchool).
+  res.json({ success: true, data: { ...safe, school: authService.publicSchool(school) } });
 }));
 
 module.exports = router;

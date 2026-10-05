@@ -13,7 +13,7 @@ export function useBranding() {
   return {
     logo:         branding?.logo         || ls('schoolLogoPreview', ''),
     primaryColor: branding?.primaryColor || ls('brandPrimaryColor', '#0D9488'),
-    schoolName:   branding?.schoolName   || school?.name || ls('registeredSchoolName', 'EduForge Pro'),
+    schoolName:   branding?.schoolName   || school?.name || ls('registeredSchoolName', 'IlmForge'),
     tagline:      branding?.tagline      || ls('brandTagline', 'School Management Platform'),
     motto:        branding?.motto        || ls('brandMotto', ''),
     /* helper: CSS gradient using primary color */

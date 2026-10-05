@@ -21,10 +21,23 @@ export function applyBranding() {
   } catch {}
 }
 
+/* A copy saved before the server stopped sending them may still hold the
+   school's private settings (its WhatsApp gateway token) and licence key.
+   Drop those from this browser on start-up. */
+const storedSchool = () => {
+  const school = ls('school');
+  if (school && (school.settingsJson !== undefined || school.licenseKey !== undefined)) {
+    const { settingsJson, licenseKey, licenseExpiry, ...safe } = school; // eslint-disable-line no-unused-vars
+    try { localStorage.setItem('school', JSON.stringify(safe)); } catch { /* ignore */ }
+    return safe;
+  }
+  return school;
+};
+
 /* ── store ───────────────────────────────────────── */
 const useAuthStore = create((set) => ({
   user:            ls('user'),
-  school:          ls('school'),
+  school:          storedSchool(),
   isAuthenticated: !!lsStr('accessToken'),
   isLoading:       false,
   error:           null,

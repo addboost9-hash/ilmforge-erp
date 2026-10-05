@@ -148,19 +148,10 @@ app.get('/health', async (req, res) => {
 // ─── PUBLIC routes ───────────────────────────────────────────────────────
 app.use('/api/v1/auth', R('./routes/auth.routes'));
 
-// ─── PUBLIC: School branding by slug (for branded login page) ────────────
-app.get('/api/v1/public/school/:slug', async (req, res) => {
-  try {
-    const school = await prisma.school.findFirst({
-      where: { slug: req.params.slug, status: 'active' },
-      select: { id:true, name:true, slug:true, logoUrl:true, email:true, city:true, address:true, phone:true },
-    });
-    if (!school) return res.status(404).json({ success:false, message:'School not found' });
-    res.json({ success:true, data: school });
-  } catch (err) {
-    res.status(500).json({ success:false, message:'Server error' });
-  }
-});
+// ─── PUBLIC: a school's own pages, looked up by its slug ─────────────────
+// Branding for its login / admission / fee-slip pages and the online
+// admission form. See routes/public.routes.js.
+app.use('/api/v1/public', R('./routes/public.routes'));
 
 // ─── PUBLIC: Fee lookup by roll number — rate-limited, schoolSlug required, PII stripped ───
 app.get('/api/v1/public/fees/by-roll/:rollNo', publicFeeLimiter, async (req, res) => {

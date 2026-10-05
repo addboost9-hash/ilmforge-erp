@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../config/prisma');
 const phoneUtil = require('../utils/phone');
+const slugUtil = require('../utils/slug');
 const { equals: ciEquals } = require('../utils/search');
 const { sendSMS } = require('./sms.service');
 const { sendEmail, sendWelcomeEmail, sendOTPEmail, sendSchoolReadyEmail } = require('./email.service');
@@ -92,16 +93,19 @@ const register = async ({ schoolName, name, email, phone, password: userPassword
     : generatePassword();
   const passwordHash = await bcrypt.hash(plainPassword, 12);
 
-  // Build collision-resistant slug candidates for registration attempts
-  const baseSlug = schoolName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'school';
-  const buildUniqueSlug = () => `${baseSlug}-${Date.now().toString(36)}-${uuidv4().slice(0, 6)}`;
+  // The school's web name, used in all its public links. A clean name
+  // ("future-foundation-school", "-2" if taken) for the first attempt; the
+  // random form is only a fallback if another school takes it in the same
+  // instant.
+  const baseSlug = slugUtil.slugify(schoolName) || 'school';
+  const cleanSlug = await slugUtil.freeSlug(prisma, schoolName);
+  const buildUniqueSlug = () => `${baseSlug.slice(0, 24)}-${Date.now().toString(36)}-${uuidv4().slice(0, 6)}`;
   const safeLogoUrl = typeof logoUrl === 'string' && logoUrl.length > 10 && logoUrl.length <= 1_500_000
     ? logoUrl
     : null;
 
   // Create school + campus + admin user; in dev retry once if a race caused unique conflict.
-  const createSchoolGraph = async () => {
-    const uniqueSlug = buildUniqueSlug();
+  const createSchoolGraph = async (uniqueSlug) => {
     return prisma.$transaction(async (tx) => {
       const school = await tx.school.create({
         data: {
@@ -138,9 +142,12 @@ const register = async ({ schoolName, name, email, phone, password: userPassword
   let result;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      result = await createSchoolGraph();
+      result = await createSchoolGraph(attempt === 0 ? cleanSlug : buildUniqueSlug());
       break;
     } catch (err) {
+      // Another school took the same name a moment ago: retry with the
+      // fallback form. Safe in production too; nothing was written.
+      if (err?.code === 'P2002' && String(err?.meta?.target || '').includes('slug') && attempt === 0) continue;
       const canRetry = process.env.NODE_ENV !== 'production' && err?.code === 'P2002' && attempt === 0;
       if (!canRetry) throw err;
 
@@ -239,6 +246,7 @@ const register = async ({ schoolName, name, email, phone, password: userPassword
       schoolName,
       schoolSlug:  result.school.slug,
       schoolLink,                    // unique login link for THIS school only
+      schoolPage: `${frontendBase}/s/${result.school.slug}`, // public page: apply, fee slip, sign-in
       schoolLogoUrl: safeLogoUrl,
       adminEmail:  email,
       adminPassword: plainPassword,  // shown once in popup — user must save it
@@ -344,7 +352,7 @@ const verifyPhone = async ({ userId, otp, requestOrigin = '' }) => {
     password:   '',
   });
 
-  return { ...tokens, user: sanitizeUser(user), school: user.school };
+  return { ...tokens, user: sanitizeUser(user), school: publicSchool(user.school) };
 };
 
 // Resend OTP — now sends via email (Office365) + SMS backup
@@ -385,7 +393,7 @@ const resendOTP = async ({ userId }) => {
 };
 
 // Login
-const login = async ({ email, phone, password }) => {
+const login = async ({ email, phone, password, schoolSlug }) => {
   // Build OR conditions: support login by email (case-insensitive) or phone number
   const identifier = email || phone;
   const normalizedEmail = identifier ? identifier.trim().toLowerCase() : null;
@@ -400,7 +408,33 @@ const login = async ({ email, phone, password }) => {
   }
 
   const where = orConditions.length > 1 ? { OR: orConditions } : (orConditions[0] || { email: '' });
-  let user = await prisma.user.findFirst({ where: { ...where, deletedAt: null }, include: { school: true } });
+
+  // The school whose link opened the sign-in page, if any. Neither email nor
+  // phone is unique across schools (a parent with children in two schools,
+  // a teacher who works at both), so it decides who is meant when the
+  // password alone fits more than one account.
+  const linkSchool = schoolSlug
+    ? await prisma.school.findFirst({ where: { slug: String(schoolSlug).trim().toLowerCase() }, select: { id: true } })
+    : null;
+  const linkFirst = (rows, schoolOf) => (linkSchool
+    ? [...rows.filter((r) => schoolOf(r) === linkSchool.id), ...rows.filter((r) => schoolOf(r) !== linkSchool.id)]
+    : rows);
+
+  let user = null;
+  const matches = linkFirst(
+    await prisma.user.findMany({ where: { ...where, deletedAt: null }, include: { school: true }, take: 20 }),
+    (u) => u.schoolId,
+  );
+  if (matches.length === 1) {
+    user = matches[0];
+  } else if (matches.length > 1) {
+    // Previously findFirst picked one at random, so the person was told
+    // "Invalid credentials" whenever it picked their other school.
+    for (const m of matches) {
+      if (await bcrypt.compare(password, m.passwordHash)) { user = m; break; }
+    }
+    if (!user) user = matches[0]; // wrong password: recorded against the likeliest account below
+  }
 
   // Fall back to the student's roll number. A student's stored email is a
   // synthetic address they never see (name.rollno@slug.student); the roll
@@ -420,10 +454,10 @@ const login = async ({ email, phone, password }) => {
         OR: [{ rollNo: ciEquals(roll) }, { rollNo: roll.toUpperCase() }],
         deletedAt: null, NOT: { userId: null },
       },
-      select: { userId: true },
+      select: { userId: true, schoolId: true },
       take: 20,
     });
-    for (const c of candidates) {
+    for (const c of linkFirst(candidates, (r) => r.schoolId)) {
       const candidate = await prisma.user.findFirst({
         where: { id: c.userId, deletedAt: null },
         include: { school: true },
@@ -473,7 +507,7 @@ const login = async ({ email, phone, password }) => {
     data: { schoolId: user.schoolId, userId: user.id, action: 'LOGIN_SUCCESS', resource: 'user', resourceId: user.id }
   });
 
-  return { ...tokens, user: sanitizeUser(user), school: user.school, mustChangePassword: user.mustChangePassword };
+  return { ...tokens, user: sanitizeUser(user), school: publicSchool(user.school), mustChangePassword: user.mustChangePassword };
 };
 
 // Refresh token
@@ -589,6 +623,19 @@ const generateTokens = (user) => {
   return { accessToken, refreshToken };
 };
 
+/* What any signed-in person may know about their school. The full row also
+   holds settingsJson (the WhatsApp gateway API token, payment settings) and
+   the licence key, and it was sent to every login — parents and students
+   included — and kept in their browser. */
+const SCHOOL_PUBLIC_FIELDS = ['id', 'name', 'slug', 'logoUrl', 'address', 'city', 'phone', 'email', 'plan', 'status', 'trialEndsAt', 'maxStudents', 'subdomain', 'activatedAt', 'createdAt'];
+const publicSchool = (school) => {
+  if (!school) return null;
+  const out = {};
+  for (const k of SCHOOL_PUBLIC_FIELDS) if (school[k] !== undefined) out[k] = school[k];
+  if (Array.isArray(school.campuses)) out.campuses = school.campuses;
+  return out;
+};
+
 const sanitizeUser = (user) => ({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, photoUrl: user.photoUrl, schoolId: user.schoolId, campusId: user.campusId });
 
 const getWelcomeEmailHtml = ({ name, schoolName, verifyUrl }) => `
@@ -612,4 +659,4 @@ const getWelcomeEmailHtml = ({ name, schoolName, verifyUrl }) => `
   </div>
 </div></body></html>`;
 
-module.exports = { register, verifyPhone, resendOTP, login, refreshToken, changePassword, forgotPassword, resetPassword, verifyEmail, resendCredentialsForUser };
+module.exports = { register, verifyPhone, resendOTP, login, refreshToken, changePassword, forgotPassword, resetPassword, verifyEmail, resendCredentialsForUser, publicSchool };

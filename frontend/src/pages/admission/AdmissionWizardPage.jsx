@@ -9,7 +9,7 @@
  *   Step 5: Review & Confirm
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
@@ -132,6 +132,27 @@ const inputCls = 'w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-whi
 const labelCls = 'block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide';
 
 // Default 5 years ago
+/* An application from Admission Inquiries (online form or walk-in) opens the
+   wizard with what the parent already told the school. */
+function withPrefill(form, p) {
+  if (!p) return form;
+  const g = String(p.gender || '').toLowerCase();
+  const pick = (v) => (v ? String(v) : '');
+  return {
+    ...form,
+    name: pick(p.name) || form.name,
+    fatherName: pick(p.fatherName) || form.fatherName,
+    gender: g === 'male' ? 'Male' : g === 'female' ? 'Female' : form.gender,
+    dob: /^\d{4}-\d{2}-\d{2}$/.test(p.dob || '') ? p.dob : form.dob,
+    fatherCnic: pick(p.fatherCnic) || form.fatherCnic,
+    parentCnic: pick(p.fatherCnic) || form.parentCnic,
+    emergencyPhone: pick(p.emergencyPhone) || form.emergencyPhone,
+    parentEmail: pick(p.parentEmail) || form.parentEmail,
+    address: pick(p.address) || form.address,
+    prevSchoolName: pick(p.prevSchoolName) || form.prevSchoolName,
+  };
+}
+
 const defaultDob = () => {
   const d = new Date();
   d.setFullYear(d.getFullYear() - 5);
@@ -153,7 +174,11 @@ export default function AdmissionWizardPage() {
   const [prevHistoryOpen, setPrevHistoryOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
 
-  const [form, setForm] = useState({
+  const location = useLocation();
+  const prefill = location.state?.prefill || null;
+  const inquiryId = location.state?.inquiryId || null;
+
+  const [form, setForm] = useState(() => withPrefill({
     // ── Step 1: Student Info ──
     familyNo: '',
     admissionDate: new Date().toISOString().slice(0, 10),
@@ -223,7 +248,7 @@ export default function AdmissionWizardPage() {
     // ── Step 4 ──
     parentEmail: '', parentCnic: '',
     createPortalAccounts: true,
-  });
+  }, prefill));
 
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErrors(e => ({ ...e, [k]: null })); };
   const setDiscount = (head, val) => setForm(f => ({ ...f, feeDiscounts: { ...f.feeDiscounts, [head]: val } }));
@@ -233,6 +258,14 @@ export default function AdmissionWizardPage() {
     queryKey: ['wizard-classes'],
     queryFn: () => api.get('/classes').then(r => r.data.data || []),
   });
+
+  // Pick the class the parent applied for, once the class list has loaded.
+  useEffect(() => {
+    if (!prefill?.className || !classes.length) return;
+    const want = prefill.className.trim().toLowerCase();
+    const match = classes.find((c) => String(c.name).trim().toLowerCase() === want);
+    if (match) setForm((f) => (f.classId ? f : { ...f, classId: String(match.id) }));
+  }, [classes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Needed for the letterhead on the printed admission form.
   const { data: school } = useQuery({
@@ -399,6 +432,12 @@ export default function AdmissionWizardPage() {
       toast.dismiss(loadingToast);
       toast.success('Student admitted successfully! Credentials have been sent.');
       setResult(res.data);
+      // The application this admission came from is now done.
+      if (inquiryId) {
+        api.put(`/admissions/inquiries/${inquiryId}`, { status: 'admitted' }).catch(() => {
+          toast('Admitted. Please mark the inquiry as Admitted in Admission Inquiries.', { icon: 'ℹ️' });
+        });
+      }
     } catch (err) {
       toast.dismiss(loadingToast);
       const errorMessage = err.response?.data?.message || 'Try again.';
@@ -553,6 +592,11 @@ export default function AdmissionWizardPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-800">New Student Admission</h1>
         <p className="text-sm text-slate-500">Complete student registration — portal accounts, fee & class auto-linked</p>
+        {prefill && (
+          <div role="status" style={{ marginTop: 10, padding: '9px 12px', borderRadius: 8, background: '#F0FDFA', border: '1px solid #99F6E4', color: '#0F766E', fontSize: 13 }}>
+            Filled in from admission application ADM-{String(inquiryId || '').padStart(5, '0')}. Please check every step before admitting.
+          </div>
+        )}
       </div>
 
       {/* Stepper */}
