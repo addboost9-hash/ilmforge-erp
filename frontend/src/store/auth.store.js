@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import api from '../api/client';
+import { clearSession, clearOfflineData } from '../utils/session';
 
 /* ── helpers ─────────────────────────────────────── */
 const ls = (key, fallback = null) => {
@@ -62,6 +63,9 @@ const useAuthStore = create((set) => ({
       // guards can gate on it. The backend has tracked/returned this flag
       // correctly all along; nothing in the frontend ever read it.
       const user = { ...loggedInUser, mustChangePassword: !!mustChangePassword };
+      // A new sign-in starts with no offline copies of anyone else's data
+      // (the last person may have closed the browser without signing out).
+      clearOfflineData();
       localStorage.setItem('accessToken',  accessToken);
       localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('user',   JSON.stringify(user));
@@ -114,14 +118,10 @@ const useAuthStore = create((set) => ({
   /* logout ──────────────────────── */
   logout: async () => {
     try { await api.post('/auth/logout'); } catch {}
-    /* keep branding across logout so login page still looks branded */
-    const logo         = lsStr('schoolLogoPreview', '');
-    const primaryColor = lsStr('brandPrimaryColor', '#0D9488');
-    const schoolName   = lsStr('registeredSchoolName', '');
-    localStorage.clear();
-    if (logo)        localStorage.setItem('schoolLogoPreview',    logo);
-    if (primaryColor)localStorage.setItem('brandPrimaryColor',    primaryColor);
-    if (schoolName)  localStorage.setItem('registeredSchoolName', schoolName);
+    /* Keeps the school's branding and web name (so the sign-in page still
+       shows the school) and any attendance still waiting for the internet;
+       drops the offline copies of this user's data. */
+    await clearSession();
     set({ user: null, school: null, isAuthenticated: false });
     window.location.href = '/login';
   },

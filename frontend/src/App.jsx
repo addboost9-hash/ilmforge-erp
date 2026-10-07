@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import React from 'react';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
+import OfflineStatus from './components/OfflineStatus';
 import useAuthStore from './store/auth.store';
 import ErrorBoundary from './components/ErrorBoundary';
 import AdminLayout from './layouts/AdminLayout';
@@ -229,6 +230,11 @@ const qc = new QueryClient({
     },
     mutations: {
       retry: 1,
+      // With the default ('online') a save made without internet was paused:
+      // the button span forever and nothing told the user. Always attempt
+      // it: the API client says "You are offline", and attendance saves are
+      // kept on the device and sent later (utils/offlineQueue.js).
+      networkMode: 'always',
     },
   },
 });
@@ -324,6 +330,8 @@ export default function App() {
       <BrowserRouter>
         {/* PWA Install Prompt — shows on mobile/desktop when installable */}
         <PWAInstallPrompt />
+        {/* Offline banner + attendance saves waiting for the internet */}
+        <OfflineStatus />
         <Toaster
           position="top-right"
           toastOptions={{

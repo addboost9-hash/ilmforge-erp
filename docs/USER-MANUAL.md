@@ -728,6 +728,29 @@ turned away rather than shown the page.
 <a name="part-13"></a>
 ## Part 13 — When something goes wrong
 
+### Working without internet
+
+IlmForge keeps working when the school's internet drops:
+
+| | Without internet |
+|---|---|
+| Opening IlmForge | Opens as normal on a computer or phone that has used it before. |
+| Pages you opened earlier | Show the data they had when you last saw them. |
+| **Marking attendance** (class register, Mark Now, teacher portal, staff attendance) | **Saved on this device** and sent automatically when the internet is back. |
+| Anything else (fees, admissions, marks, settings) | Needs the internet. You are told "You are offline" and nothing is lost from the form; save again when the connection is back. |
+
+While offline, a dark bar at the bottom says **You're offline** and how many attendance
+saves are waiting. When the connection returns it says **Back online**, sends them by
+itself and shows *"2 attendance saves sent"*. If any are still waiting, an amber bar has a
+**Send now** button.
+
+> Keep the device signed in until the waiting attendance has been sent. Absence messages to
+> parents go out when the register reaches the server. Fee payments are never saved
+> offline: a receipt only exists once the server has confirmed the payment.
+
+A weak signal no longer signs anyone out. Signing out removes this device's saved copies of
+your data, so the next person on a shared office computer cannot see them.
+
 **"The server could not complete that request"**
 The system could not reach the server. Check the internet connection and try again. If it
 continues, contact your IT support — nothing you did caused it, and no data was lost.

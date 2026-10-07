@@ -9,6 +9,8 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
+import toast from 'react-hot-toast';
+import { postOrQueue } from '../../utils/offlineQueue';
 import {
   CalendarDays, Users, CheckCircle2, XCircle, Clock3, Send,
   ChevronRight, ChevronLeft, UserCheck, MessageSquare, Sparkles,
@@ -69,19 +71,16 @@ export default function AttendanceFlowPage() {
       const records = students
         .filter(s => marks[s.id])
         .map(s => ({ studentId: s.id, status: marks[s.id], date, classId: parseInt(classId) }));
-      const res = await api.post('/attendance/save', { records, date, classId: parseInt(classId), ...(sectionId && { sectionId: parseInt(sectionId) }) });
-      // LINKED: auto-notify absent parents
-      let notified = 0;
-      if (notifyAbsent) {
-        const absentees = students.filter(s => marks[s.id] === 'absent' && s.emergencyPhone);
-        for (const s of absentees.slice(0, 50)) {
-          await api.post('/notifications/sms', {
-            phone: s.emergencyPhone,
-            message: `Dear Parent, your child ${s.name} (${s.rollNo}) is marked ABSENT from school today, ${date}. — ${''}School`,
-          }).then(() => notified++).catch(() => {});
-        }
-      }
-      return { saved: records.length, notified, absent: counts.absent };
+      // The server texts absent students' parents itself (once per child per
+      // day). This page used to send a second SMS of its own to each of them,
+      // signed "— School" with no school name.
+      const section = sections.find(sec => String(sec.id) === String(sectionId));
+      const res = await postOrQueue('/attendance/save', {
+        records, date, classId: parseInt(classId), notifyAbsent,
+        ...(sectionId && { sectionId: parseInt(sectionId) }),
+      }, { label: `${selectedClass?.name || 'Class'}${section ? ' ' + section.name : ''}, ${date}` });
+      if (res.queued) return { saved: records.length, notified: 0, absent: counts.absent, queued: true };
+      return { saved: res.data.saved ?? records.length, notified: res.data.notified ?? 0, absent: counts.absent };
     },
     onSuccess: (data) => {
       setSaved(data);
@@ -89,6 +88,7 @@ export default function AttendanceFlowPage() {
       qc.invalidateQueries({ queryKey: ['att-existing'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
+    onError: (err) => toast.error(err.response?.data?.message || 'Attendance could not be saved. Please try again.'),
   });
 
   const STATUS = [
@@ -105,8 +105,14 @@ export default function AttendanceFlowPage() {
         <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-4">
           <CheckCircle2 className="w-9 h-9 text-teal-600" />
         </div>
-        <h1 className="text-xl font-bold text-slate-800">Attendance Saved!</h1>
+        <h1 className="text-xl font-bold text-slate-800">{saved.queued ? 'Saved on this device' : 'Attendance Saved!'}</h1>
         <p className="text-sm text-slate-500 mt-1">{selectedClass?.name} · {date}</p>
+        {saved.queued && (
+          <p role="status" className="text-sm mt-3 rounded-xl px-4 py-3" style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E' }}>
+            There is no internet right now. This register is kept on this device and will be sent automatically when the
+            connection is back{notifyAbsent ? '; absent students’ parents are messaged then' : ''}. Keep this device signed in until it is sent.
+          </p>
+        )}
 
         <div className="grid grid-cols-3 gap-3 my-6">
           <div className="bg-white border border-slate-200 rounded-xl p-4">

@@ -85,7 +85,7 @@ export default function PWAInstallPrompt() {
         <div style={{ flex: 1, minWidth: 200 }}>
           <div style={{ fontWeight: 800, fontSize: 15 }}>Install the IlmForge App!</div>
           <div style={{ fontSize: 12.5, opacity: 0.85, marginTop: 2 }}>
-            Add it to your home screen — works offline too · No app store needed
+            Add it to your home screen. Opens without internet, and attendance marked offline is sent when you're back online · No app store needed
           </div>
           {/* Features */}
           <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
@@ -149,7 +149,7 @@ export default function PWAInstallPrompt() {
         </div>
 
         <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7, textAlign: 'center' }}>
-          IlmForge will work like a native app from your home screen — offline too ✅
+          IlmForge opens from your home screen like an app, even without internet ✅
         </div>
       </div>
     );

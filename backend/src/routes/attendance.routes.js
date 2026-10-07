@@ -130,7 +130,7 @@ router.post('/save', wrap(async (req, res) => {
     }
   }
 
-  res.json({ success: true, message: `${saved} records saved. ${notified} absent notifications sent.` });
+  res.json({ success: true, saved, notified, message: `${saved} records saved. ${notified} absent notifications sent.` });
 }));
 
 // POST /api/v1/attendance/staff — Save staff attendance records

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { postOrQueue } from '../../utils/offlineQueue';
 import { Save, CheckCircle, XCircle, RefreshCw, AlertTriangle } from 'lucide-react';
 
 export default function AttendancePage() {
@@ -29,13 +30,14 @@ export default function AttendancePage() {
   }, [data]);
 
   const save = useMutation({
-    mutationFn: () => api.post('/attendance/save', {
+    mutationFn: () => postOrQueue('/attendance/save', {
       classId: filters.classId,
       sectionId: filters.sectionId || null,
       date: filters.date,
       records: Object.entries(attendance).map(([studentId, status]) => ({ studentId: parseInt(studentId), status })),
-    }),
+    }, { label: `Class register, ${filters.date}` }),
     onSuccess: (r) => {
+      if (r?.queued) { toast(r.data.message, { icon: '📴', duration: 7000 }); return; }
       const count = Object.keys(attendance).length;
       const absentCount = Object.values(attendance).filter(v => v === 'absent').length;
       toast.success(`Attendance saved for ${count} students!`);

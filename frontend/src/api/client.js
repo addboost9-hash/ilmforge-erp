@@ -1,10 +1,30 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { clearSession } from '../utils/session';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
 // Remembers the last failure notice so parallel failures collapse into one.
 let lastNotice = { msg: '', at: 0 };
+
+/* One message for "the request got no proper answer". A page firing six
+   parallel reads must not stack six identical toasts, so the same message
+   is shown at most once per few seconds. */
+function notifyNetworkProblem({ offline, isNetwork, isServer, isRateLimit }) {
+  if (!(offline || isNetwork || isServer || isRateLimit)) return;
+  const msg = offline
+    ? 'You are offline. Check your internet connection.'
+    : isRateLimit
+      ? 'Too many requests. Please wait a moment and try again.'
+      : isNetwork
+        ? 'Could not reach the server. Check your connection, then try again.'
+        : 'The server could not complete that request. Please try again.';
+  const now = Date.now();
+  if (lastNotice.msg !== msg || now - lastNotice.at > 4000) {
+    lastNotice = { msg, at: now };
+    toast.error(msg, { id: 'api-failure', duration: 5000 });
+  }
+}
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -31,7 +51,7 @@ function processQueue(error, token = null) {
 }
 
 const clearAndRedirect = () => {
-  localStorage.clear();
+  clearSession();
   window.location.href = '/login';
 };
 
@@ -45,7 +65,7 @@ api.interceptors.response.use(
     // School suspended / inactive / expired
     if (status === 403 && ['SCHOOL_SUSPENDED','SCHOOL_INACTIVE','TRIAL_EXPIRED','LICENSE_EXPIRED'].includes(code)) {
       const msg = err.response.data;
-      localStorage.clear();
+      clearSession();
       window.location.href = `/suspended?reason=${encodeURIComponent(msg.message)}&contact=${encodeURIComponent(msg.contact || msg.renew || msg.upgrade || '')}`;
       return Promise.reject(err);
     }
@@ -61,7 +81,12 @@ api.interceptors.response.use(
         }).then(token => {
           err.config.headers.Authorization = `Bearer ${token}`;
           return api.request(err.config);
-        }).catch(() => clearAndRedirect());
+        }).catch((e) => {
+          // Only a server that refused the renewal ends the sign-in; no
+          // answer at all (offline, weak signal) must not.
+          if (e?.response) clearAndRedirect();
+          return Promise.reject(e);
+        });
       }
 
       isRefreshing = true;
@@ -85,6 +110,14 @@ api.interceptors.response.use(
           return new Promise(resolve => setTimeout(() => resolve(api.request(err.config)), 4000));
         }
         processQueue(refreshErr, null);
+        // No answer from the server: the sign-in is not wrong, the network
+        // is. It used to sign the person out and wipe this device's saved
+        // data whenever the renewal met a weak signal. Keep the session; the
+        // next request renews it once the connection is back.
+        if (!refreshErr.response) {
+          notifyNetworkProblem({ offline: typeof navigator !== 'undefined' && navigator.onLine === false, isNetwork: true });
+          return Promise.reject(refreshErr);
+        }
         clearAndRedirect();
         return Promise.reject(refreshErr);
       } finally {
@@ -102,28 +135,12 @@ api.interceptors.response.use(
 
        Pass `{ silent: true }` on a request to opt out (polling, probes). */
     if (!err.config?.silent) {
-      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-      const isNetwork = !err.response;
-      const isServer = status >= 500;
-      const isRateLimit = status === 429;
-
-      if (offline || isNetwork || isServer || isRateLimit) {
-        const msg = offline
-          ? 'You are offline. Check your internet connection.'
-          : isRateLimit
-            ? 'Too many requests. Please wait a moment and try again.'
-            : isNetwork
-              ? 'Could not reach the server. Check your connection, then try again.'
-              : 'The server could not complete that request. Please try again.';
-
-        // A page firing six parallel reads must not stack six identical
-        // toasts, so the same message is shown at most once per few seconds.
-        const now = Date.now();
-        if (lastNotice.msg !== msg || now - lastNotice.at > 4000) {
-          lastNotice = { msg, at: now };
-          toast.error(msg, { id: 'api-failure', duration: 5000 });
-        }
-      }
+      notifyNetworkProblem({
+        offline: typeof navigator !== 'undefined' && navigator.onLine === false,
+        isNetwork: !err.response,
+        isServer: status >= 500,
+        isRateLimit: status === 429,
+      });
     }
 
     // Any other 401 (invalid token, not just expired) → logout

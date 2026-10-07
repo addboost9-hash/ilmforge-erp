@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
+import { postOrQueue } from '../../utils/offlineQueue';
 import {
   LayoutDashboard, Users, UserCheck, GraduationCap, BookMarked,
   FolderOpen, Calendar, Bell, Key, Video, LogOut, ChevronRight,
@@ -435,11 +436,13 @@ function AttendanceTab({ classes }) {
   };
 
   const saveAtt = useMutation({
-    mutationFn: () => api.post('/attendance/save', {
+    mutationFn: () => postOrQueue('/attendance/save', {
       type, classId: parseInt(classId), sectionId: sectionId ? parseInt(sectionId) : null, date,
       records: Object.entries(attendance).map(([sid, status]) => ({ studentId: parseInt(sid), status })),
-    }),
-    onSuccess: () => toast.success('Attendance saved successfully!'),
+    }, { label: `Class register, ${date}` }),
+    onSuccess: (res) => (res?.queued
+      ? toast(res.data.message, { icon: '📴', duration: 7000 })
+      : toast.success('Attendance saved successfully!')),
     onError: err => toast.error(err.response?.data?.message || 'Failed to save attendance'),
   });
 

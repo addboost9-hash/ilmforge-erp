@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { postOrQueue } from '../../utils/offlineQueue';
 import { UserCheck, UserX, Save, X, Clock } from 'lucide-react';
 
 const STATUS_OPTIONS = [
@@ -57,7 +58,7 @@ export default function StaffAttendancePage() {
 
   const save = useMutation({
     mutationFn: () =>
-      api.post('/attendance/staff', {
+      postOrQueue('/attendance/staff', {
         date,
         records: staff
           .filter(s => attendance[s.id])
@@ -67,9 +68,10 @@ export default function StaffAttendancePage() {
             timeIn:  timeIn[s.id]  || null,
             timeOut: timeOut[s.id] || null,
           })),
-      }),
-    onSuccess: () => {
-      toast.success('Staff attendance saved!');
+      }, { label: `Staff attendance, ${date}` }),
+    onSuccess: (res) => {
+      if (res?.queued) toast(res.data.message, { icon: '📴', duration: 7000 });
+      else toast.success('Staff attendance saved!');
       qc.invalidateQueries({ queryKey: ['staff-attendance-date', date] });
       setShowModal(false);
     },

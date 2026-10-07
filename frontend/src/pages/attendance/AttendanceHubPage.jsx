@@ -2,6 +2,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { postOrQueue } from '../../utils/offlineQueue';
+
+const OFFLINE_TOAST = { icon: '📴', duration: 7000 };
 import { X, ChevronDown, ChevronUp, Download } from 'lucide-react';
 
 /* ─── design tokens ─────────────────────────────────────────── */
@@ -140,7 +143,7 @@ function MarkAttendanceModal({ row, date, onClose, onSaved }) {
 
   const save = useMutation({
     mutationFn: () =>
-      api.post('/attendance/save', {
+      postOrQueue('/attendance/save', {
         classId: row.classId,
         sectionId: row.sectionId || null,
         date,
@@ -148,9 +151,10 @@ function MarkAttendanceModal({ row, date, onClose, onSaved }) {
           studentId: s.id,
           status: (statuses[s.id] || 'present').toLowerCase().replace('not marked', 'absent'),
         })),
-      }),
-    onSuccess: () => {
-      toast.success('Attendance saved!');
+      }, { label: `${row.className}${row.sectionName ? ' ' + row.sectionName : ''}, ${date}` }),
+    onSuccess: (res) => {
+      if (res?.queued) toast(res.data.message, OFFLINE_TOAST);
+      else toast.success('Attendance saved!');
       onSaved && onSaved();
       onClose();
     },
@@ -365,7 +369,7 @@ function ExpandedDetailRow({ row, students, loading, date, onSaved }) {
 
   const save = useMutation({
     mutationFn: () =>
-      api.post('/attendance/save', {
+      postOrQueue('/attendance/save', {
         classId: row.classId,
         sectionId: row.sectionId || null,
         date,
@@ -373,9 +377,10 @@ function ExpandedDetailRow({ row, students, loading, date, onSaved }) {
           studentId: s.id,
           status: (statuses[s.id] || 'Not Marked').toLowerCase().replace('not marked', 'absent'),
         })),
-      }),
-    onSuccess: () => {
-      toast.success(`Attendance saved for ${row.className}${row.sectionName ? ' - ' + row.sectionName : ''}!`);
+      }, { label: `${row.className}${row.sectionName ? ' ' + row.sectionName : ''}, ${date}` }),
+    onSuccess: (res) => {
+      if (res?.queued) toast(res.data.message, OFFLINE_TOAST);
+      else toast.success(`Attendance saved for ${row.className}${row.sectionName ? ' - ' + row.sectionName : ''}!`);
       setDirty(false);
       onSaved && onSaved();
     },
@@ -404,7 +409,13 @@ function ExpandedDetailRow({ row, students, loading, date, onSaved }) {
               <button
                 style={{ ...btnTeal, marginLeft: 'auto', opacity: dirty ? 1 : 0.6 }}
                 disabled={save.isPending || totalExp === 0}
-                onClick={() => save.mutate()}
+                onClick={() => {
+                  // Unmarked students are saved as absent, which also messages
+                  // their parents. Say so instead of doing it silently.
+                  const unmarked = students.filter((s) => !statuses[s.id] || statuses[s.id] === 'Not Marked').length;
+                  if (unmarked && !window.confirm(`${unmarked} ${unmarked === 1 ? 'student is' : 'students are'} not marked. Save ${unmarked === 1 ? 'this student' : 'them'} as ABSENT? Their parents will get an absence message.`)) return;
+                  save.mutate();
+                }}
               >
                 {save.isPending ? 'Saving…' : 'Save Attendance'}
               </button>
@@ -692,7 +703,7 @@ function StaffAttendanceTab() {
 
   const save = useMutation({
     mutationFn: () =>
-      api.post('/attendance/staff', {
+      postOrQueue('/attendance/staff', {
         date,
         records: staff.map((s) => ({
           staffId: s.id,
@@ -700,8 +711,8 @@ function StaffAttendanceTab() {
           timeIn: timeIn[s.id] || null,
           timeOut: timeOut[s.id] || null,
         })),
-      }),
-    onSuccess: () => toast.success('Staff attendance saved!'),
+      }, { label: `Staff attendance, ${date}` }),
+    onSuccess: (res) => (res?.queued ? toast(res.data.message, OFFLINE_TOAST) : toast.success('Staff attendance saved!')),
     onError: (err) => toast.error(err.response?.data?.message || 'Save failed'),
   });
 

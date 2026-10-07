@@ -638,6 +638,39 @@ const SECTIONS = [
   },
 
   /* ──────────────────────────────────────────
+     WORKING WITHOUT INTERNET
+  ────────────────────────────────────────── */
+  {
+    id: 'offline',
+    icon: '📴',
+    color: '#334155',
+    title: 'Working Without Internet',
+    desc: 'What still works when the school internet drops, and how attendance is sent later',
+    chapters: [
+      {
+        title: 'What works offline',
+        steps: [
+          { n:1, text:'IlmForge opens on a computer or phone that has used it before, even with no internet' },
+          { n:2, text:'Pages you opened earlier show the data they had when you last saw them' },
+          { n:3, text:'A dark bar at the bottom says "You\'re offline" while there is no connection' },
+          { n:4, text:'Fees, admissions, marks and settings need the internet: you are told, and your form stays filled in' },
+        ],
+      },
+      {
+        title: 'Marking attendance offline',
+        steps: [
+          { n:1, text:'Mark the register as usual (class register, Mark Now, teacher portal or staff attendance) and press Save' },
+          { n:2, text:'It says "saved on this device" and the bar shows how many saves are waiting' },
+          { n:3, text:'When the internet is back it says "Back online" and sends them by itself' },
+          { n:4, text:'If any are still waiting, the amber bar has a "Send now" button' },
+        ],
+        warning: 'Keep the device signed in until the waiting attendance has been sent. Absence messages to parents go out when it reaches the server.',
+        note: 'Fee payments are never saved offline: a receipt only exists once the server has confirmed the payment.',
+      },
+    ],
+  },
+
+  /* ──────────────────────────────────────────
      ONLINE ADMISSIONS & SCHOOL LINKS
   ────────────────────────────────────────── */
   {
