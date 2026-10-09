@@ -4,8 +4,29 @@ const prisma = require('../config/prisma');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 router.get('/inquiries', wrap(async (req, res) => {
-  const inquiries = await prisma.admissionInquiry.findMany({ where: { schoolId: req.schoolId }, orderBy: { createdAt: 'desc' } });
-  res.json({ success: true, data: inquiries });
+  // Photos (about 40 KB each) are left out of the list so a long list stays
+  // fast; hasPhoto says which have one, and GET /inquiries/:id/photo loads it.
+  const [inquiries, withPhoto] = await Promise.all([
+    prisma.admissionInquiry.findMany({
+      where: { schoolId: req.schoolId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, schoolId: true, campusId: true, name: true, phone: true, classInterested: true, date: true, status: true, notes: true, createdAt: true, updatedAt: true },
+    }),
+    prisma.admissionInquiry.findMany({ where: { schoolId: req.schoolId, photoUrl: { not: null } }, select: { id: true } }),
+  ]);
+  const has = new Set(withPhoto.map((r) => r.id));
+  res.json({ success: true, data: inquiries.map((i) => ({ ...i, hasPhoto: has.has(i.id) })) });
+}));
+
+// GET /api/v1/admissions/inquiries/:id/photo — the photo sent with one application.
+router.get('/inquiries/:id/photo', wrap(async (req, res) => {
+  const inquiry = await prisma.admissionInquiry.findFirst({
+    where: { id: parseInt(req.params.id), schoolId: req.schoolId },
+    select: { photoUrl: true },
+  });
+  if (!inquiry) return res.status(404).json({ success: false, message: 'Inquiry not found.' });
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  res.json({ success: true, data: { photoUrl: inquiry.photoUrl || null } });
 }));
 
 router.post('/inquiries', wrap(async (req, res) => {

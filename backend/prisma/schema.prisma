@@ -332,6 +332,7 @@ model FeeInvoice {
   voucherNo   String?
   isCustomFee Boolean      @default(false)
   remarks     String?
+  importBatch String? // set on rows entered from old records (Past Records import), so that import can be undone
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   student     Student      @relation(fields: [studentId], references: [id])
@@ -339,6 +340,7 @@ model FeeInvoice {
 
   @@index([schoolId, studentId])
   @@index([schoolId, status])
+  @@index([schoolId, importBatch])
 }
 
 model FeePayment {
@@ -355,6 +357,7 @@ model FeePayment {
   transactionRef String?
   receiptNo      String?
   remarks        String?
+  importBatch    String? // set on rows entered from old records (Past Records import), so that import can be undone
   createdAt      DateTime @default(now())
 
   // Corrections. A recorded payment is never edited in place or deleted:
@@ -374,6 +377,7 @@ model FeePayment {
   @@index([schoolId, voidedAt])
   @@index([schoolId, studentId])
   @@index([invoiceId])
+  @@index([schoolId, importBatch])
 }
 
 model Expense {
@@ -385,10 +389,12 @@ model Expense {
   description String?
   date        DateTime @default(now())
   addedBy     Int?
+  importBatch String? // set on rows entered from old records (Past Records import), so that import can be undone
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([schoolId, date])
+  @@index([schoolId, importBatch])
 }
 
 model ExpenseCategory {
@@ -413,11 +419,13 @@ model SalaryRecord {
   status           String    @default("pending") // pending|issued
   issuedBy         Int?
   issueDate        DateTime?
+  importBatch      String? // set on rows entered from old records (Past Records import), so that import can be undone
   createdAt        DateTime  @default(now())
   staff            Staff     @relation(fields: [staffId], references: [id])
 
   @@unique([staffId, month, year])
   @@index([schoolId, month, year])
+  @@index([schoolId, importBatch])
 }
 
 model Attendance {
@@ -581,6 +589,7 @@ model AdmissionInquiry {
   date            DateTime @default(now())
   status          String   @default("open") // open|contacted|admitted|closed
   notes           String?
+  photoUrl        String? // student photo sent with an online application (compressed data URL, ~40 KB)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

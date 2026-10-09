@@ -10,10 +10,45 @@ const prisma = require('../config/prisma');
 const { sendSMS } = require('./sms.service');
 const { sendWhatsApp } = require('./whatsapp.service');
 const { sendEmail } = require('./email.service');
+const { monthLabel, byPeriodDesc } = require('../utils/feeMonth');
 
 /* ─── Template tag resolver ───────────────────────────────────────── */
 function resolveTemplate(body, vars = {}) {
   return body.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+}
+
+/* ─── Fee dues, one entry per student ─────────────────────────────
+   Reminders went out once per unpaid invoice, so a parent three months
+   behind got three messages, each quoting the stored paisa as rupees
+   (Rs. 350,000 for a Rs 3,500 fee). duesByStudent() folds the unpaid
+   invoices into one entry per student: what is still due in total and
+   the months it covers, oldest first. The fee routes use it too.
+─────────────────────────────────────────────────────────────────── */
+
+/** Stored paisa -> "3,500", for a message that already says "Rs.". */
+const rupees = (paisa) =>
+  (Number(paisa || 0) / 100).toLocaleString('en-PK', { maximumFractionDigits: 2 });
+
+const periodOf = (inv) => (inv.month ? `${monthLabel(inv.month)} ${inv.year || ''}`.trim() : '');
+
+/**
+ * @param invoices rows with { studentId, dueAmount, month, year, student? }
+ * @returns [{ studentId, student, invoices, totalDue (paisa), months: ['July 2026', ...] }]
+ */
+function duesByStudent(invoices) {
+  const byStudent = new Map();
+  for (const inv of invoices || []) {
+    if (!(inv.dueAmount > 0)) continue;
+    const id = inv.studentId ?? inv.student?.id;
+    if (!byStudent.has(id)) byStudent.set(id, { studentId: id, student: inv.student || null, invoices: [], totalDue: 0 });
+    const due = byStudent.get(id);
+    due.invoices.push(inv);
+    due.totalDue += inv.dueAmount;
+  }
+  return [...byStudent.values()].map((due) => {
+    const oldestFirst = [...due.invoices].sort((a, b) => byPeriodDesc(b, a));
+    return { ...due, invoices: oldestFirst, months: [...new Set(oldestFirst.map(periodOf).filter(Boolean))] };
+  });
 }
 
 /* ─── Dispatcher: send via configured channel ─────────────────────── */
@@ -79,7 +114,8 @@ async function runFeeReminders() {
 
       const bodyTemplate = tpl?.body || defaultBody;
 
-      // Find unpaid invoices
+      // Find unpaid invoices. A whole school's unpaid book is loaded (it
+      // used to stop at 500 invoices), so no student's total is cut short.
       const unpaid = await prisma.feeInvoice.findMany({
         where: {
           schoolId: rule.schoolId,
@@ -87,7 +123,7 @@ async function runFeeReminders() {
           dueAmount: { gt: 0 },
         },
         select: {
-          id: true, dueAmount: true, month: true, year: true,
+          id: true, studentId: true, dueAmount: true, month: true, year: true,
           student: {
             select: {
               name: true, emergencyPhone: true,
@@ -96,24 +132,25 @@ async function runFeeReminders() {
             },
           },
         },
-        take: 500,
       });
 
       let sent = 0;
-      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-      for (const inv of unpaid) {
-        const parentUser = inv.student?.parents?.[0]?.parent?.user;
-        const phone = parentUser?.phone || inv.student?.emergencyPhone;
+      // One message per student: the total still due and every month it covers.
+      for (const due of duesByStudent(unpaid)) {
+        const parentUser = due.student?.parents?.[0]?.parent?.user;
+        const phone = parentUser?.phone || due.student?.emergencyPhone;
         const email  = parentUser?.email;
         if (!phone && !email) continue;
 
+        const months = due.months.join(', ');
         const msg = resolveTemplate(bodyTemplate, {
           parent_name:  parentUser?.name || 'Parent',
-          student_name: inv.student?.name || 'Student',
-          class:        inv.student?.class?.name || '',
-          amount:       Number(inv.dueAmount).toLocaleString('en-PK'),
-          month:        monthNames[(inv.month || 1) - 1] + ' ' + (inv.year || ''),
+          student_name: due.student?.name || 'Student',
+          class:        due.student?.class?.name || '',
+          amount:       rupees(due.totalDue),
+          month:        months,
+          months,
         });
 
         await dispatch({ channel: rule.channel, phone, email, subject: 'Fee Reminder — IlmForge', message: msg });
@@ -422,4 +459,6 @@ module.exports = {
   runDailyCollectionReport,
   resolveTemplate,
   dispatch,
+  duesByStudent,
+  rupees,
 };

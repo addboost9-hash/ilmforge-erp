@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { feePeriod, monthLabel } from '../../utils/feeMonth';
 import {
   DollarSign, Printer, Download, Edit2, X, Search,
   Trash2, FileText, RefreshCw, AlertTriangle, Play,
@@ -750,7 +751,7 @@ function FeeHistoryTab() {
               <tr key={inv._id || i} style={{ background: i % 2 === 0 ? '#fff' : '#f9fafb', borderBottom: '1px solid #f1f5f9' }}>
                 <td style={{ padding: '10px 14px', color: '#6b7280' }}>{i + 1}</td>
                 <td style={{ padding: '10px 14px', fontWeight: 600, color: '#111827' }}>{inv.invoiceNo || `INV-${i + 1}`}</td>
-                <td style={{ padding: '10px 14px' }}>{inv.month} {inv.year}</td>
+                <td style={{ padding: '10px 14px' }}>{feePeriod(inv) || '—'}</td>
                 <td style={{ padding: '10px 14px', fontWeight: 700, color: '#1d4ed8' }}>Rs. {(inv.amount || 0).toLocaleString()}</td>
                 <td style={{ padding: '10px 14px' }}>
                   <span style={{
@@ -874,7 +875,7 @@ function ReportsTab() {
                   <td style={{ padding: '10px 14px', color: '#374151' }}>{d.fatherName || '—'}</td>
                   <td style={{ padding: '10px 14px', color: '#374151' }}>{d.className}</td>
                   <td style={{ padding: '10px 14px', color: '#374151' }}>{d.sectionName || '—'}</td>
-                  <td style={{ padding: '10px 14px', color: '#374151' }}>{d.month}</td>
+                  <td style={{ padding: '10px 14px', color: '#374151' }}>{monthLabel(d.month)}</td>
                   <td style={{ padding: '10px 14px', fontWeight: 700, color: '#DC2626' }}>Rs. {(d.amountDue || 0).toLocaleString()}</td>
                   <td style={{ padding: '10px 14px', color: '#374151' }}>{d.phone || '—'}</td>
                 </tr>

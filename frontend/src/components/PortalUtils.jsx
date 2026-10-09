@@ -5,6 +5,7 @@
  */
 import { useState } from 'react';
 import { AlertTriangle, RefreshCw, Download, Printer, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { feePeriod } from '../utils/feeMonth';
 
 /* ─── Color tokens ──────────────────────────────────────── */
 export const PORTAL_COLORS = {
@@ -191,10 +192,9 @@ export function ProgressBar({ value, max = 100, color = '#0073b7', height = 6, s
 /* ─── Fee voucher print — professional 3-copy with all heads ─ */
 export function printFeeVoucher({ student, invoice, school }) {
   const schoolName = school?.name || localStorage.getItem('registeredSchoolName') || 'IlmForge School';
-  // FIX: FeeInvoice.month is stored as a full name string (e.g. "July"), not
-  // a 1-12 index — indexing a month-name array with it always produced
-  // undefined, so every printed fee voucher showed "undefined <year>".
-  const monthLabel = invoice?.month ? `${invoice.month} ${invoice?.year || ''}` : '—';
+  // FeeInvoice.month is "7" from Generate Fees and "July" (or "Jul") from
+  // admissions and older data. Printed raw, a voucher read "7 2026".
+  const monthLabel = feePeriod(invoice) || '—';
   const dueDate = invoice?.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-PK') : '—';
   // Stored in paisa; shown in rupees. This printed 325,000 for a Rs 3,250 due.
   const total = Number(invoice?.dueAmount || invoice?.totalAmount || 0) / 100;

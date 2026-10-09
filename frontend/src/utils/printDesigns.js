@@ -8,6 +8,8 @@
  */
 
 import { buildWatermarkCss, buildWatermarkMarkup } from './watermarkPrint';
+import { feePeriod } from './feeMonth';
+import { amount } from './currency';
 
 const esc = (s) => String(s ?? '—').replace(/</g, '&lt;');
 
@@ -84,10 +86,13 @@ export function printFeeVoucher(invoice, student, school) {
   const dueDate = invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-PK') : '—';
   const issueDate = new Date().toLocaleDateString('en-PK');
   const voucherNo = `V-${invoice.id || Date.now().toString().slice(-6)}`;
+  // Amounts are paisa, like every stored figure; amount() prints rupees.
   const total = invoice.totalAmount ?? invoice.amount ?? 0;
   const paid = invoice.paidAmount ?? 0;
   const balance = invoice.balance ?? (total - paid);
   const lateFee = invoice.lateFee ?? 0;
+  // "July 2026" whether the month was stored as "7" or "July"; raw it read "7 2026".
+  const period = feePeriod(invoice);
   const wmLogo = school?.logoUrl || (typeof window !== 'undefined' ? localStorage.getItem('schoolLogoPreview') : '') || '';
   const wmSchool = esc(school?.name || 'IlmForge School');
   const watermarkCss = buildWatermarkCss({ mode: 'compact', position: 'absolute', color: '#0F172A', containerClass: 'v-wm', logoClass: 'v-wm-img', fallbackClass: 'v-wm-fallback', textClass: 'v-wm-text', logoSize: '102px', textSize: '11px', textMarginTop: '6px' });
@@ -119,11 +124,11 @@ export function printFeeVoucher(invoice, student, school) {
       <table class="v-table">
         <thead><tr><th>Description</th><th style="text-align:right">Amount (Rs)</th></tr></thead>
         <tbody>
-          <tr><td>Tuition Fee — ${esc(invoice.month)} ${esc(invoice.year)}</td><td style="text-align:right">${Number(total).toLocaleString()}</td></tr>
-          ${lateFee > 0 ? `<tr><td>Late Fee (after due date)</td><td style="text-align:right">${Number(lateFee).toLocaleString()}</td></tr>` : ''}
-          ${paid > 0 ? `<tr><td>Already Paid</td><td style="text-align:right">− ${Number(paid).toLocaleString()}</td></tr>` : ''}
+          <tr><td>Tuition Fee${period ? ` — ${esc(period)}` : ''}</td><td style="text-align:right">${amount(total)}</td></tr>
+          ${lateFee > 0 ? `<tr><td>Late Fee (after due date)</td><td style="text-align:right">${amount(lateFee)}</td></tr>` : ''}
+          ${paid > 0 ? `<tr><td>Already Paid</td><td style="text-align:right">− ${amount(paid)}</td></tr>` : ''}
         </tbody>
-        <tfoot><tr><td>PAYABLE AMOUNT</td><td style="text-align:right">Rs ${Number(balance + lateFee).toLocaleString()}</td></tr></tfoot>
+        <tfoot><tr><td>PAYABLE AMOUNT</td><td style="text-align:right">Rs ${amount(balance + lateFee)}</td></tr></tfoot>
       </table>
       <div class="v-ft">
         <div class="v-sig">Depositor Signature</div>

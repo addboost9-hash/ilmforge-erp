@@ -5,8 +5,18 @@ import api from '../../api/client';
 import { Search, DollarSign, Printer, X, CheckCircle, Receipt, Pencil, Ban } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
 import EmptyState from '../../components/ui/EmptyState';
+import { feePeriod } from '../../utils/feeMonth';
 
 const money = v => 'Rs. ' + ((v || 0) / 100).toLocaleString();
+// Pakistan's today for a date input (UTC+5 all year), whatever the PC clock zone.
+const todayPKT = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+const dmy = ymd => String(ymd).split('-').reverse().join('/');
+const pkDate = (d, opts) => new Date(d).toLocaleString('en-PK', { timeZone: 'Asia/Karachi', ...opts });
+const DAY = { day: '2-digit', month: '2-digit', year: 'numeric' };
+// The Pakistan day an instant falls on, for comparing two timestamps by day.
+const pkDay = d => new Date(new Date(d).getTime() + 5 * 3600e3).toISOString().slice(0, 10);
+// Keyed in on a later day than the money was received (a fee entered late).
+const enteredLate = p => !!p.paymentDate && !!p.createdAt && pkDay(p.createdAt) !== pkDay(p.paymentDate);
 
 export default function FeeCollectionPage() {
   const qc = useQueryClient();
@@ -15,7 +25,7 @@ export default function FeeCollectionPage() {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [activeInv, setActiveInv] = useState(null);
-  const [payForm, setPayForm] = useState({ amountPaid: '', discount: 0, method: 'cash', notifyVia: 'whatsapp_sms' });
+  const [payForm, setPayForm] = useState({ amountPaid: '', discount: 0, method: 'cash', notifyVia: 'whatsapp_sms', paymentDate: todayPKT() });
   const [receiptData, setReceiptData] = useState(null); // holds last payment receipt for display
   const [showCoin, setShowCoin] = useState(false);
   // Correcting a mis-keyed receipt. `fixing` holds the payment being
@@ -42,11 +52,14 @@ export default function FeeCollectionPage() {
       const receiptNo = r.data.data?.receiptNo || r.data.data?.payment?.id || 'N/A';
       const studentName = selected?.name || feeData?.student?.name || 'Student';
       const collectedAmt = Math.round((variables.amountPaid || 0) / 100);
+      // The receipt carries the day the money was received, as the server
+      // filed it: for a fee entered late that is not today.
+      const paidOn = r.data.data?.paymentDate || r.data.data?.payment?.paymentDate || new Date().toISOString();
+      const backdated = !!r.data.data?.backdated;
       setPaidAmount(collectedAmt);
       setShowCoin(true);
       setTimeout(() => setShowCoin(false), 3000);
-      toast.success(`Rs. ${collectedAmt.toLocaleString()} collected from ${studentName}. Receipt: ${receiptNo}`);
-      const paidAmount = money(variables.amountPaid);
+      toast.success(`Rs. ${collectedAmt.toLocaleString()} collected from ${studentName}${backdated ? ` (filed on ${pkDate(paidOn, DAY)})` : ''}. Receipt: ${receiptNo}`);
       qc.invalidateQueries(['student-fee', selected?.id]);
       qc.invalidateQueries(['dashboard']);
       // Store receipt data for the success/print modal
@@ -56,13 +69,16 @@ export default function FeeCollectionPage() {
         studentRollNo: feeData?.student?.rollNo || selected?.rollNo || '',
         className: feeData?.student?.class?.name || selected?.class?.name || '',
         feeTitle: activeInv?.feeTitle || '',
-        month: activeInv ? `${activeInv.month} ${activeInv.year}` : '',
+        month: activeInv ? feePeriod(activeInv) : '',
         amountPaid: variables.amountPaid,
         discount: variables.discount || 0,
         method: variables.method,
         newStatus: r.data.data?.newStatus,
         newDue: r.data.data?.newDue,
-        date: new Date().toLocaleString('en-PK'),
+        // A past day has no meaningful time of day, so only the date is shown.
+        date: backdated
+          ? pkDate(paidOn, { day: '2-digit', month: 'short', year: 'numeric' })
+          : pkDate(paidOn),
         schoolName: localStorage.getItem('registeredSchoolName') || 'IlmForge School',
         cashierName: localStorage.getItem('userName') || 'Admin',
       });
@@ -119,12 +135,27 @@ export default function FeeCollectionPage() {
 
   const openPayModal = (inv) => {
     setActiveInv(inv);
-    setPayForm({ amountPaid: ((inv.dueAmount || 0) / 100).toFixed(0), discount: 0, method: 'cash', notifyVia: 'whatsapp_sms' });
+    setPayForm({ amountPaid: ((inv.dueAmount || 0) / 100).toFixed(0), discount: 0, method: 'cash', notifyVia: 'whatsapp_sms', paymentDate: todayPKT() });
     setShowModal(true);
   };
 
+  // A fee received on an earlier day is filed on that day. Messaging the
+  // parent "fee received" today about it would only confuse them, so a past
+  // date turns notifying off; the cashier can turn it back on.
+  const pickPaymentDate = (value) => setPayForm(f => {
+    const today = todayPKT();
+    const past = !!value && value < today;
+    const wasPast = !!f.paymentDate && f.paymentDate < today;
+    let notifyVia = f.notifyVia;
+    if (past && !wasPast) notifyVia = 'none';
+    else if (!past && wasPast && f.notifyVia === 'none') notifyVia = 'whatsapp_sms';
+    return { ...f, paymentDate: value, notifyVia };
+  });
+  const payDateIsPast = !!payForm.paymentDate && payForm.paymentDate < todayPKT();
+
   const confirmPayment = () => {
     if (!payForm.amountPaid || payForm.amountPaid <= 0) return toast.error('Enter valid amount');
+    if (payForm.paymentDate && payForm.paymentDate > todayPKT()) return toast.error('Payment date cannot be in the future.');
     pay.mutate({
       invoiceId: activeInv.id,
       studentId: selected.id,
@@ -132,6 +163,7 @@ export default function FeeCollectionPage() {
       discount: Math.round(parseFloat(payForm.discount || 0) * 100),
       method: payForm.method,
       notifyVia: payForm.notifyVia,
+      paymentDate: payForm.paymentDate || undefined,
     });
   };
 
@@ -272,7 +304,7 @@ export default function FeeCollectionPage() {
                 {(feeData.invoices || []).map(inv => (
                   <tr key={inv.id}>
                     <td style={{ fontWeight: 600 }}>{inv.feeTitle}</td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{inv.month} {inv.year}</td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{feePeriod(inv)}</td>
                     <td>{money(inv.totalAmount)}</td>
                     <td style={{ color: 'var(--stat-teal)' }}>{money(inv.discount)}</td>
                     <td style={{ color: 'var(--stat-green)', fontWeight: 600 }}>{money(inv.paidAmount)}</td>
@@ -383,11 +415,15 @@ export default function FeeCollectionPage() {
                     <tr key={p.id} style={voided ? { opacity: 0.6 } : undefined}>
                       <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{p.receiptNo || p.id}</td>
                       <td style={{ color: 'var(--text-secondary)' }}>
-                        {new Date(p.paymentDate || p.createdAt).toLocaleDateString('en-PK')}
+                        {pkDate(p.paymentDate || p.createdAt, DAY)}
+                        {/* So a late entry can be told apart when the day's cash is checked. */}
+                        {enteredLate(p) && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>entered {pkDate(p.createdAt, DAY)}</div>
+                        )}
                       </td>
                       <td style={{ color: 'var(--text-secondary)' }}>
                         {p.invoice?.feeTitle}
-                        {p.invoice?.month ? ' (' + p.invoice.month + ' ' + (p.invoice.year || '') + ')' : ''}
+                        {p.invoice?.month ? ' (' + feePeriod(p.invoice) + ')' : ''}
                       </td>
                       <td style={{ fontWeight: 700, textDecoration: voided ? 'line-through' : 'none' }}>
                         {money(p.amountPaid)}
@@ -502,7 +538,7 @@ export default function FeeCollectionPage() {
               <div>
                 <div id="collect-payment-title" className="modal-title">Collect Payment</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {activeInv.feeTitle} — {activeInv.month} {activeInv.year}
+                  {activeInv.feeTitle} — {feePeriod(activeInv)}
                 </div>
               </div>
               <button aria-label="Close collect payment dialog" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
@@ -538,6 +574,16 @@ export default function FeeCollectionPage() {
                 <label htmlFor="collect-discount" className="form-label">Discount (Rs.)</label>
                 <input id="collect-discount" className="form-control" type="number" step="1" min="0"
                   value={payForm.discount} onChange={e => setPayForm({ ...payForm, discount: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="collect-date" className="form-label">Payment date</label>
+                <input id="collect-date" className="form-control" type="date" max={todayPKT()}
+                  value={payForm.paymentDate} onChange={e => pickPaymentDate(e.target.value)} />
+                {payDateIsPast && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                    This payment will be filed on {dmy(payForm.paymentDate)}, not today.
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label htmlFor="collect-method" className="form-label">Payment Method</label>

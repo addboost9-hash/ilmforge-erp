@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { feePeriod } from '../../utils/feeMonth';
 import { Search, Printer, Users, DollarSign, FileText, Thermometer, CreditCard, CheckCircle, X, Phone } from 'lucide-react';
 import { buildWatermarkCss, buildWatermarkMarkup } from '../../utils/watermarkPrint';
 
@@ -86,7 +87,7 @@ const printFamilyVoucher = (students, allInvoices, school, thermal = false) => {
       <td style="padding:8px 10px;font-weight:600;color:#111827;">${st?.name || '—'}</td>
       <td style="padding:8px 10px;color:#6B7280;">${st?.class?.name || '—'}</td>
       <td style="padding:8px 10px;color:#374151;">${inv.feeTitle || '—'}</td>
-      <td style="padding:8px 10px;color:#374151;">${inv.month || ''} ${inv.year || ''}</td>
+      <td style="padding:8px 10px;color:#374151;">${feePeriod(inv)}</td>
       <td style="padding:8px 10px;text-align:right;">${money(inv.totalAmount)}</td>
       <td style="padding:8px 10px;text-align:right;color:#059669;font-weight:600;">${money(inv.paidAmount)}</td>
       <td style="padding:8px 10px;text-align:right;font-weight:700;color:${inv.dueAmount > 0 ? '#DC2626' : '#059669'};">${money(inv.dueAmount)}</td>
@@ -212,7 +213,7 @@ function PayModal({ invoice, student, onClose, onPaid }) {
           <button aria-label="Close" onClick={onClose} style={{ background:'none',border:'none',cursor:'pointer',color:'#9CA3AF' }}><X size={18}/></button>
         </div>
         <div style={{ fontSize:13,color:'#374151',marginBottom:14 }}>
-          <strong>{student.name}</strong> — {invoice.feeTitle} ({invoice.month} {invoice.year})
+          <strong>{student.name}</strong> — {invoice.feeTitle} ({feePeriod(invoice)})
           <br/>
           <span style={{ color:'#DC2626',fontWeight:600 }}>Due: {money(invoice.dueAmount)}</span>
         </div>
@@ -561,7 +562,7 @@ export default function FamilyVoucherPage() {
                     ) : (
                       childInvoices.map(inv => (
                         <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#F9FAFB', borderRadius: 7, marginBottom: 5, fontSize: 12.5, gap: 8 }}>
-                          <span style={{ flex: 1 }}>{inv.feeTitle} — {inv.month} {inv.year}</span>
+                          <span style={{ flex: 1 }}>{inv.feeTitle} — {feePeriod(inv)}</span>
                           <span style={{ fontWeight: 700, color: '#DC2626', minWidth: 70, textAlign: 'right' }}>{money(inv.dueAmount)}</span>
                           <button
                             className="btn btn-sm"

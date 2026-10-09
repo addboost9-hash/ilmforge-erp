@@ -232,11 +232,12 @@ const SECTIONS = [
       {
         title: 'Generate & Collect',
         steps: [
-          { n:1, text:'Fees → Generate → select the month → generate vouchers for a class or the whole school' },
+          { n:1, text:'Fees → Generate → select the month and year → generate vouchers for a class. A month already billed (including one brought in from Past Records) is skipped, so nobody is billed twice' },
           { n:2, text:'Fees → Collect → search for the student (name/roll number) → the outstanding amount is displayed' },
           { n:3, text:'Payment mode: Cash / Bank / Card / Wallet / Online' },
           { n:4, text:'Partial payments are allowed — the remaining balance carries forward' },
-          { n:5, text:'Print the receipt and an automatic SMS confirming "Rs. X received" is sent to the parent' },
+          { n:5, text:'Print the receipt. The parent gets a message confirming "Rs. X received" unless you choose "Do not notify"' },
+          { n:6, text:'Money received on an earlier day? Set "Payment date" to that day: it is filed on that date in every report. The message switches to "Do not notify"; change it back if the parent should be told' },
         ],
         tip: 'A late fee can be added automatically (e.g. Rs. 100/day) if the due date is missed — enable it from Settings → Fees.',
       },
@@ -268,7 +269,7 @@ const SECTIONS = [
           { n:1, text:'Fees → Defaulters (or /fees/defaulters)' },
           { n:2, text:'A list of overdue students: name, class, outstanding amount, days overdue' },
           { n:3, text:'Filter: class-wise, amount-wise, month-wise' },
-          { n:4, text:'"Send Reminder" → sends bulk SMS/WhatsApp messages to defaulters\' parents' },
+          { n:4, text:'"Send Reminder" → one message per student to the parent, with the total due in rupees and the months it covers' },
           { n:5, text:'Export to Excel/PDF for the principal\'s review' },
         ],
         warning: 'Review the list before sending bulk reminders — make sure parents who have already paid don\'t get a message by mistake.',
@@ -359,6 +360,8 @@ const SECTIONS = [
           { n:3, text:'e.g. Basic Rs. 45,000 + Allowance Rs. 8,000 − Deduction Rs. 2,000 = Rs. 51,000' },
           { n:4, text:'Generate and print the payslip; it is also available on the staff portal' },
           { n:5, text:'Bank transfer sheet export (HBL/UBL bulk salary)' },
+          { n:6, text:'Payroll → set "Paid on" to the day the salary was really paid, then Pay (one person) or Pay all. The salary is also recorded under Expenses › Salaries on that day' },
+          { n:7, text:'An unpaid month can be edited (allowances, bonus, deductions); a paid month cannot. Staff who joined after the month are left out of it' },
         ],
         tip: 'Absence deductions can be calculated automatically from the attendance module.',
       },
@@ -517,6 +520,15 @@ const SECTIONS = [
     title: 'Latest Additions',
     desc: 'Fee corrections, portal links, admission form printing, card designs, dashboard',
     chapters: [
+      {
+        title: 'New: old records, earlier dates, fixing student records',
+        steps: [
+          { n:1, text:'Settings → Past Records brings in fees, previous balances, salaries and expenses from before the school used IlmForge, each on its real date' },
+          { n:2, text:'Fee Collection, Payroll and Expenses take the date something really happened ("Payment date", "Paid on", "Date")' },
+          { n:3, text:'Student Registry: list a whole class, see what is missing, edit any record, add or change photos; the same photo buttons are on ID Cards, Certificates and the Admission Form' },
+          { n:4, text:'Details: Import, Export & Photos → "Past records", "Entering something that happened earlier" and "Fixing a student\'s record"' },
+        ],
+      },
       {
         title: 'Correcting a fee that was collected wrongly',
         steps: [
@@ -734,7 +746,7 @@ const SECTIONS = [
     icon: '📥',
     color: '#15803D',
     title: 'Import, Export & Photos',
-    desc: 'Add many students and staff from Excel, move a school to another server, student photos',
+    desc: 'Students and staff from Excel, fixing records and photos, past fees, salaries and expenses, moving a school',
     chapters: [
       {
         title: 'Download the Excel template',
@@ -751,13 +763,25 @@ const SECTIONS = [
         title: 'Fill and import students and staff',
         steps: [
           { n:1, text:'Students sheet — required: Student Name, Father Name, Class. Also: Gender, Date of Birth, B-Form, Section, Parent Phone, Parent Email, Address, Blood Group, Admission Date' },
-          { n:2, text:'Staff sheet — required: Name, and a Phone or Email. Also: Designation, Role, CNIC, Department, Joining Date, Monthly Salary (Rs)' },
+          { n:2, text:'Staff sheet — required: Name, and a Phone or Email. Also: Designation, Role, CNIC, Department, Joining Date, Monthly Salary (Rs), Status (Active, or Left for someone who no longer works here: added for their old salaries, with no login)' },
           { n:3, text:'Leave Roll No and Employee Code blank — IlmForge creates them (e.g. C5A-26-001, TCH-26-0019)' },
           { n:4, text:'Dates are day first: 14/03/2014 is 14 March. Type phones as 03001234567' },
           { n:5, text:'Sidebar → Import & Export → Choose Excel file. "Check before importing" lists every problem by sheet, row and column. Nothing is saved yet' },
           { n:6, text:'Click "Import". Then click "Download login details" straight away — it lists every new username and password' },
+          { n:7, text:'The imported students are listed underneath. Filter "Incomplete", "No photo", "No date of birth" or "No parent phone" and fix each one there with Edit or the photo button' },
         ],
         tip: 'Importing the same file twice is safe: anyone already in the school is skipped. Brothers and sisters with the same parent phone share one parent account.',
+      },
+      {
+        title: 'Fixing a student\'s record',
+        steps: [
+          { n:1, text:'Student Registry → type a name or roll number, or choose a class to list the whole class' },
+          { n:2, text:'A "Missing" badge shows what is not filled in yet: photo, date of birth, parent phone, B-Form' },
+          { n:3, text:'Click Edit: name, father and mother name, date of birth, gender, class and section, roll number, parent mobile, B-Form, address and status. Only what you change is saved' },
+          { n:4, text:'Changing the parent mobile also changes the number the parent signs in with; you are told when it does' },
+          { n:5, text:'Delete offers two choices: "Mark as left school" keeps everything (use this when a student leaves), "Delete record" is only for an entry made by mistake and is refused once fees have been paid' },
+        ],
+        note: 'A student marked as left moves to the Inactive tab and can still get a leaving or character certificate.',
       },
       {
         title: 'Moving a school to another server',
@@ -766,18 +790,41 @@ const SECTIONS = [
           { n:2, text:'On the new server: sign in as admin → Import & Export → choose that file → check → import' },
           { n:3, text:'Classes, students (with parents) and staff are recreated, each with a new login' },
         ],
-        warning: 'Fees, attendance and exam marks are not part of this file. Use Settings → Backup & Restore to move the whole database.',
+        warning: 'Fee history, attendance and exam marks are not part of this file. Use Settings → Backup & Restore to move the whole database.',
       },
       {
         title: 'Student and staff photos',
         steps: [
-          { n:1, text:'Student: Student Registry → open the student → "Add photo" (or "Change photo")' },
-          { n:2, text:'Staff: Staff Directory → Edit → click the "Add Photo" box → Save' },
-          { n:3, text:'Or on ID Cards: click the photo spot on a card row and choose a picture' },
-          { n:4, text:'Any phone or camera picture works — it is shrunk automatically to about 40 KB' },
-          { n:5, text:'The same photo then appears on the ID card, character certificate, leaving certificate and the portal' },
+          { n:1, text:'Student: click the photo on the student\'s row in Student Registry, or open the student → "Add photo" (or "Change photo")' },
+          { n:2, text:'While printing: ID Cards shows "No photo · Add photo" on each card without one ("Show only these" lists them); Certificates and the Admission Form page have a photo button next to the student' },
+          { n:3, text:'Staff: Staff Directory → Edit → click the "Add Photo" box → Save, or the photo spot on their ID card row' },
+          { n:4, text:'JPG, PNG or WEBP up to 5 MB. Any phone picture works: it is shrunk automatically to about 40 KB' },
+          { n:5, text:'The same photo then appears on the ID card, character certificate, leaving certificate, admission form and the portal' },
+          { n:6, text:'Parents can attach the child\'s photo on the school\'s online admission form; it comes across when the application is admitted' },
         ],
         tip: 'If a page says a photo is saved only on this computer, click "Save to records" (ID Cards) or "save it to the record" (student profile) so every computer sees it.',
+      },
+      {
+        title: 'Past records: old fees, salaries and expenses',
+        download: 'history',
+        steps: [
+          { n:1, text:'First add all students and staff with Import & Export, including those who have left (students: Status Inactive; staff: Status Left)' },
+          { n:2, text:'Settings → Past Records → Download template. It has four sheets, and lists your students and staff to copy roll numbers and employee codes from' },
+          { n:3, text:'Fee History: one row per student per month — Fee Amount, Concession, Paid, and the day it was paid. Or Previous Balance: just what each student still owed on a day (it becomes one unpaid bill to collect). Use one or the other for the same months' },
+          { n:4, text:'Salary History: one row per staff member per month, Paid (with the day) or Unpaid. Expenses: date, category and amount for everything else' },
+          { n:5, text:'Choose Excel file → "Check before importing" shows every problem by row and the rupee totals. Nothing is saved yet' },
+          { n:6, text:'Click Import. Every row is filed on its own date: reports, the dashboard, each student\'s fee record and Payroll show the right months' },
+        ],
+        note: 'No message is sent to parents or staff when importing, and old fees are not counted as any accountant\'s cash. Anything left unpaid is a real due that parents see and are reminded about: enter an amount the school has written off as Concession. Importing the same file again adds nothing. "Earlier imports" lets you undo an import, unless fees were collected or salaries paid against it since.',
+      },
+      {
+        title: 'Entering something that happened earlier',
+        steps: [
+          { n:1, text:'A fee received on an earlier day: Fees → Collect → set "Payment date"' },
+          { n:2, text:'A salary paid on an earlier day: Payroll → "Paid on"' },
+          { n:3, text:'An expense from an earlier day: Expenses → Date' },
+          { n:4, text:'Each one is filed on that date in every report. Dates in the future are refused' },
+        ],
       },
     ],
   },
@@ -918,10 +965,25 @@ function Step({ n, text }) {
 
 /* Signed-in admins get the template with their own classes filled in; anyone
    else (or if the server is unreachable) gets the blank copy on the website. */
-function TemplateDownload() {
+function TemplateDownload({ kind }) {
   const [busy, setBusy] = useState(false);
   const get = async () => {
     setBusy(true);
+    if (kind === 'history') {
+      // Lists the school's own students and staff, so there is no public copy.
+      try {
+        const res = await api.get('/history/template', { responseType: 'blob' });
+        const href = URL.createObjectURL(res.data);
+        const a = document.createElement('a');
+        a.href = href; a.download = 'past-records.xlsx';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(href), 2000);
+        toast.success('Past records template downloaded');
+      } catch {
+        toast.error('Sign in as the school admin and open Settings → Past Records to download it.');
+      } finally { setBusy(false); }
+      return;
+    }
     try {
       const res = await api.get('/bulk/template', { responseType: 'blob' });
       const href = URL.createObjectURL(res.data);
@@ -940,7 +1002,7 @@ function TemplateDownload() {
   return (
     <button type="button" onClick={get} disabled={busy}
       style={{ display:'inline-flex', alignItems:'center', gap:8, margin:'6px 0 4px', padding:'9px 16px', borderRadius:8, border:'none', background:'#15803D', color:'#fff', fontWeight:700, fontSize:13, cursor: busy ? 'wait' : 'pointer' }}>
-      <Download size={15} /> {busy ? 'Preparing…' : 'Download template'}
+      <Download size={15} /> {busy ? 'Preparing…' : kind === 'history' ? 'Download past records template' : 'Download template'}
     </button>
   );
 }
@@ -957,7 +1019,7 @@ function Chapter({ chapter, defaultOpen }) {
       {open && (
         <div style={{ padding:'16px 20px', borderTop:'1px solid #E5E7EB' }}>
           {chapter.steps && chapter.steps.map(s => <Step key={s.n} {...s}/>)}
-          {chapter.download && <TemplateDownload />}
+          {chapter.download && <TemplateDownload kind={chapter.download === 'history' ? 'history' : 'records'} />}
 
           {chapter.isTable && chapter.content && (
             <div style={{ overflowX:'auto', marginTop:6 }}>

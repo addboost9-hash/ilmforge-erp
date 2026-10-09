@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { feePeriod } from '../../utils/feeMonth';
 import { MessageSquare, DollarSign, AlertTriangle, RefreshCw, Printer } from 'lucide-react';
 
 function printDefaultersReport(invoices, schoolName) {
@@ -213,7 +214,7 @@ export default function FeeDefaultersPage() {
                     <td><span style={{fontFamily:'monospace',fontSize:12,color:'#0D9488'}}>{inv.student?.rollNo||'—'}</span></td>
                     <td><span className="badge badge-blue">{inv.student?.class?.name||'—'}</span></td>
                     <td style={{fontSize:12}}>{inv.feeTitle}</td>
-                    <td style={{fontSize:12,color:'#64748B'}}>{inv.month} {inv.year}</td>
+                    <td style={{fontSize:12,color:'#64748B'}}>{feePeriod(inv) || '—'}</td>
                     <td>{money(inv.totalAmount)}</td>
                     <td style={{color:'#15803d'}}>{money(inv.paidAmount)}</td>
                     <td><span style={{color:'#DC2626',fontWeight:800}}>{money(inv.dueAmount)}</span></td>

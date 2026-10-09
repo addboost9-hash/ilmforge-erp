@@ -1,96 +1,147 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { pastDate } = require('../utils/pastDate');
+const {
+  amountPaisa, wholeNumber, categoryName, findExpenseCategory, expenseCategory, pkDayRange, pkDayStart, pkDayKey,
+} = require('../services/salaryPayment.service');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
-// FIX: the Accountant Portal (ExpenseLogTab / BalancesheetTab) calls this with
-// a single-day `date` param and a `by` (addedBy) param to scope "today's
-// expenses" per accountant, but this handler only ever understood `month`/
-// `year` — both params were silently ignored, so the accountant always saw
-// every expense ever recorded for the school instead of just today's/theirs.
-// Also attaches a resolved `category` name onto each row: Expense.categoryId
-// has no Prisma relation to ExpenseCategory, so it can't be `include`d — the
-// frontend expects `expense.category` to render a label.
+// Printed reports ask for a whole period at once (up to 2000 rows).
+const MAX_LIMIT = 2000;
+
+const bad = (res, message) => res.status(400).json({ success: false, message });
+
+// Blank descriptions are stored as nothing rather than as spaces.
+const cleanText = (v) => {
+  const s = String(v ?? '').trim();
+  return s || null;
+};
+
+/* The category an expense is filed under: an id picked from the dropdown, or
+   a name (the Accountant Portal sends names from a fixed list). A name is
+   matched to the school's categories whatever its case or spacing, and added
+   the first time it is used. -> { id, name } (both null for none) | { error } */
+async function resolveCategory(schoolId, { categoryId, category }) {
+  if (categoryId !== undefined && categoryId !== null && categoryId !== '') {
+    const id = wholeNumber(categoryId);
+    const found = id && await prisma.expenseCategory.findFirst({ where: { id, schoolId }, select: { id: true, name: true } });
+    return found || { error: 'That expense category does not exist.' };
+  }
+  if (categoryName(category)) return expenseCategory(prisma, schoolId, category);
+  return { id: null, name: null };
+}
+
+/* ── GET / — the school's expenses, newest first ──
+   ?from=YYYY-MM-DD&to=YYYY-MM-DD  Pakistan calendar days, both included
+   ?categoryId=  ?page=  ?limit= (25 by default, up to 2000)
+   Older callers still work: ?date= (one day, the Accountant Portal),
+   ?month=&year=, and ?by= / ?addedBy= (who entered it).
+   -> { data, total, page, pages, totalAmount }. totalAmount is the sum, in
+   paisa, of every matching expense, not only this page's.
+   Also attaches a resolved `category` name onto each row: Expense.categoryId
+   has no Prisma relation to ExpenseCategory, so it can't be `include`d. */
 router.get('/', wrap(async (req, res) => {
-  const { page = 1, limit = 25, month, year, date, by, addedBy } = req.query;
-  const skip = (parseInt(page)-1)*parseInt(limit);
-  let dateFilter;
-  if (date) {
-    const start = new Date(date); start.setHours(0, 0, 0, 0);
-    const end = new Date(start); end.setDate(end.getDate() + 1);
-    dateFilter = { gte: start, lt: end };
-  } else if (month && year) {
-    dateFilter = { gte: new Date(parseInt(year), parseInt(month)-1, 1), lt: new Date(parseInt(year), parseInt(month), 1) };
+  const { from, to, date, month, year, categoryId, by, addedBy } = req.query;
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 25), MAX_LIMIT);
+
+  let range = null;
+  if (from || to) range = pkDayRange(from, to);
+  else if (date) range = pkDayRange(date, date);
+  else if (month && year) {
+    const m = wholeNumber(month);
+    const y = wholeNumber(year);
+    if (m === null || m < 1 || m > 12 || y === null) return bad(res, 'Month must be 1 to 12 and year a number like 2026.');
+    range = { filter: { gte: pkDayStart(y, m, 1), lt: pkDayStart(y, m + 1, 1) } };
+  }
+  if (range?.error) return bad(res, range.error);
+
+  const where = { schoolId: req.schoolId };
+  if (range && (range.filter.gte || range.filter.lt)) where.date = range.filter;
+  if (categoryId !== undefined && categoryId !== '') {
+    const id = wholeNumber(categoryId);
+    if (id === null) return bad(res, 'categoryId must be a number.');
+    where.categoryId = id;
   }
   const byId = by || addedBy;
-  const where = {
-    schoolId: req.schoolId,
-    ...(dateFilter && { date: dateFilter }),
-    ...(byId && { addedBy: parseInt(byId) }),
-  };
-  const [expenses, total, categories] = await Promise.all([
-    prisma.expense.findMany({ where, skip, take: parseInt(limit), orderBy: { date: 'desc' } }),
+  if (byId) {
+    const userId = wholeNumber(byId);
+    if (userId === null) return bad(res, 'by must be a user id.');
+    where.addedBy = userId;
+  }
+
+  const [expenses, total, sum, categories] = await Promise.all([
+    prisma.expense.findMany({ where, skip: (page - 1) * limit, take: limit, orderBy: [{ date: 'desc' }, { id: 'desc' }] }),
     prisma.expense.count({ where }),
-    prisma.expenseCategory.findMany({ where: { schoolId: req.schoolId } }),
+    prisma.expense.aggregate({ where, _sum: { amount: true } }),
+    prisma.expenseCategory.findMany({ where: { schoolId: req.schoolId }, select: { id: true, name: true } }),
   ]);
   const catMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
   const data = expenses.map(e => ({ ...e, category: e.categoryId ? catMap[e.categoryId] || null : null }));
-  res.json({ success: true, data, total });
+  res.json({ success: true, data, total, page, pages: Math.ceil(total / limit), totalAmount: sum._sum.amount || 0 });
 }));
 
-// FIX: accepts either a numeric `categoryId` or a plain `category` name string
-// (the Accountant Portal's expense form sends a category name from a fixed
-// dropdown, not an id) — resolves/creates the matching ExpenseCategory for
-// the school so the amount is actually tagged instead of silently dropped.
+/* ── POST / — record an expense ──
+   { categoryId | category (a name), amount (paisa), description, date }
+   date is the day the money was really spent: YYYY-MM-DD or DD/MM/YYYY,
+   blank for today, never in the future. A school that has just joined
+   enters last year's bills with their real dates. */
 router.post('/', wrap(async (req, res) => {
-  const { categoryId, category, amount, description, date } = req.body;
-  if (!amount) return res.status(400).json({ success: false, message: 'Amount required.' });
+  const { categoryId, category, amount, description, date } = req.body || {};
+  const paisa = amountPaisa(amount);
+  if (paisa.error) return bad(res, paisa.error);
+  const when = pastDate(date, { label: 'Date' });
+  if (when.error) return bad(res, when.error);
+  const cat = await resolveCategory(req.schoolId, { categoryId, category });
+  if (cat.error) return bad(res, cat.error);
 
-  let resolvedCategoryId = categoryId ? parseInt(categoryId) : null;
-  if (!resolvedCategoryId && category) {
-    const existing = await prisma.expenseCategory.findFirst({ where: { schoolId: req.schoolId, name: category } });
-    resolvedCategoryId = existing ? existing.id : (await prisma.expenseCategory.create({ data: { schoolId: req.schoolId, name: category } })).id;
-  }
-
-  const expense = await prisma.expense.create({ data: { schoolId: req.schoolId, campusId: req.campusId, categoryId: resolvedCategoryId, amount: parseInt(amount), description, date: date ? new Date(date) : new Date(), addedBy: req.user.id } });
-  res.status(201).json({ success: true, data: { ...expense, category: category || null } });
+  const expense = await prisma.expense.create({
+    data: {
+      schoolId: req.schoolId,
+      campusId: req.campusId,
+      categoryId: cat.id,
+      amount: paisa.value,
+      description: cleanText(description),
+      date: when.date,
+      addedBy: req.user.id,
+    },
+  });
+  res.status(201).json({ success: true, data: { ...expense, category: cat.name } });
 }));
 
 /* ── PUT /:id — correct a logged expense ──
    Expenses could be logged and deleted but never edited, so fixing a wrong
    amount, date or category meant deleting the entry and re-creating it —
-   which loses the original addedBy/created trail. Accepts a category name
-   the same way POST does. */
+   which loses the original addedBy/created trail. Accepts the same fields
+   and rules as POST; only the fields sent are changed. */
 router.put('/:id', wrap(async (req, res) => {
   const existing = await prisma.expense.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
   if (!existing) return res.status(404).json({ success: false, message: 'Expense not found.' });
 
-  const { categoryId, category, amount, description, date } = req.body;
-
-  let resolvedCategoryId = existing.categoryId;
-  if (categoryId !== undefined) {
-    resolvedCategoryId = categoryId ? parseInt(categoryId) : null;
-  } else if (category !== undefined) {
-    if (!category) {
-      resolvedCategoryId = null;
-    } else {
-      const found = await prisma.expenseCategory.findFirst({ where: { schoolId: req.schoolId, name: category } });
-      resolvedCategoryId = found ? found.id : (await prisma.expenseCategory.create({ data: { schoolId: req.schoolId, name: category } })).id;
-    }
+  const { categoryId, category, amount, description, date } = req.body || {};
+  const data = {};
+  if (amount !== undefined) {
+    const paisa = amountPaisa(amount);
+    if (paisa.error) return bad(res, paisa.error);
+    data.amount = paisa.value;
+  }
+  if (description !== undefined) data.description = cleanText(description);
+  if (date !== undefined && date !== null && String(date).trim() !== '') {
+    const when = pastDate(date, { label: 'Date' });
+    if (when.error) return bad(res, when.error);
+    // Saving the same day again keeps the time it was first recorded at.
+    if (pkDayKey(when.date) !== pkDayKey(existing.date)) data.date = when.date;
+  }
+  if (categoryId !== undefined || category !== undefined) {
+    const cat = await resolveCategory(req.schoolId, { categoryId, category });
+    if (cat.error) return bad(res, cat.error);
+    data.categoryId = cat.id;
   }
 
-  const expense = await prisma.expense.update({
-    where: { id: existing.id },
-    data: {
-      categoryId: resolvedCategoryId,
-      ...(amount !== undefined && { amount: parseInt(amount) }),
-      ...(description !== undefined && { description }),
-      ...(date !== undefined && { date: date ? new Date(date) : existing.date }),
-    },
-  });
-
-  const cat = resolvedCategoryId
-    ? await prisma.expenseCategory.findUnique({ where: { id: resolvedCategoryId }, select: { name: true } })
+  const expense = await prisma.expense.update({ where: { id: existing.id }, data });
+  const cat = expense.categoryId
+    ? await prisma.expenseCategory.findUnique({ where: { id: expense.categoryId }, select: { name: true } })
     : null;
   res.json({ success: true, data: { ...expense, category: cat?.name || null }, message: 'Expense updated.' });
 }));
@@ -105,14 +156,21 @@ router.delete('/:id', wrap(async (req, res) => {
 }));
 
 router.get('/categories', wrap(async (req, res) => {
-  const cats = await prisma.expenseCategory.findMany({ where: { schoolId: req.schoolId } });
+  const cats = await prisma.expenseCategory.findMany({ where: { schoolId: req.schoolId }, orderBy: { name: 'asc' } });
   res.json({ success: true, data: cats });
 }));
 
+// Adding "utilities" when "Utilities" exists returns the existing category
+// instead of a near-duplicate that would split the school's totals.
 router.post('/categories', wrap(async (req, res) => {
-  const { name } = req.body;
+  const name = categoryName(req.body?.name);
+  if (!name) return bad(res, 'Category name is required.');
+  const existing = await findExpenseCategory(prisma, req.schoolId, name);
+  if (existing) {
+    return res.json({ success: true, data: existing, existed: true, message: `"${existing.name}" is already a category.` });
+  }
   const cat = await prisma.expenseCategory.create({ data: { schoolId: req.schoolId, name } });
-  res.status(201).json({ success: true, data: cat });
+  res.status(201).json({ success: true, data: cat, message: 'Category added.' });
 }));
 
 module.exports = router;

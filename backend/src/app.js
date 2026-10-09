@@ -312,6 +312,7 @@ app.use('/api/v1/crm',             protect, FINANCE, R('./routes/crm.routes'));
 app.use('/api/v1/backups',         protect, ADMIN_ONLY, R('./routes/backup.routes'));
 app.use('/api/v1/sops',            protect, R('./routes/sop.routes'));
 app.use('/api/v1/bulk',            protect, ADMIN_ONLY, R('./routes/bulkimport.routes'));
+app.use('/api/v1/history',         protect, ADMIN_ONLY, R('./routes/history.routes'));
 app.use('/api/v1/robobuddy',       protect, ADMIN_ONLY, R('./routes/robobuddy.routes'));
 app.use('/api/v1/chat',            protect, R('./routes/chat.routes'));
 /* ═══ v3.3: tests / quizzes / leave-balance ═══ */

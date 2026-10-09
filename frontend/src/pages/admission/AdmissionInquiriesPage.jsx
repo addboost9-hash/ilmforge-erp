@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 import api from '../../api/client';
 import useAuthStore from '../../store/auth.store';
 import { schoolLinks } from '../../utils/schoolLinks';
-import { Plus, X, Phone, MessageCircle, ChevronDown, ChevronRight, UserPlus, Search, Link2, Globe } from 'lucide-react';
+import { Plus, X, Phone, MessageCircle, ChevronDown, ChevronRight, UserPlus, Search, Link2, Globe, User } from 'lucide-react';
 
 const STATUSES = [
   { key: 'open', label: 'New', badge: 'badge-blue', bg: '#DBEAFE', fg: '#1D4ED8' },
@@ -43,6 +43,18 @@ const ago = (at) => {
   if (d < 30) return `${d} days ago`;
   return new Date(at).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' });
 };
+
+/* An application's photo is loaded only when its row is shown (they are left
+   out of the list itself so a long list stays fast). */
+const photoKey = (id) => ['inquiry-photo', id];
+const fetchPhoto = (id) => api.get(`/admissions/inquiries/${id}/photo`, { silent: true }).then((r) => r.data.data.photoUrl);
+
+function InquiryPhoto({ inq, size = 36 }) {
+  const { data: url } = useQuery({ queryKey: photoKey(inq.id), queryFn: () => fetchPhoto(inq.id), enabled: !!inq.hasPhoto, staleTime: 10 * 60_000 });
+  const style = { width: size, height: Math.round(size * 1.2), borderRadius: 6, flexShrink: 0, objectFit: 'cover', border: '1px solid #E2E8F0', background: '#F8FAFC' };
+  if (!inq.hasPhoto) return <span style={{ ...style, display: 'grid', placeItems: 'center', color: '#CBD5E1' }} title="No photo sent"><User size={Math.round(size * 0.5)} /></span>;
+  return url ? <img src={url} alt={`Photo of ${inq.name}`} style={style} /> : <span style={style} aria-hidden="true" />;
+}
 
 const waNumber = (phone) => { const c = String(phone || '').replace(/\D/g, '').slice(-10); return c.length === 10 ? `92${c}` : ''; };
 
@@ -101,8 +113,12 @@ export default function AdmissionInquiriesPage() {
       .catch(() => toast.error('Could not copy. The link is: ' + applyLink));
   };
 
-  const admit = (inq) => {
+  const admit = async (inq) => {
     const d = details(inq.notes).fields;
+    let photo = '';
+    if (inq.hasPhoto) {
+      try { photo = await qc.fetchQuery({ queryKey: photoKey(inq.id), queryFn: () => fetchPhoto(inq.id), staleTime: 10 * 60_000 }) || ''; } catch { /* admit without it */ }
+    }
     navigate('/admissions/wizard', {
       state: {
         inquiryId: inq.id,
@@ -117,6 +133,7 @@ export default function AdmissionInquiriesPage() {
           address: d.Address || '',
           prevSchoolName: d['Previous school'] || '',
           className: inq.classInterested || '',
+          photo,
         },
       },
     });
@@ -207,10 +224,15 @@ export default function AdmissionInquiriesPage() {
                         </td>
                         <td style={{ fontFamily: 'monospace', fontSize: 12, color: '#475569' }}>{ref(inq.id)}</td>
                         <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <InquiryPhoto inq={inq} />
+                          <div>
                           <div style={{ fontWeight: 700, color: '#1E3A5F' }}>{inq.name}</div>
                           <div style={{ fontSize: 11.5, color: '#64748B' }}>
                             {d.fields['Father / guardian'] ? `Father: ${d.fields['Father / guardian']}` : ''}
                             {d.online && <span style={{ marginLeft: d.fields['Father / guardian'] ? 6 : 0, fontSize: 10.5, fontWeight: 700, color: '#0F766E', background: '#CCFBF1', borderRadius: 99, padding: '1px 7px' }}>Online form</span>}
+                          </div>
+                          </div>
                           </div>
                         </td>
                         <td style={{ fontFamily: 'monospace', fontSize: 12.5 }}>{inq.phone}</td>
@@ -239,6 +261,7 @@ export default function AdmissionInquiriesPage() {
                           <td />
                           <td colSpan={7} style={{ background: '#F8FAFC' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '6px 18px', fontSize: 13, padding: '6px 0' }}>
+                              {inq.hasPhoto && <div style={{ gridRow: 'span 3' }}><InquiryPhoto inq={inq} size={90} /></div>}
                               {Object.entries(d.fields).filter(([k]) => k !== 'Source').map(([k, v]) => (
                                 <div key={k}><span style={{ color: '#64748B' }}>{k}: </span><strong>{v}</strong></div>
                               ))}

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { openServerDocument } from '../../utils/print';
+import { feePeriod, byPeriodDesc } from '../../utils/feeMonth';
 import {
   Barcode, X, DollarSign, Printer, CheckCircle, User,
   RefreshCw, ZapIcon, Receipt, CreditCard, Smartphone, Wallet,
@@ -11,6 +12,10 @@ import {
 
 const money = v => 'Rs. ' + ((v || 0) / 100).toLocaleString();
 const fmt   = v => ((v || 0) / 100).toFixed(0);
+// Pakistan's today for a date input (UTC+5 all year), whatever the PC clock zone.
+const todayPKT = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+const dmy = ymd => String(ymd).split('-').reverse().join('/');
+const blankPay = (amountPaid) => ({ amountPaid, discount: 0, method: 'cash', notifyVia: 'whatsapp_sms', printReceipt: true, paymentDate: todayPKT() });
 
 const STATUS_BADGE = {
   paid:    { cls: 'badge-green',  label: 'Paid' },
@@ -49,10 +54,13 @@ export default function FeeBarcodeCollectionPage() {
   /* payment modal */
   const [modalOpen,  setModalOpen]  = useState(false);
   const [activeInv,  setActiveInv]  = useState(null);
-  const [payForm,    setPayForm]    = useState({ amountPaid:'', discount:0, method:'cash', notifyVia:'whatsapp_sms', printReceipt:true });
+  const [payForm,    setPayForm]    = useState(blankPay(''));
 
   /* collect-all mode */
   const [collectAll, setCollectAll] = useState(false);
+  // True for the whole collect-all run: between one bill's payment and the
+  // next nothing is pending, and a second click would pay the bills twice.
+  const [collecting, setCollecting] = useState(false);
 
   /* today's session counter (resets on page reload — for a persistent counter use a query) */
   const [todayCount, setTodayCount] = useState(0);
@@ -62,7 +70,8 @@ export default function FeeBarcodeCollectionPage() {
   useEffect(() => { barcodeRef.current?.focus(); }, []);
 
   /* ── today's collections (from server) ── */
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Pakistan's day: the UTC date is still yesterday until 5 a.m. here.
+  const todayStr = todayPKT();
   const { data: todayStats } = useQuery({
     queryKey: ['barcode-today-stats'],
     queryFn: () => api.get('/fees/payments', { params: { from: todayStr, to: todayStr, limit: 500 } }).then(r => r.data),
@@ -90,7 +99,9 @@ export default function FeeBarcodeCollectionPage() {
     mutationFn: d => api.post('/fees/payments', d),
     onSuccess: r => {
       const receipt = r.data.data?.receiptNo || '';
-      toast.success(`Payment recorded! Receipt: ${receipt}`);
+      // The server's own words: "Payment recorded on 02/10/2026." for a fee
+      // filed on an earlier day, so the cashier sees which day it went to.
+      toast.success(`${r.data.message || 'Payment recorded.'} Receipt: ${receipt}`);
       setTodayCount(c => c + 1);
       setTodayTotal(t => t + (r.data.data?.payment?.amountPaid || 0));
       qc.invalidateQueries(['barcode-today-stats']);
@@ -125,7 +136,7 @@ export default function FeeBarcodeCollectionPage() {
   const openPayModal = (inv) => {
     setCollectAll(false);
     setActiveInv(inv);
-    setPayForm({ amountPaid: fmt(inv.dueAmount), discount: 0, method:'cash', notifyVia:'whatsapp_sms', printReceipt: true });
+    setPayForm(blankPay(fmt(inv.dueAmount)));
     setModalOpen(true);
   };
 
@@ -136,32 +147,76 @@ export default function FeeBarcodeCollectionPage() {
     const totalDue = pending.reduce((s, i) => s + (i.dueAmount || 0), 0);
     setActiveInv(null);
     setCollectAll(true);
-    setPayForm({ amountPaid: fmt(totalDue), discount: 0, method:'cash', notifyVia:'whatsapp_sms', printReceipt: true });
+    setPayForm(blankPay(fmt(totalDue)));
     setModalOpen(true);
   };
+
+  // As on Fee Collection: a fee received on an earlier day is filed on that
+  // day, and messaging the parent "fee received" today about it would only
+  // confuse them, so a past date turns notifying off. It can be turned back on.
+  const pickPaymentDate = (value) => setPayForm(f => {
+    const today = todayPKT();
+    const past = !!value && value < today;
+    const wasPast = !!f.paymentDate && f.paymentDate < today;
+    let notifyVia = f.notifyVia;
+    if (past && !wasPast) notifyVia = 'none';
+    else if (!past && wasPast && f.notifyVia === 'none') notifyVia = 'whatsapp_sms';
+    return { ...f, paymentDate: value, notifyVia };
+  });
+  const payDateIsPast = !!payForm.paymentDate && payForm.paymentDate < todayPKT();
 
   /* ── confirm payment (single or all) ── */
   const confirmPayment = async () => {
     const amt = parseFloat(payForm.amountPaid);
     if (!amt || amt <= 0) return toast.error('Enter a valid amount');
+    if (payForm.paymentDate && payForm.paymentDate > todayPKT()) return toast.error('Payment date cannot be in the future.');
     const disc = parseFloat(payForm.discount || 0);
+    if (disc < 0) return toast.error('Discount cannot be negative.');
+    const paymentDate = payForm.paymentDate || undefined;
 
     if (collectAll) {
-      /* pay each pending invoice sequentially */
-      let remaining = Math.round(amt * 100);
-      for (const inv of pendingInvoices) {
-        if (remaining <= 0) break;
-        const chunk = Math.min(remaining, inv.dueAmount || 0);
-        if (chunk <= 0) continue;
-        await pay.mutateAsync({
-          invoiceId:  inv.id,
-          studentId:  studentData.student.id,
-          amountPaid: chunk,
-          discount:   Math.round(disc * 100 / pendingInvoices.length),
-          method:     payForm.method,
-          notifyVia:  payForm.notifyVia,
-        });
-        remaining -= chunk;
+      let cash = Math.round(amt * 100);
+      let off  = Math.round(disc * 100);
+      if (cash + off > totalDue) {
+        return toast.error(`Amount plus discount is more than the total due (${money(totalDue)}).`);
+      }
+      // Oldest month first, the way dues are cleared. Each bill takes cash
+      // first and then whatever discount still fits on it. Split evenly, the
+      // discount pushed a fully paid bill over its due and was refused.
+      const plan = [];
+      for (const inv of [...pendingInvoices].sort((a, b) => byPeriodDesc(b, a))) {
+        if (cash <= 0) break;
+        const due  = inv.dueAmount || 0;
+        const part = Math.min(cash, due);
+        if (part <= 0) continue;
+        const give = Math.min(off, due - part);
+        plan.push({ inv, part, give });
+        cash -= part;
+        off  -= give;
+      }
+      // A discount is recorded with a payment, so it cannot go on a bill
+      // that gets no cash. Say so before anything is saved.
+      if (off > 0) {
+        return toast.error(`${money(off)} of the discount would fall on bills nothing is being paid on. Collect those bills one at a time.`);
+      }
+      setCollecting(true);
+      try {
+        for (const { inv, part, give } of plan) {
+          await pay.mutateAsync({
+            invoiceId:  inv.id,
+            studentId:  studentData.student.id,
+            amountPaid: part,
+            discount:   give,
+            method:     payForm.method,
+            notifyVia:  payForm.notifyVia,
+            paymentDate,
+          });
+        }
+      } catch {
+        // The failed bill's reason is already on screen (onError); the bills
+        // after it are left unpaid rather than paid out of order.
+      } finally {
+        setCollecting(false);
       }
     } else {
       pay.mutate({
@@ -171,6 +226,7 @@ export default function FeeBarcodeCollectionPage() {
         discount:   Math.round(disc * 100),
         method:     payForm.method,
         notifyVia:  payForm.notifyVia,
+        paymentDate,
       });
     }
   };
@@ -395,7 +451,7 @@ export default function FeeBarcodeCollectionPage() {
                       return (
                         <tr key={inv.id} className="invoice-row" style={{ opacity: inv.status === 'paid' ? 0.6 : 1 }}>
                           <td style={{ fontWeight:600, color:'#1E3A5F' }}>{inv.feeTitle}</td>
-                          <td style={{ color:'#64748B', fontSize:13 }}>{inv.month} {inv.year}</td>
+                          <td style={{ color:'#64748B', fontSize:13 }}>{feePeriod(inv) || '—'}</td>
                           <td>{money(inv.totalAmount)}</td>
                           <td style={{ color:'#15803d', fontWeight:600 }}>{money(inv.paidAmount)}</td>
                           <td style={{ color: inv.dueAmount > 0 ? '#DC2626' : '#15803d', fontWeight:700 }}>
@@ -479,7 +535,7 @@ export default function FeeBarcodeCollectionPage() {
                 </div>
                 {!collectAll && activeInv && (
                   <div style={{ fontSize:12, color:'#64748B', marginTop:3 }}>
-                    {activeInv.feeTitle} — {activeInv.month} {activeInv.year}
+                    {activeInv.feeTitle}{feePeriod(activeInv) ? ` — ${feePeriod(activeInv)}` : ''}
                   </div>
                 )}
                 {collectAll && (
@@ -539,6 +595,22 @@ export default function FeeBarcodeCollectionPage() {
                 />
               </div>
 
+              {/* Payment date */}
+              <div className="form-group">
+                <label htmlFor="barcode-pay-date" className="form-label">Payment date</label>
+                <input id="barcode-pay-date"
+                  className="form-input"
+                  type="date" max={todayPKT()}
+                  value={payForm.paymentDate}
+                  onChange={e => pickPaymentDate(e.target.value)}
+                />
+                {payDateIsPast && (
+                  <div style={{ fontSize:11, color:'#64748B', marginTop:5 }}>
+                    {collectAll ? 'These payments' : 'This payment'} will be filed on {dmy(payForm.paymentDate)}, not today.
+                  </div>
+                )}
+              </div>
+
               {/* Payment Method */}
               <div className="form-group">
                 <label className="form-label">Payment Method</label>
@@ -586,8 +658,8 @@ export default function FeeBarcodeCollectionPage() {
 
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={() => setModalOpen(false)}>Cancel</button>
-              <button className="btn btn-teal" onClick={confirmPayment} disabled={pay.isPending}>
-                {pay.isPending
+              <button className="btn btn-teal" onClick={confirmPayment} disabled={pay.isPending || collecting}>
+                {pay.isPending || collecting
                   ? <><Spin/> Processing...</>
                   : <><CheckCircle size={15}/> {collectAll ? 'Collect All Now' : 'Confirm Payment'}</>
                 }

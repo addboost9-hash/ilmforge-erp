@@ -3,6 +3,7 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const ExcelJS = require('exceljs');
 const { requireRole } = require('../middleware/auth.middleware');
+const { monthNumber, monthKeys, monthLabel } = require('../utils/feeMonth');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -16,10 +17,22 @@ const requireFinance = (req, res, next) => {
   next();
 };
 
-/** Parse a date-only string (YYYY-MM-DD) to start-of-day Date */
-const dayStart = (str) => { const d = new Date(str); d.setHours(0, 0, 0, 0); return d; };
-/** Parse a date-only string (YYYY-MM-DD) to exclusive next-day Date */
-const dayEnd = (str) => { const d = new Date(str); d.setHours(23, 59, 59, 999); return d; };
+/* Pakistan keeps one clock all year, UTC+5. A day picked in a report is a
+   Pakistan day whatever zone the server runs in: on the live server (UTC),
+   setHours(0) began the day at 5 a.m. Pakistan time. */
+const PKT_MS = 5 * 3600 * 1000;
+const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+/** Parse a date-only string (YYYY-MM-DD) to the start of that Pakistan day */
+const dayStart = (str) => {
+  const [y, m, d] = String(str).slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) - PKT_MS);
+};
+/** Parse a date-only string (YYYY-MM-DD) to the last millisecond of that Pakistan day */
+const dayEnd = (str) => new Date(dayStart(str).getTime() + 864e5 - 1);
+/** The Pakistan calendar day an instant falls on, as YYYY-MM-DD. */
+const pktDay = (when = new Date()) => new Date(new Date(when).getTime() + PKT_MS).toISOString().slice(0, 10);
+/** YYYY-MM-DD -> DD/MM/YYYY, as dates are written in Pakistan. */
+const dmy = (ymd) => String(ymd).split('-').reverse().join('/');
 
 // ─── 1. GET /report/students/excel ──────────────────────────────────────────
 router.get('/students/excel', wrap(async (req, res) => {
@@ -193,7 +206,8 @@ router.get('/fees/head-dues', requireFinance, wrap(async (req, res) => {
   const { month, year } = req.query;
   const where = {
     schoolId: req.schoolId,
-    ...(month && { month }),
+    // Invoices hold the month as "7" or "July"/"Jul"; match every spelling.
+    ...(month && { month: { in: monthKeys(month) } }),
     ...(year && { year: parseInt(year) }),
   };
 
@@ -227,7 +241,7 @@ router.get('/fees/discount', requireFinance, wrap(async (req, res) => {
     where: {
       schoolId: req.schoolId,
       discount: { gt: 0 },
-      ...(month && { month }),
+      ...(month && { month: { in: monthKeys(month) } }),
       ...(year && { year: parseInt(year) }),
     },
     include: {
@@ -351,12 +365,13 @@ router.get('/accounting/balance-sheet', requireFinance, wrap(async (req, res) =>
 // ─── 10. GET /report/accounting/summary ─────────────────────────────────────
 // Monthly summary cards: totalCollected, totalExpenses, netBalance for current/given month
 router.get('/accounting/summary', requireFinance, wrap(async (req, res) => {
-  const now = new Date();
-  const month = req.query.month ? parseInt(req.query.month) - 1 : now.getMonth(); // 0-indexed
-  const year = req.query.year ? parseInt(req.query.year) : now.getFullYear();
+  const today = pktDay();
+  const month = monthNumber(req.query.month) || Number(today.slice(5, 7)); // 1-12
+  const year = parseInt(req.query.year) || Number(today.slice(0, 4));
 
-  const monthStart = new Date(year, month, 1);
-  const monthEnd = new Date(year, month + 1, 1);
+  // The month as Pakistan sees it, whatever zone the server runs in.
+  const monthStart = new Date(Date.UTC(year, month - 1, 1) - PKT_MS);
+  const monthEnd = new Date(Date.UTC(year, month, 1) - PKT_MS);
 
   const [collected, expenses, totalStudents, totalDue] = await Promise.all([
     prisma.feePayment.aggregate({
@@ -376,7 +391,9 @@ router.get('/accounting/summary', requireFinance, wrap(async (req, res) => {
         schoolId: req.schoolId,
         status: { in: ['unpaid', 'partial'] },
         year,
-        month: monthStart.toLocaleString('default', { month: 'long' }),
+        // Generate Fees stores "7", admissions and old records "July" or
+        // "Jul"; matching only "July" left most of the month's dues out.
+        month: { in: monthKeys(month) },
       },
     }),
   ]);
@@ -387,7 +404,7 @@ router.get('/accounting/summary', requireFinance, wrap(async (req, res) => {
   res.json({
     success: true,
     data: {
-      month: monthStart.toLocaleString('default', { month: 'long' }),
+      month: monthLabel(month),
       year,
       totalCollected,
       totalExpenses,
@@ -509,117 +526,213 @@ router.get('/staff/salary', requireFinance, wrap(async (req, res) => {
   res.json({ success: true, data, total: data.length, totalNet });
 }));
 
+/* ─── Daily balance sheet: whose hand the cash is in ─────────────────────────
+   Cash is counted by when it was ENTERED (createdAt), not by the date written
+   on it. A fee received last week but keyed in today was never part of last
+   week's handover, so it is cash still in this person's hand today; it is
+   listed with its own date (datedOn, backdated) so whoever counts the cash
+   can see why it is there. A payment with no receiver (fee history imported
+   from old books) is a record, not anyone's cash, and is never counted; nor
+   is an expense brought in from old records (importBatch set), or a parent's
+   "I have paid online" note, which is a Rs 0 row until the school confirms it.
+   What was carried into a day is that day's opening cash: everything
+   collected since the last handover, less everything spent from it.
+
+   A settlement (an AuditLog row, action 'BALANCESHEET_SETTLED') hands over
+   everything entered up to its cut-off: the moment it was made, or the end of
+   the day being settled when that day is already past, so settling last
+   Tuesday does not also settle the days after it.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/** A settlement's cut-off, in ms. Older rows have no `upTo`: they cut off when made. */
+const settledUpTo = (log) => {
+  try {
+    const { upTo } = JSON.parse(log.details || '{}');
+    if (upTo && !Number.isNaN(Date.parse(upTo))) return Date.parse(upTo);
+  } catch { /* not JSON: fall back to when it was recorded */ }
+  return new Date(log.createdAt).getTime();
+};
+
 // Shared computation behind daily-balancesheet / balancesheet/:date / balancesheet/latest.
+// `date` is a Pakistan day, YYYY-MM-DD.
 async function computeDailyBalancesheet(schoolId, accId, date) {
   const targetStart = dayStart(date);
   const targetEnd = dayEnd(date);
 
-  // Previous days: unsettled payments collected by this accountant (before today)
-  // Settlement is tracked in AuditLog with action 'BALANCESHEET_SETTLED'
-  const lastSettlement = await prisma.auditLog.findFirst({
-    where: {
-      schoolId,
-      action: 'BALANCESHEET_SETTLED',
-      details: { contains: `"accountantId":${accId}` },
-    },
+  // The comma matters: '"accountantId":1' alone also matched accountant 12.
+  const settlements = await prisma.auditLog.findMany({
+    where: { schoolId, action: 'BALANCESHEET_SETTLED', details: { contains: `"accountantId":${accId},` } },
+    select: { createdAt: true, details: true },
     orderBy: { createdAt: 'desc' },
+    take: 500,
   });
+  const cutoffs = settlements.map(settledUpTo);
+  const latest = cutoffs.length ? Math.max(...cutoffs) : null;
+  const before = cutoffs.filter((c) => c < targetStart.getTime());
+  // Cash carried into this day: entered after the last handover before it.
+  const carriedFrom = new Date(before.length ? Math.max(...before) : 0);
 
-  const unsettledSince = lastSettlement
-    ? new Date(lastSettlement.createdAt)
-    : new Date(0); // beginning of time if never settled
+  const cashIn = { voidedAt: null, schoolId, receivedBy: accId, amountPaid: { gt: 0 } };
+  const cashOut = { schoolId, addedBy: accId, importBatch: null };
 
-  // Payments received by this accountant on the target date
-  const todayPayments = await prisma.feePayment.findMany({
-    where: { voidedAt: null,
-      schoolId,
-      receivedBy: accId,
-      paymentDate: { gte: targetStart, lte: targetEnd },
-    },
-    include: {
-      invoice: {
-        select: {
-          feeTitle: true,
-          month: true,
-          year: true,
-          student: { select: { name: true, rollNo: true } },
+  const [carried, carriedOut, todayPayments, todayExpenses, categories] = await Promise.all([
+    prisma.feePayment.findMany({
+      where: { ...cashIn, createdAt: { gt: carriedFrom, lt: targetStart } },
+      select: { amountPaid: true, createdAt: true },
+    }),
+    prisma.expense.findMany({
+      where: { ...cashOut, createdAt: { gt: carriedFrom, lt: targetStart } },
+      select: { amount: true, createdAt: true },
+    }),
+    // Payments this person keyed in on the day, whatever day is written on them.
+    prisma.feePayment.findMany({
+      where: { ...cashIn, createdAt: { gte: targetStart, lte: targetEnd } },
+      include: {
+        invoice: {
+          select: {
+            feeTitle: true,
+            month: true,
+            year: true,
+            student: { select: { name: true, rollNo: true, class: { select: { name: true } } } },
+          },
         },
       },
-    },
-    orderBy: { paymentDate: 'asc' },
-  });
+      orderBy: { createdAt: 'asc' },
+    }),
+    // Expenses this person keyed in on the day (paid out of the same cash).
+    prisma.expense.findMany({
+      where: { ...cashOut, createdAt: { gte: targetStart, lte: targetEnd } },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.expenseCategory.findMany({ where: { schoolId }, select: { id: true, name: true } }),
+  ]);
 
-  // Expenses added by this accountant on the target date
-  const todayExpenses = await prisma.expense.findMany({
-    where: {
-      schoolId,
-      addedBy: accId,
-      date: { gte: targetStart, lte: targetEnd },
-    },
-    orderBy: { date: 'asc' },
-  });
+  // Still to hand over: entered after the latest cut-off, or never handed over.
+  const open = (row) => latest === null || new Date(row.createdAt).getTime() > latest;
+  const sum = (rows, key) => rows.reduce((t, r) => t + (r[key] || 0), 0);
+  const dated = (row, when) => {
+    const on = pktDay(when);
+    return { ...row, datedOn: on, backdated: on !== date };
+  };
+  const categoryName = new Map(categories.map((c) => [c.id, c.name]));
 
-  // Previous unsettled payments (between lastSettlement and target-day start)
-  const previousPayments = await prisma.feePayment.findMany({
-    where: { voidedAt: null,
-      schoolId,
-      receivedBy: accId,
-      paymentDate: { gte: unsettledSince, lt: targetStart },
-    },
-    select: { amountPaid: true },
-  });
+  const previousUnsettled = sum(carried, 'amountPaid') - sum(carriedOut, 'amount');
+  const todayCollected = sum(todayPayments, 'amountPaid');
+  const todayExpensesTotal = sum(todayExpenses, 'amount');
+  const cashInHand = sum(carried.filter(open), 'amountPaid')
+    - sum(carriedOut.filter(open), 'amount')
+    + sum(todayPayments.filter(open), 'amountPaid')
+    - sum(todayExpenses.filter(open), 'amount');
+  const anyOpen = carried.some(open) || carriedOut.some(open) || todayPayments.some(open) || todayExpenses.some(open);
 
-  const todayCollected = todayPayments.reduce((sum, p) => sum + p.amountPaid, 0);
-  const todayExpensesTotal = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const previousUnsettled = previousPayments.reduce((sum, p) => sum + p.amountPaid, 0);
-  const cashInHand = previousUnsettled + todayCollected - todayExpensesTotal;
-
-  // "Settled" means this exact target date already has a BALANCESHEET_SETTLED
-  // audit entry recorded for it (not just "there exists some settlement ever").
-  const settledForDate = lastSettlement && lastSettlement.details?.includes(`"date":"${date}"`);
+  const payments = todayPayments.map((p) => dated(p, p.paymentDate));
+  const expenses = todayExpenses.map((e) => ({
+    ...dated(e, e.date),
+    category: e.categoryId ? categoryName.get(e.categoryId) || null : null,
+  }));
 
   return {
     accountantId: accId,
     date,
-    status: settledForDate ? 'settled' : 'unsettled',
-    lastSettledAt: lastSettlement?.createdAt || null,
-    payments: todayPayments,
-    expenses: todayExpenses,
+    // Settled = nothing this person entered up to this day is still in hand.
+    status: anyOpen ? 'unsettled' : 'settled',
+    lastSettledAt: settlements[0]?.createdAt || null,
+    payments,
+    expenses,
     cashInHand,
     summary: {
       previousUnsettled,
       todayCollected,
       todayExpenses: todayExpensesTotal,
+      handedOver: previousUnsettled + todayCollected - todayExpensesTotal - cashInHand,
       cashInHand,
+      backdated: payments.filter((p) => p.backdated).length + expenses.filter((e) => e.backdated).length,
     },
   };
 }
 
+// Every person who handled cash on a day (the admin's Daily Balance Sheet):
+// what they took in and spent that day, and what is still in their hand.
+// Fee history imported that day (no receiver) is reported apart, as a count.
+async function dailyBalancesheets(schoolId, date) {
+  const targetStart = dayStart(date);
+  const targetEnd = dayEnd(date);
+  const [receivers, spenders, imported] = await Promise.all([
+    prisma.feePayment.groupBy({
+      by: ['receivedBy'],
+      where: { schoolId, voidedAt: null, receivedBy: { not: null }, amountPaid: { gt: 0 }, createdAt: { lte: targetEnd } },
+    }),
+    prisma.expense.groupBy({
+      by: ['addedBy'],
+      where: { schoolId, addedBy: { not: null }, importBatch: null, createdAt: { gte: targetStart, lte: targetEnd } },
+    }),
+    prisma.feePayment.aggregate({
+      where: { schoolId, voidedAt: null, receivedBy: null, createdAt: { gte: targetStart, lte: targetEnd } },
+      _sum: { amountPaid: true },
+      _count: true,
+    }),
+  ]);
+  const ids = [...new Set([...receivers.map((r) => r.receivedBy), ...spenders.map((e) => e.addedBy)])];
+  const [users, sheets] = await Promise.all([
+    prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, email: true, role: true } }),
+    Promise.all(ids.map((id) => computeDailyBalancesheet(schoolId, id, date))),
+  ]);
+  const byId = new Map(users.map((u) => [u.id, u]));
+
+  return {
+    date,
+    sheets: sheets
+      // Only people with something on this day, or cash carried into it.
+      .filter((s) => s.payments.length || s.expenses.length || s.summary.previousUnsettled || s.cashInHand)
+      .map((s) => {
+        const user = byId.get(s.accountantId);
+        return { ...s, name: user?.name || 'Unknown user', email: user?.email || '', role: user?.role || '' };
+      })
+      .sort((a, b) => b.summary.todayCollected - a.summary.todayCollected),
+    imported: { count: imported._count || 0, amount: imported._sum.amountPaid || 0 },
+  };
+}
+
 // ─── 13. GET /report/accounting/daily-balancesheet ──────────────────────────
-// Individual accountant's daily balance sheet
-// ?accountantId=&date=
+// ?date=YYYY-MM-DD&accountantId= — one person's daily balance sheet.
+// ?date=YYYY-MM-DD alone — { date, sheets: [...one per person], imported }.
+const accountantParam = (raw, fallback) => {
+  if (raw === undefined || raw === null || raw === '') return fallback;
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
+
 router.get('/accounting/daily-balancesheet', requireFinance, wrap(async (req, res) => {
-  const { accountantId, date } = req.query;
-  if (!accountantId || !date) {
-    return res.status(400).json({ success: false, message: 'accountantId and date params required.' });
+  const { date } = req.query;
+  if (!isDay(date)) {
+    return res.status(400).json({ success: false, message: 'date param required (YYYY-MM-DD).' });
   }
-  const data = await computeDailyBalancesheet(req.schoolId, parseInt(accountantId), date);
+  const accId = accountantParam(req.query.accountantId, undefined);
+  if (accId === null) return res.status(400).json({ success: false, message: 'accountantId must be a user id.' });
+  const data = accId
+    ? await computeDailyBalancesheet(req.schoolId, accId, date)
+    : await dailyBalancesheets(req.schoolId, date);
   res.json({ success: true, data });
 }));
 
 // ─── GET /report/accounting/balancesheet/latest — Accountant Portal banner ──
 // Today's sheet for the calling accountant (or ?accountantId= for admins).
 router.get('/accounting/balancesheet/latest', requireFinance, wrap(async (req, res) => {
-  const accId = req.query.accountantId ? parseInt(req.query.accountantId) : req.user.id;
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const data = await computeDailyBalancesheet(req.schoolId, accId, todayStr);
+  const accId = accountantParam(req.query.accountantId, req.user.id);
+  if (!accId) return res.status(400).json({ success: false, message: 'accountantId must be a user id.' });
+  // Pakistan's today: the UTC server is still on yesterday until 5 a.m.
+  const data = await computeDailyBalancesheet(req.schoolId, accId, pktDay());
   res.json({ success: true, data });
 }));
 
 // ─── GET /report/accounting/balancesheet/:date — a specific day's sheet for
 // the calling accountant (or ?accountantId= for admins).
 router.get('/accounting/balancesheet/:date', requireFinance, wrap(async (req, res) => {
-  const accId = req.query.accountantId ? parseInt(req.query.accountantId) : req.user.id;
+  if (!isDay(req.params.date)) {
+    return res.status(400).json({ success: false, message: 'Date must be YYYY-MM-DD.' });
+  }
+  const accId = accountantParam(req.query.accountantId, req.user.id);
+  if (!accId) return res.status(400).json({ success: false, message: 'accountantId must be a user id.' });
   const data = await computeDailyBalancesheet(req.schoolId, accId, req.params.date);
   res.json({ success: true, data });
 }));
@@ -635,38 +748,58 @@ router.post('/accounting/settle', requireFinance, wrap(async (req, res) => {
   if (!accountantId || !date) {
     return res.status(400).json({ success: false, message: 'accountantId and date required.' });
   }
+  if (!isDay(date)) {
+    return res.status(400).json({ success: false, message: 'Date must be YYYY-MM-DD.' });
+  }
+  if (date > pktDay()) {
+    return res.status(400).json({ success: false, message: 'A day that has not come yet cannot be settled.' });
+  }
 
-  const accId = parseInt(accountantId);
+  const accId = accountantParam(accountantId, null);
+  if (!accId) return res.status(400).json({ success: false, message: 'accountantId must be a user id.' });
   const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
   if (!isAdmin && accId !== req.user.id) {
     return res.status(403).json({ success: false, message: 'You can only settle your own balance sheet.' });
   }
 
-  // Verify accountant exists in this school
+  // Verify the person is in this school. Not only active users: the cash of
+  // someone who has since left still has to be handed over and settled.
   const accountant = await prisma.user.findFirst({
-    where: { id: accId, schoolId: req.schoolId, isActive: true },
+    where: { id: accId, schoolId: req.schoolId },
     select: { id: true, name: true, role: true },
   });
   if (!accountant) {
     return res.status(404).json({ success: false, message: 'Accountant not found.' });
   }
 
-  // Record settlement in audit log
+  // Hands over everything entered up to now, or up to the end of that day
+  // when settling a day already past (the days after it stay open). The
+  // amount handed over is kept on the record for whoever audits the cash.
+  const upTo = new Date(Math.min(Date.now(), dayEnd(date).getTime()));
+  const sheet = await computeDailyBalancesheet(req.schoolId, accId, date);
+
+  // Record settlement in audit log. accountantId stays the first key: the
+  // sheet finds a person's settlements by the text '"accountantId":<id>,'.
   const log = await prisma.auditLog.create({
     data: {
       schoolId: req.schoolId,
       userId: req.user.id,
       action: 'BALANCESHEET_SETTLED',
       resource: 'daily_balancesheet',
-      details: JSON.stringify({ accountantId: accId, date, notes: notes || '', settledBy: req.user.id }),
+      details: JSON.stringify({
+        accountantId: accId, date, notes: notes || '', settledBy: req.user.id,
+        upTo: upTo.toISOString(), amount: sheet.cashInHand,
+      }),
     },
   });
 
   res.json({
     success: true,
-    message: `Balance sheet settled for ${accountant.name} on ${date}.`,
-    data: { settlementId: log.id, accountantId: accId, date, settledBy: req.user.id },
+    message: `Balance sheet settled for ${accountant.name} on ${dmy(date)}.`,
+    data: { settlementId: log.id, accountantId: accId, date, settledBy: req.user.id, amount: sheet.cashInHand },
   });
 }));
 
 module.exports = router;
+// Pure helpers, exported for tests/fees/fee-history.test.mjs.
+module.exports.helpers = { dayStart, dayEnd, pktDay, settledUpTo };

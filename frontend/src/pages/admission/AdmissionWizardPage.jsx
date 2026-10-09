@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { validatePhone, validateCNIC, formatCNIC } from '../../utils/validation';
 import { printAdmissionForm } from './AdmissionFormPrintPage';
-import { compressPhoto } from '../../utils/photo';
+import { compressPhoto, pickProblem } from '../../utils/photo';
 
 /* ═══════════════════════════════════════════════════════
    LIVE PHOTO CAPTURE COMPONENT
@@ -89,9 +89,11 @@ function PhotoCapture({ preview, onCapture, onClear }) {
           <button type="button" onClick={startCamera} style={btnSm('#0073b7')}>📷 Camera</button>
           <label style={{ ...btnSm('#475569'), cursor:'pointer' }}>
             📁 Browse
-            <input type="file" accept="image/*" style={{ display:'none' }} onChange={e => {
-              const file = e.target.files[0]; if (!file) return;
-              if (file.size > 3 * 1024 * 1024) { alert('Photo must be under 3MB'); return; }
+            <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display:'none' }} onChange={e => {
+              const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+              // Same rules as every other photo upload (JPG/PNG/WebP up to 5 MB).
+              const problem = pickProblem(file);
+              if (problem) { toast.error(problem); return; }
               const reader = new FileReader();
               reader.onload = ev => { onCapture(ev.target.result); setMode('captured'); };
               reader.readAsDataURL(file);
@@ -150,6 +152,10 @@ function withPrefill(form, p) {
     parentEmail: pick(p.parentEmail) || form.parentEmail,
     address: pick(p.address) || form.address,
     prevSchoolName: pick(p.prevSchoolName) || form.prevSchoolName,
+    // "Add Student" on a class row opens the wizard with that class chosen.
+    ...(p.classId ? { classId: String(p.classId), sectionId: p.sectionId ? String(p.sectionId) : '' } : {}),
+    // The photo the parent sent with the online application.
+    ...(p.photo ? { photoPreview: p.photo, photoBase64: p.photo } : {}),
   };
 }
 
@@ -592,7 +598,7 @@ export default function AdmissionWizardPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-800">New Student Admission</h1>
         <p className="text-sm text-slate-500">Complete student registration — portal accounts, fee & class auto-linked</p>
-        {prefill && (
+        {prefill && inquiryId && (
           <div role="status" style={{ marginTop: 10, padding: '9px 12px', borderRadius: 8, background: '#F0FDFA', border: '1px solid #99F6E4', color: '#0F766E', fontSize: 13 }}>
             Filled in from admission application ADM-{String(inquiryId || '').padStart(5, '0')}. Please check every step before admitting.
           </div>

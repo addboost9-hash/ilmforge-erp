@@ -1,10 +1,60 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { pastDate } = require('../utils/pastDate');
 const { contains: ciContains, equals: ciEquals } = require('../utils/search');
+const { monthNumber, monthKeys, monthLabel, byPeriodDesc, feeKind } = require('../utils/feeMonth');
 const { sendSMS } = require('../services/sms.service');
 const { sendFeePaidNotification, sendFeeReminderNotification } = require('../services/whatsapp.service');
+const { duesByStudent } = require('../services/scheduler.service');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
+/* Pakistan keeps one clock all year, UTC+5. A date picked on a screen is a
+   Pakistan day whatever zone the server runs in: the live server is on UTC,
+   where setHours(0) began "today" at 5 a.m. Pakistan time. */
+const PKT_MS = 5 * 3600 * 1000;
+const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+const pktDayStart = (ymd) => {
+  const [y, m, d] = String(ymd).slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) - PKT_MS);
+};
+const pktDayEnd = (ymd) => new Date(pktDayStart(ymd).getTime() + 864e5 - 1);
+/** Every instant of a fee month in Pakistan, as a Prisma date filter. */
+const pktMonth = (month, year) => ({
+  gte: new Date(Date.UTC(year, month - 1, 1) - PKT_MS),
+  lt: new Date(Date.UTC(year, month, 1) - PKT_MS),
+});
+/** The Pakistan calendar day an instant falls on, as YYYY-MM-DD. */
+const pktDay = (when = new Date()) => new Date(new Date(when).getTime() + PKT_MS).toISOString().slice(0, 10);
+/** YYYY-MM-DD -> DD/MM/YYYY, as dates are written in Pakistan. */
+const dmy = (ymd) => String(ymd).split('-').reverse().join('/');
+/* A fee title's kind, month names taken out (utils/feeMonth.js): the Transport
+   tab bills "Transport Fee Of July" and Custom Fee bills "Transport Fee", and
+   July's transport must not be billed twice because the two screens name it
+   differently. Past Records compares bills with the same rule. */
+const kindOf = feeKind;
+/** Students among `sameMonth` invoices already billed a fee of the same kind as `title`. */
+const billedFor = (sameMonth, title) => {
+  const kind = kindOf(title);
+  return new Set(sameMonth.filter((inv) => kindOf(inv.feeTitle) === kind).map((inv) => inv.studentId));
+};
+/* A month can now hold more than one bill (the monthly fee, transport, an
+   exam fee), and each needs its own voucher number: the monthly fee keeps
+   the usual JUL-0042-2026, any other fee adds its first letters (JUL-0042-2026-TRA). */
+const voucherFor = (monthName, studentId, year, title) => {
+  const kind = kindOf(title);
+  const tag = kind === 'monthly' ? '' : `-${(kind.slice(0, 3) || 'FEE').toUpperCase()}`;
+  return `${monthName.toUpperCase()}-${String(studentId).padStart(4, '0')}-${year}${tag}`;
+};
+/** from/to (Pakistan days, either may be blank) -> { range } | { error }. */
+const pktRange = (from, to) => {
+  const bad = [from, to].find((v) => v && !isDay(v));
+  if (bad) return { error: `${bad} is not a date. Use YYYY-MM-DD.` };
+  const range = {};
+  if (from) range.gte = pktDayStart(from);
+  if (to) range.lte = pktDayEnd(to);
+  return { range: Object.keys(range).length ? range : null };
+};
 
 const isFinanceRole = (role) => ['super_admin', 'admin', 'accountant'].includes(role);
 
@@ -23,10 +73,11 @@ router.get('/stats', requireFinanceRole, wrap(async (req, res) => {
   const { schoolId } = req;
   const { from, to } = req.query;
 
-  const range = {};
-  if (from) { const d = new Date(from); d.setHours(0, 0, 0, 0); range.gte = d; }
-  if (to)   { const d = new Date(to);   d.setHours(23, 59, 59, 999); range.lte = d; }
-  const hasRange = Object.keys(range).length > 0;
+  // Pakistan days (setHours(0) on the UTC server began them at 5 a.m.).
+  const dates = pktRange(from, to);
+  if (dates.error) return res.status(400).json({ success: false, message: dates.error });
+  const range = dates.range || {};
+  const hasRange = !!dates.range;
 
   const [paidAgg, invoiceAgg] = await Promise.all([
     prisma.feePayment.aggregate({
@@ -72,10 +123,19 @@ router.post('/generate', requireFinanceRole, wrap(async (req, res) => {
     return res.status(400).json({ success: false, message: 'classId, month, year required.' });
   }
 
-  const monthInt = parseInt(month);
-  const yearInt  = parseInt(year);
+  // Old months may be billed (a school entering its past fees), but only
+  // real ones: a typo such as month 13 or year 2062 would bill every student.
+  const monthInt = monthNumber(month);
+  const yearInt  = Number(year);
+  const lastYear = new Date(Date.now() + PKT_MS).getUTCFullYear() + 1;
+  if (!monthInt) {
+    return res.status(400).json({ success: false, message: 'Fee month must be 1 to 12.' });
+  }
+  if (!Number.isInteger(yearInt) || yearInt < 2000 || yearInt > lastYear) {
+    return res.status(400).json({ success: false, message: `Fee year must be between 2000 and ${lastYear}.` });
+  }
   const MONTHS   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const monthName = MONTHS[(monthInt - 1)] || String(month);
+  const monthName = MONTHS[(monthInt - 1)];
 
   // Use campusId from body (user selection) or fall back to middleware campus
   const filterCampusId = bodyCampusId ? parseInt(bodyCampusId) : req.campusId;
@@ -118,18 +178,26 @@ router.post('/generate', requireFinanceRole, wrap(async (req, res) => {
   // validation error before this fix.
   const monthStr = String(monthInt);
 
+  // "Already billed" means a bill of the SAME KIND for this month, under any
+  // spelling of the month: "7" from this screen, "July"/"Jul" from
+  // admissions, custom invoices and fee records entered from old books.
+  // Checking only "7" billed July twice for a month entered as "July"; and
+  // an Admission or Transport Fee in July must not stop the monthly fee.
+  const title = feeTitle || `Monthly Fee Of ${monthName}`;
+  const sameMonth = await prisma.feeInvoice.findMany({
+    where: { schoolId, studentId: { in: students.map((s) => s.id) }, year: yearInt, month: { in: monthKeys(monthInt) } },
+    select: { studentId: true, feeTitle: true },
+  });
+  const billed = billedFor(sameMonth, title);
+
   for (const student of students) {
-    // Check if invoice already exists for this month/year
-    const existing = await prisma.feeInvoice.findFirst({
-      where: { schoolId, studentId: student.id, month: monthStr, year: yearInt },
-    });
-    if (existing) {
+    if (billed.has(student.id)) {
       results.skipped++;
       results.students.push({ id: student.id, name: student.name, rollNo: student.rollNo, status: 'skipped' });
       continue;
     }
 
-    const voucherNo = `${monthName.toUpperCase()}-${String(student.id).padStart(4,'0')}-${year}`;
+    const voucherNo = voucherFor(monthName, student.id, yearInt, title);
 
     await prisma.feeInvoice.create({
       data: {
@@ -137,7 +205,7 @@ router.post('/generate', requireFinanceRole, wrap(async (req, res) => {
         campusId: student.campusId,
         studentId: student.id,
         classId: parseInt(classId),
-        feeTitle: feeTitle || `Monthly Fee Of ${monthName}`,
+        feeTitle: title,
         totalAmount: baseAmount,
         dueAmount:   baseAmount,
         paidAmount:  0,
@@ -156,7 +224,7 @@ router.post('/generate', requireFinanceRole, wrap(async (req, res) => {
   res.json({
     success: true,
     data:    results,
-    message: `${results.generated} invoice${results.generated !== 1 ? 's' : ''} generated, ${results.skipped} already existed.`,
+    message: `${results.generated} invoice${results.generated !== 1 ? 's' : ''} generated, ${results.skipped} already billed for ${monthLabel(monthInt)} ${yearInt}.`,
   });
 }));
 
@@ -175,12 +243,13 @@ router.get('/invoices', requireFinanceRole, wrap(async (req, res) => {
     ...(Number.isFinite(oneStudent) && { studentId: oneStudent }),
     ...(classId && { classId: parseInt(classId) }),
     ...(status && { status }),
-    ...(month && { month }),
+    // Any spelling of the month: "7" and "July" are the same month.
+    ...(month && { month: { in: monthKeys(month) } }),
     ...(year && { year: parseInt(year) }),
     ...(search && { student: { OR: [{ name: ciContains(search) }, { rollNo: ciContains(search) }] } }),
   };
   const [invoices, total] = await Promise.all([
-    prisma.feeInvoice.findMany({ where, skip, take: parseInt(limit), include: { student: { select: { name: true, rollNo: true, classId: true } }, payments: { orderBy: { createdAt: 'desc' }, take: 1 } }, orderBy: { createdAt: 'desc' } }),
+    prisma.feeInvoice.findMany({ where, skip, take: parseInt(limit), include: { student: { select: { name: true, rollNo: true, classId: true, fatherName: true, class: { select: { name: true } } } }, payments: { orderBy: { createdAt: 'desc' }, take: 1 } }, orderBy: { createdAt: 'desc' } }),
     prisma.feeInvoice.count({ where })
   ]);
   res.json({ success: true, data: invoices, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
@@ -219,8 +288,11 @@ router.get('/student/:studentId', wrap(async (req, res) => {
   const invoices = await prisma.feeInvoice.findMany({
     where: { schoolId, studentId },
     include: { payments: { orderBy: { createdAt: 'desc' } } },
-    orderBy: [{ year: 'desc' }, { month: 'desc' }]
+    orderBy: [{ year: 'desc' }, { createdAt: 'desc' }]
   });
+  // Newest month first, by the month's number: sorting the text column put
+  // "9" above "12" and "September" above "October".
+  invoices.sort(byPeriodDesc);
 
   res.json({ success: true, data: { student, invoices } });
 }));
@@ -228,8 +300,17 @@ router.get('/student/:studentId', wrap(async (req, res) => {
 // POST /api/v1/fees/payments - Record a fee payment
 router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
   const { schoolId } = req;
-  const { invoiceId, amountPaid, discount = 0, method = 'cash', notifyVia = 'whatsapp_sms' } = req.body;
+  const { invoiceId, amountPaid, discount = 0, method = 'cash', notifyVia = 'whatsapp_sms', paymentDate, remarks } = req.body;
+  // An optional note typed with the payment ("part payment", "advance").
+  const note = remarks ? String(remarks).replace(/\s+/g, ' ').trim().slice(0, 200) || null : null;
   const paidNum = parseInt(amountPaid);
+  // The day the money was actually received. Entering a payment late (or a
+  // school entering its past fees) must file it on that day, not today.
+  const enteredAt = new Date();
+  const when = pastDate(paymentDate, { label: 'Payment date', now: enteredAt });
+  if (when.error) return res.status(400).json({ success: false, message: when.error });
+  // pastDate hands back `now` itself for today, so anything else is an earlier day.
+  const backdated = when.date !== enteredAt;
   const discountNum = parseInt(discount) || 0;
   // FIX: !amountPaid is truthy-falsy only — a negative number passes it — and
   // there was no cap on discount vs. remaining due, so a payment could mark
@@ -265,12 +346,23 @@ router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
       const pay = await tx.feePayment.create({
         data: { schoolId, invoiceId: parseInt(invoiceId), studentId: invoice.studentId,
           amountPaid: paidNum, discount: discountNum, method, receivedBy: req.user.id,
-          notifiedVia: notifyVia, receiptNo }
+          notifiedVia: notifyVia, receiptNo, paymentDate: when.date, remarks: note }
       });
       await tx.feeInvoice.update({
         where: { id: parseInt(invoiceId) },
         data: { paidAmount: { increment: paidNum }, discount: { increment: discountNum }, dueAmount: due, status }
       });
+      // A fee keyed in for an earlier day is legitimate (it was received
+      // then), but an auditor must be able to tell it from one recorded on
+      // the day, so the entry date is kept beside the date written on it.
+      if (backdated) {
+        await tx.auditLog.create({
+          data: {
+            schoolId, userId: req.user.id, action: 'PAYMENT_BACKDATED', resource: 'fee_payment', resourceId: pay.id,
+            details: JSON.stringify({ paymentId: pay.id, paymentDate: pktDay(when.date), enteredAt: enteredAt.toISOString() }),
+          },
+        });
+      }
       return { pay, due, status };
     });
     payment = result.pay; newDue = result.due; newStatus = result.status;
@@ -282,13 +374,13 @@ router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
   // Send notification to parent (WhatsApp/SMS + Email)
   if (notifyVia !== 'none') {
     const school = await prisma.school.findUnique({ where: { id: schoolId } });
-    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const monthStr = invoice.month ? (monthNames[(parseInt(invoice.month)-1)] || invoice.month) : '';
+    const monthStr = invoice.month ? `${monthLabel(invoice.month)} ${invoice.year || ''}`.trim() : '';
 
-    // WhatsApp/SMS — fire and forget
+    // WhatsApp/SMS — fire and forget. The messages print "Rs." before the
+    // figure, so they get rupees: the stored paisa read as Rs 350,000.
     sendFeePaidNotification({
       parentPhone: invoice.student.emergencyPhone || '',
-      studentName: invoice.student.name, amount: parseInt(amountPaid),
+      studentName: invoice.student.name, amount: paidNum / 100,
       month: monthStr, receiptNo, schoolName: school?.name || 'School'
     }).catch(() => {});
 
@@ -300,15 +392,19 @@ router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
         to: parentEmail,
         parentName: invoice.student.parent?.name || invoice.student.fatherName || 'Parent',
         studentName: invoice.student.name,
-        amount: parseInt(amountPaid),
-        month: `${monthStr} ${invoice.year || ''}`.trim(),
+        amount: paidNum / 100,
+        month: monthStr,
         receiptNo,
         schoolName: school?.name || 'School',
       }).catch(() => {});
     }
   }
 
-  res.json({ success: true, data: { payment, receiptNo, newStatus, newDue }, message: 'Payment recorded successfully.' });
+  res.json({
+    success: true,
+    data: { payment, receiptNo, newStatus, newDue, paymentDate: payment.paymentDate, backdated },
+    message: backdated ? `Payment recorded on ${dmy(pktDay(payment.paymentDate))}.` : 'Payment recorded successfully.',
+  });
 }));
 
 // GET /api/v1/fees/defaulters
@@ -432,6 +528,12 @@ router.put('/payments/:id', requireFinanceRole, wrap(async (req, res) => {
         ), { status: 400 });
       }
 
+      // A correction re-keys the same cash, so the new row keeps the day it
+      // was received, the person who received it and when it was first
+      // entered. Dated today and credited to the corrector, it moved the
+      // fee to the wrong month in reports and showed up as fresh cash in
+      // the corrector's balance sheet. voidedBy/voidedAt on the original
+      // record who corrected it and when.
       const replacement = await tx.feePayment.create({
         data: {
           schoolId,
@@ -440,7 +542,9 @@ router.put('/payments/:id', requireFinanceRole, wrap(async (req, res) => {
           amountPaid: paidNum,
           discount: discNum,
           method: method || existing.method,
-          receivedBy: req.user.id,
+          receivedBy: existing.receivedBy,
+          paymentDate: existing.paymentDate,
+          createdAt: existing.createdAt,
           receiptNo: `RCP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           remarks: `Correction of receipt ${existing.receiptNo || existing.id}: ${why}`,
           replacesId: existing.id,
@@ -473,18 +577,22 @@ router.get('/defaulters', requireFinanceRole, wrap(async (req, res) => {
   const { classId } = req.query;
   const pageSize = Math.min(parseInt(req.query.limit) || 50, 500);
   const offset = parseInt(req.query.offset) || 0;
+  // ?monthYear=2026-07 narrows the list to one fee month (Fee Management's
+  // "Monthly Fee Defaulters"), matching every stored spelling of it.
+  const [, ofYear, ofMonth] = /^(\d{4})-(\d{1,2})$/.exec(String(req.query.monthYear || '')) || [];
 
   const where = {
     schoolId,
     status: { in: ['unpaid', 'partial'] },
     ...(campusId && { campusId }),
     ...(classId && { classId: parseInt(classId) }),
+    ...(ofYear && { year: Number(ofYear), month: { in: monthKeys(Number(ofMonth)) } }),
   };
 
   const [invoices, total] = await Promise.all([
     prisma.feeInvoice.findMany({
       where,
-      include: { student: { include: { class: true } } },
+      include: { student: { include: { class: true, section: true } } },
       orderBy: { dueAmount: 'desc' },
       take: pageSize,
       skip: offset,
@@ -501,21 +609,35 @@ router.post('/defaulters/sms', requireFinanceRole, wrap(async (req, res) => {
   const { classId } = req.body;
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
   const invoices = await prisma.feeInvoice.findMany({
-    where: { schoolId, status: { in: ['unpaid', 'partial'] }, ...(classId && { classId: parseInt(classId) }) },
+    where: { schoolId, status: { in: ['unpaid', 'partial'] }, dueAmount: { gt: 0 }, ...(classId && { classId: parseInt(classId) }) },
     include: { student: true }
   });
+  // One message per student, not one per unpaid invoice: the total still
+  // due, in rupees (the message prints "Rs." before it; the stored paisa
+  // read as a hundred times the fee), and every month it covers.
   let sent = 0;
-  for (const inv of invoices) {
-    if (inv.student?.emergencyPhone) {
-      await sendFeeReminderNotification({
-        parentPhone: inv.student.emergencyPhone, studentName: inv.student.name,
-        dueAmount: inv.dueAmount, month: inv.month || '', dueDate: inv.dueDate?.toLocaleDateString() || '', schoolName: school?.name || 'School'
-      });
-      sent++;
-    }
+  for (const due of duesByStudent(invoices)) {
+    if (!due.student?.emergencyPhone) continue;
+    await sendFeeReminderNotification({
+      parentPhone: due.student.emergencyPhone, studentName: due.student.name,
+      dueAmount: due.totalDue / 100, month: due.months.join(', '), dueDate: payBy(due.invoices),
+      schoolName: school?.name || 'School',
+    });
+    sent++;
   }
-  res.json({ success: true, message: `Reminder sent to ${sent} parents.` });
+  res.json({ success: true, data: { sent }, message: `Reminder sent to ${sent} parent${sent === 1 ? '' : 's'}.` });
 }));
+
+// "Please pay by ..." in a reminder: the nearest due date still ahead, or
+// today when every month is already overdue (a past date reads as a typo).
+function payBy(invoices, now = new Date()) {
+  const todayStart = pktDayStart(pktDay(now));
+  const ahead = invoices
+    .map((inv) => inv.dueDate && new Date(inv.dueDate))
+    .filter((d) => d && d >= todayStart)
+    .sort((a, b) => a - b)[0];
+  return dmy(pktDay(ahead || now));
+}
 
 // GET /api/v1/fees/structures
 router.get('/structures', requireFinanceRole, wrap(async (req, res) => {
@@ -550,17 +672,32 @@ router.post('/invoices', requireFinanceRole, wrap(async (req, res) => {
   if (!studentId || !heads.length) return res.status(400).json({ success: false, message: 'Choose a student and add at least one fee head.' });
   const student = await prisma.student.findFirst({ where: { id: parseInt(studentId), schoolId: req.schoolId } });
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+  if (heads.some((h) => !String(h.name || '').trim() || !(parseInt(h.amount) > 0))) {
+    return res.status(400).json({ success: false, message: 'Every fee head needs a name and an amount more than 0.' });
+  }
   const total = heads.reduce((a, h) => a + (parseInt(h.amount) || 0), 0);
   const feeTitle = heads.length > 1 ? `Custom Fee (${heads.length} heads)` : (heads[0]?.name || 'Custom Fee');
+  // The month the bill is for, in Pakistan: the UTC server's own month is
+  // still last month for the first five hours of each month here.
+  const pkNow = new Date(Date.now() + PKT_MS);
+  const monthNum = month ? monthNumber(month) : pkNow.getUTCMonth() + 1;
+  const yearNum = year ? parseInt(year) : pkNow.getUTCFullYear();
+  if (!monthNum || !(yearNum >= 2000 && yearNum <= pkNow.getUTCFullYear() + 1)) {
+    return res.status(400).json({ success: false, message: 'Choose a valid month and year for this bill.' });
+  }
+  if (dueDate && !isDay(String(dueDate).slice(0, 10))) {
+    return res.status(400).json({ success: false, message: 'The due date must be a date (YYYY-MM-DD).' });
+  }
   const inv = await prisma.feeInvoice.create({
     data: {
       schoolId: req.schoolId, campusId: student.campusId, studentId: student.id,
       classId: student.classId,
       feeTitle,
-      month: month ? String(month) : new Date().toLocaleString('default', { month: 'long' }),
-      year: parseInt(year) || new Date().getFullYear(),
+      month: String(monthNum),
+      year: yearNum,
       totalAmount: total, paidAmount: 0, dueAmount: total, status: 'unpaid',
-      dueDate: dueDate ? new Date(dueDate) : new Date(Date.now() + 10 * 864e5),
+      // A due date is a day: midday in Pakistan keeps it on that day everywhere.
+      dueDate: dueDate ? new Date(`${String(dueDate).slice(0, 10)}T07:00:00.000Z`) : new Date(Date.now() + 10 * 864e5),
       // Keep the itemised heads (amounts in paisa) so the printed voucher
       // can list Admission, Annual, Uniform... instead of one lump sum.
       remarks: JSON.stringify(heads.map((h) => ({ name: String(h.name || ''), amount: parseInt(h.amount) || 0 }))),
@@ -614,22 +751,23 @@ router.get('/student-by-barcode', requireFinanceRole, wrap(async (req, res) => {
 
   const code = barcode.trim();
 
-  // Try to find student by rollNo first, then by admissionNo
+  // Roll number first, then the voucher number printed on a fee slip.
+  // (It used to also match `admissionNo`, a field Student does not have, so
+  // every lookup failed with a server error.)
+  const studentInclude = {
+    class:   { select: { id: true, name: true } },
+    section: { select: { id: true, name: true } },
+  };
   let student = await prisma.student.findFirst({
-    where: {
-      schoolId,
-      deletedAt: null,
-      ...(campusId && { campusId }),
-      OR: [
-        { rollNo:       ciEquals(code) },
-        { admissionNo:  ciEquals(code) },
-      ],
-    },
-    include: {
-      class:   { select: { id: true, name: true } },
-      section: { select: { id: true, name: true } },
-    },
+    where: { schoolId, deletedAt: null, ...(campusId && { campusId }), rollNo: ciEquals(code) },
+    include: studentInclude,
   });
+  if (!student) {
+    const voucher = await prisma.feeInvoice.findFirst({ where: { schoolId, voucherNo: code }, select: { studentId: true } });
+    if (voucher) {
+      student = await prisma.student.findFirst({ where: { id: voucher.studentId, schoolId, deletedAt: null }, include: studentInclude });
+    }
+  }
 
   // Fallback: partial match on rollNo (handles barcodes with leading zeros etc.)
   if (!student) {
@@ -638,10 +776,7 @@ router.get('/student-by-barcode', requireFinanceRole, wrap(async (req, res) => {
         schoolId,
         deletedAt: null,
         ...(campusId && { campusId }),
-        OR: [
-          { rollNo:      ciContains(code) },
-          { admissionNo: ciContains(code) },
-        ],
+        rollNo: ciContains(code),
       },
       include: {
         class:   { select: { id: true, name: true } },
@@ -654,12 +789,14 @@ router.get('/student-by-barcode', requireFinanceRole, wrap(async (req, res) => {
     return res.status(404).json({ success: false, message: `No student found for barcode: ${code}` });
   }
 
-  // Fetch all invoices; frontend filters to unpaid/partial for quick display
+  // Fetch all invoices; frontend filters to unpaid/partial for quick display.
+  // Newest month first by its number, not by the text column ("9" > "12").
   const invoices = await prisma.feeInvoice.findMany({
     where: { schoolId, studentId: student.id },
     include: { payments: { orderBy: { createdAt: 'desc' }, take: 5 } },
-    orderBy: [{ year: 'desc' }, { month: 'desc' }],
+    orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
   });
+  invoices.sort(byPeriodDesc);
 
   res.json({ success: true, data: { student, invoices } });
 }));
@@ -669,23 +806,15 @@ router.get('/student-by-barcode', requireFinanceRole, wrap(async (req, res) => {
 router.get('/payments', requireFinanceRole, wrap(async (req, res) => {
   const { accountant, from, to, limit = 50, page = 1 } = req.query;
   const take = Math.min(parseInt(limit) || 50, 500); // hard cap at 500
-  const skip = (parseInt(page) - 1) * take;
+  const skip = (Math.max(parseInt(page) || 1, 1) - 1) * take;
+  // from/to are Pakistan days, matched on the day the money was received.
+  const dates = pktRange(from, to);
+  if (dates.error) return res.status(400).json({ success: false, message: dates.error });
 
   const where = {
     schoolId: req.schoolId,
     ...(accountant && { receivedBy: parseInt(accountant) }),
-    ...(from && to && {
-      paymentDate: {
-        gte: new Date(new Date(from).setHours(0, 0, 0, 0)),
-        lte: new Date(new Date(to).setHours(23, 59, 59, 999)),
-      },
-    }),
-    ...(from && !to && {
-      paymentDate: { gte: new Date(new Date(from).setHours(0, 0, 0, 0)) },
-    }),
-    ...(!from && to && {
-      paymentDate: { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) },
-    }),
+    ...(dates.range && { paymentDate: dates.range }),
   };
 
   const [payments, total] = await Promise.all([
@@ -700,7 +829,7 @@ router.get('/payments', requireFinanceRole, wrap(async (req, res) => {
             month: true,
             year: true,
             voucherNo: true,
-            student: { select: { id: true, name: true, rollNo: true } },
+            student: { select: { id: true, name: true, rollNo: true, fatherName: true, class: { select: { name: true } } } },
           },
         },
         // receivedBy is just an Int field (userId) — no relation in schema
@@ -738,39 +867,43 @@ router.get('/payments', requireFinanceRole, wrap(async (req, res) => {
   });
 }));
 
-// GET /api/v1/fees/payments/export
-// Returns all fee payments for a given month/year as JSON (frontend handles CSV/Excel download).
-// Query: ?month=<1-12>&year=<YYYY>&from=YYYY-MM-DD&to=YYYY-MM-DD
+// GET /api/v1/fees/payments/export — the Fee Collection Report.
+// The money RECEIVED in a month (?month=1-12&year=YYYY), or between two days
+// (?from=&to=, which take precedence), as rows ready for CSV/Excel. Row
+// amounts are rupees (they go straight into a spreadsheet); totalAmount is
+// paisa like every other API figure.
+//
+// This filtered on the invoice's month with parseInt() against a text column,
+// which Prisma rejects, so the report never loaded. It also asked which month
+// a fee was FOR rather than when it was paid; a collection report is about
+// money received, so it goes by the payment date.
 router.get('/payments/export', requireFinanceRole, wrap(async (req, res) => {
   const { month, year, from, to } = req.query;
 
-  const where = {
-    schoolId: req.schoolId,
-    ...(from && to && {
-      paymentDate: {
-        gte: new Date(new Date(from).setHours(0, 0, 0, 0)),
-        lte: new Date(new Date(to).setHours(23, 59, 59, 999)),
-      },
-    }),
-    ...(from && !to && {
-      paymentDate: { gte: new Date(new Date(from).setHours(0, 0, 0, 0)) },
-    }),
-    ...(!from && to && {
-      paymentDate: { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) },
-    }),
-    ...(month && year && {
-      invoice: { month: parseInt(month), year: parseInt(year) },
-    }),
-    ...(!from && !to && month && !year && {
-      invoice: { month: parseInt(month) },
-    }),
-    ...(!from && !to && !month && year && {
-      invoice: { year: parseInt(year) },
-    }),
-  };
+  let paymentDate;
+  let period;
+  if (from || to) {
+    const dates = pktRange(from, to);
+    if (dates.error) return res.status(400).json({ success: false, message: dates.error });
+    paymentDate = dates.range;
+    period = `${from ? dmy(from) : 'the start'} to ${to ? dmy(to) : 'today'}`;
+  } else {
+    const m = monthNumber(month);
+    const y = Number(year);
+    if (!m || !Number.isInteger(y) || y < 2000) {
+      return res.status(400).json({ success: false, message: 'Choose a month and year, or a from and to date.' });
+    }
+    paymentDate = pktMonth(m, y);
+    period = `${monthLabel(m)} ${y}`;
+  }
 
   const payments = await prisma.feePayment.findMany({
-    where: { ...where, voidedAt: null },
+    where: {
+      schoolId: req.schoolId, voidedAt: null, paymentDate,
+      // A parent's "I have paid online" note is stored as a Rs 0 payment
+      // until someone checks the transfer: not money received.
+      OR: [{ amountPaid: { gt: 0 } }, { discount: { gt: 0 } }],
+    },
     include: {
       invoice: {
         select: {
@@ -784,30 +917,42 @@ router.get('/payments/export', requireFinanceRole, wrap(async (req, res) => {
         },
       },
     },
-    orderBy: { paymentDate: 'desc' },
+    orderBy: [{ paymentDate: 'asc' }, { createdAt: 'asc' }],
     take: 5000, // safety cap
   });
 
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const receiverIds = [...new Set(payments.map((p) => p.receivedBy).filter(Boolean))];
+  const receivers = receiverIds.length
+    ? await prisma.user.findMany({ where: { id: { in: receiverIds } }, select: { id: true, name: true } })
+    : [];
+  const receiverName = new Map(receivers.map((u) => [u.id, u.name]));
 
-  const rows = payments.map(p => ({
-    'Receipt No':    p.receiptNo || '',
-    'Voucher No':    p.invoice?.voucherNo || '',
-    'Student Name':  p.invoice?.student?.name || '',
-    'Roll No':       p.invoice?.student?.rollNo || '',
-    'Class':         p.invoice?.student?.class?.name || '',
-    'Fee Title':     p.invoice?.feeTitle || '',
-    'Month':         p.invoice?.month ? (MONTHS[(parseInt(p.invoice.month) - 1)] || p.invoice.month) : '',
-    'Year':          p.invoice?.year || '',
-    'Amount Paid':   p.amountPaid || 0,
-    'Discount':      p.discount || 0,
-    'Method':        p.method || 'cash',
-    'Payment Date':  p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('en-PK') : '',
-  }));
+  const rows = payments.map((p) => {
+    const paidOn = pktDay(p.paymentDate);
+    const enteredOn = pktDay(p.createdAt);
+    return {
+      'Date':          dmy(paidOn),
+      'Receipt No':    p.receiptNo || '',
+      'Voucher No':    p.invoice?.voucherNo || '',
+      'Student':       p.invoice?.student?.name || '',
+      'Roll No':       p.invoice?.student?.rollNo || '',
+      'Class':         p.invoice?.student?.class?.name || '',
+      'Fee':           p.invoice?.feeTitle || '',
+      'Fee Month':     p.invoice?.month ? `${monthLabel(p.invoice.month)} ${p.invoice.year || ''}`.trim() : '',
+      'Amount (Rs)':   (p.amountPaid || 0) / 100,
+      'Discount (Rs)': (p.discount || 0) / 100,
+      'Method':        p.method || 'cash',
+      // Imported history has no receiver: it is a record, not anyone's cash.
+      'Received By':   p.receivedBy ? (receiverName.get(p.receivedBy) || 'Unknown user') : 'Imported',
+      // Filled only for a fee keyed in on a later day than it was paid.
+      'Entered On':    enteredOn !== paidOn ? dmy(enteredOn) : '',
+    };
+  });
 
   const totalAmount = payments.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
+  const totalDiscount = payments.reduce((sum, p) => sum + (p.discount || 0), 0);
 
-  res.json({ success: true, data: rows, total: rows.length, totalAmount });
+  res.json({ success: true, data: rows, total: rows.length, totalAmount, totalDiscount, period });
 }));
 
 /* ── POST /fees/increment — Apply fee increment to all students in a class ── */
@@ -1034,3 +1179,5 @@ router.post('/payments/online', wrap(async (req, res) => {
 }));
 
 module.exports = router;
+// Pure helpers, exported for tests/fees/fee-history.test.mjs.
+module.exports.helpers = { pktDayStart, pktDayEnd, pktMonth, pktDay, pktRange, payBy, billedFor };

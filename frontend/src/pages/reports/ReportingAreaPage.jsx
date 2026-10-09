@@ -11,12 +11,16 @@ import {
   CreditCard, Briefcase, CheckSquare, Loader2,
 } from 'lucide-react';
 import { buildWatermarkCss, buildWatermarkMarkup } from '../../utils/watermarkPrint';
+import { feePeriod } from '../../utils/feeMonth';
 
 /* ─── helpers ─────────────────────────────────────────────────────────── */
 // Amounts arrive in paisa (Rs 3,500 is 350000); this was printing the
 // stored figure straight out, a hundred times too large.
 const money   = v  => 'Rs. ' + (Number(v || 0) / 100).toLocaleString('en-PK');
-const today   = () => new Date().toISOString().slice(0, 10);
+// Pakistan's today (UTC+5 all year): report periods are Pakistan days, and
+// the UTC date is still yesterday here until 5 a.m.
+const today   = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+const monthStart = () => today().slice(0, 7) + '-01';
 const fmtD    = d  => d ? new Date(d).toLocaleDateString('en-PK', { day:'2-digit', month:'short', year:'numeric' }) : '—';
 const schoolName = () => localStorage.getItem('schoolName')    || 'IlmForge School';
 const schoolAddr = () => localStorage.getItem('schoolAddress') || 'Islamabad, Pakistan';
@@ -35,6 +39,33 @@ const toRows = res => {
   if (Array.isArray(d?.records))   return d.records;
   return [];
 };
+
+/* ─── finance data ────────────────────────────────────────────────────── */
+// Names and notes come from the database: keep them as text in the printout.
+const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// "Monthly Fee Of Jul" and "Monthly Fee Of Aug" are one fee head.
+const headOf = (title) => String(title || 'Fee')
+  .replace(/\s*\b(of\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(\s+\d{4})?\s*$/i, '').trim() || 'Fee';
+
+/** Every unpaid and part-paid bill (the API sends 500 at a time). */
+async function allDues() {
+  const rows = [];
+  for (let offset = 0; offset < 20000; offset += 500) {
+    const r = await api.get('/fees/defaulters', { params: { limit: 500, offset } });
+    const batch = r.data?.data || [];
+    rows.push(...batch);
+    if (!batch.length || rows.length >= (r.data?.total || 0)) break;
+  }
+  return rows;
+}
+
+/** Expense category names by id. */
+async function categoryNames() {
+  const r = await api.get('/expenses/categories').catch(() => null);
+  return new Map((r?.data?.data || []).map((c) => [c.id, c.name]));
+}
+
+const periodText = (from, to) => (from === to ? fmtD(from) : `${fmtD(from)} — ${fmtD(to)}`);
 
 /* ─── print helper ────────────────────────────────────────────────────── */
 function openPrint(titleText, bodyHtml) {
@@ -337,27 +368,36 @@ export default function ReportingAreaPage() {
     setModal(null);
   });
 
-  /* ── 4. Fee defaulters ───────────────────────────────────────────── */
+  /* ── 4. Fee defaulters: one line per student ─────────────────────── */
   const printDefaulters = () => withLoading('defaulters', async () => {
-    const res  = await api.get('/fees/defaulters');
-    const rows = toRows(res);
-    if (!rows.length) { setError('No defaulters found. All fees may be up to date.'); return; }
+    const bills = await allDues();
+    if (!bills.length) { setError('No defaulters found. All fees may be up to date.'); return; }
 
-    const totalDue = rows.reduce((a,r)=>a+(r.amount||r.totalDue||r.balance||0),0);
+    // Everything each student still owes, and for which months.
+    const byStudent = new Map();
+    for (const b of bills) {
+      if (!byStudent.has(b.studentId)) byStudent.set(b.studentId, { student: b.student, due: 0, periods: [] });
+      const row = byStudent.get(b.studentId);
+      row.due += b.dueAmount || 0;
+      row.periods.push(feePeriod(b, true) || b.feeTitle);
+    }
+    const rows = [...byStudent.values()].sort((a, b) => b.due - a.due);
+    const totalDue = rows.reduce((a, r) => a + r.due, 0);
     const body = `
       <div class="summary-box">
         <div class="s-card"><div class="val">${rows.length}</div><div class="lbl">Defaulters</div></div>
+        <div class="s-card"><div class="val">${bills.length}</div><div class="lbl">Unpaid Bills</div></div>
         <div class="s-card"><div class="val">${money(totalDue)}</div><div class="lbl">Total Due</div></div>
       </div>
       <table>
-        <thead><tr><th>#</th><th>Student Name</th><th>Class</th><th>Month / Period</th><th>Amount Due</th><th>Status</th></tr></thead>
-        <tbody>${rows.map((r,i)=>`<tr>
-          <td>${i+1}</td>
-          <td style="font-weight:600">${r.student||r.studentName||r.name||'—'}</td>
-          <td>${r.class||r.className||'—'}</td>
-          <td>${r.month||r.period||'—'}</td>
-          <td style="color:#DC2626;font-weight:700">${money(r.amount||r.totalDue||r.balance)}</td>
-          <td><span class="badge badge-red">Unpaid</span></td>
+        <thead><tr><th>#</th><th>Student</th><th>Class</th><th>Months Due</th><th>Parent Phone</th><th>Amount Due</th></tr></thead>
+        <tbody>${rows.map((r, i) => `<tr>
+          <td>${i + 1}</td>
+          <td style="font-weight:600">${esc(r.student?.name || '—')}<div style="font-size:10px;color:#6B7280">${esc(r.student?.rollNo || '')}</div></td>
+          <td>${esc([r.student?.class?.name, r.student?.section?.name].filter(Boolean).join(' ') || '—')}</td>
+          <td>${esc(r.periods.join(', '))}</td>
+          <td>${esc(r.student?.emergencyPhone || '—')}</td>
+          <td style="color:#DC2626;font-weight:700">${money(r.due)}</td>
         </tr>`).join('')}</tbody>
       </table>`;
     openPrint('Fee Defaulters Report', body);
@@ -365,26 +405,27 @@ export default function ReportingAreaPage() {
 
   /* ── 5. Unpaid invoices ──────────────────────────────────────────── */
   const printUnpaid = () => withLoading('unpaid', async () => {
-    const res  = await api.get('/fees/invoices?status=unpaid&limit=1000');
-    const rows = toRows(res);
-    if (!rows.length) { setError('No unpaid invoices found.'); return; }
+    const bills = (await allDues()).sort((a, b) =>
+      String(a.student?.name || '').localeCompare(String(b.student?.name || '')) || (a.year - b.year) || 0);
+    if (!bills.length) { setError('No unpaid invoices found.'); return; }
 
-    const total = rows.reduce((a,r)=>a+(r.amount||r.total||0),0);
+    const total = bills.reduce((a, r) => a + (r.dueAmount || 0), 0);
     const body  = `
       <div class="summary-box">
-        <div class="s-card"><div class="val">${rows.length}</div><div class="lbl">Pending Invoices</div></div>
+        <div class="s-card"><div class="val">${bills.length}</div><div class="lbl">Pending Invoices</div></div>
         <div class="s-card"><div class="val">${money(total)}</div><div class="lbl">Total Pending</div></div>
       </div>
       <table>
-        <thead><tr><th>#</th><th>Student</th><th>Class</th><th>Fee Head</th><th>Month</th><th>Amount</th><th>Status</th></tr></thead>
-        <tbody>${rows.map((r,i)=>`<tr>
-          <td>${i+1}</td>
-          <td style="font-weight:600">${r.student||r.studentName||'—'}</td>
-          <td>${r.class||r.className||'—'}</td>
-          <td>${r.head||r.feeHead||r.feeType||'Tuition'}</td>
-          <td>${r.month||r.period||'—'}</td>
-          <td>${money(r.amount||r.total)}</td>
-          <td><span class="badge ${(r.status||'').toLowerCase()==='partial'?'badge-yellow':'badge-red'}">${r.status||'Unpaid'}</span></td>
+        <thead><tr><th>#</th><th>Student</th><th>Class</th><th>Fee</th><th>Month</th><th>Bill</th><th>Still Due</th><th>Status</th></tr></thead>
+        <tbody>${bills.map((r, i) => `<tr>
+          <td>${i + 1}</td>
+          <td style="font-weight:600">${esc(r.student?.name || '—')}</td>
+          <td>${esc(r.student?.class?.name || '—')}</td>
+          <td>${esc(r.feeTitle || 'Fee')}</td>
+          <td>${esc(feePeriod(r) || '—')}</td>
+          <td>${money((r.totalAmount || 0) + (r.lateFee || 0))}</td>
+          <td style="font-weight:700;color:#DC2626">${money(r.dueAmount)}</td>
+          <td><span class="badge ${r.status === 'partial' ? 'badge-yellow' : 'badge-red'}">${r.status === 'partial' ? 'Part paid' : 'Unpaid'}</span></td>
         </tr>`).join('')}</tbody>
       </table>`;
     openPrint('List of Unpaid Invoices', body);
@@ -392,284 +433,274 @@ export default function ReportingAreaPage() {
 
   /* ── 6. Fee discount report ──────────────────────────────────────── */
   const printDiscount = () => withLoading('discount', async () => {
-    const res  = await api.get('/students?status=active&limit=1000');
-    const rows = toRows(res).filter(s => (s.discount || s.feeDiscount || s.concession || 0) > 0);
+    const res  = await api.get('/reports/fees/discount');
+    const rows = res.data?.data || [];
     if (!rows.length) { setError('No discount records found.'); return; }
 
-    const totalDisc = rows.reduce((a,s)=>a+(s.discount||s.feeDiscount||s.concession||0),0);
+    const totalDisc = rows.reduce((a, r) => a + (r.discountAmount || 0), 0);
+    const students  = new Set(rows.map((r) => r.studentId)).size;
     const body = `
       <div class="summary-box">
-        <div class="s-card"><div class="val">${rows.length}</div><div class="lbl">Students with Discount</div></div>
+        <div class="s-card"><div class="val">${students}</div><div class="lbl">Students with Discount</div></div>
         <div class="s-card"><div class="val">${money(totalDisc)}</div><div class="lbl">Total Discount Given</div></div>
       </div>
       <table>
-        <thead><tr><th>#</th><th>Student</th><th>Class</th><th>Discount Type</th><th>Discount Amount</th><th>Net Fee</th></tr></thead>
-        <tbody>${rows.map((s,i)=>{
-          const disc = s.discount||s.feeDiscount||s.concession||0;
-          const fee  = s.monthlyFee||s.fee||0;
-          return `<tr>
-            <td>${i+1}</td>
-            <td style="font-weight:600">${s.name||s.fullName||'—'}</td>
-            <td>${s.class||s.className||'—'}</td>
-            <td>${s.discountType||s.concessionType||'Concession'}</td>
-            <td style="color:#D97706;font-weight:700">${money(disc)}</td>
-            <td style="font-weight:700">${money(fee-disc)}</td>
-          </tr>`;
-        }).join('')}</tbody>
+        <thead><tr><th>#</th><th>Student</th><th>Class</th><th>Fee</th><th>Month</th><th>Bill</th><th>Discount</th><th>Still Due</th></tr></thead>
+        <tbody>${rows.map((r, i) => `<tr>
+          <td>${i + 1}</td>
+          <td style="font-weight:600">${esc(r.student || '—')}<div style="font-size:10px;color:#6B7280">${esc(r.rollNo || '')}</div></td>
+          <td>${esc([r.class, r.section].filter(Boolean).join(' ') || '—')}</td>
+          <td>${esc(r.feeTitle || 'Fee')}</td>
+          <td>${esc(feePeriod(r) || '—')}</td>
+          <td>${money(r.totalAmount)}</td>
+          <td style="color:#D97706;font-weight:700">${money(r.discountAmount)}</td>
+          <td>${money(r.dueAmount)}</td>
+        </tr>`).join('')}</tbody>
       </table>`;
     openPrint('Fee Discount Report', body);
   });
 
   /* ── 7. Head-wise dues summary ───────────────────────────────────── */
   const printHeadDues = () => withLoading('headDues', async () => {
-    const res  = await api.get('/fees/invoices?status=unpaid&limit=2000');
-    const rows = toRows(res);
-    if (!rows.length) { setError('No outstanding dues found.'); return; }
-
-    const headMap = {};
-    rows.forEach(r => {
-      const h = r.head||r.feeHead||r.feeType||'Tuition';
-      if (!headMap[h]) headMap[h] = { total:0, count:0 };
-      headMap[h].total += r.amount||r.total||0;
-      headMap[h].count++;
-    });
-    const list       = Object.entries(headMap);
-    const grandTotal = list.reduce((a,[,v])=>a+v.total,0);
+    const res    = await api.get('/reports/fees/head-dues');
+    const groups = res.data?.data || [];
+    const heads  = new Map();
+    for (const g of groups) {
+      const h = headOf(g.feeType);
+      if (!heads.has(h)) heads.set(h, { billed: 0, paid: 0, discount: 0, due: 0 });
+      const t = heads.get(h);
+      t.billed += g.totalBilled || 0; t.paid += g.totalPaid || 0; t.discount += g.totalDiscount || 0; t.due += g.balance || 0;
+    }
+    const list = [...heads.entries()].filter(([, v]) => v.due > 0).sort((a, b) => b[1].due - a[1].due);
+    if (!list.length) { setError('No outstanding dues found.'); return; }
+    const sum = (k) => list.reduce((a, [, v]) => a + v[k], 0);
     const body = `<table>
-      <thead><tr><th>#</th><th>Fee Head</th><th>No. of Invoices</th><th>Total Due</th></tr></thead>
-      <tbody>${list.map(([h,v],i)=>`<tr>
-        <td>${i+1}</td>
-        <td style="font-weight:600">${h}</td>
-        <td>${v.count}</td>
-        <td style="color:#DC2626;font-weight:700">${money(v.total)}</td>
+      <thead><tr><th>#</th><th>Fee Head</th><th>Billed</th><th>Received</th><th>Discount</th><th>Still Due</th></tr></thead>
+      <tbody>${list.map(([h, v], i) => `<tr>
+        <td>${i + 1}</td>
+        <td style="font-weight:600">${esc(h)}</td>
+        <td>${money(v.billed)}</td>
+        <td style="color:#16A34A">${money(v.paid)}</td>
+        <td>${money(v.discount)}</td>
+        <td style="color:#DC2626;font-weight:700">${money(v.due)}</td>
       </tr>`).join('')}
-      <tr style="background:#FEF2F2;font-weight:700"><td colspan="2">Grand Total</td><td>${list.reduce((a,[,v])=>a+v.count,0)}</td><td style="color:#DC2626">${money(grandTotal)}</td></tr>
+      <tr style="background:#FEF2F2;font-weight:700"><td colspan="2">Grand Total</td><td>${money(sum('billed'))}</td><td>${money(sum('paid'))}</td><td>${money(sum('discount'))}</td><td style="color:#DC2626">${money(sum('due'))}</td></tr>
       </tbody></table>`;
     openPrint('Head Wise Dues Summary', body);
   });
 
   /* ── 8. Income & Expense report ──────────────────────────────────── */
   const printIncomeExpense = ({ dateFrom, dateTo }) => withLoading('incomeExpense', async () => {
-    const qInc = new URLSearchParams({ limit:'2000' });
-    const qExp = new URLSearchParams({ limit:'2000' });
-    if (dateFrom) { qInc.set('from', dateFrom); qExp.set('from', dateFrom); }
-    if (dateTo)   { qInc.set('to',   dateTo);   qExp.set('to',   dateTo);   }
-
-    const [incRes, expRes] = await Promise.all([
-      api.get(`/fees/payments?${qInc}`),
-      api.get(`/expenses?${qExp}`),
+    const from = dateFrom || monthStart();
+    const to   = dateTo || today();
+    if (from > to) { setError('The From date is after the To date.'); return; }
+    const [res, cats] = await Promise.all([
+      api.get('/reports/accounting/income-expense', { params: { from, to } }),
+      categoryNames(),
     ]);
-    const income   = toRows(incRes);
-    const expenses = toRows(expRes);
+    const { income = [], expenses = [], totalIncome = 0, totalExpenses = 0, netBalance = 0 } = res.data?.data || {};
     if (!income.length && !expenses.length) { setError('No income or expense records found for the selected period.'); return; }
-
-    const totalInc = income.reduce((a,r)=>a+(r.amount||r.total||0),0);
-    const totalExp = expenses.reduce((a,r)=>a+(r.amount||r.total||0),0);
-    const net      = totalInc - totalExp;
-    const range    = (dateFrom || dateTo) ? ` (${fmtD(dateFrom)} — ${fmtD(dateTo)})` : '';
 
     const body = `
       <div class="summary-box">
-        <div class="s-card"><div class="val">${money(totalInc)}</div><div class="lbl">Total Income</div></div>
-        <div class="s-card"><div class="val" style="color:#DC2626">${money(totalExp)}</div><div class="lbl">Total Expense</div></div>
-        <div class="s-card"><div class="val" style="color:${net>=0?'#16A34A':'#DC2626'}">${money(Math.abs(net))}</div><div class="lbl">${net>=0?'Net Profit':'Net Loss'}</div></div>
+        <div class="s-card"><div class="val">${money(totalIncome)}</div><div class="lbl">Total Income</div></div>
+        <div class="s-card"><div class="val" style="color:#DC2626">${money(totalExpenses)}</div><div class="lbl">Total Expense</div></div>
+        <div class="s-card"><div class="val" style="color:${netBalance >= 0 ? '#16A34A' : '#DC2626'}">${money(Math.abs(netBalance))}</div><div class="lbl">${netBalance >= 0 ? 'Net Profit' : 'Net Loss'}</div></div>
       </div>
       <h4 style="margin-bottom:10px;color:#0F766E;">Income</h4>
       <table style="margin-bottom:20px">
-        <thead><tr><th>#</th><th>Date</th><th>Description</th><th>Category</th><th>Amount</th></tr></thead>
-        <tbody>${income.map((r,i)=>`<tr>
-          <td>${i+1}</td><td>${fmtD(r.date||r.paidDate||r.createdAt)}</td>
-          <td>${r.description||r.remarks||r.student||r.studentName||'—'}</td>
-          <td>${r.category||r.feeHead||r.type||'Fee'}</td>
-          <td style="font-weight:700;color:#16A34A">${money(r.amount||r.total)}</td>
-        </tr>`).join('')}</tbody>
+        <thead><tr><th>#</th><th>Date</th><th>Student</th><th>Fee</th><th>Method</th><th>Amount</th></tr></thead>
+        <tbody>${income.map((r, i) => `<tr>
+          <td>${i + 1}</td><td>${fmtD(r.paymentDate)}</td>
+          <td>${esc(r.invoice?.student?.name || '—')}</td>
+          <td>${esc([r.invoice?.feeTitle, feePeriod(r.invoice)].filter(Boolean).join(' — ') || 'Fee')}</td>
+          <td>${esc(r.method || '—')}</td>
+          <td style="font-weight:700;color:#16A34A">${money(r.amountPaid)}</td>
+        </tr>`).join('') || '<tr><td colspan="6">No fees received in this period.</td></tr>'}</tbody>
       </table>
       <h4 style="margin-bottom:10px;color:#DC2626;">Expenses</h4>
       <table>
         <thead><tr><th>#</th><th>Date</th><th>Description</th><th>Category</th><th>Amount</th></tr></thead>
-        <tbody>${expenses.map((r,i)=>`<tr>
-          <td>${i+1}</td><td>${fmtD(r.date||r.createdAt)}</td>
-          <td>${r.description||r.title||r.remarks||'—'}</td>
-          <td>${r.category||r.type||'Expense'}</td>
-          <td style="font-weight:700;color:#DC2626">${money(r.amount||r.total)}</td>
-        </tr>`).join('')}</tbody>
+        <tbody>${expenses.map((r, i) => `<tr>
+          <td>${i + 1}</td><td>${fmtD(r.date)}</td>
+          <td>${esc(r.description || '—')}</td>
+          <td>${esc(cats.get(r.categoryId) || 'Uncategorised')}</td>
+          <td style="font-weight:700;color:#DC2626">${money(r.amount)}</td>
+        </tr>`).join('') || '<tr><td colspan="5">No expenses in this period.</td></tr>'}</tbody>
       </table>`;
-    openPrint(`Income & Expense Report${range}`, body);
+    openPrint(`Income & Expense Report (${periodText(from, to)})`, body);
     setModal(null);
   });
 
   /* ── 9. Debit & Credit statement ─────────────────────────────────── */
-  const printDebitCredit = () => withLoading('debitCredit', async () => {
-    const [incRes, expRes] = await Promise.all([
-      api.get('/fees/payments?limit=2000'),
-      api.get('/expenses?limit=2000'),
+  const printDebitCredit = ({ dateFrom, dateTo }) => withLoading('debitCredit', async () => {
+    const from = dateFrom || monthStart();
+    const to   = dateTo || today();
+    if (from > to) { setError('The From date is after the To date.'); return; }
+    const [stmt, sheet] = await Promise.all([
+      api.get('/reports/accounting/debit-credit', { params: { from, to } }),
+      api.get('/reports/accounting/balance-sheet', { params: { from, to } }),
     ]);
-    const income   = toRows(incRes);
-    const expenses = toRows(expRes);
-    if (!income.length && !expenses.length) { setError('No financial records found.'); return; }
+    const rows    = stmt.data?.data || [];
+    const opening = sheet.data?.data?.openingBalance || 0;
+    if (!rows.length) { setError('No receipts or expenses in this period.'); return; }
 
-    const totalCredit = income.reduce((a,r)=>a+(r.amount||r.total||0),0);
-    const totalDebit  = expenses.reduce((a,r)=>a+(r.amount||r.total||0),0);
-    const all = [
-      ...income.map(r=>({ ...r, _type:'Credit', _date: r.date||r.paidDate||r.createdAt })),
-      ...expenses.map(r=>({ ...r, _type:'Debit', _date: r.date||r.createdAt })),
-    ].sort((a,b)=>new Date(a._date)-new Date(b._date));
-
+    const totalCredit = rows.reduce((a, r) => a + (r.credit || 0), 0);
+    const totalDebit  = rows.reduce((a, r) => a + (r.debit || 0), 0);
     const body = `
       <div class="summary-box">
+        <div class="s-card"><div class="val">${money(opening)}</div><div class="lbl">Opening Balance</div></div>
         <div class="s-card"><div class="val" style="color:#16A34A">${money(totalCredit)}</div><div class="lbl">Total Credit</div></div>
         <div class="s-card"><div class="val" style="color:#DC2626">${money(totalDebit)}</div><div class="lbl">Total Debit</div></div>
-        <div class="s-card"><div class="val" style="color:${totalCredit-totalDebit>=0?'#16A34A':'#DC2626'}">${money(totalCredit-totalDebit)}</div><div class="lbl">Balance</div></div>
+        <div class="s-card"><div class="val">${money(opening + totalCredit - totalDebit)}</div><div class="lbl">Closing Balance</div></div>
       </div>
       <table>
-        <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Debit</th><th>Credit</th></tr></thead>
-        <tbody>${all.map(r=>`<tr>
-          <td>${fmtD(r._date)}</td>
-          <td>${r.description||r.title||r.remarks||r.student||r.studentName||'—'}</td>
-          <td><span class="badge ${r._type==='Credit'?'badge-green':'badge-red'}">${r._type}</span></td>
-          <td style="color:#DC2626;font-weight:600">${r._type==='Debit'  ? money(r.amount||r.total) : '—'}</td>
-          <td style="color:#16A34A;font-weight:600">${r._type==='Credit' ? money(r.amount||r.total) : '—'}</td>
+        <thead><tr><th>Date</th><th>Ref</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+        <tbody>
+          <tr style="background:#F8FAFC"><td>${fmtD(from)}</td><td>—</td><td style="font-weight:600">Opening balance</td><td>—</td><td>—</td><td style="font-weight:700">${money(opening)}</td></tr>
+          ${rows.map((r) => `<tr>
+          <td>${fmtD(r.date)}</td>
+          <td style="font-size:10px">${esc(r.ref || '')}</td>
+          <td>${esc(r.description || '—')}</td>
+          <td style="color:#DC2626;font-weight:600">${r.debit ? money(r.debit) : '—'}</td>
+          <td style="color:#16A34A;font-weight:600">${r.credit ? money(r.credit) : '—'}</td>
+          <td style="font-weight:600">${money(opening + (r.balance || 0))}</td>
         </tr>`).join('')}</tbody>
       </table>`;
-    openPrint('Debit & Credit Statement', body);
+    openPrint(`Debit & Credit Statement (${periodText(from, to)})`, body);
+    setModal(null);
   });
 
-  /* ── 10. Accounts summary ────────────────────────────────────────── */
+  /* ── 10. Accounts summary: the last twelve months ────────────────── */
   const printAccountsSummary = () => withLoading('accountsSummary', async () => {
-    const res  = await api.get('/accounting/summary');
-    const data = res?.data?.data || res?.data || {};
+    let y = Number(today().slice(0, 4));
+    let m = Number(today().slice(5, 7));
+    const months = [];
+    for (let i = 0; i < 12; i++) {
+      months.unshift({ m, y });
+      m -= 1; if (!m) { m = 12; y -= 1; }
+    }
+    const rows = await Promise.all(months.map(({ m: month, y: year }) =>
+      api.get('/reports/accounting/summary', { params: { month, year } }).then((r) => r.data?.data || {})));
+    if (!rows.some((r) => r.totalCollected || r.totalExpenses)) { setError('No income or expenses recorded in the last twelve months.'); return; }
 
-    // Normalise: backend may return array of months or a summary object
-    const rows = Array.isArray(data) ? data : (data.months || data.monthly || []);
-    if (!rows.length) { setError('No accounting summary data available.'); return; }
-
-    const grandInc = rows.reduce((a,r)=>a+(r.income||r.totalIncome||r.credit||0),0);
-    const grandExp = rows.reduce((a,r)=>a+(r.expense||r.totalExpense||r.debit||0),0);
+    const grandInc = rows.reduce((a, r) => a + (r.totalCollected || 0), 0);
+    const grandExp = rows.reduce((a, r) => a + (r.totalExpenses || 0), 0);
     const body = `<table>
-      <thead><tr><th>Month</th><th>Total Income</th><th>Total Expense</th><th>Net Balance</th></tr></thead>
-      <tbody>${rows.map(r=>{
-        const inc = r.income||r.totalIncome||r.credit||0;
-        const exp = r.expense||r.totalExpense||r.debit||0;
-        const net = inc - exp;
+      <thead><tr><th>Month</th><th>Fees Collected</th><th>Expenses</th><th>Net</th><th>Still Due (bills of the month)</th></tr></thead>
+      <tbody>${rows.map((r) => {
+        const net = (r.totalCollected || 0) - (r.totalExpenses || 0);
         return `<tr>
-          <td style="font-weight:600">${r.month||r.label||r.period||'—'}</td>
-          <td style="color:#16A34A;font-weight:700">${money(inc)}</td>
-          <td style="color:#DC2626;font-weight:700">${money(exp)}</td>
-          <td style="color:${net>=0?'#16A34A':'#DC2626'};font-weight:800">${money(net)}</td>
+          <td style="font-weight:600">${esc(`${r.month || ''} ${r.year || ''}`.trim())}</td>
+          <td style="color:#16A34A;font-weight:700">${money(r.totalCollected)}</td>
+          <td style="color:#DC2626;font-weight:700">${money(r.totalExpenses)}</td>
+          <td style="color:${net >= 0 ? '#16A34A' : '#DC2626'};font-weight:800">${money(net)}</td>
+          <td>${money(r.totalOutstanding)}</td>
         </tr>`;
       }).join('')}
       <tr style="background:#F0FDF9;font-weight:800">
         <td>Total</td>
         <td style="color:#16A34A">${money(grandInc)}</td>
         <td style="color:#DC2626">${money(grandExp)}</td>
-        <td style="color:${grandInc-grandExp>=0?'#16A34A':'#DC2626'}">${money(grandInc-grandExp)}</td>
+        <td style="color:${grandInc - grandExp >= 0 ? '#16A34A' : '#DC2626'}">${money(grandInc - grandExp)}</td>
+        <td>—</td>
       </tr></tbody></table>`;
-    openPrint('Accounts Summary Report', body);
+    openPrint('Accounts Summary Report — last 12 months', body);
   });
 
   /* ── 11. Detailed income ─────────────────────────────────────────── */
-  const printDetailedIncome = () => withLoading('detailedIncome', async () => {
-    const res  = await api.get('/fees/payments?limit=2000');
-    const rows = toRows(res);
-    if (!rows.length) { setError('No payment records found.'); return; }
+  const printDetailedIncome = ({ dateFrom, dateTo }) => withLoading('detailedIncome', async () => {
+    const from = dateFrom || monthStart();
+    const to   = dateTo || today();
+    if (from > to) { setError('The From date is after the To date.'); return; }
+    const res  = await api.get('/reports/accounting/income-expense', { params: { from, to } });
+    const rows = res.data?.data?.income || [];
+    if (!rows.length) { setError('No fees received in this period.'); return; }
 
-    const total = rows.reduce((a,r)=>a+(r.amount||r.total||0),0);
+    const total = rows.reduce((a, r) => a + (r.amountPaid || 0), 0);
     const body  = `
-      <div class="summary-box"><div class="s-card"><div class="val" style="color:#16A34A">${money(total)}</div><div class="lbl">Total Income</div></div></div>
+      <div class="summary-box"><div class="s-card"><div class="val" style="color:#16A34A">${money(total)}</div><div class="lbl">Total Income</div></div>
+        <div class="s-card"><div class="val">${rows.length}</div><div class="lbl">Receipts</div></div></div>
       <table>
-        <thead><tr><th>#</th><th>Date</th><th>Student / Description</th><th>Category</th><th>Method</th><th>Amount</th></tr></thead>
-        <tbody>${rows.map((r,i)=>`<tr>
-          <td>${i+1}</td>
-          <td>${fmtD(r.date||r.paidDate||r.createdAt)}</td>
-          <td>${r.student||r.studentName||r.description||r.remarks||'—'}</td>
-          <td>${r.category||r.feeHead||r.type||'Fee'}</td>
-          <td>${r.method||r.paymentMethod||'—'}</td>
-          <td style="font-weight:700;color:#16A34A">${money(r.amount||r.total)}</td>
+        <thead><tr><th>#</th><th>Date</th><th>Receipt</th><th>Student</th><th>Fee</th><th>Method</th><th>Amount</th></tr></thead>
+        <tbody>${rows.map((r, i) => `<tr>
+          <td>${i + 1}</td>
+          <td>${fmtD(r.paymentDate)}</td>
+          <td style="font-size:10px">${esc(r.receiptNo || '—')}</td>
+          <td>${esc(r.invoice?.student?.name || '—')}<div style="font-size:10px;color:#6B7280">${esc(r.invoice?.student?.rollNo || '')}</div></td>
+          <td>${esc([r.invoice?.feeTitle, feePeriod(r.invoice)].filter(Boolean).join(' — ') || 'Fee')}</td>
+          <td>${esc(r.method || '—')}</td>
+          <td style="font-weight:700;color:#16A34A">${money(r.amountPaid)}</td>
         </tr>`).join('')}
-        <tr style="background:#F0FDF9;font-weight:800"><td colspan="5">Grand Total</td><td style="color:#16A34A">${money(total)}</td></tr>
+        <tr style="background:#F0FDF9;font-weight:800"><td colspan="6">Grand Total</td><td style="color:#16A34A">${money(total)}</td></tr>
         </tbody>
       </table>`;
-    openPrint('Detailed Income Report', body);
+    openPrint(`Detailed Income Report (${periodText(from, to)})`, body);
+    setModal(null);
   });
 
   /* ── 12. Detailed expense ────────────────────────────────────────── */
-  const printDetailedExpense = () => withLoading('detailedExpense', async () => {
-    const res  = await api.get('/expenses?limit=2000');
-    const rows = toRows(res);
-    if (!rows.length) { setError('No expense records found.'); return; }
+  const printDetailedExpense = ({ dateFrom, dateTo }) => withLoading('detailedExpense', async () => {
+    const from = dateFrom || monthStart();
+    const to   = dateTo || today();
+    if (from > to) { setError('The From date is after the To date.'); return; }
+    const [res, cats] = await Promise.all([
+      api.get('/reports/accounting/income-expense', { params: { from, to } }),
+      categoryNames(),
+    ]);
+    const rows = res.data?.data?.expenses || [];
+    if (!rows.length) { setError('No expenses in this period.'); return; }
 
-    const total = rows.reduce((a,r)=>a+(r.amount||r.total||0),0);
+    const total = rows.reduce((a, r) => a + (r.amount || 0), 0);
     const body  = `
-      <div class="summary-box"><div class="s-card"><div class="val" style="color:#DC2626">${money(total)}</div><div class="lbl">Total Expense</div></div></div>
+      <div class="summary-box"><div class="s-card"><div class="val" style="color:#DC2626">${money(total)}</div><div class="lbl">Total Expense</div></div>
+        <div class="s-card"><div class="val">${rows.length}</div><div class="lbl">Entries</div></div></div>
       <table>
-        <thead><tr><th>#</th><th>Date</th><th>Description</th><th>Category</th><th>Paid To</th><th>Amount</th></tr></thead>
-        <tbody>${rows.map((r,i)=>`<tr>
-          <td>${i+1}</td>
-          <td>${fmtD(r.date||r.createdAt)}</td>
-          <td>${r.description||r.title||r.remarks||'—'}</td>
-          <td>${r.category||r.type||'Expense'}</td>
-          <td>${r.paidTo||r.vendor||r.party||'—'}</td>
-          <td style="font-weight:700;color:#DC2626">${money(r.amount||r.total)}</td>
+        <thead><tr><th>#</th><th>Date</th><th>Description</th><th>Category</th><th>Amount</th></tr></thead>
+        <tbody>${rows.map((r, i) => `<tr>
+          <td>${i + 1}</td>
+          <td>${fmtD(r.date)}</td>
+          <td>${esc(r.description || '—')}</td>
+          <td>${esc(cats.get(r.categoryId) || 'Uncategorised')}</td>
+          <td style="font-weight:700;color:#DC2626">${money(r.amount)}</td>
         </tr>`).join('')}
-        <tr style="background:#FEF2F2;font-weight:800"><td colspan="5">Grand Total</td><td style="color:#DC2626">${money(total)}</td></tr>
+        <tr style="background:#FEF2F2;font-weight:800"><td colspan="4">Grand Total</td><td style="color:#DC2626">${money(total)}</td></tr>
         </tbody>
       </table>`;
-    openPrint('Detailed Expense Report', body);
+    openPrint(`Detailed Expense Report (${periodText(from, to)})`, body);
+    setModal(null);
   });
 
   /* ── 13. Balance sheet ───────────────────────────────────────────── */
-  const printBalanceSheet = ({ dateFrom, dateTo, accountant }) => withLoading('balanceSheet', async () => {
-    const qInc = new URLSearchParams({ limit:'2000' });
-    const qExp = new URLSearchParams({ limit:'2000' });
-    if (dateFrom) { qInc.set('from', dateFrom); qExp.set('from', dateFrom); }
-    if (dateTo)   { qInc.set('to',   dateTo);   qExp.set('to',   dateTo);   }
-
-    const [incRes, expRes] = await Promise.all([
-      api.get(`/fees/payments?${qInc}`),
-      api.get(`/expenses?${qExp}`),
+  const printBalanceSheet = ({ dateFrom, dateTo }) => withLoading('balanceSheet', async () => {
+    const from = dateFrom || monthStart();
+    const to   = dateTo || today();
+    if (from > to) { setError('The From date is after the To date.'); return; }
+    const [sheetRes, detailRes, cats] = await Promise.all([
+      api.get('/reports/accounting/balance-sheet', { params: { from, to } }),
+      api.get('/reports/accounting/income-expense', { params: { from, to } }),
+      categoryNames(),
     ]);
-    const income   = toRows(incRes);
-    const expenses = toRows(expRes);
+    const sheet = sheetRes.data?.data || {};
+    const { income = [], expenses = [] } = detailRes.data?.data || {};
 
-    // Group income by category
-    const incMap = {};
-    income.forEach(r => {
-      const k = r.category||r.feeHead||r.type||'Fee Collection';
-      if (!incMap[k]) incMap[k] = 0;
-      incMap[k] += r.amount||r.total||0;
-    });
-    // Group expense by category
-    const expMap = {};
-    expenses.forEach(r => {
-      const k = r.category||r.type||'Miscellaneous';
-      if (!expMap[k]) expMap[k] = 0;
-      expMap[k] += r.amount||r.total||0;
-    });
-
-    const totalInc = Object.values(incMap).reduce((a,v)=>a+v,0);
-    const totalExp = Object.values(expMap).reduce((a,v)=>a+v,0);
-    const net      = totalInc - totalExp;
-    const range    = (dateFrom || dateTo) ? `${fmtD(dateFrom)} to ${fmtD(dateTo)}` : 'All Time';
-
-    const incRows = Object.entries(incMap).map(([k,v])=>
-      `<tr><td>${k}</td><td>—</td><td style="color:#16A34A;font-weight:700">${money(v)}</td><td>${money(v)}</td></tr>`
-    ).join('');
-    const expRows = Object.entries(expMap).map(([k,v])=>
-      `<tr><td>${k}</td><td style="color:#DC2626;font-weight:700">${money(v)}</td><td>—</td><td style="color:#DC2626">${money(-v)}</td></tr>`
-    ).join('');
+    // Income by fee head, expenses by category.
+    const group = (list, keyOf, valOf) => [...list.reduce((m, r) => m.set(keyOf(r), (m.get(keyOf(r)) || 0) + valOf(r)), new Map()).entries()].sort((a, b) => b[1] - a[1]);
+    const incRows = group(income, (r) => headOf(r.invoice?.feeTitle), (r) => r.amountPaid || 0);
+    const expRows = group(expenses, (r) => cats.get(r.categoryId) || 'Uncategorised', (r) => r.amount || 0);
 
     const body = `
-      <p style="margin-bottom:16px;font-size:12px;color:#6B7280;">Period: ${range}${accountant ? ' · Accountant: '+accountant : ''}</p>
+      <p style="margin-bottom:16px;font-size:12px;color:#6B7280;">Period: ${periodText(from, to)}</p>
       <table>
-        <thead><tr><th>Account Head</th><th>Debit (Expense)</th><th>Credit (Income)</th><th>Balance</th></tr></thead>
+        <thead><tr><th>Account</th><th>Out</th><th>In</th></tr></thead>
         <tbody>
-          ${incRows}
-          ${expRows}
+          <tr style="background:#F8FAFC;font-weight:700"><td>Opening balance (${fmtD(from)})</td><td>—</td><td>${money(sheet.openingBalance)}</td></tr>
+          ${incRows.map(([k, v]) => `<tr><td>Fees: ${esc(k)}</td><td>—</td><td style="color:#16A34A;font-weight:700">${money(v)}</td></tr>`).join('')}
+          ${expRows.map(([k, v]) => `<tr><td>Expense: ${esc(k)}</td><td style="color:#DC2626;font-weight:700">${money(v)}</td><td>—</td></tr>`).join('')}
+          <tr style="font-weight:700"><td>Total for the period</td><td style="color:#DC2626">${money(sheet.expenses)}</td><td style="color:#16A34A">${money(sheet.income)}</td></tr>
           <tr style="background:#F0FDF9;font-weight:800">
-            <td>Net Balance</td>
-            <td style="color:#DC2626">${money(totalExp)}</td>
-            <td style="color:#16A34A">${money(totalInc)}</td>
-            <td style="color:${net>=0?'#16A34A':'#DC2626'};font-size:14px">${money(net)}</td>
+            <td>Closing balance (${fmtD(to)})</td><td>—</td>
+            <td style="color:${(sheet.closingBalance || 0) >= 0 ? '#16A34A' : '#DC2626'};font-size:14px">${money(sheet.closingBalance)}</td>
           </tr>
         </tbody>
       </table>`;
@@ -677,31 +708,40 @@ export default function ReportingAreaPage() {
     setModal(null);
   });
 
-  /* ── 14. Staff salary report ─────────────────────────────────────── */
-  const printStaffSalary = () => withLoading('staffSalary', async () => {
-    const res  = await api.get('/salary?limit=500');
-    const rows = toRows(res);
-    if (!rows.length) { setError('No salary records found.'); return; }
+  /* ── 14. Staff salary report: one month ──────────────────────────── */
+  const printStaffSalary = ({ filterMonth }) => withLoading('staffSalary', async () => {
+    const [year, month] = String(filterMonth || today().slice(0, 7)).split('-').map(Number);
+    const label = new Date(Date.UTC(year, month - 1, 1)).toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const res  = await api.get('/reports/staff/salary', { params: { month, year } });
+    const rows = res.data?.data || [];
+    if (!rows.length) { setError(`Payroll for ${label} has not been generated yet. Generate it in Payroll Manager first.`); return; }
 
-    const total = rows.reduce((a,r)=>a+(r.salary||r.amount||r.netSalary||r.gross||0),0);
+    const total  = rows.reduce((a, r) => a + (r.netSalary || 0), 0);
+    const paid   = rows.filter((r) => r.status === 'issued').reduce((a, r) => a + (r.netSalary || 0), 0);
     const body  = `
       <div class="summary-box">
-        <div class="s-card"><div class="val">${rows.length}</div><div class="lbl">Total Staff</div></div>
+        <div class="s-card"><div class="val">${rows.length}</div><div class="lbl">Staff</div></div>
         <div class="s-card"><div class="val">${money(total)}</div><div class="lbl">Total Payroll</div></div>
+        <div class="s-card"><div class="val" style="color:#16A34A">${money(paid)}</div><div class="lbl">Paid</div></div>
+        <div class="s-card"><div class="val" style="color:#DC2626">${money(total - paid)}</div><div class="lbl">Unpaid</div></div>
       </div>
       <table>
-        <thead><tr><th>#</th><th>Staff Name</th><th>Designation</th><th>Department</th><th>Monthly Salary</th></tr></thead>
-        <tbody>${rows.map((s,i)=>`<tr>
-          <td>${i+1}</td>
-          <td style="font-weight:600">${s.name||s.staffName||s.fullName||'—'}</td>
-          <td>${s.designation||s.position||'—'}</td>
-          <td>${s.department||'—'}</td>
-          <td style="font-weight:700;color:#0F766E">${money(s.salary||s.amount||s.netSalary||s.gross)}</td>
+        <thead><tr><th>#</th><th>Staff Name</th><th>Designation</th><th>Basic</th><th>Allowances + Bonus</th><th>Deductions</th><th>Net Salary</th><th>Status</th></tr></thead>
+        <tbody>${rows.map((s, i) => `<tr>
+          <td>${i + 1}</td>
+          <td style="font-weight:600">${esc(s.name || '—')}<div style="font-size:10px;color:#6B7280">${esc(s.empCode || '')}</div></td>
+          <td>${esc(s.designation || '—')}</td>
+          <td>${money(s.basic)}</td>
+          <td>${money((s.allowances || 0) + (s.bonus || 0))}</td>
+          <td>${money(s.deductions)}</td>
+          <td style="font-weight:700;color:#0F766E">${money(s.netSalary)}</td>
+          <td>${s.status === 'issued' ? `<span class="badge badge-green">Paid ${s.issueDate ? fmtD(s.issueDate) : ''}</span>` : '<span class="badge badge-red">Unpaid</span>'}</td>
         </tr>`).join('')}
-        <tr style="background:#F0FDF9;font-weight:800"><td colspan="4">Total</td><td style="color:#0F766E">${money(total)}</td></tr>
+        <tr style="background:#F0FDF9;font-weight:800"><td colspan="6">Total</td><td style="color:#0F766E">${money(total)}</td><td></td></tr>
         </tbody>
       </table>`;
-    openPrint('Staff Salary Report', body);
+    openPrint(`Staff Salary Report — ${label}`, body);
+    setModal(null);
   });
 
   /* ── 15. Staff attendance summary ────────────────────────────────── */
@@ -763,19 +803,49 @@ export default function ReportingAreaPage() {
     incomeExpense: {
       title: 'Income & Expense Report',
       fields: [
-        { key:'dateFrom', label:'From Date', type:'date', defaultVal: today().slice(0,7)+'-01' },
-        { key:'dateTo',   label:'To Date',   type:'date', defaultVal: today()                  },
+        { key:'dateFrom', label:'From Date', type:'date', defaultVal: monthStart() },
+        { key:'dateTo',   label:'To Date',   type:'date', defaultVal: today()      },
       ],
       onGenerate: printIncomeExpense,
     },
     balanceSheet: {
       title: 'Find A Balance Sheet',
       fields: [
-        { key:'dateFrom',   label:'From Date',  type:'date', defaultVal: today().slice(0,7)+'-01' },
-        { key:'dateTo',     label:'To Date',    type:'date', defaultVal: today()                  },
-        { key:'accountant', label:'Accountant', type:'text', placeholder:'e.g. Ahmed Ali', defaultVal:'' },
+        { key:'dateFrom',   label:'From Date',  type:'date', defaultVal: monthStart() },
+        { key:'dateTo',     label:'To Date',    type:'date', defaultVal: today()      },
       ],
       onGenerate: printBalanceSheet,
+    },
+    debitCredit: {
+      title: 'Debit & Credit Statement',
+      fields: [
+        { key:'dateFrom', label:'From Date', type:'date', defaultVal: monthStart() },
+        { key:'dateTo',   label:'To Date',   type:'date', defaultVal: today()      },
+      ],
+      onGenerate: printDebitCredit,
+    },
+    detailedIncome: {
+      title: 'Detailed Income Report',
+      fields: [
+        { key:'dateFrom', label:'From Date', type:'date', defaultVal: monthStart() },
+        { key:'dateTo',   label:'To Date',   type:'date', defaultVal: today()      },
+      ],
+      onGenerate: printDetailedIncome,
+    },
+    detailedExpense: {
+      title: 'Detailed Expense Report',
+      fields: [
+        { key:'dateFrom', label:'From Date', type:'date', defaultVal: monthStart() },
+        { key:'dateTo',   label:'To Date',   type:'date', defaultVal: today()      },
+      ],
+      onGenerate: printDetailedExpense,
+    },
+    staffSalary: {
+      title: 'Staff Salary Report',
+      fields: [
+        { key:'filterMonth', label:'Month (YYYY-MM)', type:'month', defaultVal: today().slice(0,7) },
+      ],
+      onGenerate: printStaffSalary,
     },
     staffAttendance: {
       title: 'Staff Attendance Summary',
@@ -855,31 +925,31 @@ export default function ReportingAreaPage() {
         {
           id:'debitCredit', icon:TrendingDown, iconColor:'#DC2626', iconBg:'#FEE2E2',
           title:'Debit & Credit Statement',
-          description:'Chronological listing of all debit (payments) and credit (income) entries.',
-          onGenerate: printDebitCredit,
+          description:'Every fee received and expense paid in a period, in date order, with a running balance.',
+          onGenerate: () => openModal('debitCredit'),
         },
         {
           id:'accountsSummary', icon:BarChart2, iconColor:'#0891B2', iconBg:'#E0F2FE',
           title:'Accounts Summary Report',
-          description:'Monthly income, expense and net balance summary table.',
+          description:'Fees collected, expenses and net balance for each of the last twelve months.',
           onGenerate: printAccountsSummary,
         },
         {
           id:'detailedIncome', icon:TrendingUp, iconColor:'#059669', iconBg:'#D1FAE5',
           title:'Detailed Income Report',
-          description:'Each income transaction listed with date, category and amount.',
-          onGenerate: printDetailedIncome,
+          description:'Each fee receipt in a period, with date, student, fee and amount.',
+          onGenerate: () => openModal('detailedIncome'),
         },
         {
           id:'detailedExpense', icon:TrendingDown, iconColor:'#B91C1C', iconBg:'#FEE2E2',
           title:'Detailed Expense Report',
-          description:'Each expense transaction listed with date, category and amount.',
-          onGenerate: printDetailedExpense,
+          description:'Each expense in a period, with date, category and amount.',
+          onGenerate: () => openModal('detailedExpense'),
         },
         {
           id:'balanceSheet', icon:DollarSign, iconColor:'#1E3A5F', iconBg:'#E0F2FE',
           title:'Find A Balance Sheet',
-          description:'Assets, liabilities and net balance filtered by date range and accountant.',
+          description:'Opening balance, income by fee head, expenses by category and closing balance for a period.',
           onGenerate: () => openModal('balanceSheet'),
         },
       ],
@@ -890,8 +960,8 @@ export default function ReportingAreaPage() {
         {
           id:'staffSalary', icon:Users, iconColor:'#B45309', iconBg:'#FEF3C7',
           title:'Staff Salary Report',
-          description:'Complete salary listing for all staff members with total payroll.',
-          onGenerate: printStaffSalary,
+          description:'One month\'s salaries for every staff member: net pay, and whether it was paid.',
+          onGenerate: () => openModal('staffSalary'),
         },
         {
           id:'staffAttendance', icon:CheckSquare, iconColor:'#0891B2', iconBg:'#E0F2FE',

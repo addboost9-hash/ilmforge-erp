@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -7,6 +7,8 @@ import { ChevronDown, ChevronUp, X, FileText, Search } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
 import EmptyState from '../../components/ui/EmptyState';
 import { SkeletonRows } from '../../components/Skeleton';
+import StudentPhotoButton from '../../components/StudentPhotoButton';
+import StudentRowActions, { MissingBadge } from '../../components/StudentRowActions';
 
 /* ─── helpers ─────────────────────────────────────────────────── */
 const TEAL = '#0D9488';
@@ -397,7 +399,7 @@ function AddStudentRow({ classId, sectionId, onAdded }) {
     <div style={{ padding: '10px 16px', background: TEAL_LIGHT, borderTop: '1px solid #CCFBF1' }}>
       <button
         style={{ ...btnTeal, fontSize: 12, padding: '6px 14px' }}
-        onClick={() => nav(`/admissions?classId=${classId}&sectionId=${sectionId || ''}`)}
+        onClick={() => nav('/admissions/wizard', { state: { prefill: { classId: String(classId), sectionId: sectionId ? String(sectionId) : '' } } })}
       >
         + Add Student
       </button>
@@ -412,6 +414,7 @@ export default function StudentsPage() {
   const [expandedRow, setExpandedRow] = useState(null);
   const [promoteRow, setPromoteRow] = useState(null);
   const [searchInput, setSearchInput] = useState('');
+  const [searchClassId, setSearchClassId] = useState('');
   const searchQuery = useDebounce(searchInput.trim(), 400);
   const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem('students_visited'));
 
@@ -423,7 +426,7 @@ export default function StudentsPage() {
 
   const { data: classSections = [], isLoading } = useQuery({
     queryKey: ['class-sections', activeTab],
-    queryFn: () => api.get('/students/class-sections').then((r) => r.data.data || []),
+    queryFn: () => api.get('/students/class-sections', { params: { status: activeTab } }).then((r) => r.data.data || []),
     staleTime: 60_000,
   });
 
@@ -433,19 +436,21 @@ export default function StudentsPage() {
   });
 
   // Search results query (only fires when searchQuery is non-empty)
+  const searching = searchQuery.length > 0 || !!searchClassId;
   const { data: searchResults = [], isFetching: searchLoading } = useQuery({
-    queryKey: ['students-search', searchQuery, activeTab],
-    enabled: searchQuery.length > 0,
+    queryKey: ['students-search', searchQuery, searchClassId, activeTab],
+    enabled: searching,
     queryFn: () =>
       api.get('/students', {
-        params: { search: searchQuery, status: activeTab, limit: 50 },
+        params: { search: searchQuery || undefined, classId: searchClassId || undefined, status: activeTab, limit: searchClassId ? 300 : 50 },
       }).then((r) => r.data.data || []),
     staleTime: 30_000,
   });
+  const searchClassName = (classes.find((c) => String(c.id) === searchClassId) || {}).name;
 
   // Expanded row students
   const { data: expandedStudents = [], isLoading: loadingExpanded } = useQuery({
-    queryKey: ['students-expanded', expandedRow],
+    queryKey: ['students-expanded', expandedRow, activeTab],
     enabled: !!expandedRow,
     queryFn: () => {
       const [classId, sectionId] = (expandedRow || '').split('-');
@@ -573,7 +578,7 @@ export default function StudentsPage() {
         <div>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827' }}>🎓 Student Registry</h1>
           <p style={{ margin: '2px 0 0', fontSize: 13, color: '#6B7280' }}>
-            Total Active: <strong>{total}</strong>
+            Total {activeTab === 'active' ? 'active' : 'inactive'}: <strong>{total}</strong>
           </p>
         </div>
         <div style={{ display:'flex', gap:8 }}>
@@ -593,6 +598,15 @@ export default function StudentsPage() {
               </button>
             )}
           </div>
+          <select
+            value={searchClassId}
+            onChange={(e) => setSearchClassId(e.target.value)}
+            aria-label="Filter by class"
+            style={{ padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 13, background: '#fff' }}
+          >
+            <option value="">All classes</option>
+            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
           <button
             style={{ ...btnTeal, gap: 7 }}
             onClick={() => navigate('/admissions/form-print')}
@@ -622,13 +636,13 @@ export default function StudentsPage() {
         </div>
 
         {/* ── Search Results Panel ── */}
-        {searchQuery && (
+        {searching && (
           <div style={{ padding:'12px 16px', background:'#FFFBEB', borderBottom:'2px solid #FDE68A' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
               <span style={{ fontSize:13, fontWeight:700, color:'#92400E' }}>
-                Search: "{searchQuery}" — {searchLoading ? 'Searching…' : `${searchResults.length} result(s)`}
+                {searchQuery ? `Search: "${searchQuery}"` : 'Students'}{searchClassName ? ` in ${searchClassName}` : ''} — {searchLoading ? 'Searching…' : `${searchResults.length} result(s)`}
               </span>
-              <button onClick={() => { setSearchInput(''); setSearchQuery(''); }}
+              <button onClick={() => { setSearchInput(''); setSearchClassId(''); }}
                 style={{ ...btnOutline, padding:'4px 12px', fontSize:12 }}>
                 Clear Search
               </button>
@@ -646,7 +660,7 @@ export default function StudentsPage() {
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, background:'#fff', borderRadius:6, overflow:'hidden' }}>
                 <thead>
                   <tr style={{ background: TEAL }}>
-                    {['#','Roll No','Name','Father Name','Class','Section','Gender','Actions'].map(h => (
+                    {['#','Photo','Roll No','Name','Father Name','Class','Section','Record','Actions'].map(h => (
                       <th key={h} style={{ padding:'8px 12px', color:'#fff', fontWeight:700, textAlign:'left' }}>{h}</th>
                     ))}
                   </tr>
@@ -655,17 +669,15 @@ export default function StudentsPage() {
                   {searchResults.map((s, i) => (
                     <tr key={s.id} style={{ borderBottom:'1px solid #F3F4F6', background: i%2===0?'#fff':'#FAFAFA' }}>
                       <td style={{ padding:'8px 12px', color:'#9CA3AF' }}>{i+1}</td>
+                      <td style={{ padding:'6px 12px' }}><StudentPhotoButton student={s} size={32} showLabel={false} /></td>
                       <td style={{ padding:'8px 12px', fontFamily:'monospace', color:TEAL, fontWeight:700 }}>{s.rollNo||'—'}</td>
                       <td style={{ padding:'8px 12px', fontWeight:600, color:'#111827' }}>{s.name}</td>
                       <td style={{ padding:'8px 12px', color:'#6B7280' }}>{s.fatherName||'—'}</td>
                       <td style={{ padding:'8px 12px' }}>{s.class?.name||'—'}</td>
                       <td style={{ padding:'8px 12px', color:'#6B7280' }}>{s.section?.name||'—'}</td>
-                      <td style={{ padding:'8px 12px', color:'#6B7280', textTransform:'capitalize' }}>{s.gender||'—'}</td>
+                      <td style={{ padding:'8px 12px' }}><MissingBadge student={s} /></td>
                       <td style={{ padding:'8px 12px' }}>
-                        <Link to={`/students/${s.id}`}
-                          style={{ ...btnTeal, padding:'4px 12px', fontSize:12, textDecoration:'none' }}>
-                          View
-                        </Link>
+                        <StudentRowActions student={s} />
                       </td>
                     </tr>
                   ))}
@@ -704,9 +716,8 @@ export default function StudentsPage() {
                 const rowKey = `${row.classId}-${row.sectionId}`;
                 const isExpanded = expandedRow === rowKey;
                 return (
-                  <>
+                  <Fragment key={rowKey}>
                     <tr
-                      key={rowKey}
                       style={{
                         borderBottom: '1px solid #F3F4F6',
                         background: isExpanded ? TEAL_LIGHT : idx % 2 === 0 ? '#fff' : '#FAFAFA',
@@ -776,29 +787,31 @@ export default function StudentsPage() {
                                 <thead>
                                   <tr style={{ background: '#CCFBF1' }}>
                                     <th style={{ padding: '7px 14px', textAlign: 'left', color: '#0F766E', fontWeight: 700 }}>#</th>
+                                    <th style={{ padding: '7px 14px', textAlign: 'left', color: '#0F766E', fontWeight: 700 }}>Photo</th>
                                     <th style={{ padding: '7px 14px', textAlign: 'left', color: '#0F766E', fontWeight: 700 }}>Reg No</th>
                                     <th style={{ padding: '7px 14px', textAlign: 'left', color: '#0F766E', fontWeight: 700 }}>Name</th>
                                     <th style={{ padding: '7px 14px', textAlign: 'left', color: '#0F766E', fontWeight: 700 }}>Father Name</th>
-                                    <th style={{ padding: '7px 14px', textAlign: 'left', color: '#0F766E', fontWeight: 700 }}>Gender</th>
+                                    <th style={{ padding: '7px 14px', textAlign: 'left', color: '#0F766E', fontWeight: 700 }}>Record</th>
+                                    <th style={{ padding: '7px 14px', textAlign: 'left', color: '#0F766E', fontWeight: 700 }}>Actions</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {expandedStudents.map((s, i) => (
                                     <tr key={s.id} style={{ borderBottom: '1px solid #D1FAE5' }}>
                                       <td style={{ padding: '7px 14px', color: '#9CA3AF' }}>{i + 1}</td>
+                                      <td style={{ padding: '5px 14px' }}><StudentPhotoButton student={s} size={30} showLabel={false} /></td>
                                       <td style={{ padding: '7px 14px', fontFamily: 'monospace', color: TEAL, fontWeight: 700 }}>
                                         {s.rollNo || '—'}
                                       </td>
                                       <td style={{ padding: '7px 14px', fontWeight: 600 }}>{s.name}</td>
                                       <td style={{ padding: '7px 14px', color: '#6B7280' }}>{s.fatherName || '—'}</td>
-                                      <td style={{ padding: '7px 14px', color: '#6B7280', textTransform: 'capitalize' }}>
-                                        {s.gender || '—'}
-                                      </td>
+                                      <td style={{ padding: '7px 14px' }}><MissingBadge student={s} /></td>
+                                      <td style={{ padding: '7px 14px' }}><StudentRowActions student={s} compact /></td>
                                     </tr>
                                   ))}
                                   {expandedStudents.length === 0 && (
                                     <tr>
-                                      <td colSpan={5} style={{ textAlign: 'center', padding: 20, color: '#9CA3AF' }}>
+                                      <td colSpan={7} style={{ textAlign: 'center', padding: 20, color: '#9CA3AF' }}>
                                         No students found
                                       </td>
                                     </tr>
@@ -811,7 +824,7 @@ export default function StudentsPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>

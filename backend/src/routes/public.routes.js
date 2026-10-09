@@ -14,6 +14,7 @@ const rateLimit = require('express-rate-limit');
 const prisma = require('../config/prisma');
 const { sendEmail } = require('../services/email.service');
 const { parseApplication, applicationNotes, reference } = require('../utils/admissionApplication');
+const { checkPhoto } = require('../utils/photo');
 
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
@@ -95,6 +96,14 @@ router.post('/admissions/:slug', applyLimiter, wrap(async (req, res) => {
 
   const [campuses, classes] = await schoolLists(school.id);
   const { errors, value } = parseApplication(req.body, { classes, campuses });
+  // Optional photo of the child. The form shrinks it to about 40 KB first;
+  // anything that is not a small JPG/PNG/WebP is refused here.
+  let photoUrl = null;
+  if (req.body?.photo) {
+    const photo = checkPhoto(req.body.photo);
+    if (photo.error) errors.photo = photo.error;
+    else photoUrl = photo.value;
+  }
   if (Object.keys(errors).length) {
     return res.status(400).json({ success: false, message: Object.values(errors)[0], errors });
   }
@@ -102,10 +111,14 @@ router.post('/admissions/:slug', applyLimiter, wrap(async (req, res) => {
   // A double-click or a second try a few minutes later is the same application.
   const recent = await prisma.admissionInquiry.findMany({
     where: { schoolId: school.id, phone: value.phone, createdAt: { gte: new Date(Date.now() - 24 * 3600 * 1000) } },
-    select: { id: true, name: true },
+    select: { id: true, name: true, photoUrl: true },
   });
   const dup = recent.find((r) => r.name.trim().toLowerCase() === value.studentName.toLowerCase());
   if (dup) {
+    // Sent again, this time with the photo: keep the photo.
+    if (photoUrl && !dup.photoUrl) {
+      await prisma.admissionInquiry.update({ where: { id: dup.id }, data: { photoUrl } });
+    }
     return res.json({
       success: true,
       data: { reference: reference(dup.id), schoolName: school.name, schoolPhone: school.phone || '', duplicate: true },
@@ -120,6 +133,7 @@ router.post('/admissions/:slug', applyLimiter, wrap(async (req, res) => {
       phone: value.phone,
       classInterested: value.classInterested,
       notes: applicationNotes(value),
+      photoUrl,
       status: 'open',
     },
   });
@@ -132,6 +146,7 @@ router.post('/admissions/:slug', applyLimiter, wrap(async (req, res) => {
       ['Reference', ref], ['Student', value.studentName], ['Class', value.classInterested],
       ['Father / guardian', value.fatherName], ['Phone', value.phone], ['Campus', value.campusName],
       ['Date of birth', value.dob], ['Email', value.email], ['Address', value.address],
+      ['Photo', photoUrl ? 'Attached (see Admission Inquiries)' : ''],
     ].filter(([, v]) => v);
     sendEmail({
       to: school.email,

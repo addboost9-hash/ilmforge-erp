@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
+import { feePeriod } from '../../utils/feeMonth';
 import {
   Home, DollarSign, Award, BookOpen,
   User, ChevronRight, Download, Bell,
@@ -1019,7 +1020,8 @@ export default function StudentPortalPage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 700, fontSize: 13.5, color: NAVY }}>{inv.feeTitle || 'Monthly Fee'}</div>
                         <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
-                          {inv.month && inv.year ? `${inv.month}/${inv.year}` : fmtDate(inv.createdAt)}
+                          {/* "July 2026", whether the month was stored as "7" or "July". */}
+                          {inv.month && inv.year ? feePeriod(inv) : fmtDate(inv.createdAt)}
                           {' · '}Total: <strong style={{ color: NAVY }}>{Rs(inv.totalAmount)}</strong>
                           {inv.dueAmount > 0 && <span style={{ color: '#DC2626', fontWeight: 700 }}> · Due: {Rs(inv.dueAmount)}</span>}
                         </div>

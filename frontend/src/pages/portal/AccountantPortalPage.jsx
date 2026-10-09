@@ -5,7 +5,7 @@
  *               Defaulters (yellow), Staff Salary (purple), Expenses (orange)
  * Action tile grid: white background with colored icon
  */
-import { useMemo, useState, useCallback, useRef } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Navigate, Link } from 'react-router-dom';
 import {
@@ -39,6 +39,8 @@ import {
 import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
 import { printFeeVoucher } from '../../components/PortalUtils';
+import { feePeriod, byPeriodDesc } from '../../utils/feeMonth';
+import { toPaisa } from '../../utils/currency';
 
 /* ── Enterprise theme tokens ─────────────────────────────── */
 const NAVY = '#1B2F6E';
@@ -48,9 +50,24 @@ const CYAN = '#00c0ef';
 // Every amount on this portal (fees, expenses, salaries) is stored in paisa.
 // It was printed straight out, so dues and totals read 100 times too large.
 const Rs = (v) => `Rs. ${(Number(v || 0) / 100).toLocaleString('en-PK')}`;
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// Pakistan's today (UTC+5 all year), whatever zone the PC clock is set to.
+// The UTC date is still yesterday until 5 a.m. here, which showed today's
+// sheet as unsettled and offered yesterday in the date pickers.
+const todayISO = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
 const fmtDate = (d) =>
-  new Date(d).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
+  new Date(d).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Karachi' });
+/** YYYY-MM-DD -> DD/MM/YYYY, as dates are written in Pakistan. */
+const dmy = (ymd) => String(ymd || '').slice(0, 10).split('-').reverse().join('/');
+/** "Monthly Fee Of Jul (July 2026)": the bill and the month it is for. */
+const feeLabel = (inv) => {
+  const period = feePeriod(inv);
+  return `${inv?.feeTitle || 'Fee'}${period ? ` (${period})` : ''}`;
+};
+/** The server's reason for a refused request, or a check made on this page.
+    A bare network error's text ("Request failed with status code 500") is
+    no use to an accountant, so that gets the fallback. */
+const errorText = (err, fallback) =>
+  err?.response?.data?.message || (err && !err.isAxiosError && err.message) || fallback;
 
 /* ── Stat card presets ───────────────────────────────────── */
 const STAT_PRESETS = {
@@ -204,20 +221,10 @@ function DashboardTab({ user, setActiveTab }) {
     retry: false,
   });
 
-  const { data: todayPayments = [] } = useQuery({
-    queryKey: ['today-payments', user?.id],
-    // FIX: GET /fees/payments only understands `from`/`to` range params (see
-    // fee.routes.js) — the `date` param sent here was silently ignored, so
-    // "Collection Today" was actually showing this accountant's ALL-TIME
-    // payment total, not today's.
-    queryFn: () =>
-      api
-        .get('/fees/payments', { params: { accountant: user?.id, from: todayISO(), to: todayISO(), limit: 200 } })
-        .then((r) => r.data.data || []),
-    staleTime: 30_000,
-    retry: false,
-  });
-
+  // Today's sheet for this accountant. "Collection Today" is read from it so
+  // the card and the Daily Balancesheet tab agree: cash keyed in today,
+  // including a fee entered today for an earlier day. (The card summed a
+  // field the payments list does not have, so it always read Rs 0.)
   const { data: lastSheet } = useQuery({
     queryKey: ['last-balancesheet'],
     queryFn: () =>
@@ -225,11 +232,14 @@ function DashboardTab({ user, setActiveTab }) {
     staleTime: 60_000,
     retry: false,
   });
+  const todayPayments = lastSheet?.payments || [];
 
-  const { data: expensesAll = [] } = useQuery({
+  // The server's total of every expense dated today; adding up the rows
+  // counted only the first page of 25.
+  const { data: expensesToday } = useQuery({
     queryKey: ['expenses-all-today'],
     queryFn: () =>
-      api.get('/expenses', { params: { date: todayISO() } }).then((r) => r.data.data || []),
+      api.get('/expenses', { params: { date: todayISO(), limit: 1 } }).then((r) => r.data),
     staleTime: 60_000,
     retry: false,
   });
@@ -262,8 +272,8 @@ function DashboardTab({ user, setActiveTab }) {
       paid.reduce((s, i) => s + (i.paidAmount || 0), 0) +
       partial.reduce((s, i) => s + (i.paidAmount || 0), 0);
     const totalDue = [...partial, ...unpaid].reduce((s, i) => s + (i.dueAmount || 0), 0);
-    const todayTotal = todayPayments.reduce((s, p) => s + (p.amount || 0), 0);
-    const totalExpenses = expensesAll.reduce((s, e) => s + (e.amount || 0), 0);
+    const todayTotal = lastSheet?.summary?.todayCollected || 0;
+    const totalExpenses = expensesToday?.totalAmount || 0;
     return {
       totalCollected,
       totalDue,
@@ -272,7 +282,7 @@ function DashboardTab({ user, setActiveTab }) {
       todayTotal,
       totalExpenses,
     };
-  }, [invoices, defaulters, todayPayments, expensesAll]);
+  }, [invoices, defaulters, lastSheet, expensesToday]);
 
   const isUnsettled =
     !lastSheet || lastSheet.status !== 'settled' || lastSheet.date !== todayISO();
@@ -513,80 +523,59 @@ function BalancesheetTab({ user }) {
   const [date, setDate] = useState(todayISO());
   const queryClient = useQueryClient();
 
-  const { data: payments = [], isLoading: loadingPayments } = useQuery({
-    queryKey: ['bs-payments', date, user?.id],
-    // FIX: backend only filters on `from`/`to`, not `date` — see the matching
-    // fix on the Dashboard tab's "today's payments" query above.
-    queryFn: () =>
-      api
-        .get('/fees/payments', { params: { accountant: user?.id, from: date, to: date, limit: 500 } })
-        .then((r) => r.data.data || []),
-    staleTime: 30_000,
-    retry: false,
-  });
-
-  const { data: expenses = [], isLoading: loadingExpenses } = useQuery({
-    queryKey: ['bs-expenses', date, user?.id],
-    queryFn: () =>
-      api
-        .get('/expenses', { params: { date, by: user?.id } })
-        .then((r) => r.data.data || []),
-    staleTime: 30_000,
-    retry: false,
-  });
-
-  const { data: sheetStatus } = useQuery({
-    queryKey: ['sheet-status', date],
+  // The server works the sheet out. Cash is counted by the day it was
+  // ENTERED, so a fee keyed in today for an earlier day is in today's hand
+  // (listed with its own date), and what a settlement handed over is taken
+  // off. Adding it up here by payment date put late entries on days already
+  // handed over, counted today's cash twice as "previous", and read fields
+  // the payments list does not have, so every total read Rs 0.
+  const { data: sheet, isLoading } = useQuery({
+    queryKey: ['bs-sheet', date, user?.id],
     queryFn: () =>
       api.get(`/reports/accounting/balancesheet/${date}`).then((r) => r.data.data || null),
     staleTime: 30_000,
     retry: false,
   });
 
-  const { data: prevSheet } = useQuery({
-    queryKey: ['prev-sheet'],
-    queryFn: () =>
-      api.get('/reports/accounting/balancesheet/latest').then((r) => r.data.data || null),
-    staleTime: 60_000,
-    retry: false,
-  });
-
   const settleMutation = useMutation({
     mutationFn: () => api.post('/reports/accounting/settle', { accountantId: user?.id, date }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sheet-status', date] });
+      // Settling a day also changes what later days carry in.
+      queryClient.invalidateQueries({ queryKey: ['bs-sheet'] });
       queryClient.invalidateQueries({ queryKey: ['last-balancesheet'] });
-      queryClient.invalidateQueries({ queryKey: ['prev-sheet'] });
     },
   });
 
-  const totalPayments = useMemo(
-    () => payments.reduce((s, p) => s + (p.amount || 0), 0),
-    [payments]
-  );
-  const totalExpenses = useMemo(
-    () => expenses.reduce((s, e) => s + (e.amount || 0), 0),
-    [expenses]
-  );
-  const prevUnsettled =
-    prevSheet && prevSheet.status !== 'settled' ? prevSheet.cashInHand || 0 : 0;
-  const cashInHand = totalPayments - totalExpenses + prevUnsettled;
-  const isSettled = sheetStatus?.status === 'settled';
-  const printRef = useRef(null);
+  const payments = sheet?.payments || [];
+  const expenses = sheet?.expenses || [];
+  const totalPayments = sheet?.summary?.todayCollected || 0;
+  const totalExpenses = sheet?.summary?.todayExpenses || 0;
+  const prevUnsettled = sheet?.summary?.previousUnsettled || 0;
+  const handedOver = sheet?.summary?.handedOver || 0;
+  const cashInHand = sheet?.cashInHand || 0;
+  const lateEntries = sheet?.summary?.backdated || 0;
+  const isSettled = sheet?.status === 'settled';
+  const [confirming, setConfirming] = useState(false);
+  const settleError = settleMutation.error ? errorText(settleMutation.error, 'The sheet could not be settled. Try again.') : '';
 
   const handlePrint = () => {
+    // Names and notes come from the database; keep them as text in the printout.
+    const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const win = window.open('', '_blank', 'width=900,height=700');
+    if (!win) return;
     win.document.write(`
-      <html><head><title>Daily Balancesheet — ${date}</title>
+      <html><head><title>Daily Balancesheet — ${dmy(date)}</title>
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; padding: 24px; }
         h1 { font-size: 22px; font-weight: 900; color: ${NAVY}; }
         h2 { font-size: 14px; color: #64748B; font-weight: 500; margin-bottom: 18px; }
+        h3 { font-size: 13px; color: ${NAVY}; margin: 6px 0 8px; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 18px; }
         th { background: #F1F5F9; padding: 7px 10px; text-align: left; border-bottom: 2px solid #CBD5E1; font-weight: 700; color: #334155; }
         td { padding: 7px 10px; border-bottom: 1px solid #E2E8F0; }
-        .summary-box { border: 2px solid ${NAVY}; border-radius: 10px; padding: 14px 18px; margin-top: 10px; width: 300px; margin-left: auto; }
+        .late { color: #B45309; font-size: 11px; }
+        .summary-box { border: 2px solid ${NAVY}; border-radius: 10px; padding: 14px 18px; margin-top: 10px; width: 320px; margin-left: auto; }
         .summary-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; }
         .summary-row.total { font-weight: 900; font-size: 15px; border-top: 1px solid #CBD5E1; padding-top: 8px; margin-top: 4px; color: ${NAVY}; }
         .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-35deg); font-size: 90px; font-weight: 900; color: rgba(185,28,28,0.09); pointer-events: none; white-space: nowrap; z-index: 0; }
@@ -601,32 +590,46 @@ function BalancesheetTab({ user }) {
       <div class="school-header">
         <div>
           <h1>Daily Balancesheet</h1>
-          <h2>Date: ${fmtDate(date)} &nbsp;|&nbsp; Accountant: ${user?.name || 'N/A'}</h2>
+          <h2>Date: ${dmy(date)} &nbsp;|&nbsp; Accountant: ${esc(user?.name || 'N/A')}</h2>
         </div>
         <span class="status-badge ${isSettled ? 'settled' : 'unsettled'}">${isSettled ? 'SETTLED' : 'UNSETTLED'}</span>
       </div>
+      <h3>Fees received</h3>
       <table>
-        <thead><tr><th>Roll No</th><th>Student Name</th><th>Class</th><th>Fee Title</th><th style="text-align:right">Amount</th></tr></thead>
+        <thead><tr><th>Receipt</th><th>Roll No</th><th>Student</th><th>Class</th><th>Fee</th><th style="text-align:right">Amount</th></tr></thead>
         <tbody>
-          ${payments
-            .map(
-              (p) =>
-                `<tr><td>${p.student?.rollNo || '—'}</td><td>${p.student?.name || '—'}</td><td>${p.student?.class?.name || '—'}</td><td>${p.feeTitle || p.invoice?.feeType || '—'}</td><td style="text-align:right;font-weight:700">${Rs(p.amount)}</td></tr>`
-            )
-            .join('')}
+          ${payments.length ? payments.map((p) => `<tr>
+            <td>${esc(p.receiptNo || '—')}</td>
+            <td>${esc(p.invoice?.student?.rollNo || '—')}</td>
+            <td>${esc(p.invoice?.student?.name || '—')}${p.backdated ? `<div class="late">Dated ${dmy(p.datedOn)}</div>` : ''}</td>
+            <td>${esc(p.invoice?.student?.class?.name || '—')}</td>
+            <td>${esc(feeLabel(p.invoice))}</td>
+            <td style="text-align:right;font-weight:700">${Rs(p.amountPaid)}</td></tr>`).join('') : '<tr><td colspan="6">No fees entered on this day.</td></tr>'}
         </tbody>
       </table>
+      ${expenses.length ? `<h3>Paid out</h3>
+      <table>
+        <thead><tr><th>Category</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+        <tbody>${expenses.map((e) => `<tr><td>${esc(e.category || '—')}</td><td>${esc(e.description || '—')}${e.backdated ? `<div class="late">Dated ${dmy(e.datedOn)}</div>` : ''}</td><td style="text-align:right;font-weight:700">${Rs(e.amount)}</td></tr>`).join('')}</tbody>
+      </table>` : ''}
       <div class="summary-box">
-        <div class="summary-row"><span>Total Payments</span><span><b>${Rs(totalPayments)}</b></span></div>
-        <div class="summary-row"><span>Total Expenses</span><span style="color:#B91C1C"><b>- ${Rs(totalExpenses)}</b></span></div>
-        <div class="summary-row"><span>Prev. Unsettled</span><span><b>${Rs(prevUnsettled)}</b></span></div>
-        <div class="summary-row total"><span>Cash in Hand</span><span>${Rs(cashInHand)}</span></div>
+        <div class="summary-row"><span>Carried in (not yet handed over)</span><span><b>${Rs(prevUnsettled)}</b></span></div>
+        <div class="summary-row"><span>Fees received</span><span><b>${Rs(totalPayments)}</b></span></div>
+        <div class="summary-row"><span>Paid out</span><span style="color:#B91C1C"><b>- ${Rs(totalExpenses)}</b></span></div>
+        ${handedOver ? `<div class="summary-row"><span>Handed over</span><span><b>- ${Rs(handedOver)}</b></span></div>` : ''}
+        <div class="summary-row total"><span>Cash in hand</span><span>${Rs(cashInHand)}</span></div>
       </div>
       <script>window.onload=()=>{window.print();window.close();}</script>
       </body></html>
     `);
     win.document.close();
   };
+
+  const cell = { padding: '8px 10px' };
+  const head = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontWeight: 700 };
+  const lateTag = (row) => row.backdated && (
+    <div style={{ fontSize: 11, color: '#B45309', fontWeight: 600 }}>Dated {dmy(row.datedOn)}</div>
+  );
 
   return (
     <div>
@@ -645,7 +648,8 @@ function BalancesheetTab({ user }) {
             type="date"
             value={date}
             max={todayISO()}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(e) => { setDate(e.target.value || todayISO()); setConfirming(false); settleMutation.reset(); }}
+            aria-label="Day of the balance sheet"
             style={{
               border: `1.5px solid ${NAVY}40`,
               borderRadius: 8,
@@ -668,9 +672,10 @@ function BalancesheetTab({ user }) {
             {isSettled ? '✓ SETTLED' : '⚠ UNSETTLED'}
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             onClick={handlePrint}
+            disabled={isLoading}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -688,31 +693,58 @@ function BalancesheetTab({ user }) {
           >
             <Printer size={14} /> Print
           </button>
-          {!isSettled && (user?.role === 'admin' || user?.role === 'accountant') && (
-            <button
-              onClick={() => settleMutation.mutate()}
-              disabled={settleMutation.isPending}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                background: settleMutation.isPending ? '#94A3B8' : '#059669',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 8,
-                padding: '8px 14px',
-                cursor: settleMutation.isPending ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit',
-                fontWeight: 700,
-                fontSize: 13,
-              }}
-            >
-              <CheckCircle2 size={14} />
-              {settleMutation.isPending ? 'Settling…' : 'Mark as Settled'}
-            </button>
+          {!isSettled && !isLoading && (user?.role === 'admin' || user?.role === 'accountant') && (
+            confirming ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#334155' }}>
+                Hand over {Rs(cashInHand)} for {dmy(date)}?
+                <button
+                  onClick={() => settleMutation.mutate(undefined, { onSuccess: () => setConfirming(false) })}
+                  disabled={settleMutation.isPending}
+                  style={{ background: '#059669', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 12px', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}
+                >
+                  {settleMutation.isPending ? 'Settling…' : 'Yes, settle'}
+                </button>
+                <button
+                  onClick={() => { setConfirming(false); settleMutation.reset(); }}
+                  disabled={settleMutation.isPending}
+                  style={{ background: '#fff', color: '#334155', border: '1px solid #CBD5E1', borderRadius: 8, padding: '7px 12px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setConfirming(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: '#059669',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '8px 14px',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                <CheckCircle2 size={14} /> Mark as Settled
+              </button>
+            )
           )}
         </div>
       </div>
+      {settleError && (
+        <div role="alert" style={{ background: '#FEE2E2', color: '#991B1B', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 12 }}>{settleError}</div>
+      )}
+      {lateEntries > 0 && (
+        <div style={{ background: '#FEF3C7', color: '#92400E', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 12 }}>
+          {lateEntries === 1 ? '1 entry made on this day carries' : `${lateEntries} entries made on this day carry`} an earlier date. It is counted
+          in this day's cash because the money was entered, and is still in hand, on this day.
+        </div>
+      )}
 
       {/* Payments table */}
       <div
@@ -753,35 +785,34 @@ function BalancesheetTab({ user }) {
           </div>
         )}
         <div style={{ fontWeight: 800, fontSize: 14, color: NAVY, marginBottom: 10 }}>
-          Fee Collections — {fmtDate(date)}
+          Fees received — {fmtDate(date)}
           <span style={{ marginLeft: 8, fontSize: 12, color: '#64748B', fontWeight: 500 }}>
-            ({payments.length} records)
+            ({payments.length} {payments.length === 1 ? 'receipt' : 'receipts'})
           </span>
         </div>
-        {loadingPayments ? (
+        {isLoading ? (
           <div style={{ color: '#64748B', fontSize: 13, padding: '20px 0' }}>Loading…</div>
         ) : payments.length === 0 ? (
-          <div style={{ color: '#64748B', fontSize: 13 }}>No payments recorded for this date.</div>
+          <div style={{ color: '#64748B', fontSize: 13 }}>No fees entered on this day.</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
               <thead>
                 <tr style={{ background: '#F8FAFC' }}>
-                  {['Roll No', 'Student Name', 'Class', 'Fee Title', 'Amount Paid'].map(
-                    (h) => (
-                      <th key={h} style={{ textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontWeight: 700 }}>{h}</th>
-                    )
-                  )}
+                  {['Receipt', 'Roll No', 'Student Name', 'Class', 'Fee', 'Amount Paid'].map((h) => (
+                    <th key={h} style={head}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {payments.map((p) => (
                   <tr key={p.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                    <td style={{ padding: '8px 10px', color: '#64748B' }}>{p.student?.rollNo || '—'}</td>
-                    <td style={{ padding: '8px 10px', color: NAVY, fontWeight: 600 }}>{p.student?.name || '—'}</td>
-                    <td style={{ padding: '8px 10px', color: '#64748B' }}>{p.student?.class?.name || '—'}</td>
-                    <td style={{ padding: '8px 10px', color: '#64748B' }}>{p.feeTitle || p.invoice?.feeType || '—'}</td>
-                    <td style={{ padding: '8px 10px', color: '#059669', fontWeight: 700 }}>{Rs(p.amount)}</td>
+                    <td style={{ ...cell, color: '#64748B', fontFamily: 'monospace', fontSize: 11.5 }}>{p.receiptNo || '—'}</td>
+                    <td style={{ ...cell, color: '#64748B' }}>{p.invoice?.student?.rollNo || '—'}</td>
+                    <td style={{ ...cell, color: NAVY, fontWeight: 600 }}>{p.invoice?.student?.name || '—'}{lateTag(p)}</td>
+                    <td style={{ ...cell, color: '#64748B' }}>{p.invoice?.student?.class?.name || '—'}</td>
+                    <td style={{ ...cell, color: '#64748B' }}>{feeLabel(p.invoice)}</td>
+                    <td style={{ ...cell, color: '#059669', fontWeight: 700 }}>{Rs(p.amountPaid)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -789,6 +820,33 @@ function BalancesheetTab({ user }) {
           </div>
         )}
       </div>
+
+      {/* Expenses paid out of the same cash */}
+      {expenses.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 16px', marginBottom: 14 }}>
+          <div style={{ fontWeight: 800, fontSize: 14, color: NAVY, marginBottom: 10 }}>
+            Paid out — {fmtDate(date)}
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead>
+                <tr style={{ background: '#F8FAFC' }}>
+                  {['Category', 'Description', 'Amount'].map((h) => <th key={h} style={head}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.map((e) => (
+                  <tr key={e.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                    <td style={{ ...cell, color: '#64748B' }}>{e.category || '—'}</td>
+                    <td style={{ ...cell, color: NAVY }}>{e.description || '—'}{lateTag(e)}</td>
+                    <td style={{ ...cell, color: '#B91C1C', fontWeight: 700 }}>{Rs(e.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Summary box */}
       <div
@@ -803,9 +861,10 @@ function BalancesheetTab({ user }) {
       >
         <div style={{ fontWeight: 800, fontSize: 14, color: NAVY, marginBottom: 12 }}>Daily Summary</div>
         {[
-          { label: 'Total Payments',       value: Rs(totalPayments),   color: '#059669' },
-          { label: 'Total Expenses',       value: `− ${Rs(totalExpenses)}`, color: '#B91C1C' },
-          { label: 'Prev. Unsettled Amount', value: Rs(prevUnsettled), color: '#D97706' },
+          { label: 'Carried in (not yet handed over)', value: Rs(prevUnsettled), color: '#D97706' },
+          { label: 'Fees received', value: Rs(totalPayments), color: '#059669' },
+          { label: 'Paid out', value: `− ${Rs(totalExpenses)}`, color: '#B91C1C' },
+          ...(handedOver ? [{ label: 'Handed over', value: `− ${Rs(handedOver)}`, color: '#475569' }] : []),
         ].map(({ label, value, color }) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 7, color: '#475569' }}>
             <span>{label}</span>
@@ -840,8 +899,10 @@ function FeeCollectionTab({ user }) {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [payAmount, setPayAmount] = useState('');
   const [payNote, setPayNote] = useState('');
+  const [payDate, setPayDate] = useState(todayISO());
   const [payingId, setPayingId] = useState(null);
   const queryClient = useQueryClient();
+  const backdated = payDate && payDate !== todayISO();
 
   const { data: students = [], isFetching } = useQuery({
     queryKey: ['student-search', search],
@@ -877,12 +938,19 @@ function FeeCollectionTab({ user }) {
         : Math.round(Number(amount.rupees) * 100);
       if (!paisa || paisa <= 0) throw new Error('Enter a valid payment amount');
       if (paisa > 1000000 * 100) throw new Error('Amount seems too high — please verify');
-      return api.post('/fees/payments', { invoiceId, amountPaid: paisa, method: 'cash' });
+      return api.post('/fees/payments', {
+        invoiceId, amountPaid: paisa, method: 'cash', remarks: note || undefined,
+        // Money received on an earlier day is filed on that day; the parent is
+        // not sent a "received today" message for it.
+        paymentDate: payDate,
+        ...(backdated && { notifyVia: 'none' }),
+      });
     },
     onSuccess: (res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['student-invoices', selectedStudent?.id] });
-      queryClient.invalidateQueries({ queryKey: ['today-payments'] });
-      queryClient.invalidateQueries({ queryKey: ['bs-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['bs-sheet'] });
+      queryClient.invalidateQueries({ queryKey: ['last-balancesheet'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-history'] });
       // Auto-print receipt
       const inv = invoices.find(i => i.id === vars.invoiceId);
       if (inv && selectedStudent) {
@@ -903,11 +971,13 @@ function FeeCollectionTab({ user }) {
       }
       setPayAmount('');
       setPayNote('');
+      setPayDate(todayISO());
       setPayingId(null);
     },
   });
 
-  const unpaidInvoices = invoices.filter((i) => i.status !== 'paid');
+  // Newest month first: text order put "9" after "12".
+  const unpaidInvoices = invoices.filter((i) => i.status !== 'paid').sort(byPeriodDesc);
 
   return (
     <div>
@@ -975,7 +1045,7 @@ function FeeCollectionTab({ user }) {
                 <div key={inv.id} style={{ border: '1px solid #E2E8F0', borderRadius: 10, padding: '12px 14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: payingId === inv.id ? 12 : 0 }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>{inv.feeType || inv.title || 'Fee Invoice'}</div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>{feeLabel(inv)}</div>
                       <div style={{ fontSize: 12, color: '#64748B' }}>
                         Due: {Rs(inv.dueAmount || 0)} · Status:{' '}
                         <span style={{ fontWeight: 700, color: inv.status === 'partial' ? '#D97706' : '#B91C1C', textTransform: 'capitalize' }}>
@@ -984,7 +1054,7 @@ function FeeCollectionTab({ user }) {
                       </div>
                     </div>
                     <button
-                      onClick={() => setPayingId(payingId === inv.id ? null : inv.id)}
+                      onClick={() => { setPayingId(payingId === inv.id ? null : inv.id); setPayDate(todayISO()); payMutation.reset(); }}
                       style={{ background: NAVY, color: '#fff', border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
                     >
                       {payingId === inv.id ? 'Cancel' : 'Pay Now'}
@@ -1001,6 +1071,17 @@ function FeeCollectionTab({ user }) {
                           onChange={(e) => setPayAmount(e.target.value)}
                           placeholder={String((inv.dueAmount || 0) / 100)}
                           style={{ width: '100%', border: '1px solid #CBD5E1', borderRadius: 7, padding: '7px 10px', fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }}
+                        />
+                      </div>
+                      <div style={{ flex: '0 1 150px' }}>
+                        <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Payment date</div>
+                        <input
+                          type="date"
+                          value={payDate}
+                          max={todayISO()}
+                          onChange={(e) => setPayDate(e.target.value || todayISO())}
+                          aria-label="Payment date"
+                          style={{ width: '100%', border: '1px solid #CBD5E1', borderRadius: 7, padding: '6px 8px', fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }}
                         />
                       </div>
                       <div style={{ flex: '2 1 160px' }}>
@@ -1023,6 +1104,16 @@ function FeeCollectionTab({ user }) {
                       >
                         {payMutation.isPending ? 'Posting…' : 'Confirm Payment'}
                       </button>
+                      {backdated && (
+                        <div style={{ flexBasis: '100%', fontSize: 12, color: '#92400E' }}>
+                          Filed on {dmy(payDate)}, the day the money was received. The parent is not sent a message for an earlier date.
+                        </div>
+                      )}
+                      {payMutation.isError && (
+                        <div role="alert" style={{ flexBasis: '100%', fontSize: 12, color: '#B91C1C' }}>
+                          {errorText(payMutation.error, 'The payment could not be saved. Try again.')}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1046,8 +1137,17 @@ function ExpenseLogTab({ user }) {
   const [category, setCategory] = useState(EXPENSE_CATEGORIES[0]);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [date] = useState(todayISO());
+  // The day the money was spent: today, or an earlier day entered late.
+  const [date, setDate] = useState(todayISO());
+  const [confirmingDelete, setConfirmingDelete] = useState(null);
   const queryClient = useQueryClient();
+  // Each expense comes out of this person's cash on the day it is entered.
+  const refreshCash = () => {
+    queryClient.invalidateQueries({ queryKey: ['expenses-today'] });
+    queryClient.invalidateQueries({ queryKey: ['expenses-all-today'] });
+    queryClient.invalidateQueries({ queryKey: ['bs-sheet'] });
+    queryClient.invalidateQueries({ queryKey: ['last-balancesheet'] });
+  };
 
   const { data: expenses = [], isLoading } = useQuery({
     queryKey: ['expenses-today', date, user?.id],
@@ -1060,10 +1160,9 @@ function ExpenseLogTab({ user }) {
   const addMutation = useMutation({
     mutationFn: () =>
       // Rupees typed -> paisa stored, as the main Expenses page does.
-      api.post('/expenses', { category, amount: Math.round(Number(amount) * 100), description, date }),
+      api.post('/expenses', { category, amount: toPaisa(amount), description, date }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['expenses-today'] });
-      queryClient.invalidateQueries({ queryKey: ['bs-expenses'] });
+      refreshCash();
       setAmount('');
       setDescription('');
     },
@@ -1071,10 +1170,7 @@ function ExpenseLogTab({ user }) {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => api.delete(`/expenses/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['expenses-today'] });
-      queryClient.invalidateQueries({ queryKey: ['bs-expenses'] });
-    },
+    onSuccess: () => { refreshCash(); setConfirmingDelete(null); },
   });
 
   const totalToday = expenses.reduce((s, e) => s + (e.amount || 0), 0);
@@ -1084,6 +1180,12 @@ function ExpenseLogTab({ user }) {
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '16px 18px', marginBottom: 14 }}>
         <div style={{ fontWeight: 800, fontSize: 14, color: NAVY, marginBottom: 12 }}>Log New Expense</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ flex: '0 1 150px' }}>
+            <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Date</div>
+            <input type="date" value={date} max={todayISO()} aria-label="Date of the expense"
+              onChange={(e) => setDate(e.target.value || todayISO())}
+              style={{ width: '100%', border: '1px solid #CBD5E1', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }} />
+          </div>
           <div style={{ flex: '1 1 140px' }}>
             <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Category</div>
             <select value={category} onChange={(e) => setCategory(e.target.value)}
@@ -1107,19 +1209,19 @@ function ExpenseLogTab({ user }) {
             {addMutation.isPending ? 'Saving…' : 'Add'}
           </button>
         </div>
-        {addMutation.isError && <div style={{ color: '#B91C1C', fontSize: 12, marginTop: 8 }}>Failed to save expense. Please try again.</div>}
+        {addMutation.isError && <div role="alert" style={{ color: '#B91C1C', fontSize: 12, marginTop: 8 }}>{errorText(addMutation.error, 'The expense could not be saved. Try again.')}</div>}
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '16px 18px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <div style={{ fontWeight: 800, fontSize: 14, color: NAVY }}>Today's Expenses — {fmtDate(date)}</div>
+          <div style={{ fontWeight: 800, fontSize: 14, color: NAVY }}>{date === todayISO() ? "Today's Expenses" : 'Expenses dated'} — {fmtDate(date)}</div>
           <div style={{ fontWeight: 700, color: '#B91C1C', fontSize: 13 }}>Total: {Rs(totalToday)}</div>
         </div>
 
         {isLoading ? (
           <div style={{ color: '#64748B', fontSize: 13 }}>Loading…</div>
         ) : expenses.length === 0 ? (
-          <div style={{ color: '#64748B', fontSize: 13 }}>No expenses logged today.</div>
+          <div style={{ color: '#64748B', fontSize: 13 }}>No expenses logged for this day.</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
@@ -1138,11 +1240,25 @@ function ExpenseLogTab({ user }) {
                     </td>
                     <td style={{ padding: '8px 10px', color: '#475569' }}>{exp.description || '—'}</td>
                     <td style={{ padding: '8px 10px', color: '#B91C1C', fontWeight: 700 }}>{Rs(exp.amount)}</td>
-                    <td style={{ padding: '8px 10px' }}>
-                      <button onClick={() => { if (window.confirm(`Delete expense of ${Rs(exp.amount)}? This cannot be undone.`)) deleteMutation.mutate(exp.id); }} disabled={deleteMutation.isPending}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: 4 }} title="Delete">
-                        <Trash2 size={14} />
-                      </button>
+                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                      {confirmingDelete === exp.id ? (
+                        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+                          Delete {Rs(exp.amount)}?
+                          <button onClick={() => deleteMutation.mutate(exp.id)} disabled={deleteMutation.isPending}
+                            style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 8px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+                          </button>
+                          <button onClick={() => setConfirmingDelete(null)} disabled={deleteMutation.isPending}
+                            style={{ background: '#fff', color: '#334155', border: '1px solid #CBD5E1', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                            Keep
+                          </button>
+                        </span>
+                      ) : (
+                        <button onClick={() => setConfirmingDelete(exp.id)} disabled={deleteMutation.isPending}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: 4 }} title="Delete" aria-label={`Delete expense of ${Rs(exp.amount)}`}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1178,11 +1294,14 @@ function PaymentHistoryTab({ user }) {
     retry: false,
   });
 
+  // Each row is a receipt; the student and the bill are on its invoice.
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return payments.filter(
-      (p) => !q || p.student?.name?.toLowerCase().includes(q) || p.student?.rollNo?.toLowerCase().includes(q) || p.feeTitle?.toLowerCase().includes(q)
-    );
+    return payments.filter((p) => {
+      const st = p.invoice?.student;
+      return !q || st?.name?.toLowerCase().includes(q) || st?.rollNo?.toLowerCase().includes(q)
+        || p.invoice?.feeTitle?.toLowerCase().includes(q) || p.receiptNo?.toLowerCase().includes(q);
+    });
   }, [payments, search]);
 
   const pageData = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -1192,17 +1311,19 @@ function PaymentHistoryTab({ user }) {
     // Properly escape CSV values to handle commas/quotes
     const esc = (v) => { const s = String(v ?? '').replace(/"/g, '""'); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s; };
     const rows = [
-      ['Date', 'Receipt No', 'Roll No', 'Student', 'Class', 'Fee Title', 'Amount (Rs.)', 'Method', 'Received By'],
+      ['Date', 'Receipt No', 'Roll No', 'Student', 'Class', 'Fee', 'Amount (Rs.)', 'Method', 'Received By', 'Entered On', 'Status'],
       ...filtered.map((p) => [
-        p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('en-PK') : (p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-PK') : '—'),
+        fmtDate(p.paymentDate || p.createdAt),
         p.receiptNo || p.id || '—',
-        p.student?.rollNo || '—',
-        p.student?.name || '—',
-        p.student?.class?.name || '—',
-        p.feeTitle || p.invoice?.feeType || 'Monthly Fee',
-        p.amountPaid || p.amount || 0,
+        p.invoice?.student?.rollNo || '—',
+        p.invoice?.student?.name || '—',
+        p.invoice?.student?.class?.name || '—',
+        feeLabel(p.invoice),
+        (p.amountPaid || 0) / 100,
         p.method || 'cash',
-        p.receivedBy || '—',
+        p.receivedByUser?.name || '—',
+        p.createdAt ? fmtDate(p.createdAt) : '—',
+        p.voidedAt ? 'Voided' : 'Paid',
       ].map(esc)),
     ];
     const csv = '﻿' + rows.map((r) => r.join(',')).join('\n'); // BOM for Excel
@@ -1215,7 +1336,8 @@ function PaymentHistoryTab({ user }) {
     URL.revokeObjectURL(url);
   };
 
-  const totalAmount = filtered.reduce((s, p) => s + (p.amount || 0), 0);
+  // A voided receipt stays listed (it is part of the record) but is not money.
+  const totalAmount = filtered.filter((p) => !p.voidedAt).reduce((s, p) => s + (p.amountPaid || 0), 0);
 
   return (
     <div>
@@ -1267,20 +1389,23 @@ function PaymentHistoryTab({ user }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                 <thead>
                   <tr style={{ background: '#F8FAFC' }}>
-                    {['Date', 'Roll No', 'Student', 'Class', 'Fee Title', 'Amount'].map((h) => (
+                    {['Date', 'Receipt', 'Roll No', 'Student', 'Class', 'Fee', 'Amount'].map((h) => (
                       <th key={h} style={{ textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontWeight: 700 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {pageData.map((p) => (
-                    <tr key={p.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                      <td style={{ padding: '8px 10px', color: '#64748B' }}>{p.createdAt ? fmtDate(p.createdAt) : '—'}</td>
-                      <td style={{ padding: '8px 10px', color: '#64748B' }}>{p.student?.rollNo || '—'}</td>
-                      <td style={{ padding: '8px 10px', color: NAVY, fontWeight: 600 }}>{p.student?.name || '—'}</td>
-                      <td style={{ padding: '8px 10px', color: '#64748B' }}>{p.student?.class?.name || '—'}</td>
-                      <td style={{ padding: '8px 10px', color: '#64748B' }}>{p.feeTitle || p.invoice?.feeType || '—'}</td>
-                      <td style={{ padding: '8px 10px', color: '#059669', fontWeight: 700 }}>{Rs(p.amount)}</td>
+                    <tr key={p.id} style={{ borderBottom: '1px solid #F1F5F9', opacity: p.voidedAt ? 0.55 : 1 }}>
+                      <td style={{ padding: '8px 10px', color: '#64748B', whiteSpace: 'nowrap' }}>{fmtDate(p.paymentDate || p.createdAt)}</td>
+                      <td style={{ padding: '8px 10px', color: '#64748B', fontFamily: 'monospace', fontSize: 11.5 }}>{p.receiptNo || '—'}</td>
+                      <td style={{ padding: '8px 10px', color: '#64748B' }}>{p.invoice?.student?.rollNo || '—'}</td>
+                      <td style={{ padding: '8px 10px', color: NAVY, fontWeight: 600 }}>{p.invoice?.student?.name || '—'}</td>
+                      <td style={{ padding: '8px 10px', color: '#64748B' }}>{p.invoice?.student?.class?.name || '—'}</td>
+                      <td style={{ padding: '8px 10px', color: '#64748B' }}>{feeLabel(p.invoice)}</td>
+                      <td style={{ padding: '8px 10px', color: p.voidedAt ? '#94A3B8' : '#059669', fontWeight: 700, textDecoration: p.voidedAt ? 'line-through' : 'none' }}>
+                        {Rs(p.amountPaid)}{p.voidedAt ? <span style={{ marginLeft: 6, fontSize: 11, textDecoration: 'none' }}>Voided</span> : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

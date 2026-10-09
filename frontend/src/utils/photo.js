@@ -7,8 +7,8 @@
  *
  * Photos are shrunk in the browser before they are sent. A phone camera
  * produces 3-5 MB; a passport photo on an ID card needs about 300 x 380
- * pixels. Shrinking first keeps each record around 15-25 KB, so a class list
- * with photos still loads quickly.
+ * pixels. Shrinking first keeps each photo to about 40 KB (a 300 x 380 JPEG),
+ * so a class list with photos still loads quickly.
  */
 
 const MAX_W = 300;
@@ -58,3 +58,20 @@ export async function compressPhoto(input) {
   ctx.drawImage(img, 0, 0, w, h);
   return canvas.toDataURL('image/jpeg', QUALITY);
 }
+
+/* What a person may pick. A phone photo is 3-5 MB; anything up to 5 MB is
+   accepted and shrunk here to about 40 KB before it is sent. */
+export const PICK_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+export const PICK_MAX_BYTES = 5 * 1024 * 1024;
+export const PICK_RULES = 'JPG, PNG or WebP · up to 5 MB · it is resized automatically to about 40 KB';
+
+/** A plain-language reason the file cannot be used, or null if it is fine. */
+export function pickProblem(file) {
+  if (!file) return 'No file was chosen.';
+  if (!PICK_TYPES.includes(file.type)) return 'Choose a JPG, PNG or WebP photo.';
+  if (file.size > PICK_MAX_BYTES) return `This photo is ${(file.size / 1048576).toFixed(1)} MB. Choose one up to 5 MB.`;
+  return null;
+}
+
+/** Size of a data URL in KB, for "Ready · 38 KB". */
+export const dataUrlKB = (url) => Math.round(((String(url || '').split(',')[1] || '').length * 3) / 4 / 1024);

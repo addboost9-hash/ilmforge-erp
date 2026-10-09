@@ -18,7 +18,9 @@ import {
   Download, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle,
   Info, RefreshCw, KeyRound, ArrowRightLeft,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../../api/client';
+import ImportedStudents from './ImportedStudents';
 
 const CHUNK = 25; // people per request
 
@@ -384,6 +386,8 @@ export default function RecordsImportExportPage() {
               </div>
             )}
 
+            <ImportedStudents ids={(results.students || []).filter((x) => x.status === 'imported' && x.id).map((x) => x.id)} />
+
             <div><button className="btn btn-outline btn-sm" onClick={reset}><Upload size={13} /> Import another file</button></div>
           </div>
         </div>
@@ -398,6 +402,7 @@ export default function RecordsImportExportPage() {
             <p style={{ margin: 0 }}>Dates are day first: <strong>14/03/2014</strong> is 14 March. Type phone numbers as <strong>03001234567</strong>. The template keeps the leading zero for you.</p>
             <p style={{ margin: 0 }}>Brothers and sisters with the same parent phone share one parent account. Anyone already in the school is skipped, so importing the same file twice never creates duplicates.</p>
             <p style={{ margin: 0 }}><strong>Moving to another server:</strong> export here, then import the file on the new server. Classes, students, parents and staff move across. Fee history, attendance and exam marks are not included, and everyone gets a new password in the login details sheet.</p>
+            <p style={{ margin: 0 }}><strong>Old fees, salaries and expenses</strong> from before the school used IlmForge have their own template: <Link to="/settings/past-records" style={{ color: 'var(--primary, #0F3D33)', fontWeight: 600, textDecoration: 'underline' }}>Past Records</Link>. Add students and staff here first (including those who have left), because past records are matched to them.</p>
           </div>
         </div>
       )}

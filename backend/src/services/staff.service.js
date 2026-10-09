@@ -72,6 +72,8 @@ const slug12 = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0,
  * @param {object} ctx { schoolId, campusId, actorUserId?, school? }
  * @param {object} input  the same body the Add Staff form posts. basicSalary
  *                        is in PAISA, as everywhere else money is stored.
+ *                        isActive: false adds someone who has already left
+ *                        (for their past salary records) with the login off.
  */
 async function createStaff(ctx, input) {
   const { schoolId } = ctx;
@@ -79,6 +81,7 @@ async function createStaff(ctx, input) {
     name, email, phone, departmentId, designation, joiningDate,
     basicSalary, salaryType, cnic, gender, dob, role: requestedRole, empCode: givenEmpCode, photoUrl,
   } = input;
+  const isActive = input.isActive !== false;
 
   const fail = (msg) => { const e = new Error(msg); e.status = 400; throw e; };
   if (!name) fail('Name is required.');
@@ -115,7 +118,7 @@ async function createStaff(ctx, input) {
     const user = await tx.user.create({
       data: {
         schoolId, campusId, name, email: loginEmail, phone: canonicalPhone,
-        role: staffRole, passwordHash, mustChangePassword: true,
+        role: staffRole, passwordHash, mustChangePassword: true, isActive,
         // The school vouches for staff it adds, as it does for students and
         // parents. Without this the new account could not sign in at all.
         phoneVerifiedAt: new Date(),
@@ -132,6 +135,7 @@ async function createStaff(ctx, input) {
         joiningDate: joiningDate ? new Date(joiningDate) : null,
         basicSalary: basicSalary ? parseInt(basicSalary) : 0,
         salaryType: salaryType || 'monthly',
+        isActive,
       },
     });
     if (ctx.actorUserId) {

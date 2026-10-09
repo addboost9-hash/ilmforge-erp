@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { toPaisa } from '../../utils/currency';
 import {
   DollarSign,
   Bus,
@@ -22,7 +23,20 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-const YEARS = [2024, 2025, 2026];
+// The month and year it is now in Pakistan (UTC+5 all year), whatever zone
+// the PC clock is set to. Read when a tab opens, not when the app loaded, so
+// a screen left open into a new month still starts on the right one.
+const pkNow = () => {
+  const pk = new Date(Date.now() + 5 * 3600e3);
+  return { month: MONTHS[pk.getUTCMonth()], year: String(pk.getUTCFullYear()) };
+};
+
+// A few years back for a school entering its old fees, and next year for
+// billing ahead in December. A fixed list went stale every January.
+const feeYears = () => {
+  const y = Number(pkNow().year);
+  return Array.from({ length: 7 }, (_, i) => y - 5 + i);
+};
 
 const CAMPUSES = ['Main Campus', 'Branch Campus A', 'Branch Campus B'];
 
@@ -37,15 +51,11 @@ const DEFAULT_FEE_TYPES = [
   'Library Fee',
 ];
 
-const now = new Date();
-const DEFAULT_MONTH = MONTHS[now.getMonth()];
-const DEFAULT_YEAR  = now.getFullYear().toString();
-
+// The 10th of the fee month, as YYYY-MM-DD. Built as text: converting local
+// midnight with toISOString() gave the 9th on a Pakistan clock.
 function getDefaultDueDate(month, year) {
-  const monthIdx = MONTHS.indexOf(month);
-  const y = parseInt(year, 10);
-  const d = new Date(y, monthIdx, 10);
-  return d.toISOString().slice(0, 10);
+  const m = String(MONTHS.indexOf(month) + 1).padStart(2, '0');
+  return `${year}-${m}-10`;
 }
 
 function loadFeeTypes() {
@@ -168,25 +178,55 @@ function GenerateBtn({ label, loading, disabled, onClick }) {
   );
 }
 
-/* ─── Success Banner ─────────────────────────────────── */
-function SuccessBanner({ message, onDismiss }) {
+/* ─── Year select ────────────────────────────────────── */
+function YearSelect({ value, onChange }) {
+  return (
+    <FormGroup label="Fee Year">
+      <select className="form-select" value={value} onChange={e => onChange(e.target.value)}>
+        {feeYears().map(y => <option key={y} value={y}>{y}</option>)}
+      </select>
+    </FormGroup>
+  );
+}
+
+/* ─── What the server did ────────────────────────────── */
+// Its own words ("12 invoices generated, 3 already billed for July 2026", or
+// "no active students found"), after the class name. The message made up
+// here hid the reason when nothing was billed.
+function showResult(res, className, setBanner) {
+  const made = res.data?.data?.generated || 0;
+  const msg = `${className}: ${res.data?.message || `${made} invoices generated.`}`;
+  setBanner({ message: msg, nothingMade: made === 0 });
+  if (made === 0) toast(msg);
+  else toast.success(msg);
+}
+
+/* ─── Result Banner ──────────────────────────────────── */
+// Green when bills were made. Amber when nothing was: every student already
+// had the bill, or the class has no active students. That is not a failure,
+// but a green tick there read as "done" when no bill had been made.
+function SuccessBanner({ message, onDismiss, nothingMade }) {
   if (!message) return null;
+  const c = nothingMade
+    ? { bg: '#FEF3C7', border: '#FCD34D', icon: '#B45309', text: '#92400E' }
+    : { bg: '#DCFCE7', border: '#86EFAC', icon: '#16A34A', text: '#15803D' };
   return (
     <div style={{
       display: 'flex',
       alignItems: 'center',
       gap: 10,
-      background: '#DCFCE7',
-      border: '1px solid #86EFAC',
+      background: c.bg,
+      border: `1px solid ${c.border}`,
       borderRadius: 9,
       padding: '12px 16px',
       marginTop: 12,
     }}>
-      <CheckCircle size={18} color="#16A34A" />
-      <span style={{ color: '#15803D', fontWeight: 600, fontSize: 13 }}>{message}</span>
+      <CheckCircle size={18} color={c.icon} />
+      <span style={{ color: c.text, fontWeight: 600, fontSize: 13 }}>{message}</span>
       <button
         onClick={onDismiss}
-        style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#15803D', fontSize: 18, lineHeight: 1 }}
+        aria-label="Dismiss"
+        style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: c.text, fontSize: 18, lineHeight: 1 }}
       >
         &times;
       </button>
@@ -201,12 +241,12 @@ function MonthlyFeeTab({ classes }) {
   const [campus, setCampus]           = useState('Main Campus');
   const [classId, setClassId]         = useState('');
   const [sectionId, setSectionId]     = useState('');
-  const [month, setMonth]             = useState(DEFAULT_MONTH);
-  const [year, setYear]               = useState(DEFAULT_YEAR);
-  const [dueDate, setDueDate]         = useState(getDefaultDueDate(DEFAULT_MONTH, DEFAULT_YEAR));
+  const [month, setMonth]             = useState(() => pkNow().month);
+  const [year, setYear]               = useState(() => pkNow().year);
+  const [dueDate, setDueDate]         = useState(() => getDefaultDueDate(pkNow().month, pkNow().year));
   const [lateFee, setLateFee]         = useState('0');
   const [autoTransport, setAutoTransport] = useState(false);
-  const [successMsg, setSuccessMsg]   = useState('');
+  const [banner, setBanner]           = useState(null);
 
   /* sections: load from class object or use demo placeholders */
   const selectedClass = (classes || []).find(c => String(c.id) === String(classId));
@@ -225,25 +265,16 @@ function MonthlyFeeTab({ classes }) {
   const mutation = useMutation({
     mutationFn: body => api.post('/fees/generate', body),
     onSuccess: (res, variables) => {
-      const d = res.data?.data;
-      const generated = d?.generated ?? '?';
-      const skipped   = d?.skipped   ?? 0;
       const cls = (classes || []).find(c => String(c.id) === String(variables.classId));
       const className = cls?.name || `Class ${variables.classId}`;
-      const msg = `${generated} fee invoice${generated !== 1 ? 's' : ''} generated for ${className} — ${month} ${year}` +
-        (skipped > 0 ? `. ${skipped} already existed (skipped).` : '.');
-      setSuccessMsg(msg);
-      toast.success(msg);
+      showResult(res, className, setBanner);
     },
-    onError: err => {
-      const msg = err.response?.data?.message;
-      if (msg) toast.error(msg);
-      else toast.error('Failed to generate fee. Please try again.');
-    },
+    onError: err => toast.error(err.response?.data?.message || 'Failed to generate fee. Please try again.'),
   });
 
   const handleGenerate = () => {
     if (!classId) return toast.error('Please select a class');
+    if (Number(lateFee) < 0) return toast.error('Late fee cannot be negative.');
     // Convert month name to number (1-12)
     const monthNum = MONTHS.indexOf(month) + 1;
     mutation.mutate({
@@ -254,7 +285,8 @@ function MonthlyFeeTab({ classes }) {
       month:  monthNum,                // send number, not string
       year:   parseInt(year, 10),
       dueDate,
-      lateFee: parseFloat(lateFee) || 0,
+      // Typed in rupees, stored as sent: Rs 500 went in as 500 paisa (Rs 5).
+      lateFee: toPaisa(lateFee),
       autoTransport,
     });
   };
@@ -276,11 +308,7 @@ function MonthlyFeeTab({ classes }) {
             {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
         </FormGroup>
-        <FormGroup label="Fee Year">
-          <select className="form-select" value={year} onChange={e => setYear(e.target.value)}>
-            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </FormGroup>
+        <YearSelect value={year} onChange={setYear} />
       </div>
 
       <FormGroup label="Due Date">
@@ -341,7 +369,7 @@ function MonthlyFeeTab({ classes }) {
         onClick={handleGenerate}
       />
 
-      <SuccessBanner message={successMsg} onDismiss={() => setSuccessMsg('')} />
+      <SuccessBanner {...banner} onDismiss={() => setBanner(null)} />
     </div>
   );
 }
@@ -353,11 +381,11 @@ function CustomFeeTab({ classes }) {
   const [campus, setCampus]       = useState('Main Campus');
   const [classId, setClassId]     = useState('');
   const [sectionId, setSectionId] = useState('');
-  const [month, setMonth]         = useState(DEFAULT_MONTH);
-  const [year, setYear]           = useState(DEFAULT_YEAR);
+  const [month, setMonth]         = useState(() => pkNow().month);
+  const [year, setYear]           = useState(() => pkNow().year);
   const [feeType, setFeeType]     = useState('');
   const [amount, setAmount]       = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  const [banner, setBanner]       = useState(null);
 
   const feeTypes = loadFeeTypes();
 
@@ -368,21 +396,15 @@ function CustomFeeTab({ classes }) {
 
   const mutation = useMutation({
     mutationFn: body => api.post('/fees/generate', body),
-    onSuccess: res => {
-      const msg = res.data?.message || 'Custom fee generated successfully!';
-      setSuccessMsg(msg);
-      toast.success(msg);
+    onSuccess: (res, variables) => {
+      const cls = (classes || []).find(c => String(c.id) === String(variables.classId));
+      showResult(res, cls?.name || `Class ${variables.classId}`, setBanner);
       setAmount('');
     },
-    onError: err => {
-      const msg = err.response?.data?.message;
-      if (msg) toast.error(msg);
-      else {
-        setSuccessMsg('Custom fee generated successfully!');
-        toast.success('Custom fee generated successfully!');
-        setAmount('');
-      }
-    },
+    // A failed request is a failure. This used to announce "Custom fee
+    // generated successfully!" whenever the server gave no message, such as
+    // when the connection dropped and nothing had been billed.
+    onError: err => toast.error(err.response?.data?.message || 'Failed to generate fee. Please try again.'),
   });
 
   const handleGenerate = () => {
@@ -404,7 +426,7 @@ function CustomFeeTab({ classes }) {
       year: parseInt(year, 10),
       dueDate: getDefaultDueDate(month, year),
       feeTitle: feeType,
-      customAmount: Math.round(parseFloat(amount) * 100),
+      customAmount: toPaisa(amount),
     });
   };
 
@@ -425,11 +447,7 @@ function CustomFeeTab({ classes }) {
             {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
         </FormGroup>
-        <FormGroup label="Fee Year">
-          <select className="form-select" value={year} onChange={e => setYear(e.target.value)}>
-            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </FormGroup>
+        <YearSelect value={year} onChange={setYear} />
       </div>
 
       <FormGroup label="Fee Type">
@@ -473,7 +491,7 @@ function CustomFeeTab({ classes }) {
         onClick={handleGenerate}
       />
 
-      <SuccessBanner message={successMsg} onDismiss={() => setSuccessMsg('')} />
+      <SuccessBanner {...banner} onDismiss={() => setBanner(null)} />
     </div>
   );
 }
@@ -485,9 +503,10 @@ function TransportFeeTab({ classes }) {
   const [campus, setCampus]       = useState('Main Campus');
   const [classId, setClassId]     = useState('');
   const [sectionId, setSectionId] = useState('');
-  const [month, setMonth]         = useState(DEFAULT_MONTH);
-  const [year, setYear]           = useState(DEFAULT_YEAR);
-  const [successMsg, setSuccessMsg] = useState('');
+  const [month, setMonth]         = useState(() => pkNow().month);
+  const [year, setYear]           = useState(() => pkNow().year);
+  const [amount, setAmount]       = useState('');
+  const [banner, setBanner]       = useState(null);
 
   const selectedClass = (classes || []).find(c => String(c.id) === String(classId));
   const sections = selectedClass?.sections || selectedClass?.Sections || [];
@@ -496,23 +515,16 @@ function TransportFeeTab({ classes }) {
 
   const mutation = useMutation({
     mutationFn: body => api.post('/fees/generate', body),
-    onSuccess: res => {
-      const msg = res.data?.message || 'Transport fee generated successfully!';
-      setSuccessMsg(msg);
-      toast.success(msg);
+    onSuccess: (res, variables) => {
+      const cls = (classes || []).find(c => String(c.id) === String(variables.classId));
+      showResult(res, cls?.name || `Class ${variables.classId}`, setBanner);
     },
-    onError: err => {
-      const msg = err.response?.data?.message;
-      if (msg) toast.error(msg);
-      else {
-        setSuccessMsg('Transport fee generated successfully!');
-        toast.success('Transport fee generated successfully!');
-      }
-    },
+    onError: err => toast.error(err.response?.data?.message || 'Failed to generate fee. Please try again.'),
   });
 
   const handleGenerate = () => {
     if (!classId) return toast.error('Please select a class');
+    if (!amount || parseFloat(amount) <= 0) return toast.error('Please enter the transport fee amount');
     const monthNum = MONTHS.indexOf(month) + 1;
     mutation.mutate({
       type:      'transport',
@@ -522,6 +534,10 @@ function TransportFeeTab({ classes }) {
       sectionId: sectionId ? parseInt(sectionId, 10) : undefined,
       month:     monthNum,
       year:      parseInt(year, 10),
+      dueDate:   getDefaultDueDate(month, year),
+      // The server bills whatever amount it is given; with none it fell back
+      // to the class's monthly fee, so transport was billed at the tuition rate.
+      customAmount: toPaisa(amount),
     });
   };
 
@@ -542,21 +558,28 @@ function TransportFeeTab({ classes }) {
             {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
         </FormGroup>
-        <FormGroup label="Fee Year">
-          <select className="form-select" value={year} onChange={e => setYear(e.target.value)}>
-            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </FormGroup>
+        <YearSelect value={year} onChange={setYear} />
       </div>
+
+      <FormGroup label="Transport Fee per Student (Rs.)">
+        <input
+          className="form-input"
+          type="number"
+          min="0"
+          value={amount}
+          onChange={e => setAmount(e.target.value)}
+          placeholder="e.g. 2500"
+        />
+      </FormGroup>
 
       <GenerateBtn
         label={`Generate Transport Fee for ${month} ${year}`}
         loading={mutation.isPending}
-        disabled={!classId}
+        disabled={!classId || !amount}
         onClick={handleGenerate}
       />
 
-      <SuccessBanner message={successMsg} onDismiss={() => setSuccessMsg('')} />
+      <SuccessBanner {...banner} onDismiss={() => setBanner(null)} />
     </div>
   );
 }

@@ -4,12 +4,48 @@ const prisma = require('../config/prisma');
 const { contains: ciContains, equals: ciEquals } = require('../utils/search');
 const phoneUtil = require('../utils/phone');
 const { checkPhoto } = require('../utils/photo');
+const { normalizeStudentUpdate } = require('../utils/studentUpdate');
+
+/* The Inactive tab means everyone not studying here now. A comma list
+   (status=inactive,left,withdrawn) means exactly those statuses: the
+   Certificates page lists students who left apart from those who passed out,
+   and filtering after loading gave wrong counts once a list was capped. */
+const INACTIVE_STATUSES = ['inactive', 'left', 'withdrawn', 'passout'];
+const statusFilter = (status) => {
+  if (status === 'inactive') return { in: INACTIVE_STATUSES };
+  const list = String(status).split(',').map((s) => s.trim()).filter(Boolean);
+  return list.length > 1 ? { in: list } : (list[0] ?? String(status));
+};
+
+/* When the parent's phone on a student record is corrected, the parent's
+   sign-in number must follow: the manual tells offices to fix a parent who
+   cannot sign in exactly this way, but the edit used to change only the
+   student record. Only a parent account that signed in with the OLD number
+   is moved, and never onto a number another account here already uses. */
+async function syncParentLoginPhone({ schoolId, studentId, oldPhone, newPhone }) {
+  const links = await prisma.parentStudent.findMany({
+    where: { schoolId, studentId },
+    include: { parent: { include: { user: { select: { id: true, phone: true } } } } },
+  });
+  const users = links.map((l) => l.parent?.user).filter((u) => u && (!oldPhone || phoneUtil.same(u.phone, oldPhone)));
+  if (!users.length) return { changed: false };
+  const taken = await prisma.user.findFirst({
+    where: { schoolId, deletedAt: null, id: { notIn: users.map((u) => u.id) }, OR: phoneUtil.variants(newPhone).map((v) => ({ phone: v })) },
+    select: { id: true },
+  });
+  if (taken) {
+    return { changed: false, reason: 'Another account at this school already uses this number, so the parent still signs in with the old one.' };
+  }
+  const canonical = phoneUtil.canonical(newPhone);
+  await prisma.user.updateMany({ where: { id: { in: users.map((u) => u.id) } }, data: { phone: canonical } });
+  return { changed: true, phone: newPhone };
+}
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // GET /api/v1/students
 router.get('/', wrap(async (req, res) => {
   const { schoolId, campusId } = req;
-  const { classId, sectionId, status = 'active', search, page = 1, limit = 25 } = req.query;
+  const { classId, sectionId, status = 'active', search, page = 1, limit = 25, ids } = req.query;
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   // ── ROLE-BASED ACCESS CONTROL ─────────────────────────────────────────
@@ -99,22 +135,30 @@ router.get('/', wrap(async (req, res) => {
   }
   // ─────────────────────────────────────────────────────────────────────
 
+  // ?ids=1,2,3 — a given set of students (e.g. the ones just imported from
+  // Excel), whatever their status. A parent still only gets their own.
+  const idList = ids ? String(ids).split(',').map((n) => parseInt(n, 10)).filter(Number.isFinite).slice(0, 300) : null;
+  const scopedIds = parentStudentIds
+    ? (idList ? idList.filter((id) => parentStudentIds.includes(id)) : parentStudentIds)
+    : idList;
   const where = {
     schoolId, deletedAt: null,
     ...(campusId && !parentStudentIds && { campusId }),
-    ...(status && { status }),
+    ...(status && !idList && { status: statusFilter(status) }),
     ...(classId && { classId: parseInt(classId) }),
     ...(sectionId && { sectionId: parseInt(sectionId) }),
-    ...(parentStudentIds && { id: { in: parentStudentIds } }),
+    ...(scopedIds && { id: { in: scopedIds } }),
     ...(search && (() => {
-      // Split into words — each word is searched independently (OR logic)
-      const words = search.trim().split(/\s+/).filter(w => w.length > 0);
-      const wordConditions = words.flatMap(word => [
-        { name:       ciContains(word) },
-        { rollNo:     ciContains(word) },
-        { fatherName: ciContains(word) },
-      ]);
-      return { OR: wordConditions };
+      // Every word must appear in the name, roll number or father's name:
+      // "Ayesha Khan" finds Ayesha Khan (or Ayesha, daughter of Imran Khan).
+      // Matching ANY word listed every Khan and every Ayesha, and in name
+      // order the student actually typed fell off the first page.
+      const words = search.trim().split(/\s+/).filter(Boolean).slice(0, 6);
+      return {
+        AND: words.map((word) => ({
+          OR: [{ name: ciContains(word) }, { rollNo: ciContains(word) }, { fatherName: ciContains(word) }],
+        })),
+      };
     })()),
   };
   const takeNum = Math.min(parseInt(limit) || 25, 300); // cap at 300 for safety
@@ -124,7 +168,7 @@ router.get('/', wrap(async (req, res) => {
       select: {
         id: true, name: true, rollNo: true, gender: true, status: true,
         photoUrl: true, dob: true, fatherName: true, emergencyPhone: true,
-        admissionDate: true,
+        admissionDate: true, bFormNo: true,
         classId: true, sectionId: true, campusId: true, userId: true,
         class:   { select: { id: true, name: true, classTeacherId: true } },
         section: { select: { id: true, name: true } },
@@ -144,7 +188,7 @@ router.get('/', wrap(async (req, res) => {
 
 // Roll number generation and the admission itself live in
 // services/admission.service.js, shared with the Excel import.
-const { admitStudent, generateRollNo } = require('../services/admission.service');
+const { admitStudent, generateRollNo, testMarksValue } = require('../services/admission.service');
 
 // POST /api/v1/students
 /* ═══════════════════════════════════════════════════════════════════
@@ -184,10 +228,12 @@ router.get('/preview-roll', wrap(async (req, res) => {
 // for all active students grouped by class+section — used by Students page
 router.get('/class-sections', wrap(async (req, res) => {
   const { schoolId } = req;
+  // ?status=inactive lists classes for the Inactive tab; a class whose
+  // students have all left used to vanish from both tabs.
+  const status = req.query.status === 'inactive' ? 'inactive' : 'active';
 
-  // Get all active students with class+section
   const students = await prisma.student.findMany({
-    where: { schoolId, status: 'active', deletedAt: null },
+    where: { schoolId, status: statusFilter(status), deletedAt: null },
     select: {
       classId: true, sectionId: true, gender: true, admissionDate: true, createdAt: true,
       class:   { select: { id: true, name: true } },
@@ -471,61 +517,80 @@ router.delete('/promotion-history/:id', wrap(async (req, res) => {
   res.json({ success: true, message: 'Promotion undone successfully.' });
 }));
 
-// GET /api/v1/students/birthdays/upcoming?days=7
-// Returns students with birthdays in the next N days (default 7)
-router.get('/birthdays/upcoming', wrap(async (req, res) => {
-  const { schoolId } = req;
-  const days = Math.min(parseInt(req.query.days) || 7, 30);
-  const now = new Date();
+/* ── Birthdays ────────────────────────────────────────────────────────────
+   A birthday is a day in Pakistan. These endpoints used to read the server's
+   clock zone (the live server runs on UTC, where it is still yesterday until
+   5 a.m. in Pakistan), and /today ran SQLite-only SQL (strftime), which fails
+   on PostgreSQL. Now the month and day are compared here, in Pakistan time.
 
-  // Collect (month, day) pairs for the next `days` days
-  const pairs = [];
-  for (let d = 0; d <= days; d++) {
-    const dt = new Date(now);
-    dt.setDate(now.getDate() + d);
-    pairs.push({ month: dt.getMonth() + 1, day: dt.getDate(), daysUntil: d });
+   A date of birth is read as its Pakistan calendar day too. That is the right
+   day however it was stored: at UTC midnight (admissions, edits, the Excel
+   import) or at Pakistan midnight (older code). Someone born on 29 February
+   has their birthday on 28 February in other years. */
+const PKT_OFFSET_MS = 5 * 3600 * 1000;
+const DAY_MS = 24 * 3600 * 1000;
+const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+/** Days from Pakistan's today (0) to this date of birth's next birthday, if it falls within `days`; else null. */
+function daysUntilBirthday(dob, { now = new Date(), days = 0 } = {}) {
+  const born = dob ? new Date(new Date(dob).getTime() + PKT_OFFSET_MS) : null;
+  if (!born || Number.isNaN(born.getTime())) return null;
+  const bornMonth = born.getUTCMonth();
+  const bornDay = born.getUTCDate();
+  const pk = new Date(now.getTime() + PKT_OFFSET_MS);
+  const today = Date.UTC(pk.getUTCFullYear(), pk.getUTCMonth(), pk.getUTCDate());
+  for (let i = 0; i <= days; i++) {
+    const day = new Date(today + i * DAY_MS);
+    const month = day.getUTCMonth();
+    const date = day.getUTCDate();
+    if (month === bornMonth && date === bornDay) return i;
+    if (bornMonth === 1 && bornDay === 29 && month === 1 && date === 28 && !isLeapYear(day.getUTCFullYear())) return i;
   }
+  return null;
+}
 
-  // Use raw query for SQLite date comparison
-  // We fetch candidates from all active students and filter in JS for simplicity
-  const students = await prisma.student.findMany({
+/* Active students whose birthday is within `days` of today, nearest first.
+   Only id and date of birth are read for the whole school; the full rows,
+   photos included, are loaded for the few that match. */
+async function studentsWithBirthdays(schoolId, days) {
+  const now = new Date();
+  const candidates = await prisma.student.findMany({
     where: { schoolId, status: 'active', deletedAt: null, dob: { not: null } },
+    select: { id: true, dob: true },
+  });
+  const until = new Map();
+  for (const c of candidates) {
+    const d = daysUntilBirthday(c.dob, { now, days });
+    if (d !== null) until.set(c.id, d);
+  }
+  if (!until.size) return [];
+  const students = await prisma.student.findMany({
+    where: { schoolId, id: { in: [...until.keys()] } },
     select: {
       id: true, name: true, rollNo: true, dob: true, emergencyPhone: true, photoUrl: true,
+      classId: true, sectionId: true,
       class: { select: { id: true, name: true } },
       section: { select: { id: true, name: true } },
     },
+    orderBy: { name: 'asc' },
   });
+  return students
+    .map((s) => ({ ...s, _daysUntil: until.get(s.id) }))
+    .sort((a, b) => a._daysUntil - b._daysUntil);
+}
 
-  const results = [];
-  for (const s of students) {
-    if (!s.dob) continue;
-    try {
-      const dob = new Date(s.dob);
-      for (const p of pairs) {
-        if (dob.getMonth() + 1 === p.month && dob.getDate() === p.day) {
-          results.push({ ...s, _daysUntil: p.daysUntil });
-          break;
-        }
-      }
-    } catch { /* ignore invalid dob */ }
-  }
-
-  results.sort((a, b) => a._daysUntil - b._daysUntil);
-  res.json({ success: true, data: results });
+// GET /api/v1/students/birthdays/upcoming?days=7
+// Returns students with birthdays in the next N days (default 7)
+router.get('/birthdays/upcoming', wrap(async (req, res) => {
+  const days = Math.max(0, Math.min(parseInt(req.query.days) || 7, 30));
+  const data = await studentsWithBirthdays(req.schoolId, days);
+  res.json({ success: true, data });
 }));
 
 // GET /api/v1/students/birthdays/today
 router.get('/birthdays/today', wrap(async (req, res) => {
-  const today = new Date();
-  const month = today.getMonth() + 1;
-  const day = today.getDate();
-  const students = await prisma.$queryRaw`
-    SELECT id, name, rollNo, classId, dob, photoUrl FROM Student
-    WHERE schoolId = ${req.schoolId} AND deletedAt IS NULL AND status = 'active'
-    AND CAST(strftime('%m', dob) AS INTEGER) = ${month} AND CAST(strftime('%d', dob) AS INTEGER) = ${day}
-  `;
-  res.json({ success: true, data: students });
+  const data = (await studentsWithBirthdays(req.schoolId, 0)).map(({ _daysUntil, ...s }) => s);
+  res.json({ success: true, data });
 }));
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -666,16 +731,68 @@ router.put('/:id', wrap(async (req, res) => {
   ];
   const data = {};
   allowed.forEach(k => { if (req.body[k] !== undefined) data[k] = req.body[k]; });
+
+  // Tidy and check the fields people edit; explain mistakes instead of
+  // storing them (an invalid date used to crash the save).
+  const { errors, data: clean } = normalizeStudentUpdate(req.body);
+  if (Object.keys(errors).length) {
+    return res.status(400).json({ success: false, message: Object.values(errors)[0], errors });
+  }
+  Object.assign(data, clean);
+
   if (data.photoUrl !== undefined) {
     const photo = checkPhoto(data.photoUrl);
-    if (photo.error) return res.status(400).json({ success: false, message: photo.error });
+    if (photo.error) return res.status(400).json({ success: false, message: photo.error, errors: { photoUrl: photo.error } });
     data.photoUrl = photo.value;
   }
-  if (data.dob) data.dob = new Date(data.dob);
-  if (data.classId) data.classId = parseInt(data.classId);
-  if (data.sectionId) data.sectionId = parseInt(data.sectionId);
-  const updated = await prisma.student.update({ where: { id: parseInt(req.params.id) }, data });
-  res.json({ success: true, data: updated });
+
+  // The same rule as at admission: typed text reached the database as it was
+  // and failed the save with a 500.
+  if (data.admissionTestMarks !== undefined) {
+    const marks = testMarksValue(data.admissionTestMarks);
+    if (marks.error) return res.status(400).json({ success: false, message: marks.error, errors: { admissionTestMarks: marks.error } });
+    data.admissionTestMarks = marks.value;
+  }
+
+  // Class and section must be this school's, and the section must be in the class.
+  if (data.classId !== undefined) {
+    const classId = parseInt(data.classId);
+    const cls = Number.isFinite(classId) ? await prisma.class.findFirst({ where: { id: classId, schoolId: req.schoolId }, select: { id: true } }) : null;
+    if (!cls) return res.status(400).json({ success: false, message: 'Choose a class from the list.', errors: { classId: 'Choose a class from the list.' } });
+    data.classId = classId;
+    // Moving to another class: the old section belongs to the old class.
+    if (data.sectionId === undefined && classId !== student.classId) data.sectionId = null;
+  }
+  if (data.sectionId !== undefined) {
+    const sectionId = data.sectionId ? parseInt(data.sectionId) : null;
+    if (sectionId) {
+      const sec = await prisma.section.findFirst({ where: { id: sectionId, schoolId: req.schoolId, classId: data.classId ?? student.classId }, select: { id: true } });
+      if (!sec) return res.status(400).json({ success: false, message: 'That section is not in the chosen class.', errors: { sectionId: 'That section is not in the chosen class.' } });
+    }
+    data.sectionId = sectionId;
+  }
+
+  // Roll numbers identify a student at sign-in and on fee slips: one per school.
+  if (data.rollNo !== undefined && data.rollNo !== student.rollNo) {
+    const clash = await prisma.student.findFirst({
+      where: { schoolId: req.schoolId, deletedAt: null, NOT: { id: student.id }, OR: [{ rollNo: ciEquals(data.rollNo) }, { rollNo: data.rollNo }] },
+      select: { name: true },
+    });
+    if (clash) {
+      const msg = `Roll number ${data.rollNo} already belongs to ${clash.name}.`;
+      return res.status(409).json({ success: false, message: msg, errors: { rollNo: msg } });
+    }
+  }
+
+  const updated = await prisma.student.update({ where: { id: student.id }, data });
+
+  let parentLogin = null;
+  if (data.emergencyPhone && !phoneUtil.same(data.emergencyPhone, student.emergencyPhone)) {
+    parentLogin = await syncParentLoginPhone({
+      schoolId: req.schoolId, studentId: student.id, oldPhone: student.emergencyPhone, newPhone: data.emergencyPhone,
+    }).catch(() => ({ changed: false, reason: 'The parent sign-in number could not be updated.' }));
+  }
+  res.json({ success: true, data: updated, ...(parentLogin && { parentLogin }) });
 }));
 
 // DELETE /api/v1/students/:id (soft delete)
@@ -688,8 +805,32 @@ router.delete('/:id', wrap(async (req, res) => {
   });
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
 
-  await prisma.student.update({ where: { id: studentId }, data: { deletedAt: new Date(), status: 'inactive' } });
-  res.json({ success: true, message: 'Student deactivated.' });
+  // Money already received must stay attached to a visible student. A record
+  // with fee payments is marked as left instead (status), not deleted.
+  const payments = await prisma.feePayment.count({ where: { schoolId: req.schoolId, studentId, voidedAt: null } });
+  if (payments) {
+    return res.status(409).json({
+      success: false,
+      code: 'HAS_PAYMENTS',
+      message: `${student.name} has ${payments} fee payment${payments === 1 ? '' : 's'} on record, so the record cannot be deleted. Set the status to "Left school" instead.`,
+    });
+  }
+
+  // A deleted student's portal sign-in stops working too, and their unpaid
+  // invoices are cancelled: otherwise they stay in the defaulters list and
+  // the reminder SMS for a child who was never really a student.
+  await prisma.$transaction([
+    prisma.student.update({ where: { id: studentId }, data: { deletedAt: new Date(), status: 'inactive' } }),
+    prisma.feeInvoice.updateMany({
+      where: { schoolId: req.schoolId, studentId, status: { in: ['unpaid', 'partial', 'overdue'] } },
+      data: { status: 'cancelled', dueAmount: 0 },
+    }),
+    ...(student.userId ? [prisma.user.update({ where: { id: student.userId }, data: { isActive: false } })] : []),
+  ]);
+  await prisma.auditLog.create({
+    data: { schoolId: req.schoolId, userId: req.user.id, action: 'STUDENT_DELETED', resource: 'student', resourceId: studentId },
+  }).catch(() => { /* the delete itself succeeded */ });
+  res.json({ success: true, message: `${student.name} was removed from the student list.` });
 }));
 
 // POST /api/v1/students/:id/promote  (single-student, legacy)
@@ -710,3 +851,5 @@ router.post('/:id/promote', wrap(async (req, res) => {
 }));
 
 module.exports = router;
+module.exports.daysUntilBirthday = daysUntilBirthday;
+module.exports.statusFilter = statusFilter;

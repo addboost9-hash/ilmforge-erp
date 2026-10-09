@@ -6,7 +6,9 @@
  * PRINT:  Monthly voucher (3-copy) · Admission voucher (heads breakdown) · Receipt
  */
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { money, toPaisa, rupeesInput } from '../../utils/currency';
+import { feePeriod, monthLabel } from '../../utils/feeMonth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import useAuthStore from '../../store/auth.store';
@@ -60,6 +62,14 @@ export function printHeadsVoucher({ student, school, heads, month, year, dueDate
   w.document.close();
 }
 
+// Pakistan's today (UTC+5 all year), as YYYY-MM-DD.
+const pkToday = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+const pkMonth = () => Number(pkToday().slice(5, 7));
+const pkYear = () => Number(pkToday().slice(0, 4));
+const inDays = (n) => new Date(Date.now() + 5 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const errText = (e, fallback) => e?.response?.data?.message || fallback;
+
 const ADMISSION_HEADS = [
   { name: 'Admission Fee', amount: 5000 },
   { name: 'Annual Charges', amount: 3000 },
@@ -78,7 +88,10 @@ export default function FeeInvoicesManagePage() {
   const [studentQ, setStudentQ] = useState('');
   const [selStudent, setSelStudent] = useState(null);
   const [heads, setHeads] = useState([{ name: 'Monthly Tuition Fee', amount: '' }]);
+  // The month a new bill is for, and when it is due (10 days by default).
+  const [billFor, setBillFor] = useState({ month: pkMonth(), year: pkYear(), dueDate: inDays(10) });
   const [editVals, setEditVals] = useState({});
+  const [deleting, setDeleting] = useState(null);
 
   const { data: invRes } = useQuery({
     queryKey: ['fee-invoices-manage', search],
@@ -96,26 +109,35 @@ export default function FeeInvoicesManagePage() {
     // money form. They were sent as typed, so a Rs 5,000 invoice became Rs 50.
     mutationFn: () => api.post('/fees/invoices', {
       studentId: selStudent.id,
+      month: billFor.month, year: billFor.year, dueDate: billFor.dueDate || undefined,
       heads: heads.filter(h => h.name && h.amount).map(h => ({ name: h.name, amount: toPaisa(h.amount) })),
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['fee-invoices-manage'] }); setModal(null); setSelStudent(null); setHeads([{ name: 'Monthly Tuition Fee', amount: '' }]); },
+    }).then(r => r.data.data),
+    onSuccess: (inv) => {
+      qc.invalidateQueries({ queryKey: ['fee-invoices-manage'] });
+      toast.success(`Invoice created for ${feePeriod(inv)}`);
+      // The button promises the voucher: print it straight away.
+      printInvoice({ ...inv, student: { ...selStudent, className: selStudent.class?.name } });
+      setModal(null); setSelStudent(null); setHeads([{ name: 'Monthly Tuition Fee', amount: '' }]);
+    },
+    onError: (e) => toast.error(errText(e, 'The invoice could not be created.')),
   });
   const updateInv = useMutation({
     mutationFn: () => api.put(`/fees/invoices/${modal.inv.id}`, { ...editVals, totalAmount: toPaisa(editVals.totalAmount) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['fee-invoices-manage'] }); setModal(null); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['fee-invoices-manage'] }); setModal(null); toast.success('Invoice updated'); },
+    onError: (e) => toast.error(errText(e, 'The invoice could not be saved.')),
   });
   const deleteInv = useMutation({
     mutationFn: (id) => api.delete(`/fees/invoices/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['fee-invoices-manage'] }),
-    onError: (e) => alert(e.response?.data?.message || 'Delete failed'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['fee-invoices-manage'] }); setDeleting(null); toast.success('Invoice deleted'); },
+    onError: (e) => { setDeleting(null); toast.error(errText(e, 'The invoice could not be deleted.')); },
   });
 
   const printInvoice = (inv) => {
-    let parsedHeads = [{ name: `Tuition Fee — ${inv.month} ${inv.year}`, amount: inv.totalAmount }];
+    let parsedHeads = [{ name: `Tuition Fee — ${feePeriod(inv)}`, amount: inv.totalAmount }];
     try { const h = JSON.parse(inv.remarks); if (Array.isArray(h) && h[0]?.name) parsedHeads = h; } catch {}
     printHeadsVoucher({
       student: inv.student || { name: inv.studentName, rollNo: inv.rollNo, fatherName: inv.fatherName, className: inv.className },
-      school, heads: parsedHeads, month: inv.month, year: inv.year, dueDate: inv.dueDate,
+      school, heads: parsedHeads, month: monthLabel(inv.month), year: inv.year, dueDate: inv.dueDate,
       voucherNo: `V-${inv.id}`, title: parsedHeads.length > 1 ? 'ADMISSION / CUSTOM VOUCHER' : 'MONTHLY FEE VOUCHER',
     });
   };
@@ -133,9 +155,9 @@ export default function FeeInvoicesManagePage() {
           <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
           <input className={input + ' pl-9'} placeholder="Student/invoice search…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <button onClick={() => { setModal({ mode: 'insert' }); setHeads([{ name: 'Monthly Tuition Fee', amount: '' }]); }}
+        <button onClick={() => { setModal({ mode: 'insert' }); setHeads([{ name: 'Monthly Tuition Fee', amount: '' }]); setBillFor({ month: pkMonth(), year: pkYear(), dueDate: inDays(10) }); }}
           className="flex items-center gap-1.5 bg-teal-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl"><Plus className="w-4 h-4" /> New Invoice</button>
-        <button onClick={() => { setModal({ mode: 'insert' }); setHeads(ADMISSION_HEADS.map(h => ({ ...h }))); }}
+        <button onClick={() => { setModal({ mode: 'insert' }); setHeads(ADMISSION_HEADS.map(h => ({ ...h }))); setBillFor({ month: pkMonth(), year: pkYear(), dueDate: inDays(10) }); }}
           className="flex items-center gap-1.5 bg-amber-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl"><Receipt className="w-4 h-4" /> Admission Voucher (all heads)</button>
       </div>
 
@@ -148,7 +170,7 @@ export default function FeeInvoicesManagePage() {
             {invoices.map(inv => (
               <tr key={inv.id} className="border-b border-slate-50">
                 <td className="px-4 py-2.5"><div className="font-bold text-slate-800">{inv.student?.name || inv.studentName}</div><div className="text-[10px] text-slate-400">{inv.student?.rollNo || inv.rollNo}</div></td>
-                <td className="px-4 py-2.5 text-slate-600">{inv.month} {inv.year}</td>
+                <td className="px-4 py-2.5 text-slate-600">{feePeriod(inv) || '—'}</td>
                 <td className="px-4 py-2.5 font-bold">{money(inv.totalAmount)}</td>
                 <td className="px-4 py-2.5 text-teal-700">{money(inv.paidAmount)}</td>
                 <td className="px-4 py-2.5 text-red-600 font-bold">{money(inv.dueAmount)}</td>
@@ -158,8 +180,17 @@ export default function FeeInvoicesManagePage() {
                     <button title="Print voucher" onClick={() => printInvoice(inv)} className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-teal-600 hover:border-teal-300"><Printer className="w-3.5 h-3.5" /></button>
                     <button title="Edit" onClick={() => { setModal({ mode: 'edit', inv }); setEditVals({ totalAmount: rupeesInput(inv.totalAmount), status: inv.status, dueDate: inv.dueDate?.slice(0, 10) }); }}
                       className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300"><Pencil className="w-3.5 h-3.5" /></button>
-                    <button title="Delete (unpaid only)" onClick={() => confirm('Delete this invoice?') && deleteInv.mutate(inv.id)}
-                      className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-300"><Trash2 className="w-3.5 h-3.5" /></button>
+                    {deleting === inv.id ? (
+                      <span className="flex items-center gap-1.5 text-xs">
+                        <span className="text-slate-600">Delete?</span>
+                        <button onClick={() => deleteInv.mutate(inv.id)} disabled={deleteInv.isPending}
+                          className="px-2.5 py-1.5 rounded-lg bg-red-600 text-white font-bold">{deleteInv.isPending ? '…' : 'Yes'}</button>
+                        <button onClick={() => setDeleting(null)} className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600">No</button>
+                      </span>
+                    ) : (
+                      <button title="Delete (unpaid only)" aria-label="Delete invoice" onClick={() => setDeleting(inv.id)}
+                        className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-300"><Trash2 className="w-3.5 h-3.5" /></button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -193,6 +224,21 @@ export default function FeeInvoicesManagePage() {
                   <button onClick={() => setSelStudent(null)} className="text-xs text-teal-600 font-bold">Change</button>
                 </div>
               )}
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase">Month
+                  <select aria-label="Month" className={input + ' mt-1'} value={billFor.month} onChange={e => setBillFor(b => ({ ...b, month: Number(e.target.value) }))}>
+                    {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                  </select>
+                </label>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase">Year
+                  <select aria-label="Year" className={input + ' mt-1'} value={billFor.year} onChange={e => setBillFor(b => ({ ...b, year: Number(e.target.value) }))}>
+                    {Array.from({ length: 7 }, (_, i) => pkYear() - 5 + i).map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </label>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase">Due date
+                  <input aria-label="Due date" type="date" className={input + ' mt-1'} value={billFor.dueDate} onChange={e => setBillFor(b => ({ ...b, dueDate: e.target.value }))} />
+                </label>
+              </div>
               <div className="text-[10px] font-extrabold text-slate-400 uppercase mb-2">Fee Heads</div>
               {heads.map((h, i) => (
                 <div key={i} className="flex gap-2 mb-2">

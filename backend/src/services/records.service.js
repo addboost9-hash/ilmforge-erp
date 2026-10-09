@@ -34,6 +34,9 @@ const GENDERS = ['Male', 'Female'];
 // The admission wizard offers Other for students; the staff form does not.
 const STUDENT_GENDERS = ['Male', 'Female', 'Other'];
 const STATUSES = ['Active', 'Inactive', 'Passout'];
+// Staff who have left are added too when a school brings in its old salary
+// records: their past pay belongs to someone. They get no working login.
+const STAFF_STATUSES = ['Active', 'Left'];
 const ROLES = ['Teacher', 'Accountant', 'Gatekeeper', 'Admin'];
 const SALARY_TYPES = ['Monthly', 'Hourly', 'Lecture'];
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -77,6 +80,7 @@ const STAFF_COLUMNS = [
   { key: 'joiningDate', header: 'Joining Date', type: 'date', width: 14, example: '01/08/2023', note: 'DD/MM/YYYY', aliases: ['joiningdate', 'dateofjoining', 'joined', 'doj'] },
   { key: 'salary', header: 'Monthly Salary (Rs)', type: 'number', width: 17, example: 45000, note: 'In rupees', aliases: ['monthlysalaryrs', 'salary', 'basicsalary', 'monthlysalary', 'pay'] },
   { key: 'salaryType', header: 'Salary Type', list: SALARY_TYPES, width: 12, example: 'Monthly', aliases: ['salarytype', 'paytype'] },
+  { key: 'status', header: 'Status', list: STAFF_STATUSES, width: 10, example: 'Active', note: 'Blank = Active. Left = no longer works here; added for past salary records, cannot sign in', aliases: ['status', 'staffstatus'] },
 ];
 
 const STAFF_USER_ROLES = ['teacher', 'accountant', 'gatekeeper', 'admin'];
@@ -438,6 +442,13 @@ async function validate(schoolId, raw) {
     const stype = pickList(r.salaryType, SALARY_TYPES);
     out.salaryType = stype.value && !stype.unknown ? stype.value.toLowerCase() : 'monthly';
 
+    const sst = pickList(r.status, STAFF_STATUSES);
+    const leftWords = ['inactive', 'resigned', 'former', 'exstaff', 'ex'];
+    if (!sst.value) out.status = 'active';
+    else if (!sst.unknown) out.status = sst.value.toLowerCase();
+    else if (leftWords.includes(norm(sst.value))) out.status = 'left';
+    else { out.status = 'active'; err('Status', `"${sst.value}" must be Active or Left.`); }
+
     if (out.empCode && knownCodes.has(norm(out.empCode))) out.action = 'skip-exists';
     else if (out.email && knownEmails.has(out.email)) out.action = 'skip-exists';
     else if (out.cnic && knownCnics.has(norm(out.cnic))) out.action = 'skip-exists';
@@ -536,9 +547,11 @@ async function importChunk(ctx, chunk) {
           departmentId: await deptId(s.department),
           basicSalary: Math.round((s.salary || 0) * 100), // rupees -> paisa
           salaryType: s.salaryType, empCode: s.empCode,
+          isActive: s.status !== 'left',
         },
       );
-      results.staff.push({ row: s._row, name: s.name, status: 'imported', credentials: out.credentials });
+      // Someone who has left gets no login to hand out.
+      results.staff.push({ row: s._row, name: s.name, status: 'imported', credentials: s.status === 'left' ? undefined : out.credentials });
     } catch (e) {
       results.staff.push({ row: s._row, name: s.name, status: 'failed', error: e.message });
     }
@@ -566,7 +579,7 @@ async function importChunk(ctx, chunk) {
           createPortalAccounts: true,
         },
       );
-      results.students.push({ row: st._row, name: st.name, status: 'imported', rollNo: out.student.rollNo, credentials: out.credentials });
+      results.students.push({ row: st._row, id: out.student.id, name: st.name, status: 'imported', rollNo: out.student.rollNo, credentials: out.credentials });
     } catch (e) {
       results.students.push({ row: st._row, name: st.name, status: 'failed', error: e.message });
     }
@@ -651,7 +664,7 @@ function addReadMe(wb, { schoolName, mode, counts }) {
   [
     '1.  Classes sheet first. List every class and its sections, for example Class 5 with sections "A, B". Classes that already exist are left alone; missing sections are added.',
     '2.  Students sheet. One student per row. Columns marked * are required. Class and Section must match the Classes sheet or classes already in IlmForge.',
-    '3.  Staff sheet. One person per row. Give a phone number or an email — that is how they will sign in.',
+    '3.  Staff sheet. One person per row. Give a phone number or an email — that is how they will sign in. Add staff who have left with Status = Left when you will enter their old salaries.',
     '4.  Leave Roll No and Employee Code blank and IlmForge creates them. Fill them in only when moving existing records from another system.',
     '5.  Dates are DAY first: 14/03/2014 is 14 March 2014.',
     '6.  Type phone numbers as 03001234567. The column is set to text so Excel keeps the leading 0.',
@@ -669,6 +682,9 @@ function addReadMe(wb, { schoolName, mode, counts }) {
   ws.addRow([]);
   line('Moving to another server', { bold: true, size: 12 });
   line('Export from the old server, then import the same file on the new one. Classes, sections, students, parents and staff move across. Fee history, attendance and exam marks are not part of this file. Passwords cannot be exported, so everyone receives a new one in the Login Details sheet.', { height: 46 });
+  ws.addRow([]);
+  line('Old fee, salary and expense records', { bold: true, size: 12 });
+  line('Fees, salaries and expenses from before the school used IlmForge (month by month, or one previous balance per student) have their own template: Settings › Past Records. Import students and staff here first, because past records are matched to them by roll number and employee code.', { height: 46 });
   return ws;
 }
 
@@ -739,6 +755,7 @@ async function buildExport(schoolId) {
     department: s.department?.name || '', joiningDate: fmt(s.joiningDate),
     salary: s.basicSalary ? Math.round(s.basicSalary / 100) : null, // paisa -> rupees
     salaryType: cap(s.salaryType),
+    status: s.isActive ? 'Active' : 'Left',
   })), { withExample: false });
 
   return { wb, counts: { classes: classes.length, students: students.length, staff: staff.length } };
@@ -746,6 +763,8 @@ async function buildExport(schoolId) {
 
 module.exports = {
   parseWorkbook, validate, importChunk, buildTemplate, buildExport,
+  // shared with the Past Records import (history.service.js)
+  norm, mapHeaders, readSheet, addSheet, sheetColors: { INK, GREEN, PAPER, MUTED, LINE },
   // exported for tests
-  parseDate, parsePhone, parseCnic, cellText, pickList, BLOOD_GROUPS, STUDENT_GENDERS, CLASS_COLUMNS, STUDENT_COLUMNS, STAFF_COLUMNS,
+  parseDate, parsePhone, parseCnic, cellText, pickList, BLOOD_GROUPS, STUDENT_GENDERS, CLASS_COLUMNS, STUDENT_COLUMNS, STAFF_COLUMNS, STAFF_STATUSES,
 };

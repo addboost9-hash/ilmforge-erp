@@ -13,6 +13,7 @@ import {
   CheckCircle, Clock, MessageSquare, Calendar, LogOut, Printer,
 } from 'lucide-react';
 import { printFeeVoucher, exportToCSV, StatusBadge } from '../../components/PortalUtils';
+import { feePeriod } from '../../utils/feeMonth';
 
 /* ── Helpers ──────────────────────────────────────────────── */
 // Fee amounts are stored in paisa (Rs 3,500 is 350000). This page was
@@ -614,10 +615,10 @@ export default function ParentPortalPage() {
                           <div style={{ flex:1, minWidth:140 }}>
                             <div style={{ fontWeight:700, fontSize:13.5, color:NAVY }}>{inv.feeTitle||'Monthly Fee'}</div>
                             <div style={{ fontSize:12, color:'#94A3B8', marginTop:2 }}>
-                              {/* FIX: FeeInvoice.month is already stored as a full name
-                                  string (e.g. "July"), not a 1-12 index — indexing a
-                                  month-name array with it always produced undefined. */}
-                              {inv.month&&inv.year ? `${inv.month} ${inv.year}` : fmtDate(inv.createdAt)}
+                              {/* FeeInvoice.month is "7" from Generate Fees and "July"
+                                  (or "Jul") from admissions and older data; shown raw it
+                                  read "7 2026". feePeriod gives "July 2026" for both. */}
+                              {inv.month&&inv.year ? feePeriod(inv) : fmtDate(inv.createdAt)}
                               &nbsp;·&nbsp;Total: {Rs(inv.totalAmount)}
                               {inv.dueAmount > 0 && <span style={{ color:'#DC2626', fontWeight:700 }}> · Due: {Rs(inv.dueAmount)}</span>}
                             </div>
@@ -958,7 +959,9 @@ export default function ParentPortalPage() {
             {/* Invoice summary */}
             <div style={{ background:'#F8FAFC', borderRadius:10, padding:'12px 14px', marginBottom:18, border:'1px solid #E2E8F0' }}>
               <div style={{ fontSize:13, color:'#64748B' }}>Invoice</div>
-              <div style={{ fontWeight:700, fontSize:14, color:NAVY, marginTop:2 }}>{payModal.invoice.feeTitle||'Monthly Fee'}</div>
+              <div style={{ fontWeight:700, fontSize:14, color:NAVY, marginTop:2 }}>
+                {payModal.invoice.feeTitle||'Monthly Fee'}{feePeriod(payModal.invoice) ? ` · ${feePeriod(payModal.invoice)}` : ''}
+              </div>
               <div style={{ fontSize:13, color:'#DC2626', fontWeight:700, marginTop:4 }}>Due: {Rs(payModal.invoice.dueAmount||payModal.invoice.totalAmount)}</div>
               {payModal.invoice.voucherNo && <div style={{ fontSize:12, color:'#94A3B8', marginTop:2 }}>Voucher: #{payModal.invoice.voucherNo}</div>}
             </div>

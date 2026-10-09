@@ -9,7 +9,7 @@ import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { compressPhoto } from '../../utils/photo';
+import { compressPhoto, pickProblem } from '../../utils/photo';
 import { TEMPLATES, templateById, DEFAULT_RULES } from './cardTemplates';
 import {
   CreditCard, Users, Award, Printer, Search, Settings,
@@ -97,6 +97,11 @@ const barcodeSVG = (val, w = 200, h = 30) => {
     <div style="font-family:monospace;font-size:6pt;color:#333;letter-spacing:1.5px;line-height:1.4;">${text}</div>
   </div>`;
 };
+
+/* How many people one list request asks for. Students: the API allows up
+   to 300, and every row carries a photo of about 40 KB. */
+const STUDENT_LIMIT = 200;
+const STAFF_LIMIT = 500;
 
 /* ─── Person silhouette SVG (used as photo placeholder) ── */
 const personSVG = (color='#0F766E') => `
@@ -252,6 +257,7 @@ export default function IDCardsPage() {
   const [classId,  setClassId]  = useState('');
   const [sectionId,setSectionId]= useState('');
   const [search,   setSearch]   = useState('');
+  const [onlyMissing, setOnlyMissing] = useState(false);
   const [primary,  setPrimary]  = useState('#0F766E');
   const [secondary,setSecondary]= useState('#D97706');
   const [template, setTemplate] = useState('portrait');
@@ -267,12 +273,19 @@ export default function IDCardsPage() {
   const { data:school  } = useQuery({ queryKey:['school-settings'], queryFn:()=>api.get('/settings/school').then(r=>r.data.data) });
   const logoSrc = typeof window!=='undefined' ? localStorage.getItem('schoolLogoPreview') : null;
 
-  const { data:raw, isLoading } = useQuery({
-    queryKey: [type, classId, sectionId],
-    queryFn: () => type==='student'
-      ? api.get('/students',{params:{classId:classId||undefined,sectionId:sectionId||undefined,status:'active',limit:200}}).then(r=>r.data.data||[])
-      : api.get('/staff').then(r=>r.data.data||[]),
+  /* One request is capped (each student row carries its photo), so the
+     whole school may not fit. The API's total says how many there are, and
+     the page says when some are not listed instead of dropping them
+     silently. Staff lists are short; /staff on its own returned only 25. */
+  const { data:list, isLoading } = useQuery({
+    queryKey: ['id-cards', type, classId, sectionId],
+    queryFn: () => (type==='student'
+      ? api.get('/students',{params:{classId:classId||undefined,sectionId:sectionId||undefined,status:'active',limit:STUDENT_LIMIT}})
+      : api.get('/staff',{params:{limit:STAFF_LIMIT}})
+    ).then(r => ({ rows: r.data.data || [], total: r.data.total ?? (r.data.data || []).length })),
   });
+  const raw = list?.rows;
+  const notListed = Math.max(0, (list?.total || 0) - (raw?.length || 0));
 
   /* ── Auto-load saved photos from localStorage when data loads ── */
   useEffect(() => {
@@ -302,28 +315,53 @@ export default function IDCardsPage() {
       || p.class?.name?.toLowerCase().includes(q)
       || p.designation?.toLowerCase().includes(q);
   });
+  /* Everyone in this list without a photo: their printed card would show an
+     empty photo box, so say so before printing, and let the office find them. */
+  const hasPhotoOf = (p) => !!(photoMap[p.id] || p.photoUrl);
+  const missingPhotos = (raw || []).filter((p) => !hasPhotoOf(p)).length;
+  const shownPeople = onlyMissing ? people.filter((p) => !hasPhotoOf(p)) : people;
 
   const cls        = (classes||[]).find(c=>c.id===parseInt(classId));
-  const allChecked = people.length>0 && selected.length===people.length;
+  // Select All means the rows on screen: with "Show only these" on, it used
+  // to select the hidden people with photos too.
+  const allChecked = shownPeople.length>0 && shownPeople.every(p=>selected.includes(p.id));
 
   const toggleOne = id => setSelected(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
-  const toggleAll = () => setSelected(allChecked?[]:people.map(p=>p.id));
+  const toggleAll = () => setSelected(allChecked?[]:shownPeople.map(p=>p.id));
 
   /* The camera button on a row saves the photo to the person's record, so
      it appears on certificates and every later print, not just this one.
-     It used to live only in this page's memory and this browser. */
+     It used to live only in this page's memory and this browser.
+
+     The card shows the new photo only once the record has it. It used to
+     change first, so a save that failed still looked done until the next
+     visit brought the old photo back. */
+  const [savingIds, setSavingIds] = useState([]);
+  // Refresh every list and document that shows these people's photos.
+  const refreshPhotoLists = useCallback(() => {
+    const lists = type === 'student' ? /student|card|certificate/i : /staff|card|certificate/i;
+    qc.invalidateQueries({ predicate: (q) => lists.test(String(q.queryKey?.[0] || '')) });
+  }, [type, qc]);
   const uploadPhoto = useCallback(async (id, file) => {
     if (!file) return;
+    const problem = pickProblem(file);
+    if (problem) { toast.error(problem); return; }
+    setSavingIds(ids => [...ids, id]);
     try {
       const small = await compressPhoto(file);
-      setPhotoMap(m => ({ ...m, [id]: small }));
       await api.put(`/${type === 'student' ? 'students' : 'staff'}/${id}`, { photoUrl: small });
+      setPhotoMap(m => ({ ...m, [id]: small }));
+      // An older copy kept only in this browser would cover the new photo on the next visit.
+      try { localStorage.removeItem(`photo_${type}_${id}`); } catch {}
+      setLocalIds(ids => ids.filter(x => x !== id));
       toast.success('Photo saved to the record');
-      qc.invalidateQueries({ queryKey: [type] });
+      refreshPhotoLists();
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'The photo could not be saved.');
+    } finally {
+      setSavingIds(ids => ids.filter(x => x !== id));
     }
-  }, [type, qc]);
+  }, [type, refreshPhotoLists]);
 
   /* Photos saved by older versions live only in this browser. Offer to move
      them onto the records so every device and document can use them. */
@@ -340,7 +378,7 @@ export default function IDCardsPage() {
       } catch { /* leave it local; the count below says how many moved */ }
     }
     setRescuing(false);
-    qc.invalidateQueries({ queryKey: [type] });
+    refreshPhotoLists();
     toast.success(`${saved} of ${localOnly.length} photos saved to the records`);
   };
 
@@ -383,6 +421,18 @@ export default function IDCardsPage() {
     toast.success(`Opened ${subset.length} ID card(s) for printing!`);
   };
 
+  /* Printing the selected cards: when some have no photo, the page asks
+     first (in the page, not a browser pop-up) and prints on "Print anyway".
+     A changed selection drops the question, so it never prints an old one. */
+  const [confirmPrint, setConfirmPrint] = useState(null); // { people, noPhoto }
+  useEffect(() => { setConfirmPrint(null); }, [selected, type]);
+  const printSelected = () => {
+    const chosen = people.filter(p=>selected.includes(p.id));
+    const noPhoto = chosen.filter(p=>!hasPhotoOf(p)).length;
+    if (noPhoto) setConfirmPrint({ people: chosen, noPhoto });
+    else doPrint(chosen);
+  };
+
   /* Designs come from cardTemplates.js — each ships a front and a back. */
 
   const isPortrait = templateById(template).orient === 'portrait';
@@ -403,7 +453,7 @@ export default function IDCardsPage() {
             </button>
           )}
           <button className="btn btn-teal" disabled={selected.length===0}
-            onClick={()=>doPrint(people.filter(p=>selected.includes(p.id)))}>
+            onClick={printSelected}>
             <Printer size={15}/> Print {selected.length||''} Cards
           </button>
         </div>
@@ -573,24 +623,61 @@ export default function IDCardsPage() {
               {allChecked?<><X size={12}/> Deselect All</>:<><CheckSquare size={12}/> Select All</>}
             </button>
             {selected.length>0 && (
-              <button className="btn btn-teal btn-sm" onClick={()=>doPrint(people.filter(p=>selected.includes(p.id)))}>
+              <button className="btn btn-teal btn-sm" onClick={printSelected}>
                 <Printer size={12}/> Print ({selected.length})
               </button>
             )}
           </div>
 
+          {confirmPrint && (
+            <div role="alert" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap', background:'#FFFBEB', border:'1px solid #F59E0B', borderRadius:8, padding:'10px 12px', marginBottom:10, fontSize:13, color:'#92400E' }}>
+              <span>
+                <strong>{confirmPrint.noPhoto} of the {confirmPrint.people.length} selected {confirmPrint.people.length===1?'card has':'cards have'} no photo</strong>{' '}
+                and will print with an empty photo box.
+              </span>
+              <span style={{ display:'flex', gap:6 }}>
+                <button type="button" className="btn btn-sm btn-outline" onClick={()=>setConfirmPrint(null)}>Cancel</button>
+                <button type="button" className="btn btn-sm btn-teal" onClick={()=>{ const chosen = confirmPrint.people; setConfirmPrint(null); doPrint(chosen); }}>
+                  <Printer size={12}/> Print anyway
+                </button>
+              </span>
+            </div>
+          )}
+
+          {/* Stays while "Show only these" is on, even once everyone has a
+              photo: otherwise the list was left empty with no way back. */}
+          {(missingPhotos > 0 || (onlyMissing && !isLoading)) && (
+            <div role="status" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap', background:missingPhotos>0?'#FFFBEB':'#F0FDF4', border:`1px solid ${missingPhotos>0?'#FDE68A':'#BBF7D0'}`, borderRadius:8, padding:'9px 12px', marginBottom:10, fontSize:13, color:missingPhotos>0?'#92400E':'#166534' }}>
+              <span>
+                {missingPhotos > 0
+                  ? <><strong>{missingPhotos} {missingPhotos===1?(type==='staff'?'person has':'student has'):(type==='staff'?'people have':'students have')} no photo.</strong>{' '}
+                      Their cards would print with an empty photo box. Click <strong>Add photo</strong> on the row.</>
+                  : <strong>Everyone listed has a photo now.</strong>}
+              </span>
+              <button type="button" className="btn btn-sm btn-outline" aria-pressed={onlyMissing} onClick={()=>setOnlyMissing(v=>!v)}>
+                {onlyMissing ? 'Show everyone' : 'Show only these'}
+              </button>
+            </div>
+          )}
+          {notListed > 0 && (
+            <div role="status" style={{ background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:8, padding:'9px 12px', marginBottom:10, fontSize:13, color:'#1E40AF' }}>
+              <strong>Showing {raw.length.toLocaleString('en-PK')} of {list.total.toLocaleString('en-PK')} {type==='staff'?'staff':'students'}</strong>
+              {type==='student' && (!classId ? ' — choose a class to see everyone' : (cls?.sections?.length && !sectionId) ? ' — choose a section to see everyone' : '')}.
+              {search && ' The search looks only at the ones listed here.'}
+            </div>
+          )}
           <div style={{ marginBottom:8, fontSize:12.5, color:'#6B7280' }}>
-            {people.length} {type==='staff'?'staff':'students'}{search&&` matching "${search}"`}
+            {shownPeople.length} {type==='staff'?'staff':'students'}{search&&` matching "${search}"`}{onlyMissing&&' without a photo'}
             {selected.length>0&&<span className="badge badge-teal" style={{ marginLeft:8 }}>{selected.length} selected</span>}
           </div>
 
           <div className="card" style={{ padding:0, overflow:'hidden' }}>
             {isLoading ? (
               <div className="loading-center"><div className="spinner"/></div>
-            ) : people.length===0 ? (
+            ) : shownPeople.length===0 ? (
               <div className="empty-state" style={{ padding:48 }}>
                 <div className="empty-state-icon"><CreditCard size={44} style={{ opacity:.2 }}/></div>
-                <div className="empty-state-text">{search?`No results for "${search}"`:`No ${type==='staff'?'staff':'students'} found`}</div>
+                <div className="empty-state-text">{search?`No results for "${search}"${notListed>0?` among the ${raw.length} listed`:''}`:`No ${type==='staff'?'staff':'students'} found`}</div>
                 {search&&<button className="btn btn-outline btn-sm" style={{ marginTop:10 }} onClick={()=>setSearch('')}>Clear search</button>}
               </div>
             ) : (
@@ -611,9 +698,10 @@ export default function IDCardsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {people.map((p,i)=>{
+                    {shownPeople.map((p,i)=>{
                       const checked  = selected.includes(p.id);
                       const hasPhoto = !!(photoMap[p.id]||p.photoUrl);
+                      const saving   = savingIds.includes(p.id);
                       return (
                         <tr key={p.id}
                           style={{ background:checked?primary+'10':undefined }}
@@ -626,7 +714,7 @@ export default function IDCardsPage() {
                           <td onClick={e=>e.stopPropagation()}>
                             <div style={{ position:'relative', width:46, height:54 }}>
                               {/* Photo or placeholder */}
-                              <div style={{ width:46, height:54, borderRadius:6, overflow:'hidden', border:`2px solid ${hasPhoto?primary:primary+'30'}`, background:primary+'10', display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+                              <div style={{ width:46, height:54, borderRadius:6, overflow:'hidden', border:`2px solid ${hasPhoto?primary:primary+'30'}`, background:primary+'10', display:'flex', alignItems:'flex-end', justifyContent:'center', opacity: saving ? 0.45 : 1 }}>
                                 {hasPhoto
                                   ? <img src={photoMap[p.id]||p.photoUrl} alt="" style={{ width:'100%',height:'100%',objectFit:'cover',display:'block' }}/>
                                   : <>
@@ -639,17 +727,23 @@ export default function IDCardsPage() {
                               <button
                                 aria-label={`Upload photo for ${p.name}`}
                                 title={`Upload photo for ${p.name}`}
+                                disabled={saving}
                                 onClick={()=>fileRefs.current[p.id]?.click()}
-                                style={{ position:'absolute',bottom:-3,right:-3,width:20,height:20,borderRadius:'50%',background:primary,border:'2px solid #fff',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',boxShadow:'0 1px 4px rgba(0,0,0,0.2)' }}>
+                                style={{ position:'absolute',bottom:-3,right:-3,width:20,height:20,borderRadius:'50%',background:primary,border:'2px solid #fff',display:'flex',alignItems:'center',justifyContent:'center',cursor:saving?'wait':'pointer',boxShadow:'0 1px 4px rgba(0,0,0,0.2)' }}>
                                 <Camera size={10} color="#fff"/>
                               </button>
+                              {/* Emptied after every pick: choosing the same file again
+                                  (say after a failed save) fires no change otherwise. */}
                               <input ref={el=>fileRefs.current[p.id]=el} aria-label={`Photo file for ${p.name}`} type="file" accept="image/*" style={{ display:'none' }}
-                                onChange={e=>uploadPhoto(p.id,e.target.files?.[0])}/>
+                                onChange={e=>{ const file = e.target.files?.[0]; e.target.value = ''; uploadPhoto(p.id, file); }}/>
                             </div>
                           </td>
                           <td>
                             <div style={{ fontWeight:700,fontSize:13,color:'#111827' }}>{p.name}</div>
-                            {hasPhoto&&<div style={{ fontSize:10,color:'#059669',fontWeight:700 }}>✓ Photo</div>}
+                            <button type="button" disabled={saving} onClick={e=>{ e.stopPropagation(); fileRefs.current[p.id]?.click(); }}
+                              style={{ background:'none', border:0, padding:0, cursor:saving?'wait':'pointer', fontSize:11, fontWeight:700, color: saving ? '#6B7280' : hasPhoto ? '#059669' : '#B45309' }}>
+                              {saving ? 'Saving photo…' : hasPhoto ? '✓ Photo · Change' : '⚠ No photo · Add photo'}
+                            </button>
                           </td>
                           <td><span style={{ fontFamily:'monospace',fontWeight:700,color:primary,fontSize:12 }}>{p.rollNo||p.empCode||`ID-${p.id}`}</span></td>
                           <td>

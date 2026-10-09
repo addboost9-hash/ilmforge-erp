@@ -6,8 +6,10 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import StudentPhotoButton from '../../components/StudentPhotoButton';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { useDebounce } from '../../hooks/useDebounce';
 import {
   FileText, Award, GraduationCap, User, Calendar, Gift,
   Printer, Search, X, CheckCircle, ChevronDown,
@@ -23,6 +25,22 @@ const CERT_TYPES = [
   { id:'admit',     icon:User,          label:'Exam Admit Card',        desc:'Exam entrance slip with barcode',        color:'#DC2626', forStaff:false },
   { id:'birthday',  icon:Gift,          label:'Birthday Wish Card',     desc:'Personalized birthday card',             color:'#EC4899', forStaff:null  },
 ];
+
+/* ── Which students are listed ─────────────────────
+   Leaving and character certificates are mostly made after a student has
+   gone, but the list showed only current students. GET /students takes a
+   comma list of statuses, so "Left school" asks for everyone who left
+   (inactive, left, withdrawn) without the passed-out students, who have
+   their own choice, and the count it sends back is exact. */
+const STUDENT_GROUPS = [
+  { id:'active',  label:'Current students', status:'active',                  empty:'No current students found' },
+  { id:'left',    label:'Left school',      status:'inactive,left,withdrawn', empty:'No students who left school' },
+  { id:'passout', label:'Passed out',       status:'passout',                 empty:'No passed-out students' },
+];
+// GET /students returns at most 300 per request; /staff returns 25 unless asked for more.
+const STUDENT_LIMIT = 300;
+const STAFF_LIMIT   = 500;
+const toList = r => ({ rows: r.data.data || [], total: r.data.total ?? (r.data.data || []).length });
 
 /* ════════════════════════════════════════════════════
    CERTIFICATE HTML BUILDERS
@@ -472,6 +490,7 @@ export default function CertificatesPage() {
   const [selected, setSelected] = useState(null);
   const [classId,  setClassId]  = useState('');
   const [sectionId, setSectionId] = useState('');
+  const [group,    setGroup]    = useState('active');
 
   /* Character certificate extra fields */
   const [charFields, setCharFields] = useState({
@@ -501,22 +520,38 @@ export default function CertificatesPage() {
     queryFn:  () => api.get('/settings/school').then(r => r.data.data),
   });
 
-  const { data:rawPeople, isFetching } = useQuery({
-    queryKey: [forStaff ? 'staff' : 'students', classId, sectionId],
+  const studentGroup = STUDENT_GROUPS.find(g => g.id === group) || STUDENT_GROUPS[0];
+  const listParams = {
+    classId:   classId   || undefined,
+    sectionId: sectionId || undefined,
+    status:    studentGroup.status,
+  };
+
+  // isLoading, not isFetching: saving a photo on a row refreshes this list,
+  // and the whole table turned into a spinner after every photo.
+  const { data:list, isLoading } = useQuery({
+    queryKey: ['certificate-people', forStaff ? 'staff' : group, classId, sectionId],
     queryFn:  () => forStaff
-      ? api.get('/staff').then(r => r.data.data || [])
-      : api.get('/students', {
-          params: {
-            classId:   classId   || undefined,
-            sectionId: sectionId || undefined,
-            status:    'active',
-            limit:     200,
-          },
-        }).then(r => r.data.data || []),
+      ? api.get('/staff', { params: { limit: STAFF_LIMIT } }).then(toList)
+      : api.get('/students', { params: { ...listParams, limit: STUDENT_LIMIT } }).then(toList),
   });
 
+  /* When there are more students than one request returns, the list says
+     so, and a typed name is looked up on the server, so nobody past the
+     first page is out of reach. Choosing a class is not always enough:
+     passed-out students are nearly all in the final class. */
+  const capped = !!list && list.rows.length < list.total;
+  const searchTerm = useDebounce(search.trim(), 300);
+  const searchServer = capped && !forStaff && searchTerm.length >= 2;
+  const { data:found, isFetching:searching } = useQuery({
+    queryKey: ['certificate-people', group, classId, sectionId, 'search', searchTerm],
+    queryFn:  () => api.get('/students', { params: { ...listParams, search: searchTerm, limit: STUDENT_LIMIT } }).then(toList),
+    enabled:  searchServer,
+  });
+  const rawPeople = (searchServer && found ? found.rows : list?.rows) || [];
+
   /* Search filter */
-  const people = (rawPeople || []).filter(p => {
+  const people = rawPeople.filter(p => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
@@ -615,11 +650,20 @@ export default function CertificatesPage() {
                 </button>
               </div>
 
-              {/* Class + Section dropdowns for students */}
+              {/* Which students + Class + Section dropdowns */}
               {!forStaff && (
                 <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
                   <select
                     className="form-select"
+                    aria-label="Which students"
+                    style={{ width:160, height:34, fontSize:12.5 }}
+                    value={group}
+                    onChange={e => { setGroup(e.target.value); setSelected(null); }}>
+                    {STUDENT_GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                  </select>
+                  <select
+                    className="form-select"
+                    aria-label="Class"
                     style={{ width:150, height:34, fontSize:12.5 }}
                     value={classId}
                     onChange={e => { setClassId(e.target.value); setSectionId(''); setSelected(null); }}>
@@ -629,6 +673,7 @@ export default function CertificatesPage() {
                   {classId && (sections || []).length > 0 && (
                     <select
                       className="form-select"
+                      aria-label="Section"
                       style={{ width:130, height:34, fontSize:12.5 }}
                       value={sectionId}
                       onChange={e => { setSectionId(e.target.value); setSelected(null); }}>
@@ -699,16 +744,33 @@ export default function CertificatesPage() {
                 )}
               </div>
               <span style={{ fontSize:12, color:'#9CA3AF', whiteSpace:'nowrap' }}>
-                {people.length} {forStaff ? 'staff' : 'students'}
+                {searchServer && searching ? 'Searching…' : `${people.length} ${forStaff ? 'staff' : 'students'}`}
               </span>
             </div>
 
-            {isFetching ? (
+            {/* Never drop people silently: say when the list is not everyone. */}
+            {capped && !searchServer && (
+              <div role="status" style={{ padding:'9px 16px', background:'#EFF6FF', borderBottom:'1px solid #BFDBFE', fontSize:12.5, color:'#1E40AF' }}>
+                {`Showing ${list.rows.length.toLocaleString('en-PK')} of ${list.total.toLocaleString('en-PK')} ${forStaff ? 'staff' : 'students'}.`}
+                {!forStaff && (classId ? ' Type a name to search them all.' : ' Choose a class, or type a name to search them all.')}
+              </div>
+            )}
+            {searchServer && found && found.rows.length < found.total && (
+              <div role="status" style={{ padding:'9px 16px', background:'#EFF6FF', borderBottom:'1px solid #BFDBFE', fontSize:12.5, color:'#1E40AF' }}>
+                More than {STUDENT_LIMIT} match "{searchTerm}". Type more of the name or roll number.
+              </div>
+            )}
+
+            {isLoading ? (
               <div className="loading-center" style={{ padding:40 }}><div className="spinner"/></div>
             ) : people.length === 0 ? (
               <div className="empty-state" style={{ padding:40 }}>
                 <div className="empty-state-icon">📋</div>
-                <div className="empty-state-text">{search ? `No results for "${search}"` : 'No records found'}</div>
+                <div className="empty-state-text">
+                  {searchServer && searching ? 'Searching all students…'
+                    : search ? `No results for "${search}"`
+                    : forStaff ? 'No records found' : studentGroup.empty}
+                </div>
                 {search && (
                   <button className="btn btn-outline btn-sm" style={{ marginTop:10 }} onClick={() => setSearch('')}>
                     Clear search
@@ -733,10 +795,19 @@ export default function CertificatesPage() {
                         <td style={{ color:'#9CA3AF', fontSize:12 }}>{i + 1}</td>
                         <td>
                           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                            <div style={{ width:30, height:30, borderRadius:'50%', background:activeCert?.color+'20', display:'flex', alignItems:'center', justifyContent:'center', color:activeCert?.color, fontWeight:800, fontSize:12, flexShrink:0 }}>
-                              {p.name?.charAt(0)}
-                            </div>
-                            <span style={{ fontWeight:600, fontSize:13 }}>{p.name}</span>
+                            {forStaff ? (
+                              <div style={{ width:30, height:30, borderRadius:'50%', background:activeCert?.color+'20', display:'flex', alignItems:'center', justifyContent:'center', color:activeCert?.color, fontWeight:800, fontSize:12, flexShrink:0 }}>
+                                {p.name?.charAt(0)}
+                              </div>
+                            ) : (
+                              /* The certificate prints the photo on the record:
+                                 add or change it here before printing. */
+                              <StudentPhotoButton student={p} size={30} showLabel={false} />
+                            )}
+                            <span style={{ display:'grid' }}>
+                              <span style={{ fontWeight:600, fontSize:13 }}>{p.name}</span>
+                              {!forStaff && !p.photoUrl && <span style={{ fontSize:10.5, color:'#B45309', fontWeight:700 }}>No photo: prints without one</span>}
+                            </span>
                           </div>
                         </td>
                         {!forStaff && <>

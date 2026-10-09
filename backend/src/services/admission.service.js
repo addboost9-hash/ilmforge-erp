@@ -57,6 +57,20 @@ async function generateRollNo(schoolId, classId, sectionId, client = prisma) {
   return `${prefix}-${yr}-${Date.now().toString(36).slice(-5).toUpperCase()}`;
 }
 
+/* Admission test marks are optional, but what is typed must be a plain
+   number from 0 to 1000: "abc" used to reach the database as NaN and fail
+   the whole admission with a 500. Shared with editing a student record.
+   Returns { value } (null when left empty) or { error }. */
+const TEST_MARKS_ERROR = 'Admission test marks must be a number from 0 to 1000, or left empty.';
+function testMarksValue(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return { value: null };
+  const text = String(raw).trim();
+  // Digits with an optional decimal part only: Number() alone also takes
+  // "0x10", "1e2" and "Infinity".
+  if (!/^\d+(\.\d+)?$/.test(text) || Number(text) > 1000) return { error: TEST_MARKS_ERROR };
+  return { value: Number(text) };
+}
+
 /** First campus of the school, creating "Main Campus" if it has none. */
 async function resolveCampus(schoolId, campusId) {
   if (campusId) return parseInt(campusId);
@@ -110,6 +124,13 @@ async function admitStudent(ctx, input) {
   const photo = photoUrl !== undefined ? checkPhoto(photoUrl) : { value: null };
   if (photo.error) {
     const e = new Error(photo.error);
+    e.status = 400;
+    throw e;
+  }
+
+  const testMarks = testMarksValue(admissionTestMarks);
+  if (testMarks.error) {
+    const e = new Error(testMarks.error);
     e.status = 400;
     throw e;
   }
@@ -190,7 +211,7 @@ async function admitStudent(ctx, input) {
         city: city || null,
         postalAddress: postalAddress || null,
         email: email || null,
-        admissionTestMarks: admissionTestMarks != null && admissionTestMarks !== '' ? parseFloat(admissionTestMarks) : null,
+        admissionTestMarks: testMarks.value,
         bloodGroup: bloodGroup || null,
         foodDietaryReq: foodDietaryReq || null,
         allergies: allergies || null,
@@ -359,4 +380,4 @@ async function admitStudent(ctx, input) {
   return { student: result.student, invoice: result.invoice, credentials, parentReused: result.parentReused };
 }
 
-module.exports = { admitStudent, generateRollNo, resolveCampus, genPassword, slugify };
+module.exports = { admitStudent, generateRollNo, resolveCampus, genPassword, slugify, testMarksValue };

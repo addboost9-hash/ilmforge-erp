@@ -3,13 +3,33 @@
  * Next-level: Blank + Filled forms, complete fields,
  * photo placeholder, all sections, school branding
  */
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import api from '../../api/client';
 import { printHTML } from '../../utils/print';
-import { Printer, Search, FileText, ChevronRight } from 'lucide-react';
+import { useDebounce } from '../../hooks/useDebounce';
+import { Printer, Search, FileText, ChevronRight, Pencil } from 'lucide-react';
+import StudentPhotoButton from '../../components/StudentPhotoButton';
+import EditStudentModal from '../../components/EditStudentModal';
 
 const fmtDate = d => d ? new Date(d).toLocaleDateString('en-PK', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+
+/* Record values go into the printed page as HTML, so they are escaped: a
+   name with "<" or "&" in it would break the form. */
+const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// Empty prints as a blank line to write on; 0 (test marks) still prints.
+const show = v => (v === null || v === undefined || v === '' ? '' : esc(v));
+
+/* Age today as "9 years 4 months". The old sum did not take a year off
+   before the birthday month: 10 years 10 months printed as 11 years 10 months. */
+const ageText = dob => {
+  const d = dob ? new Date(dob) : null;
+  if (!d || Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  let months = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+  if (now.getDate() < d.getDate()) months -= 1;
+  return months < 0 ? '' : `${Math.floor(months / 12)} years ${months % 12} months`;
+};
 
 /* ── Print function ─────────────────────────────────────── */
 export function printAdmissionForm(student, school) {
@@ -20,12 +40,20 @@ export function printAdmissionForm(student, school) {
   const sEmail  = school?.email   || '';
   const year    = new Date().getFullYear();
 
+  /* Sections 1-4 follow the admission form's own fields, each printed from
+     its column on the student record. They used to read fields that do not
+     exist (placeOfBirth, parent.cnic, medicalConditions), leave real ones
+     blank (father's CNIC and occupation, mother's phone, previous school) and
+     print "Pakistani", "Islam" and "Father" even on a blank form. */
   const s = student || {};
+  // The admission form takes first and last name (and their Urdu) separately.
+  const fullName = [s.name, s.lastName].filter(Boolean).join(' ');
+  const urduName = [s.firstNameUrdu, s.lastNameUrdu].filter(Boolean).join(' ');
 
   const field = (label, val, w = '48%') => `
     <div style="width:${w}; margin-bottom:8px;">
       <div style="font-size:8px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">${label}</div>
-      <div style="border-bottom:1px solid #374151;min-height:18px;padding:2px 4px;font-size:11px;color:#111;">${val || ''}</div>
+      <div dir="auto" style="border-bottom:1px solid #374151;min-height:18px;padding:2px 4px;font-size:11px;color:#111;">${show(val)}</div>
     </div>`;
 
   const fieldFull = (label, val) => field(label, val, '100%');
@@ -35,7 +63,7 @@ export function printAdmissionForm(student, school) {
 
   const html = `<!DOCTYPE html>
 <html><head>
-<title>Admission Form — ${s.name || 'Blank'}</title>
+<title>Admission Form — ${show(fullName) || 'Blank'}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 11px; color: #111; background: #fff; padding: 20px 24px; }
@@ -96,8 +124,8 @@ export function printAdmissionForm(student, school) {
     </div>
     <div class="form-title">
       <h2>ADMISSION FORM</h2>
-      <p>Academic Year: ${year}–${year + 1}</p>
-      <div class="form-no">Form No.: ${s.rollNo ? 'ADM-' + s.rollNo : '___________'}</div>
+      <p>Academic Year: ${show(s.session?.name) || `${year}–${year + 1}`}</p>
+      <div class="form-no">Form No.: ${s.rollNo ? 'ADM-' + show(s.rollNo) : '___________'}</div>
       <div class="form-no">Date: ${s.createdAt ? fmtDate(s.createdAt) : '___________'}</div>
     </div>
   </div>
@@ -124,60 +152,60 @@ export function printAdmissionForm(student, school) {
   <!-- 1. STUDENT INFORMATION -->
   ${section('1. Student Information')}
   <div class="row">
-    ${fieldFull('Full Name (English)', s.name)}
-    ${fieldFull('Full Name (اردو)', '')}
+    ${fieldFull('Full Name (English)', fullName)}
+    ${fieldFull('Full Name (اردو)', urduName)}
     ${field('Date of Birth', fmtDate(s.dob))}
-    ${field('Age (Years / Months)', s.dob ? (() => { const d = new Date(s.dob); const now = new Date(); const y = now.getFullYear() - d.getFullYear(); const m = now.getMonth() - d.getMonth(); return `${y} years ${m < 0 ? 12 + m : m} months`; })() : '')}
+    ${field('Age (Years / Months)', ageText(s.dob))}
     ${field('Gender', s.gender)}
-    ${field('Religion', s.religion || 'Islam')}
-    ${field('Nationality', 'Pakistani')}
-    ${field('Place of Birth', s.placeOfBirth || '')}
+    ${field('Religion', s.religion)}
+    ${field('Nationality', s.nationality)}
+    ${field('Caste', s.caste)}
     ${field('B-Form No.', s.bFormNo)}
-    ${field('Blood Group', s.bloodGroup || '')}
+    ${field('Family No.', s.familyNo)}
   </div>
   <div class="row">
-    ${fieldFull('Home Address', s.address)}
+    ${fieldFull('Permanent Address', s.address)}
+    ${field('City', s.city)}
+    ${field('Province', s.province)}
+    ${fieldFull('Postal Address', s.postalAddress)}
   </div>
 
   <!-- 2. GUARDIAN INFORMATION -->
   ${section('2. Guardian Information', '#15803D')}
   <div class="row">
     ${field("Father's Full Name", s.fatherName)}
-    ${field("Father's CNIC", s.parent?.cnic || '')}
-    ${field("Father's Occupation", s.parent?.profession || '')}
-    ${field("Father's Phone", s.emergencyPhone || '')}
-    ${field("Mother's Full Name", s.motherName || '')}
-    ${field("Mother's Phone", '')}
-    ${field('WhatsApp Number', s.parent?.phone || s.emergencyPhone || '')}
-    ${field('Email Address', s.parent?.email || '')}
-  </div>
-  <div class="row">
-    ${field('Emergency Contact Name', s.fatherName || '')}
-    ${field('Emergency Contact Phone', s.emergencyPhone || '')}
-    ${field('Relationship', 'Father')}
-    ${field('Parent Annual Income (Rs.)', '')}
+    ${field("Father's Name (اردو)", s.fatherNameUrdu)}
+    ${field("Father's CNIC", s.fatherCnic)}
+    ${field("Father's Occupation", s.fatherOccupation)}
+    ${field("Father's Qualification", s.fatherQualification)}
+    ${field('Parent Mobile No. (WhatsApp)', s.emergencyPhone)}
+    ${field("Mother's Full Name", s.motherName)}
+    ${field("Mother's CNIC", s.motherCnic)}
+    ${field("Mother's Occupation", s.motherOccupation)}
+    ${field("Mother's Qualification", s.motherQualification)}
+    ${field("Mother's Mobile No.", s.motherPhone)}
+    ${field('Email Address', s.email)}
   </div>
 
   <!-- 3. PREVIOUS SCHOOL -->
   ${section('3. Previous School / Academic Record', '#7C3AED')}
   <div class="row">
-    ${field('Previous School Name', '')}
-    ${field('Board / University', '')}
-    ${field('Last Class / Grade Passed', '')}
-    ${field('Marks Obtained / GPA', '')}
-    ${field('Transfer Certificate No.', '')}
-    ${field('TC Issue Date', '')}
+    ${field('School Name', s.prevSchoolName)}
+    ${field('Admission No.', s.prevAdmissionNo)}
+    ${fieldFull('School Address', s.prevSchoolAddress)}
+    ${field('Contact No.', s.prevSchoolPhone)}
+    ${field('Focal Person', s.prevSchoolFocalPerson)}
+    ${field('Previous Grade', s.prevGrade)}
+    ${field('Test of Grade', s.prevTestGrade)}
   </div>
 
   <!-- 4. MEDICAL INFORMATION -->
   ${section('4. Medical Information', '#DC2626')}
   <div class="row">
-    ${field('Blood Group', s.bloodGroup || '')}
-    ${field('Any Allergy', s.allergies || '')}
-    ${field('Chronic Medical Condition', s.medicalConditions || '')}
-    ${field('Current Medication (if any)', '')}
-    ${field('Special Needs / Disability', '')}
-    ${field('Immunization Up to Date?', '')}
+    ${field('Blood Group', s.bloodGroup)}
+    ${field('Food / Dietary Needs', s.foodDietaryReq)}
+    ${fieldFull('Allergies / Major Illness', s.allergies)}
+    ${fieldFull('Condition of the Child', s.childCondition)}
   </div>
 
   <!-- 5. TRANSPORT / HOSTEL -->
@@ -225,6 +253,7 @@ export function printAdmissionForm(student, school) {
   <div class="office-box">
     <div class="office-title">For Office Use Only</div>
     <div class="row">
+      ${field('Admission Test Marks', s.admissionTestMarks)}
       ${field('Admission Approved By', '')}
       ${field('Approval Date', '')}
       ${field('Fee Structure', '')}
@@ -256,11 +285,27 @@ export default function AdmissionFormPrintPage() {
   const [studentId, setStudentId] = useState(null);
   const [student,   setStudent]   = useState(null);
   const [mode,      setMode]      = useState('blank');
+  const [editing,   setEditing]   = useState(false);
 
+  /* The search list carries only a few fields; the filled form needs the
+     whole record (address, B-Form, mother, previous school...), which used to
+     print blank. Load it once a student is chosen. */
+  const { data: fullStudent, isFetching: loadingFull } = useQuery({
+    queryKey: ['student', String(studentId)],
+    queryFn: () => api.get(`/students/${studentId}`).then(r => r.data.data),
+    enabled: !!studentId,
+  });
+  // The full record has no campus; the search row does, so keep both.
+  const printable = useMemo(() => (fullStudent ? { ...student, ...fullStudent } : student), [student, fullStudent]);
+
+  /* Searched once typing pauses (300 ms), not on every key: each letter used
+     to send its own request to the server. */
+  const searchTerm = useDebounce(search.trim(), 300);
   const { data: students = [] } = useQuery({
-    queryKey: ['adm-form-search', search],
-    queryFn:  () => api.get('/students', { params: { search, limit: 8 } }).then(r => r.data.data || []).catch(() => []),
-    enabled:  search.length >= 2,
+    queryKey: ['adm-form-search', searchTerm],
+    queryFn:  () => api.get('/students', { params: { search: searchTerm, limit: 8 } }).then(r => r.data.data || []).catch(() => []),
+    enabled:  !studentId && searchTerm.length >= 2,
+    placeholderData: keepPreviousData, // the list stays put while the next search loads
   });
 
   const { data: school } = useQuery({
@@ -318,8 +363,8 @@ export default function AdmissionFormPrintPage() {
 
             {/* Print button */}
             <button className="btn btn-primary"
-              disabled={mode === 'filled' && !studentId}
-              onClick={() => printAdmissionForm(mode === 'filled' ? student : null, school)}
+              disabled={mode === 'filled' && (!studentId || loadingFull)}
+              onClick={() => printAdmissionForm(mode === 'filled' ? printable : null, school)}
               style={{ display:'flex', alignItems:'center', gap:6 }}>
               <Printer size={14} /> {mode === 'blank' ? 'Print Blank Form' : 'Print Filled Form'}
             </button>
@@ -337,10 +382,10 @@ export default function AdmissionFormPrintPage() {
           {/* Sections overview */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))', gap:10 }}>
             {[
-              { n:'1', title:'Student Information', icon:'👨‍🎓', color:'#1B2F6E', fields:'Name (Eng/Urdu), DOB, Gender, B-Form, Blood Group, Nationality' },
-              { n:'2', title:'Guardian Information', icon:'👪', color:'#15803D', fields:"Father/Mother name, CNIC, Occupation, Phone, Email, Address" },
-              { n:'3', title:'Previous School', icon:'🏫', color:'#7C3AED', fields:'School name, Board, Class passed, Marks, TC number' },
-              { n:'4', title:'Medical Information', icon:'🏥', color:'#DC2626', fields:'Blood group, Allergies, Chronic conditions, Special needs' },
+              { n:'1', title:'Student Information', icon:'👨‍🎓', color:'#1B2F6E', fields:'Name (Eng/Urdu), DOB, Gender, Religion, Nationality, Caste, B-Form, Address' },
+              { n:'2', title:'Guardian Information', icon:'👪', color:'#15803D', fields:"Father/Mother name, CNIC, Occupation, Qualification, Mobile, Email" },
+              { n:'3', title:'Previous School', icon:'🏫', color:'#7C3AED', fields:'School name, Address, Contact, Admission no., Grade' },
+              { n:'4', title:'Medical Information', icon:'🏥', color:'#DC2626', fields:'Blood group, Food needs, Allergies, Condition of the child' },
               { n:'5', title:'Transport & Hostel', icon:'🚌', color:'#D97706', fields:'Transport required, Area, Route, Hostel required' },
               { n:'6', title:'Sibling Info', icon:'👨‍👩‍👧‍👦', color:'#0891B2', fields:'Name, class, roll number of siblings in same school' },
               { n:'7', title:'Co-curricular', icon:'🏆', color:'#64748B', fields:'Sports, Debate, Drama, Arts, Computing, Scouting' },
@@ -367,10 +412,16 @@ export default function AdmissionFormPrintPage() {
             </div>
           )}
           {mode === 'filled' && student && (
-            <div style={{ marginTop:12, padding:'12px 14px', background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, display:'flex', alignItems:'center', gap:10, fontSize:13, color:'#15803d', fontWeight:600 }}>
-              ✅ Ready: <strong>{student.name}</strong> — {student.class?.name} | Roll: {student.rollNo} — Click "Print Filled Form"
+            <div style={{ marginTop:12, padding:'12px 14px', background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', fontSize:13, color:'#15803d', fontWeight:600 }}>
+              <StudentPhotoButton student={printable} size={44} />
+              <span style={{ flex:1, minWidth:200 }}>
+                {loadingFull ? 'Loading the full record…' : <>✅ Ready: <strong>{printable.name}</strong> — {printable.class?.name} | Roll: {printable.rollNo} — Click "Print Filled Form"</>}
+                {!loadingFull && !printable.photoUrl && <div style={{ color:'#B45309', fontSize:12, marginTop:3 }}>No photo yet: add one first, or the form prints an empty photo box.</div>}
+              </span>
+              <button type="button" className="btn btn-sm btn-outline" onClick={() => setEditing(true)}><Pencil size={13}/> Edit details</button>
             </div>
           )}
+          {editing && printable && <EditStudentModal student={printable} onClose={() => setEditing(false)} />}
         </div>
       </div>
     </div>

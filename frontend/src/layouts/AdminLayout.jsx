@@ -23,6 +23,7 @@ import {
   CalendarDays, Rocket, Truck, Link2, Upload,
   TrendingUp, BookMarked, Globe, QrCode, UserPlus, Receipt, Award,
   BookOpenCheck,
+  History,
 } from 'lucide-react';
 import LicenseBanner from '../components/license/LicenseBanner';
 
@@ -102,6 +103,7 @@ const NAV = [
       { to: '/settings',        icon: Settings,    label: 'School Settings' },
       { to: '/settings/portal-links', icon: Link2, label: 'Portal Links',  roles: ['super_admin','admin'] },
       { to: '/settings/import-export', icon: Upload, label: 'Import & Export', roles: ['super_admin','admin'] },
+      { to: '/settings/past-records', icon: History, label: 'Past Records', roles: ['super_admin','admin'] },
       { to: '/launch-setup',    icon: Rocket,      label: 'Quick Setup',       roles: ['super_admin','admin'] },
       { to: '/settings/backup', icon: Database,    label: 'Backup & Restore',  roles: ['super_admin','admin'] },
       { to: '/manual',          icon: BookOpen,    label: 'User Manual' },
@@ -450,6 +452,7 @@ export default function AdminLayout() {
     { label: 'All Students', desc: 'View student roster', path: '/hub/students', icon: '👨‍🎓', group: 'Students' },
     { label: 'Admit New Student', desc: 'Admission wizard', path: '/hub/students?tab=admit', icon: '📋', group: 'Students' },
     { label: 'Import & Export Records', desc: 'Students and staff from Excel; move a school', path: '/settings/import-export', icon: '📁', group: 'Students' },
+    { label: 'Past Records', desc: 'Old fees, previous balances, salaries and expenses from Excel', path: '/settings/past-records', icon: '🗂️', group: 'Settings' },
     { label: 'Admissions CRM', desc: 'Lead pipeline', path: '/admissions/crm', icon: '🎯', group: 'Students' },
     { label: 'Student Promotion', desc: 'Promote to next class', path: '/students/promote', icon: '⬆️', group: 'Students' },
     { label: 'Student Health Records', desc: 'Medical info', path: '/student-health', icon: '🏥', group: 'Students' },
@@ -689,6 +692,7 @@ export default function AdminLayout() {
   const ROUTE_LABELS = {
   'import-export': 'Import & Export',
   'bulk-import':   'Import & Export',
+  'past-records':  'Past Records',
     'dashboard':       'Smart Dashboard',
     'academics':       'Curriculum Planner',
     'academics-hub':   'Curriculum Planner',

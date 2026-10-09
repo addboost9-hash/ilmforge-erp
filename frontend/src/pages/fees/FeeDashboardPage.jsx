@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
+import { feePeriod } from '../../utils/feeMonth';
 import {
   Search, Scan, AlertCircle, DollarSign,
   TrendingUp, TrendingDown, Wallet, CreditCard
@@ -307,7 +308,7 @@ export default function FeeDashboardPage() {
                   {(studentFee.invoices || []).slice(0, 5).map(inv => (
                     <tr key={inv.id} style={{ borderBottom: '1px solid #D1FAE5' }}>
                       <td style={{ padding: '6px 10px', fontWeight: 600, color: '#1E3A5F' }}>{inv.feeTitle}</td>
-                      <td style={{ padding: '6px 10px', color: '#64748B' }}>{inv.month} {inv.year}</td>
+                      <td style={{ padding: '6px 10px', color: '#64748B' }}>{feePeriod(inv) || '—'}</td>
                       <td style={{ padding: '6px 10px' }}>{money(inv.totalAmount)}</td>
                       <td style={{ padding: '6px 10px', color: '#15803D', fontWeight: 600 }}>{money(inv.paidAmount)}</td>
                       <td style={{ padding: '6px 10px', color: inv.dueAmount > 0 ? '#DC2626' : '#15803D', fontWeight: 700 }}>

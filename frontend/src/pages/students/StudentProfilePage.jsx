@@ -2,19 +2,20 @@ import { useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
+import EditStudentModal from '../../components/EditStudentModal';
 import { openServerDocument } from '../../utils/print';
 import { compressPhoto } from '../../utils/photo';
+import { feePeriod } from '../../utils/feeMonth';
+// Fee amounts (invoices, fee heads, discounts) are stored in paisa: a Rs 2,500
+// invoice is 250000. This page used to print the stored figure as rupees,
+// a hundred times too large; money()/amount() divide by 100.
+import { money, amount, fromPaisa, toPaisa, rupeesInput } from '../../utils/currency';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, FileText, Printer, User, CreditCard,
   ClipboardList, Award, GraduationCap, Camera, Tag, Edit2, Save, X
 } from 'lucide-react';
 
-// Fee amounts (FeeInvoice.totalAmount/paidAmount/dueAmount) are stored and
-// returned by the backend as plain rupee integers — no cents/paisa scaling
-// anywhere in fee.routes.js — so this must not divide by 100 (it previously
-// showed every amount 100x too small, e.g. Rs. 5000 rendered as "Rs. 50").
-const money = v => 'Rs. ' + (v||0).toLocaleString();
 const NAVY = '#1B2F6E';
 
 const TABS = [
@@ -56,10 +57,11 @@ function FeeDetailsPanel({ studentId }) {
     onError: () => toast.error('Failed to apply discounts'),
   });
 
+  // The office types rupees; the heads and the saved discount are paisa.
   const handleDiscountChange = (idx, val) => {
     setHeads(prev => prev.map((h, i) => {
       if (i !== idx) return h;
-      const disc = parseInt(val) || 0;
+      const disc = Math.max(0, toPaisa(val));
       return { ...h, discount: disc, netAmount: Math.max(0, h.amount - disc) };
     }));
   };
@@ -95,19 +97,19 @@ function FeeDetailsPanel({ studentId }) {
             {(heads || []).map((h, i) => (
               <tr key={h.name} style={{ background: i % 2 === 0 ? '#fafafa' : '#fff' }}>
                 <td style={{ ...tdStyle, fontWeight: 600 }}>{h.name}</td>
-                <td style={tdStyle}>{(h.amount || 0).toLocaleString()}</td>
+                <td style={tdStyle}>{amount(h.amount)}</td>
                 <td style={{ ...tdStyle, width: 140 }}>
                   <input
                     type="number"
                     min="0"
-                    max={h.amount}
+                    max={fromPaisa(h.amount)}
                     style={inpStyle}
-                    value={h.discount || 0}
+                    value={rupeesInput(h.discount)}
                     onChange={e => handleDiscountChange(i, e.target.value)}
                   />
                 </td>
                 <td style={{ ...tdStyle, fontWeight: 700, color: h.netAmount < h.amount ? '#059669' : '#1F2937' }}>
-                  {(h.netAmount || 0).toLocaleString()}
+                  {amount(h.netAmount)}
                 </td>
               </tr>
             ))}
@@ -119,9 +121,9 @@ function FeeDetailsPanel({ studentId }) {
             <tfoot>
               <tr style={{ background: '#EEF2FF', fontWeight: 700 }}>
                 <td style={{ ...tdStyle, color: NAVY }}>TOTAL</td>
-                <td style={{ ...tdStyle, color: NAVY }}>{totalFee.toLocaleString()}</td>
-                <td style={{ ...tdStyle, color: '#DC2626' }}>−{discountTotal.toLocaleString()}</td>
-                <td style={{ ...tdStyle, color: '#059669', fontSize: 14 }}>{netTotal.toLocaleString()}</td>
+                <td style={{ ...tdStyle, color: NAVY }}>{amount(totalFee)}</td>
+                <td style={{ ...tdStyle, color: '#DC2626' }}>−{amount(discountTotal)}</td>
+                <td style={{ ...tdStyle, color: '#059669', fontSize: 14 }}>{amount(netTotal)}</td>
               </tr>
             </tfoot>
           )}
@@ -157,96 +159,8 @@ function FeeDetailsPanel({ studentId }) {
   );
 }
 
-/* ── Edit Student Modal ──────────────────────────────────── */
-function EditStudentModal({ student, onClose }) {
-  const qc = useQueryClient();
-  const [form, setForm] = useState({
-    name:           student.name           || '',
-    fatherName:     student.fatherName     || '',
-    motherName:     student.motherName     || '',
-    gender:         student.gender         || '',
-    dob:            student.dob ? student.dob.split('T')[0] : '',
-    address:        student.address        || '',
-    emergencyPhone: student.emergencyPhone || '',
-    bFormNo:        student.bFormNo        || '',
-    status:         student.status         || 'active',
-  });
-
-  const mutation = useMutation({
-    mutationFn: (data) => api.put(`/students/${student.id}`, data),
-    onSuccess: () => {
-      toast.success('Student updated successfully!');
-      qc.invalidateQueries(['student', String(student.id)]);
-      onClose();
-    },
-    onError: (err) => toast.error(err.response?.data?.message || 'Update failed'),
-  });
-
-  const inp = (label, key, type='text', opts=null) => {
-    const fieldId = `edit-student-${key}`;
-    return (
-      <div style={{ marginBottom: 14 }}>
-        <label htmlFor={fieldId} style={{ display:'block', fontSize:12, fontWeight:700, color:'#374151', marginBottom:4 }}>{label}</label>
-        {opts ? (
-          <select
-            id={fieldId}
-            value={form[key]}
-            onChange={e => setForm(p => ({...p, [key]: e.target.value}))}
-            style={{ width:'100%', padding:'8px 10px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13 }}
-          >
-            {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-          </select>
-        ) : (
-          <input
-            id={fieldId}
-            type={type}
-            value={form[key]}
-            onChange={e => setForm(p => ({...p, [key]: e.target.value}))}
-            style={{ width:'100%', padding:'8px 10px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13, boxSizing:'border-box' }}
-          />
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
-      onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby="edit-student-modal-title" style={{ background:'#fff', borderRadius:10, width:'100%', maxWidth:560, maxHeight:'90vh', display:'flex', flexDirection:'column', overflow:'hidden' }}
-        onClick={e => e.stopPropagation()}>
-        <div style={{ background:NAVY, color:'#fff', padding:'14px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <span id="edit-student-modal-title" style={{ fontWeight:700, fontSize:15 }}>Edit Student — {student.name}</span>
-          <button aria-label="Close edit student dialog" onClick={onClose} style={{ background:'none', border:'none', color:'#fff', cursor:'pointer' }}><X size={18}/></button>
-        </div>
-        <div style={{ flex:1, overflowY:'auto', padding:20 }}>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 16px' }}>
-            <div>{inp('Full Name', 'name')}</div>
-            <div>{inp('Father Name', 'fatherName')}</div>
-            <div>{inp('Mother Name', 'motherName')}</div>
-            <div>{inp('Date of Birth', 'dob', 'date')}</div>
-            <div>{inp('Gender', 'gender', 'text', [{v:'male',l:'Male'},{v:'female',l:'Female'},{v:'',l:'Not specified'}])}</div>
-            <div>{inp('Status', 'status', 'text', [{v:'active',l:'Active'},{v:'inactive',l:'Inactive'},{v:'passout',l:'Passout'}])}</div>
-            <div>{inp('Emergency Phone', 'emergencyPhone', 'tel')}</div>
-            <div>{inp('B-Form / CNIC', 'bFormNo')}</div>
-          </div>
-          <div>{inp('Address', 'address')}</div>
-        </div>
-        <div style={{ padding:'12px 20px', borderTop:'1px solid #E5E7EB', display:'flex', gap:10, justifyContent:'flex-end' }}>
-          <button onClick={onClose} style={{ background:'#fff', color:'#374151', border:'1px solid #D1D5DB', borderRadius:6, padding:'9px 20px', fontWeight:600, fontSize:13, cursor:'pointer' }}>
-            Cancel
-          </button>
-          <button
-            onClick={() => mutation.mutate(form)}
-            disabled={mutation.isPending}
-            style={{ background:NAVY, color:'#fff', border:'none', borderRadius:6, padding:'9px 22px', fontWeight:700, fontSize:13, cursor:'pointer', opacity:mutation.isPending?0.7:1 }}
-          >
-            {mutation.isPending ? 'Saving…' : <><Save size={13} style={{display:'inline',marginRight:5}}/> Save Changes</>}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+/* The edit form is shared with the student list and the import results:
+   components/EditStudentModal.jsx */
 
 /* ── Generate & print certificate HTML ──────────────────── */
 function printCert(type, s, school) {
@@ -353,7 +267,9 @@ function printCert(type, s, school) {
 
   const win = window.open('', '_blank');
   if (!win) {
-    alert('Please allow pop-ups for this site to print certificates.\n\nGo to: Browser Settings → Pop-ups → Allow ilmforge-erp.vercel.app');
+    // A message on the page, not a browser alert; and no fixed web address,
+    // which was wrong for schools running IlmForge on their own computer.
+    toast.error('Pop-up blocked. Allow pop-ups for this site to print certificates.');
     return;
   }
   win.document.write(html);
@@ -589,7 +505,7 @@ export default function StudentProfilePage() {
                     {(s.feeInvoices||[]).map(inv => (
                       <tr key={inv.id}>
                         <td style={{fontWeight:600}}>{inv.feeTitle}</td>
-                        <td style={{color:'#6B7280'}}>{inv.month} {inv.year}</td>
+                        <td style={{color:'#6B7280'}}>{feePeriod(inv) || '—'}</td>
                         <td>{money(inv.totalAmount)}</td>
                         <td style={{color:'#0D9488'}}>{money(inv.discount)}</td>
                         <td style={{color:'#059669',fontWeight:600}}>{money(inv.paidAmount)}</td>

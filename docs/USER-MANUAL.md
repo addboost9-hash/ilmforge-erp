@@ -80,6 +80,13 @@ Repeat for every class. Without this, monthly fee generation has nothing to work
 See [Part 2](#part-2). Add the principal, accountant and teachers before admissions begin,
 so students can be assigned a class teacher.
 
+### Step 6 (only if the school ran before IlmForge): bring in past records
+
+Old fee bills and payments, each student's previous balance, past salaries and past
+expenses come in from one Excel workbook, each filed on the date it really happened, so
+reports and every student's fee record are complete from the first day.
+See [Past records](#past-records) in Part 5.
+
 ---
 
 <a name="part-2"></a>
@@ -185,10 +192,16 @@ Useful for walk-in enquiries and for keeping printed forms at the front desk.
    example *Class "Class 404" does not exist*. Nothing is saved yet.
 5. Click **Import [n] records**. A progress bar shows the import as it runs.
 6. Click **Download login details** straight away. It lists every new username and password.
+7. Underneath, **Imported students** lists everyone just added. Filter **Incomplete**,
+   **No photo**, **No date of birth** or **No parent phone** and fix each one right there
+   with **Edit** or the photo button, or delete a row added by mistake.
 
 > Dates are day first: **14/03/2014** is 14 March. Type phones as **03001234567**.
 > Brothers and sisters with the same parent phone share one parent account.
 > Importing the same file twice is safe; anyone already in the school is skipped.
+> Students who have already left can be added with **Status = Inactive**, and staff who have
+> left with **Status = Left**, when you will bring in their old fees or salaries
+> ([Past records](#past-records)). Staff marked Left get no login.
 
 **Where to get the template**
 
@@ -204,19 +217,30 @@ Useful for walk-in enquiries and for keeping printed forms at the front desk.
 |---|---|
 | Classes | Class\*, Sections (e.g. `A, B`), Order |
 | Students | Roll No (leave blank), Student Name\*, Father Name\*, Gender, Date of Birth, B-Form No, Class\*, Section, Parent Phone, Parent Email, Mother Name, Address, Religion, Blood Group, Admission Date, Status |
-| Staff | Employee Code (leave blank), Name\*, Designation, Role, Phone or Email\*, CNIC, Gender, Date of Birth, Department, Joining Date, Monthly Salary (Rs), Salary Type |
+| Staff | Employee Code (leave blank), Name\*, Designation, Role, Phone or Email\*, CNIC, Gender, Date of Birth, Department, Joining Date, Monthly Salary (Rs), Salary Type, Status (Active / Left) |
 
 Each sheet's first row is a grey **Example** row; leave it or delete it, it is never imported.
 The class typed for a student must exist on the Classes sheet or already be in IlmForge.
 
 ### Adding or changing a photo
 
-Open the student's profile (**Student Registry** › click the student) and click
-**Add photo** (or **Change photo**). Pick a picture from the computer or phone.
+A student's photo can be added or changed wherever you need it:
+
+| Where | How |
+|---|---|
+| Student Registry | Click the photo (or the empty photo box) on the student's row |
+| Student profile | **Add photo** / **Change photo** |
+| ID Cards | A card without a photo says **No photo · Add photo**. **Show only these** lists all of them |
+| Certificates | The photo button next to the student's name |
+| Admission Form Print | The photo button on the filled form, next to **Edit details** |
+| Online admission form | Parents attach it when applying; it comes across when you admit the application |
+
+Pick a picture from the computer or phone: **JPG, PNG or WEBP, up to 5 MB**. It is shrunk
+automatically to about 40 KB, so large phone photos are fine.
 
 The photo is saved once, on the student's record, and appears everywhere automatically:
 ID card, leaving, character and bonafide certificates, the admission form, result cards
-and the student and parent portals. Large phone photos are shrunk automatically.
+and the student and parent portals.
 
 For staff, add the photo in **Staff Directory** › edit the person, or with the small
 camera button on their row in **ID Cards**.
@@ -232,10 +256,26 @@ import that same file. Classes, sections, students, parents and staff move acros
 roll numbers and employee codes. Fee history, attendance and exam marks are not included, and
 everyone gets a new password in the login details sheet.
 
-### Finding and managing students
+### Finding and fixing student records
 
-**Sidebar → Student Registry** (`/students`) — search by name, roll number or father name.
-Toggle **Active** / **Inactive**. **Promotion** moves a whole class up at session change.
+**Sidebar → Student Registry** (`/students`)
+
+- Search by name, roll number or father name, or choose a class in **All classes** to list
+  the whole class.
+- **Active** / **Inactive** switches between current students and those who have left.
+- The **Record** column says **Missing: photo, date of birth, …** for anything not filled in yet.
+- **Edit** fixes a wrong or missing detail: name, father's and mother's name, date of birth,
+  gender, class and section, roll number, parent mobile, B-Form, address and status. Only
+  what you change is saved. If the parent mobile changes, the parent signs in with the new
+  number from then on; IlmForge tells you when that happens.
+- **Delete** gives two choices:
+  - **Mark as left school** — for a student who has left. Everything is kept; the student
+    moves to Inactive and can still be given a leaving or character certificate.
+  - **Delete record** — only for an entry made by mistake. Unpaid bills are cancelled and
+    the logins switched off. It is refused once any fee has been paid: use
+    **Mark as left school** instead.
+
+**Promotion** moves a whole class up at session change.
 
 ### Online admissions: your school's own admission form
 
@@ -258,8 +298,9 @@ QR panel also has **Print "Admissions open" poster** — an A4 poster with your 
 QR code and phone number for the gate, the notice board or a banner.
 
 **A parent applies** on the admission form: student's name, class, father's name and mobile
-number are required; date of birth, CNIC, email, address and previous school are optional.
-They get a reference number such as **ADM-00042** on screen.
+number are required; date of birth, CNIC, email, address and previous school are optional,
+and they can attach the child's photo (JPG, PNG or WEBP, up to 5 MB). They get a reference
+number such as **ADM-00042** on screen.
 
 **The school is told at once:**
 
@@ -276,8 +317,8 @@ applications are under **New**. For each one you can:
 - click the arrow to see everything the parent wrote;
 - **call** or **WhatsApp** the parent with one click;
 - change the status to **Contacted**, **Admitted** or **Closed**;
-- click **Admit** — the admission wizard opens with the child's and father's details
-  already filled in and the class chosen. After admitting, the inquiry is marked
+- click **Admit** — the admission wizard opens with the child's and father's details,
+  the class and the photo already filled in. After admitting, the inquiry is marked
   **Admitted** by itself.
 
 Walk-in and phone enquiries can be added with **Add inquiry**, so every enquiry is in one list.
@@ -401,11 +442,15 @@ it has been saved. Corrections are recorded, so there is a trail of who changed 
 
 **Sidebar → Invoicing Hub → Generate Monthly Fee** (`/fees/generate`)
 
-1. Choose the month.
+1. Choose the month and year.
 2. Click **Generate Fee for [month]**.
 
 This creates one invoice per active student from the fee structure. Run it once a month.
 There are also **Generate Custom Fee** (one-off charges) and **Generate Transport Fee**.
+
+A student who already has that month's fee is skipped, including months brought in from
+[Past records](#past-records), so running it twice never bills anyone twice. An admission or
+transport fee in the same month does not stop the monthly fee.
 
 ### Collecting a fee
 
@@ -415,10 +460,13 @@ There are also **Generate Custom Fee** (one-off charges) and **Generate Transpor
 2. Click the student in the results.
 3. Their invoices appear. Click **Collect** on the one being paid.
 4. Enter the amount, any discount, and the payment method.
-5. Click **Confirm Payment**.
+5. **Payment date** is today. If the money was received on an earlier day, choose that day:
+   the payment is filed on that date in every report. The message to the parent switches to
+   **Do not notify**; change it back if they should be told.
+6. Click **Confirm Payment**.
 
-A receipt appears which you can print and hand to the parent. The parent is also notified
-automatically if messaging is configured.
+A receipt appears, with the payment date, which you can print and hand to the parent. The
+parent is also notified automatically if messaging is configured.
 
 > The system will not let you collect more than the amount outstanding on an invoice.
 > If you try, it tells you the actual amount due.
@@ -439,7 +487,8 @@ totals, reports and the dashboard all update to the corrected figure immediately
 ### Following up defaulters
 
 **Invoicing Hub → Fee Defaulters** (`/fees/defaulters`) — lists students with outstanding
-fees and lets you send reminders.
+fees and lets you send reminders. Each student's parent gets **one** message with the total
+still due and the months it covers.
 
 ### Other fee screens
 
@@ -449,7 +498,63 @@ fees and lets you send reminders.
 | Family voucher (siblings on one voucher) | `/fees/family-voucher` |
 | Discounted students | `/fees/discounted` |
 | Annual fee increase | `/fees/increment` |
-| Collection report | `/fees/collection-report` |
+| Collection report (payments received in a month, with the day each was entered) | `/fees/collection-report` |
+
+<a name="past-records"></a>
+### Past records: fees, salaries and expenses from before IlmForge
+
+**Sidebar → Past Records** (`/settings/past-records`) — admin only.
+
+A school that has been running for years can bring its history in, so the dashboard, the
+reports, each student's fee record and the payroll are complete from the first day.
+
+**First**, add every student and staff member with [Import & Export](#part-3), including
+those who have left: students with **Status = Inactive**, staff with **Status = Left**. Past
+records find them by roll number and employee code.
+
+1. Click **Download template**. The workbook has four sheets, plus two lists of your
+   students and staff to copy roll numbers and employee codes from.
+2. Fill in only the sheets you need:
+
+   | Sheet | One row per | Columns (\* = required) |
+   |---|---|---|
+   | Fee History | student per month | Roll No\*, Student Name, Fee Month\* (07/2025), Fee Title (blank = Monthly Fee), Fee Amount (Rs)\*, Concession (Rs), Late Fine (Rs), Paid (Rs), Paid On, Method, Receipt No, Remarks |
+   | Previous Balance | student | Roll No\*, Student Name, Balance Due (Rs)\*, As Of (date), Remarks |
+   | Salary History | staff member per month | Employee Code (or CNIC or Phone), Name, Salary Month\*, Basic Salary (Rs)\*, Allowances, Bonus, Absent / Late / Loan Deduction (Rs), Net Salary (Rs) (a check), Status (Paid / Unpaid), Paid On, Remarks |
+   | Expenses | expense | Date\*, Category\*, Amount (Rs)\*, Description, Paid To |
+
+3. Click **Choose Excel file**. **Check before importing** lists every problem by sheet, row
+   and column, and the rupee totals (billed, received, owed, salaries paid, spent) to compare
+   with your old registers. Nothing is saved yet.
+4. Click **Import [n] rows**.
+
+**How it is recorded**
+
+- Every row is filed on its own date: a fee paid on 8 July 2025 counts in July 2025 in every
+  report. A row with no **Paid On** date counts on the 10th of its fee month (salaries: the
+  last day of the month).
+- **Previous Balance** becomes one unpaid bill per student, *Previous Balance (Arrears)*,
+  collected in Fee Collection like any other bill. Use **either** Fee History **or**
+  Previous Balance for the same months, not both, or the dues are counted twice.
+- Anything left unpaid is a real due: parents see it on their portal, and it appears in
+  Fee Defaulters and fee reminders. Enter an amount the school has written off as
+  **Concession**.
+- A paid salary is also recorded under **Expenses › Salaries** on its paid-on day. Do not
+  list it again on the Expenses sheet.
+- No message is sent to parents or staff, and old fees are not counted as any accountant's
+  cash on the daily balance sheet.
+- A month already in IlmForge is skipped, so importing the same file twice adds nothing. A
+  bill generated in IlmForge but paid by hand gets that payment added to it.
+- Months are written **07/2025** (Jul 2025 also works); dates day first, **08/07/2025**;
+  amounts in rupees.
+
+**Undo:** **Earlier imports** at the bottom of the page lists each import and what is still
+in IlmForge from it. **Undo** removes all of it, after you confirm. Undo is refused once a
+fee has been collected or a salary paid in IlmForge against something from that import, so
+those receipts stay correct.
+
+> **Only a few entries?** Enter them directly with their real date: **Payment date** in Fee
+> Collection, **Paid on** in Payroll Manager, **Date** in Expense Tracker.
 
 ---
 
@@ -601,10 +706,24 @@ Created automatically when you add the staff member. Details appear on screen on
 
 **Sidebar → Payroll Manager** (`/payroll`)
 
-1. Check the month shown at the top.
-2. Click **Generate Payroll**.
-3. Review each staff member's salary, allowances and deductions.
-4. Approve and print salary slips.
+1. Choose the month and year at the top (it opens on the current month).
+2. Click **Generate Payroll**. Staff who joined after that month are left out of it.
+3. Review each staff member's salary, allowances and deductions. **Edit** changes a month
+   that is not paid yet; a paid month cannot be changed.
+4. Set **Paid on** to the day the salaries were paid (today, unless it was earlier), then
+   **Pay** one person or **Pay all**.
+5. Print salary slips.
+
+Each paid salary is also recorded under **Expenses › Salaries** on its paid-on day, so the
+dashboard's spending and the profit and loss include it. A month cannot be paid twice.
+
+### Recording expenses
+
+**Sidebar → Expense Tracker** (`/expenses`)
+
+Add an expense with its **date** (today unless it was spent earlier), category, amount and a
+description. The list shows one month at a time with its total; choose another month, or
+**All**, at the top. A wrong entry can be edited or deleted.
 
 ### Other HR screens
 
@@ -634,6 +753,17 @@ Commonly used:
 | Daily balance sheet | `/accounting/balancesheet` |
 | Accounts ledger | `/accounts` |
 | Defaulters | `/fees/defaulters` |
+
+### Daily balance sheet
+
+**Accounts Ledger → Daily Balance Sheet**, or **Insights Hub** (`/accounting/balancesheet`), shows
+each accountant's cash in hand: what they collected since they last handed over cash, less what they spent.
+
+- Cash is counted by when a payment was **entered**. A payment entered today but dated an
+  earlier day is counted today (the cash is still in hand) and is marked with the date
+  written on it.
+- Old records brought in from Past records are shown apart: they are nobody's cash.
+- **Settle** records that the cash was handed over; the sheet then starts again from zero.
 
 ### Printing anything
 
@@ -713,7 +843,7 @@ Train each person on only the parts they need.
 
 | Role | Can do | Train on parts |
 |---|---|---|
-| **Admin / Principal** | Everything | All |
+| **Admin / Principal** | Everything, including Import & Export and Past Records | All |
 | **Accountant** | Fees, vouchers, defaulters, daily balance, expenses | 5, 10 |
 | **Teacher** | Attendance and marks for their own classes | 4, 6 |
 | **Gatekeeper** | Gate entry, visitors, gate passes | — |
@@ -768,6 +898,17 @@ Students sign in with their **roll number**, not an email.
 
 **The wrong fee amount was collected**
 Do not delete it. Use **Correct** or **Void** in the Payments Received panel — Part 5.
+
+**A fee, salary or expense happened on an earlier day**
+Enter it with that date: **Payment date** in Fee Collection, **Paid on** in Payroll Manager, **Date**
+in Expense Tracker. It is filed on that date in every report.
+
+**A past-records file was imported by mistake**
+**Past Records → Earlier imports → Undo** removes everything that import added. If it is
+refused, fees were collected or salaries paid against it since; the message names them.
+
+**A student's details are wrong or missing**
+**Student Registry** → find the student → **Edit**. See Part 3.
 
 **A class name is spelled wrong**
 School Settings → Classes → **Rename** on that row.

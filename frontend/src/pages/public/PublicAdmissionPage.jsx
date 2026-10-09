@@ -17,6 +17,7 @@ import { CheckCircle2, Send, RefreshCw, Printer } from 'lucide-react';
 import api from '../../api/client';
 import { useSchoolSlug, usePublicSchool, rememberSchool } from '../../utils/schoolLinks';
 import { PublicShell, SchoolNotFound, SchoolLoading } from './PublicShell';
+import PhotoPicker from '../../components/PhotoPicker';
 
 const EMPTY = {
   studentName: '', gender: '', dob: '', classId: '', classInterested: '', campusId: '',
@@ -77,6 +78,7 @@ export default function PublicAdmissionPage() {
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState('');
   const [done, setDone] = useState(null);
+  const [photo, setPhoto] = useState(null);
 
   useEffect(() => { if (school && fromUrl) rememberSchool(school); }, [school, fromUrl]);
   useEffect(() => { if (school?.name) document.title = `Admission — ${school.name}`; }, [school?.name]);
@@ -106,8 +108,8 @@ export default function PublicAdmissionPage() {
     }
     setSending(true);
     try {
-      const { data } = await api.post(`/public/admissions/${encodeURIComponent(school.slug)}`, form, { silent: true });
-      setDone({ ...data.data, studentName: form.studentName, phone: form.fatherPhone });
+      const { data } = await api.post(`/public/admissions/${encodeURIComponent(school.slug)}`, { ...form, ...(photo && { photo }) }, { silent: true });
+      setDone({ ...data.data, studentName: form.studentName, phone: form.fatherPhone, withPhoto: !!photo });
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       const res = err.response?.data;
@@ -138,11 +140,11 @@ export default function PublicAdmissionPage() {
             <div className="ps-hint" style={{ marginBottom: 6 }}>Your reference number</div>
             <div className="ps-ref">{done.reference}</div>
           </div>
-          <p className="ps-hint" style={{ margin: 0 }}>Keep this number. Quote it when you call or visit the school.</p>
+          <p className="ps-hint" style={{ margin: 0 }}>Keep this number. Quote it when you call or visit the school.{done.withPhoto ? ' The photo was received.' : ''}</p>
           {done.schoolPhone && <p style={{ margin: 0, fontSize: 14 }}>School phone: <strong className="ps-select">{done.schoolPhone}</strong></p>}
           <div className="ps-row">
             <button type="button" className="ps-btn is-ghost" onClick={() => window.print()}><Printer size={16} /> Print</button>
-            <button type="button" className="ps-btn is-ghost" onClick={() => { setDone(null); setForm({ ...EMPTY, fatherName: form.fatherName, fatherPhone: form.fatherPhone, fatherCnic: form.fatherCnic, fatherEmail: form.fatherEmail, address: form.address }); setSum(newSum()); setAnswer(''); }}>
+            <button type="button" className="ps-btn is-ghost" onClick={() => { setDone(null); setPhoto(null); setForm({ ...EMPTY, fatherName: form.fatherName, fatherPhone: form.fatherPhone, fatherCnic: form.fatherCnic, fatherEmail: form.fatherEmail, address: form.address }); setSum(newSum()); setAnswer(''); }}>
               Apply for another child
             </button>
             <Link to={schoolPage.to} className="ps-btn">Back to school page</Link>
@@ -176,6 +178,16 @@ export default function PublicAdmissionPage() {
             <Field name="studentName" error={errors.studentName} label="Student's full name" req span2>
               <input className="ps-input" {...inputProps('studentName')} autoComplete="off" value={form.studentName} onChange={(e) => set('studentName', e.target.value)} placeholder="e.g. Ayesha Khan" />
             </Field>
+            <div className="ps-field span-2" data-field="photo">
+              <PhotoPicker
+                id="f-photo"
+                label="Student's photo (optional)"
+                hint="A clear, recent face photo on a plain background. JPG, PNG or WebP up to 5 MB; it is resized automatically to about 40 KB."
+                value={photo}
+                onChange={(v) => { setPhoto(v); setErrors((x) => ({ ...x, photo: undefined })); }}
+                error={errors.photo}
+              />
+            </div>
             <Field name="gender" error={errors.gender} label="Gender">
               <select className="ps-select-input" {...inputProps('gender')} value={form.gender} onChange={(e) => set('gender', e.target.value)}>
                 <option value="">Select</option><option value="male">Male</option><option value="female">Female</option>
