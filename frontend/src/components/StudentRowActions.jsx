@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Pencil, Trash2, Eye, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, Eye, AlertTriangle, Zap } from 'lucide-react';
 import api from '../api/client';
 import EditStudentModal from './EditStudentModal';
 
@@ -88,8 +88,13 @@ export default function StudentRowActions({ student, onChanged, compact = false 
       <Link to={`/students/${student.id}`} style={{ ...btn, border: '1px solid #CBD5E1', color: '#334155', background: '#fff' }} aria-label={`View ${student.name}`}>
         <Eye size={13} />{!compact && ' View'}
       </Link>
-      <button type="button" onClick={() => setEditing(true)} style={{ ...btn, border: '1px solid #0D9488', color: '#0F766E', background: '#F0FDFA' }} aria-label={`Edit ${student.name}`}>
+      {/* Edit opens the full admission form with the record filled in;
+          Quick edit is the short pop-up form for a small fix. */}
+      <Link to={`/students/${student.id}/edit`} style={{ ...btn, border: '1px solid #0D9488', color: '#0F766E', background: '#F0FDFA' }} aria-label={`Edit ${student.name}`} title="Edit in the admission form">
         <Pencil size={13} />{!compact && ' Edit'}
+      </Link>
+      <button type="button" onClick={() => setEditing(true)} style={{ ...btn, border: '1px solid #CBD5E1', color: '#334155', background: '#fff' }} aria-label={`Quick edit ${student.name}`} title="Quick edit">
+        <Zap size={13} />
       </button>
       <button type="button" onClick={() => setDeleting(true)} style={{ ...btn, border: '1px solid #FECACA', color: '#B91C1C', background: '#fff' }} aria-label={`Delete ${student.name}`}>
         <Trash2 size={13} />

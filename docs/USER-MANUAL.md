@@ -201,25 +201,35 @@ later too — see *Correcting an admission* below.
 
 ### Correcting an admission
 
-Any detail entered at admission can be changed afterwards. Open the student's **Edit**
-from the **Student Registry**, the student's profile (**Edit** or **Correct details**), or
-**Admission Form Print → Filled Form → Edit details**. The form has the same parts as the
-admission form:
+Anything missed or typed wrongly at admission can be put right later **in the same
+admission form** you used to admit the student (`/students/<id>/edit`). Open it with:
 
-| Tab | What you can correct |
+- **Edit** on the student's row in the **Student Registry**,
+- **Edit** (or **Correct details**) on the student's profile,
+- **Edit details** on **Admission Form Print → Filled Form**.
+
+The form opens with the student's record already filled in, step by step as at admission:
+
+| Step | What you can fill in or correct |
 |---|---|
-| Student | Name, last name, names in Urdu, gender, date of birth, B-Form, religion, caste, nationality, photo |
-| Admission & class | Class, section, roll number, status, family number, admission date, admission test marks, free student |
-| Father & mother | Names (also in Urdu), CNICs, qualifications, occupations, mother's mobile |
-| Contact & address | Parent mobile, student email, parent's email and CNIC, province, city, postal and permanent address |
-| Previous school | School, contact person, phone, admission number, last class, grade, address |
-| Health | Blood group, food needs, allergies, medical condition |
+| 1 Student Info | Photo, family number, admission date, admission test marks, B-Form, names (also in Urdu), father's and mother's details, gender, date of birth, caste, nationality, province, city, religion, addresses, mobile numbers, email, previous school, health |
+| 2 Class & Section | Class, section, roll number, status (active, left school, passed out) |
+| 3 Fee Details | Free student. Fee amounts and discounts on bills are changed in the student's **Fee Details** or **Collect Fee** |
+| 4 Parent Details | Parent mobile (the parent's sign-in), parent's email and CNIC |
+| 5 Review & Save | Every change, old value → new value, with **Undo** on each |
 
-Each changed field says *changed*, and the bottom of the form counts them. Only what you
-change is saved. If something is wrong (a CNIC with a digit missing, a date in the future),
-the form opens the tab with the problem and says what to fix; nothing is saved until it is
-right. The parent's email and CNIC belong to the parent account, so a change there also
-shows for the student's brothers and sisters. The **Personal Info** tab of the profile now
+- Click any step at the top to go straight to it. The top of the form shows how many
+  changes are not saved yet; **Save changes now** saves from any step.
+- Only what you change is saved. A value that is wrong (a CNIC with a digit missing, a
+  date in the future) is explained on its step and nothing is saved until it is right.
+- The parent's mobile cannot be emptied (the parent signs in with it). A new roll number
+  becomes the student's sign-in. The parent's email and CNIC are on the parent account, so a
+  change also shows for brothers and sisters.
+- After saving, the list of what changed is shown with **Print Admission Form** for the
+  corrected form.
+
+For a one-line fix, **Quick edit** (the ⚡ button on the row, or on the profile) opens a
+short pop-up form with the same fields in tabs. The **Personal Info** tab of the profile
 shows every detail that has been filled in.
 
 ### Blank admission forms

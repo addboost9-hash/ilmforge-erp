@@ -424,7 +424,9 @@ export default function AdmissionFormPrintPage() {
                 {loadingFull ? 'Loading the full record…' : <>✅ Ready: <strong>{printable.name}</strong> — {printable.class?.name} | Roll: {printable.rollNo} — Click "Print Filled Form"</>}
                 {!loadingFull && !printable.photoUrl && <div style={{ color:'#B45309', fontSize:12, marginTop:3 }}>No photo yet: add one first, or the form prints an empty photo box.</div>}
               </span>
-              <button type="button" className="btn btn-sm btn-outline" onClick={() => setEditing(true)}><Pencil size={13}/> Edit details</button>
+              {/* Fix or fill in the record in the full admission form, then print. */}
+              <Link to={`/students/${printable.id}/edit`} className="btn btn-sm btn-outline"><Pencil size={13}/> Edit details</Link>
+              <button type="button" className="btn btn-sm btn-outline" onClick={() => setEditing(true)}>Quick edit</button>
             </div>
           )}
           {editing && printable && <EditStudentModal student={printable} onClose={() => setEditing(false)} />}

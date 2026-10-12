@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import EditStudentModal from '../../components/EditStudentModal';
@@ -302,6 +302,7 @@ export default function StudentProfilePage() {
   const { id } = useParams();
   const [tab, setTab] = useState('info');
   const [editing, setEditing] = useState(false);
+  const navigate = useNavigate();
 
   const { data:s, isLoading } = useQuery({
     queryKey: ['student', id],
@@ -354,7 +355,10 @@ export default function StudentProfilePage() {
         <h1 className="page-title">{s.name}</h1>
         <span className={`badge ${s.status==='active'?'badge-teal':s.status==='passout'?'badge-gray':'badge-red'}`}>{s.status}</span>
         <div style={{marginLeft:'auto', display:'flex', gap:8}}>
-          <button onClick={() => setEditing(true)} className="btn btn-outline btn-sm"><Edit2 size={14}/> Edit</button>
+          {/* The full admission form with this record in it; the pop-up is
+              kept for a quick fix. */}
+          <Link to={`/students/${s.id}/edit`} className="btn btn-outline btn-sm"><Edit2 size={14}/> Edit</Link>
+          <button onClick={() => setEditing(true)} className="btn btn-outline btn-sm" title="Quick edit in a pop-up">Quick edit</button>
           <Link to="/fees/collect" className="btn btn-teal btn-sm"><CreditCard size={14}/> Collect Fee</Link>
           <Link to="/id-cards" className="btn btn-outline btn-sm"><Award size={14}/> ID Card</Link>
         </div>
@@ -455,7 +459,7 @@ export default function StudentProfilePage() {
                   used to be saved but never shown, so a typing mistake there
                   went unnoticed. Optional details show once filled in. */}
               <div>
-                <InfoBlock title="Student Details" onEdit={() => setEditing(true)} rows={[
+                <InfoBlock title="Student Details" onEdit={() => navigate(`/students/${s.id}/edit`)} rows={[
                   ['Full Name',       [s.name, s.lastName].filter(Boolean).join(' '), true],
                   ['Name (Urdu)',     [s.firstNameUrdu, s.lastNameUrdu].filter(Boolean).join(' ')],
                   ['Roll Number',     s.rollNo, true],

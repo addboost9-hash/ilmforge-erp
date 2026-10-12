@@ -9,8 +9,8 @@
  *   Step 5: Review & Confirm
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { validatePhone, validateCNIC, formatCNIC } from '../../utils/validation';
@@ -188,6 +188,58 @@ function fitToWizard(fields) {
   return { values, unmatched };
 }
 
+/* ── Editing an admitted student in this same form ──────────────────
+   /students/:id/edit opens the wizard filled with the student's record.
+   Only fields that were changed are sent (PUT /students/:id), so a field
+   nobody touched can never fail the save or overwrite anything. */
+const EDIT_KEYS = [
+  'name', 'lastName', 'firstNameUrdu', 'lastNameUrdu',
+  'fatherName', 'fatherNameUrdu', 'fatherCnic', 'fatherQualification', 'fatherOccupation',
+  'motherName', 'motherCnic', 'motherQualification', 'motherOccupation', 'motherPhone',
+  'gender', 'dob', 'caste', 'nationality', 'province', 'city', 'religion', 'postalAddress', 'address',
+  'emergencyPhone', 'email', 'bFormNo', 'familyNo', 'admissionDate', 'admissionTestMarks',
+  'prevSchoolName', 'prevSchoolFocalPerson', 'prevSchoolPhone', 'prevSchoolAddress', 'prevAdmissionNo', 'prevGrade', 'prevTestGrade',
+  'bloodGroup', 'foodDietaryReq', 'allergies', 'childCondition',
+  'classId', 'sectionId', 'rollNo', 'status', 'isFreeStudent', 'parentEmail', 'parentCnic',
+];
+const EDIT_LABELS = {
+  ...READER_LABELS,
+  name: 'First name', lastName: 'Last name', firstNameUrdu: 'First name (Urdu)', lastNameUrdu: 'Last name (Urdu)',
+  classId: 'Class', sectionId: 'Section', rollNo: 'Roll number', status: 'Status', isFreeStudent: 'Free student',
+  emergencyPhone: 'Parent mobile', email: 'Email', parentEmail: 'Parent email', parentCnic: 'Parent CNIC',
+};
+// Which step shows a field, to open it when the server finds a problem there.
+const STEP_OF = { classId: 2, sectionId: 2, rollNo: 2, status: 2, isFreeStudent: 3, parentEmail: 4, parentCnic: 4 };
+const STATUS_LABELS = { active: 'Active', inactive: 'Left school (inactive)', passout: 'Passed out', left: 'Left', withdrawn: 'Withdrawn' };
+// The day in Pakistan, for a stored date (an admission saved at 1 a.m. is still that day).
+const pkDay = (d) => (d ? new Date(new Date(d).getTime() + 5 * 3600000).toISOString().slice(0, 10) : '');
+
+function studentToForm(s) {
+  const str = (v) => (v === null || v === undefined ? '' : String(v));
+  const g = str(s.gender).toLowerCase();
+  const out = {};
+  EDIT_KEYS.forEach((k) => { out[k] = str(s[k]); });
+  return {
+    ...out,
+    gender: g === 'male' ? 'Male' : g === 'female' ? 'Female' : g === 'other' ? 'Other' : '',
+    dob: pkDay(s.dob),
+    admissionDate: pkDay(s.admissionDate || s.createdAt),
+    classId: s.classId ? String(s.classId) : '',
+    sectionId: s.sectionId ? String(s.sectionId) : '',
+    status: s.status || 'active',
+    isFreeStudent: !!s.isFreeStudent,
+    parentEmail: s.parentInfo?.email || '',
+    parentCnic: s.parentInfo?.cnic || '',
+    country: 'Pakistan',
+    photoPreview: s.photoUrl || '',
+    photoBase64: '',
+  };
+}
+
+/* A select keeps a stored value that is not one of its choices (an import
+   may say "Muslim" or "Khyber Pakhtunkhwa"), instead of showing another. */
+const withCurrent = (list, value) => (value && !list.includes(value) ? [...list, value] : list);
+
 const localToday = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -204,6 +256,9 @@ const FEE_HEADS = ['Admission Fee', 'Tuition Fee', 'Stationary', 'Annual Fund'];
 
 export default function AdmissionWizardPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { id: editId } = useParams();
+  const isEdit = !!editId;
   const [step, setStep] = useState(1);
   const [stepVisible, setStepVisible] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -295,6 +350,31 @@ export default function AdmissionWizardPage() {
 
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErrors(e => ({ ...e, [k]: null })); };
   const setDiscount = (head, val) => setForm(f => ({ ...f, feeDiscounts: { ...f.feeDiscounts, [head]: val } }));
+
+  /* Edit mode: load the student once and fill the form with the record. */
+  const [original, setOriginal] = useState(null);
+  const [editDone, setEditDone] = useState(null); // { student, changes }
+  const { data: editStudent, isError: editLoadFailed } = useQuery({
+    queryKey: ['student', String(editId)],
+    queryFn: () => api.get(`/students/${editId}`).then((r) => r.data.data),
+    enabled: isEdit,
+    staleTime: 0,
+  });
+  useEffect(() => {
+    if (!isEdit || !editStudent || original) return;
+    const values = studentToForm(editStudent);
+    setOriginal(values);
+    setForm((f) => ({ ...f, ...values }));
+    if (EDIT_KEYS.some((k) => k.startsWith('prev') && values[k])) setPrevHistoryOpen(true);
+    if (['bloodGroup', 'foodDietaryReq', 'allergies', 'childCondition'].some((k) => values[k])) setHealthOpen(true);
+  }, [isEdit, editStudent, original]);
+  const hasParentAccount = !!editStudent?.parentInfo;
+
+  /* What is different from the record, as [key, before, after]. */
+  const photoChanged = isEdit && original && (form.photoBase64 !== '' || form.photoPreview !== original.photoPreview);
+  const changedKeys = isEdit && original
+    ? EDIT_KEYS.filter((k) => (k === 'isFreeStudent' ? !!form[k] !== !!original[k] : String(form[k] ?? '') !== String(original[k] ?? '')))
+    : [];
 
   /* ── Linked data ── */
   const { data: classes = [] } = useQuery({
@@ -390,6 +470,7 @@ export default function AdmissionWizardPage() {
 
   /* ── Validation ── */
   const validate = (s) => {
+    if (isEdit) return validateEdit(s);
     const e = {};
     if (s === 1) {
       if (!form.name.trim()) e.name = "Please enter the student's first name (required)";
@@ -419,6 +500,83 @@ export default function AdmissionWizardPage() {
     setErrors(e);
     return Object.keys(e).length === 0;
   };
+  /* Editing: the same checks, but an old record with something missing (no
+     father's name, no phone from an import) can still be corrected bit by
+     bit. What was there cannot be blanked where the app depends on it. */
+  const validateEdit = (s) => {
+    const e = {};
+    const phoneRule = (k) => {
+      const v = String(form[k] || '').trim();
+      if (!v && original?.[k]) e[k] = "The parent's mobile number cannot be removed: the parent signs in with it.";
+      else if (v && !validatePhone(v)) e[k] = 'Enter a valid Pakistan mobile number (e.g. 0312-3456789 or +923123456789)';
+    };
+    if (s === 1) {
+      if (!form.name.trim()) e.name = "Please enter the student's first name (required)";
+      if (!form.fatherName.trim() && original?.fatherName) e.fatherName = "The father's name cannot be left empty";
+      phoneRule('emergencyPhone');
+      if (form.fatherCnic && !validateCNIC(form.fatherCnic)) e.fatherCnic = 'Father CNIC must be 13 digits (XXXXX-XXXXXXX-X)';
+      if (form.motherCnic && !validateCNIC(form.motherCnic)) e.motherCnic = 'Mother CNIC must be 13 digits (XXXXX-XXXXXXX-X)';
+      if (!form.admissionDate) e.admissionDate = 'Enter the admission date';
+    }
+    if (s === 2) {
+      if (!form.classId && original?.classId) e.classId = 'Please select a class for this student';
+      if (!String(form.rollNo || '').trim()) e.rollNo = 'A roll number is needed: the student signs in with it';
+    }
+    if (s === 4) {
+      phoneRule('emergencyPhone');
+      if (form.parentCnic && !validateCNIC(form.parentCnic)) e.parentCnic = 'CNIC must be 13 digits (XXXXX-XXXXXXX-X)';
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  /* Save the changed fields of an admitted student. */
+  const saveEdit = async () => {
+    for (const s of [1, 2, 4]) { if (!validateEdit(s)) { setStep(s); return; } }
+    if (!changedKeys.length && !photoChanged) { toast('Nothing has been changed yet.', { icon: 'ℹ️' }); return; }
+    setSubmitting(true);
+    try {
+      const body = {};
+      changedKeys.forEach((k) => { body[k] = form[k]; });
+      if (body.classId !== undefined) body.sectionId = form.sectionId || null;
+      if (body.sectionId === '') body.sectionId = null;
+      if (photoChanged) {
+        body.photoUrl = form.photoBase64 ? await compressPhoto(form.photoBase64) : null;
+      }
+      const res = await api.put(`/students/${editId}`, body);
+      const fresh = await api.get(`/students/${editId}`).then((r) => r.data.data).catch(() => res.data.data);
+      qc.invalidateQueries({ predicate: (q) => /student|class-sections|idcard|card|certificate|admission/i.test(String(q.queryKey?.[0] || '')) });
+      const pl = res.data?.parentLogin;
+      if (pl?.changed) toast(`The parent now signs in with ${pl.phone}.`, { icon: '📱', duration: 6000 });
+      else if (pl?.reason) toast(pl.reason, { icon: 'ℹ️', duration: 7000 });
+      toast.success('Admission record updated.');
+      setEditDone({ student: fresh, changes: changeList(), photo: photoChanged });
+    } catch (err) {
+      const d = err.response?.data;
+      if (d?.errors) {
+        setErrors(d.errors);
+        const first = Object.keys(d.errors)[0];
+        setStep(STEP_OF[first] || 1);
+      }
+      toast.error(d?.message || 'The record could not be saved.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /* The changes in words, for the last step and the confirmation. */
+  const shown = (k, v) => {
+    if (k === 'classId') return classes.find((c) => String(c.id) === String(v))?.name || (v ? `Class #${v}` : '');
+    if (k === 'sectionId') {
+      const all = classes.flatMap((c) => c.sections || []);
+      return all.find((x) => String(x.id) === String(v))?.name || '';
+    }
+    if (k === 'isFreeStudent') return v ? 'Yes' : 'No';
+    if (k === 'status') return STATUS_LABELS[v] || v;
+    return v === null || v === undefined ? '' : String(v);
+  };
+  const changeList = () => changedKeys.map((k) => ({ key: k, label: EDIT_LABELS[k] || k, before: shown(k, original?.[k]), after: shown(k, form[k]) }));
+
   const next = () => {
     if (validate(step)) {
       setStepVisible(false);
@@ -580,6 +738,56 @@ export default function AdmissionWizardPage() {
     setTimeout(() => w.print(), 400);
   };
 
+  /* ═══════════════ EDIT MODE: loading, saved ═══════════════ */
+  if (isEdit && !original) {
+    return (
+      <div className="max-w-2xl mx-auto py-16 px-4 text-center text-slate-500">
+        {editLoadFailed
+          ? <>The student's record could not be loaded. <button className="text-teal-600 underline" onClick={() => navigate('/students')}>Back to students</button></>
+          : <><div className="spinner" style={{ margin: '0 auto 12px' }} />Loading the admission record…</>}
+      </div>
+    );
+  }
+  if (isEdit && editDone) {
+    const s = editDone.student;
+    return (
+      <div className="max-w-2xl mx-auto py-8 px-4">
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-3">
+            <CheckCircle2 className="w-9 h-9 text-teal-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800">Admission record updated</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            <strong>{[s.name, s.lastName].filter(Boolean).join(' ')}</strong> · Roll No <strong className="text-teal-700">{s.rollNo}</strong>
+            {s.class && <> · {s.class.name}{s.section ? ` — ${s.section.name}` : ''}</>}
+          </p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-5" aria-label="Changes saved">
+          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">Saved</div>
+          {editDone.photo && <div className="text-sm text-slate-700 py-1">Photo {s.photoUrl ? 'changed' : 'removed'}</div>}
+          {editDone.changes.map((c) => (
+            <div key={c.key} className="text-sm py-1 border-t border-slate-100 first:border-t-0 flex flex-wrap gap-x-2">
+              <span className="font-semibold text-slate-700 w-40 shrink-0">{c.label}</span>
+              <span className="text-slate-400 line-through">{c.before || 'empty'}</span>
+              <span className="text-slate-400">→</span>
+              <span className="text-teal-800 font-semibold">{c.after || 'empty'}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-3 flex-wrap">
+          <button onClick={() => printAdmissionForm(s, school)} className="flex-1 flex items-center justify-center gap-2 bg-[#1B2F6E] hover:bg-[#16255a] text-white font-semibold py-3 rounded-xl transition">
+            <FileText className="w-4 h-4" /> Print Admission Form
+          </button>
+          <button onClick={() => navigate(`/students/${s.id}`)} className="flex-1 border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-3 rounded-xl transition">
+            View Student Profile
+          </button>
+        </div>
+        <button onClick={() => { const v = studentToForm(s); setOriginal(v); setForm((f) => ({ ...f, ...v })); setEditDone(null); setStep(1); }}
+          className="w-full mt-3 text-sm text-teal-600 hover:underline">Change something else →</button>
+      </div>
+    );
+  }
+
   /* ═══════════════ SUCCESS SCREEN ═══════════════ */
   if (result) {
     const c = result.credentials;
@@ -676,8 +884,23 @@ export default function AdmissionWizardPage() {
     <div className="max-w-4xl mx-auto py-6 px-4">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-800">New Student Admission</h1>
-        <p className="text-sm text-slate-500">Complete student registration — portal accounts, fee & class auto-linked</p>
+        {isEdit ? (
+          <>
+            <h1 className="text-xl font-bold text-slate-800">Edit Admission — {[original.name, original.lastName].filter(Boolean).join(' ')} <span className="text-teal-700">({original.rollNo})</span></h1>
+            <p className="text-sm text-slate-500">The same form as at admission, filled with this student's record. Fill in what was missed or correct what is wrong; only what you change is saved.</p>
+            <div role="note" className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className={`px-2.5 py-1 rounded-full font-semibold ${changedKeys.length || photoChanged ? 'bg-teal-100 text-teal-800' : 'bg-slate-100 text-slate-500'}`}>
+                {changedKeys.length + (photoChanged ? 1 : 0) ? `${changedKeys.length + (photoChanged ? 1 : 0)} change${changedKeys.length + (photoChanged ? 1 : 0) === 1 ? '' : 's'} not saved yet` : 'No changes yet'}
+              </span>
+              <span className="text-slate-400">Click any step above to jump to it.</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <h1 className="text-xl font-bold text-slate-800">New Student Admission</h1>
+            <p className="text-sm text-slate-500">Complete student registration — portal accounts, fee & class auto-linked</p>
+          </>
+        )}
         {prefill && inquiryId && (
           <div role="status" style={{ marginTop: 10, padding: '9px 12px', borderRadius: 8, background: '#F0FDFA', border: '1px solid #99F6E4', color: '#0F766E', fontSize: 13 }}>
             Filled in from admission application ADM-{String(inquiryId || '').padStart(5, '0')}. Please check every step before admitting.
@@ -687,10 +910,11 @@ export default function AdmissionWizardPage() {
 
       {/* Stepper */}
       <div className="flex items-center mb-8">
-        {STEPS.map((s, i) => (
+        {(isEdit ? STEPS.map((s) => (s.id === 5 ? { ...s, label: 'Review & Save' } : s)) : STEPS).map((s, i) => (
           <div key={s.id} className="flex items-center flex-1 last:flex-none">
-            <button onClick={() => s.id < step && setStep(s.id)}
-              className={`flex flex-col items-center gap-1.5 ${s.id < step ? 'cursor-pointer' : 'cursor-default'}`}>
+            {/* Editing: every step can be opened directly. */}
+            <button onClick={() => (isEdit || s.id < step) && setStep(s.id)} aria-label={`Step ${s.id}: ${s.label}`}
+              className={`flex flex-col items-center gap-1.5 ${isEdit || s.id < step ? 'cursor-pointer' : 'cursor-default'}`}>
               <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all
                 ${s.id === step ? 'bg-teal-600 border-teal-600 text-white shadow-lg shadow-teal-600/30 scale-110'
                 : s.id < step ? 'bg-teal-100 border-teal-500 text-teal-700'
@@ -751,13 +975,13 @@ export default function AdmissionWizardPage() {
                 />
               </div>
               <div className="grid grid-cols-1 gap-3">
-                <Field label="Registration No" note="Auto-generated">
-                  <input className={inputCls + ' bg-slate-50 text-slate-400'} value="Auto" readOnly />
+                <Field label={isEdit ? 'Roll / Registration No' : 'Registration No'} note={isEdit ? 'change on step 2' : 'Auto-generated'}>
+                  <input className={inputCls + ' bg-slate-50 text-slate-400'} value={isEdit ? form.rollNo : 'Auto'} readOnly />
                 </Field>
                 <Field label="Family No">
                   <input className={inputCls} value={form.familyNo} onChange={e => set('familyNo', e.target.value)} placeholder="Family number" />
                 </Field>
-                <Field label="Date of Admission">
+                <Field label="Date of Admission" error={errors.admissionDate}>
                   <input type="date" className={inputCls} value={form.admissionDate} onChange={e => set('admissionDate', e.target.value)} />
                 </Field>
               </div>
@@ -782,7 +1006,7 @@ export default function AdmissionWizardPage() {
             {/* Name fields */}
             <div className="grid sm:grid-cols-2 gap-3 mb-3">
               <Field label="First Name *" error={errors.name}>
-                <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Muhammad Ahmad" autoFocus />
+                <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Muhammad Ahmad" autoFocus={!isEdit} />
               </Field>
               <Field label="Last Name">
                 <input className={inputCls} value={form.lastName} onChange={e => set('lastName', e.target.value)} placeholder="e.g. Khan" />
@@ -832,7 +1056,7 @@ export default function AdmissionWizardPage() {
               <Field label="Father's Qualification">
                 <select className={inputCls} value={form.fatherQualification} onChange={e => set('fatherQualification', e.target.value)}>
                   <option value="">Select Qualification</option>
-                  {['Matric','Intermediate','Bachelor','Master','PhD','Other','None'].map(q => <option key={q}>{q}</option>)}
+                  {withCurrent(['Matric','Intermediate','Bachelor','Master','PhD','Other','None'], form.fatherQualification).map(q => <option key={q}>{q}</option>)}
                 </select>
               </Field>
               <Field label="Father's Occupation">
@@ -874,7 +1098,7 @@ export default function AdmissionWizardPage() {
               <Field label="Mother's Qualification">
                 <select className={inputCls} value={form.motherQualification} onChange={e => set('motherQualification', e.target.value)}>
                   <option value="">Select Qualification</option>
-                  {['Matric','Intermediate','Bachelor','Master','PhD','Other','None'].map(q => <option key={q}>{q}</option>)}
+                  {withCurrent(['Matric','Intermediate','Bachelor','Master','PhD','Other','None'], form.motherQualification).map(q => <option key={q}>{q}</option>)}
                 </select>
               </Field>
               <Field label="Mother's Occupation">
@@ -901,7 +1125,7 @@ export default function AdmissionWizardPage() {
               <Field label="Nationality">
                 <select className={inputCls} value={form.nationality} onChange={e => set('nationality', e.target.value)}>
                   <option value="">Select Nationality</option>
-                  {['Pakistani','Afghan','Iranian','Indian','Other'].map(n => <option key={n}>{n}</option>)}
+                  {withCurrent(['Pakistani','Afghan','Iranian','Indian','Other'], form.nationality).map(n => <option key={n}>{n}</option>)}
                 </select>
               </Field>
               <Field label="Country">
@@ -909,7 +1133,8 @@ export default function AdmissionWizardPage() {
               </Field>
               <Field label="Province">
                 <select className={inputCls} value={form.province} onChange={e => set('province', e.target.value)}>
-                  {['ICT','Punjab','Sindh','KPK','Balochistan','AJK','GB'].map(p => <option key={p}>{p}</option>)}
+                  <option value="">Select Province</option>
+                  {withCurrent(['ICT','Punjab','Sindh','KPK','Balochistan','AJK','GB'], form.province).map(p => <option key={p}>{p}</option>)}
                 </select>
               </Field>
               <Field label="City">
@@ -918,7 +1143,7 @@ export default function AdmissionWizardPage() {
               <Field label="Religion">
                 <select className={inputCls} value={form.religion} onChange={e => set('religion', e.target.value)}>
                   <option value="">Select Religion</option>
-                  {['Islam','Christianity','Hinduism','Sikhism','Other'].map(r => <option key={r}>{r}</option>)}
+                  {withCurrent(['Islam','Christianity','Hinduism','Sikhism','Other'], form.religion).map(r => <option key={r}>{r}</option>)}
                 </select>
               </Field>
             </div>
@@ -1018,7 +1243,7 @@ export default function AdmissionWizardPage() {
                   <Field label="Blood Group">
                     <select className={inputCls} value={form.bloodGroup} onChange={e => set('bloodGroup', e.target.value)}>
                       <option value="">Select Blood Group</option>
-                      {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bg => <option key={bg}>{bg}</option>)}
+                      {withCurrent(['A+','A-','B+','B-','AB+','AB-','O+','O-'], form.bloodGroup).map(bg => <option key={bg}>{bg}</option>)}
                     </select>
                   </Field>
                   <Field label="Food and Dietary Req">
@@ -1053,6 +1278,27 @@ export default function AdmissionWizardPage() {
                 </select>
               </Field>
             </div>
+            {isEdit && (
+              <>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <Field label="Roll Number *" error={errors.rollNo}>
+                    <input className={inputCls} value={form.rollNo} onChange={e => set('rollNo', e.target.value)} />
+                  </Field>
+                  <Field label="Status">
+                    <select className={inputCls} value={form.status} onChange={e => set('status', e.target.value)}>
+                      {withCurrent(['active', 'inactive', 'passout'], form.status).map(v => <option key={v} value={v}>{STATUS_LABELS[v] || v}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                {(form.rollNo !== original.rollNo || form.classId !== original.classId) && (
+                  <div role="note" className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2">
+                    {form.rollNo !== original.rollNo && 'The student will sign in with the new roll number, and new fee slips will show it. '}
+                    {form.classId !== original.classId && "Moving class: bills already made stay as they are; next month's fee follows the new class."}
+                  </div>
+                )}
+              </>
+            )}
+            {!isEdit && <>
             <Field label="Assign Teacher (Optional)">
               <select className={inputCls} value={form.teacherId} onChange={e => set('teacherId', e.target.value)}>
                 <option value="">{classTeacher ? `Auto: ${classTeacher.name} (Class Teacher)` : 'Select teacher…'}</option>
@@ -1073,6 +1319,7 @@ export default function AdmissionWizardPage() {
                 </div>
               </div>
             )}
+            </>}
           </div>
         )}
 
@@ -1099,7 +1346,14 @@ export default function AdmissionWizardPage() {
               </div>
             </label>
 
-            {!form.isFreeStudent && (
+            {isEdit && (
+              <div role="note" className="text-sm bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-600 space-y-2">
+                <p>The fee table on this step only makes the <strong>first bill at admission</strong>; it is not kept on the record, so changing it here would change nothing.</p>
+                <p>To change a fee amount or give a discount on a bill, use <button type="button" className="text-teal-700 font-semibold underline" onClick={() => navigate(`/students/${editId}`)}>the student's Fee Details</button> or <button type="button" className="text-teal-700 font-semibold underline" onClick={() => navigate('/fees/collect')}>Collect Fee</button>.</p>
+              </div>
+            )}
+
+            {!form.isFreeStudent && !isEdit && (
               <>
                 {/* Fee structure table */}
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -1210,7 +1464,8 @@ export default function AdmissionWizardPage() {
                 )}
                 <p className="text-[11px] text-slate-400 mt-1">Sibling detection uses this number — same parent = same account</p>
               </Field>
-              <Field label="Parent Email (optional)">
+              {(!isEdit || hasParentAccount) && <>
+              <Field label="Parent Email (optional)" error={errors.parentEmail}>
                 <input className={inputCls} type="email" value={form.parentEmail} onChange={e => set('parentEmail', e.target.value)} placeholder="parent@email.com" />
               </Field>
               <Field label="Parent CNIC" error={errors.parentCnic}>
@@ -1233,7 +1488,16 @@ export default function AdmissionWizardPage() {
                   maxLength={15}
                 />
               </Field>
+              </>}
             </div>
+            {isEdit && (
+              <div role="note" className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-600">
+                {hasParentAccount
+                  ? "The parent's email and CNIC are on the parent account, so a change also shows for this student's brothers and sisters. A new mobile number becomes the parent's sign-in."
+                  : 'This student has no parent account, so there is no parent email or CNIC to correct.'}
+              </div>
+            )}
+            {!isEdit && (
             <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-teal-300 bg-teal-50 cursor-pointer">
               <input type="checkbox" checked={form.createPortalAccounts} onChange={e => set('createPortalAccounts', e.target.checked)} className="w-5 h-5 accent-teal-600" />
               <div>
@@ -1244,11 +1508,41 @@ export default function AdmissionWizardPage() {
                 </div>
               </div>
             </label>
+            )}
+          </div>
+        )}
+
+        {/* ─── STEP 5 (editing): what will change ─── */}
+        {step === 5 && isEdit && (
+          <div className="space-y-3" aria-label="Changes to save">
+            <h2 className="font-bold text-slate-800 text-base">Check the changes, then save</h2>
+            {!changedKeys.length && !photoChanged ? (
+              <p className="text-sm text-slate-500 bg-slate-50 rounded-xl p-4">Nothing has been changed yet. Go to any step above, correct or fill in what is needed, and come back here to save.</p>
+            ) : (
+              <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
+                {photoChanged && (
+                  <div className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                    <span className="font-semibold text-slate-700 w-44 shrink-0">Photo</span>
+                    <span className="text-teal-800 font-semibold">{form.photoPreview ? 'New photo' : 'Removed'}</span>
+                  </div>
+                )}
+                {changeList().map((c) => (
+                  <div key={c.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                    <span className="font-semibold text-slate-700 w-44 shrink-0">{c.label}</span>
+                    <span className="text-slate-400 line-through break-all">{c.before || 'empty'}</span>
+                    <span className="text-slate-400">→</span>
+                    <span className="text-teal-800 font-semibold break-all">{c.after || 'empty'}</span>
+                    <button type="button" className="ml-auto text-xs text-slate-500 hover:text-red-600 underline"
+                      onClick={() => set(c.key, original[c.key])}>Undo</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* ─── STEP 5: Review ─── */}
-        {step === 5 && (
+        {step === 5 && !isEdit && (
           <div className="space-y-3">
             <ReviewRow label="First Name" value={`${form.name}${form.lastName ? ' ' + form.lastName : ''}`} onEdit={() => setStep(1)} />
             <ReviewRow label="Father's Name" value={form.fatherName} onEdit={() => setStep(1)} />
@@ -1284,10 +1578,21 @@ export default function AdmissionWizardPage() {
             className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition">
             <ChevronLeft className="w-4 h-4" /> Back
           </button>
+          {isEdit && step < 5 && (changedKeys.length > 0 || photoChanged) && (
+            <button onClick={saveEdit} disabled={submitting}
+              className="ml-auto mr-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-teal-600 text-teal-700 hover:bg-teal-50 disabled:opacity-60 transition">
+              {submitting ? 'Saving…' : 'Save changes now'}
+            </button>
+          )}
           {step < 5 ? (
             <button onClick={next}
               className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl text-sm font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-lg shadow-teal-600/25 transition">
               Continue <ChevronRight className="w-4 h-4" />
+            </button>
+          ) : isEdit ? (
+            <button onClick={saveEdit} disabled={submitting || (!changedKeys.length && !photoChanged)}
+              className="flex items-center gap-2 px-7 py-2.5 rounded-xl text-sm font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-lg shadow-teal-600/25 disabled:opacity-60 transition">
+              {submitting ? 'Saving…' : 'Save Changes'}
             </button>
           ) : (
             <button onClick={submit} disabled={submitting}

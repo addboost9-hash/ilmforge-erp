@@ -531,12 +531,13 @@ const SECTIONS = [
         note: 'Nothing is saved until you admit the student. Needs an AI key on the server (ANTHROPIC_API_KEY or GEMINI_API_KEY); without it the panel says it is not switched on.',
       },
       {
-        title: 'New: correct any detail of an admission',
+        title: 'New: correct or complete an admission in the admission form',
         steps: [
-          { n:1, text:'Right after admitting: "Correct a mistake in this admission" on the success screen, then print' },
-          { n:2, text:'Later: Edit on the Student Registry, Edit or "Correct details" on the profile, or Edit details on the Admission Form page' },
-          { n:3, text:'Tabs: Student, Admission & class, Father & mother, Contact & address, Previous school, Health: every field of the admission form' },
-          { n:4, text:'Changed fields are marked and counted; a mistake opens its tab with what to fix. Only what you change is saved' },
+          { n:1, text:'Edit on the Student Registry row, Edit or "Correct details" on the profile, or Edit details on the Admission Form page' },
+          { n:2, text:'The same admission form opens with the record filled in: fill what was missed, correct what is wrong. Click any step to jump to it' },
+          { n:3, text:'Step 2 also changes roll number and status; step 4 the parent mobile, email and CNIC' },
+          { n:4, text:'Review & Save lists every change (old → new) with Undo; only what you change is saved. Then print the corrected admission form' },
+          { n:5, text:'Quick edit (⚡) is a short pop-up for a one-line fix; right after admitting, "Correct a mistake in this admission" on the success screen' },
         ],
       },
       {

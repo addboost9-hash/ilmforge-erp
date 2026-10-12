@@ -408,6 +408,8 @@ export default function App() {
             <Route path="/students"                   element={<StudentsPage />} />
             <Route path="/students/birthdays"         element={<BirthdaysPage />} />
             <Route path="/students/:id"               element={<StudentProfilePage />} />
+            {/* Edit an admitted student in the same form as a new admission. */}
+            <Route path="/students/:id/edit"          element={<AdmissionWizardPage />} />
             <Route path="/parents"                    element={<ParentsPage />} />
 
             {/* Admissions */}
