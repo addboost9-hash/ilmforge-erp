@@ -21,7 +21,8 @@ router.get('/departments', wrap(async (req, res) => {
   const departments = await prisma.department.findMany({
     where: { schoolId: req.schoolId },
     orderBy: { name: 'asc' },
-    include: { _count: { select: { staff: true } } },
+    // Only people still working here: offboarded staff kept the count up.
+    include: { _count: { select: { staff: { where: { deletedAt: null, isActive: true } } } } },
   });
   res.json({
     success: true,
@@ -55,6 +56,27 @@ router.put('/departments/:id', wrap(async (req, res) => {
   res.json({ success: true, data: department });
 }));
 
+/* Move staff into or out of a department in one go, from the Departments
+   page, instead of opening every staff record. Body: { add: [staffId], remove: [staffId] } */
+router.put('/departments/:id/members', wrap(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const dept = await prisma.department.findFirst({ where: { id, schoolId: req.schoolId } });
+  if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
+  const ids = (v) => (Array.isArray(v) ? v : []).map((x) => parseInt(x)).filter(Number.isInteger);
+  const add = ids(req.body.add);
+  const remove = ids(req.body.remove).filter((x) => !add.includes(x));
+  if (!add.length && !remove.length) return res.status(400).json({ success: false, message: 'Choose at least one staff member.' });
+
+  const [added, removed] = await prisma.$transaction([
+    prisma.staff.updateMany({ where: { id: { in: add }, schoolId: req.schoolId, deletedAt: null }, data: { departmentId: id } }),
+    prisma.staff.updateMany({ where: { id: { in: remove }, schoolId: req.schoolId, departmentId: id }, data: { departmentId: null } }),
+  ]);
+  const parts = [];
+  if (added.count) parts.push(`${added.count} added to ${dept.name}`);
+  if (removed.count) parts.push(`${removed.count} removed from ${dept.name}`);
+  res.json({ success: true, message: parts.join(', ') || 'Nothing changed.', data: { added: added.count, removed: removed.count } });
+}));
+
 router.delete('/departments/:id', wrap(async (req, res) => {
   const id = parseInt(req.params.id);
   const existing = await prisma.department.findFirst({ where: { id, schoolId: req.schoolId } });
@@ -75,14 +97,21 @@ router.delete('/departments/:id', wrap(async (req, res) => {
 }));
 
 router.get('/', wrap(async (req, res) => {
-  const { departmentId, search, page = 1, limit = 25 } = req.query;
-  const skip = (parseInt(page)-1)*parseInt(limit);
-  const where = { schoolId: req.schoolId, isActive: true, deletedAt: null, ...(departmentId && { departmentId: parseInt(departmentId) }), ...(search && { name: ciContains(search) }) };
+  const { departmentId, page = 1 } = req.query;
+  const search = req.query.search || req.query.name;
+  // Without a limit every staff member comes back. The default used to be 25,
+  // and most pages (staff list, staff attendance, HR) never asked for more, so
+  // from the 26th teacher on people were missing from them.
+  const take = req.query.limit ? Math.min(Math.max(parseInt(req.query.limit) || 25, 1), 2000) : 2000;
+  const skip = (Math.max(parseInt(page) || 1, 1) - 1) * take;
+  const dept = departmentId === 'none' ? { departmentId: null }
+    : departmentId && Number.isInteger(parseInt(departmentId)) ? { departmentId: parseInt(departmentId) } : {};
+  const where = { schoolId: req.schoolId, isActive: true, deletedAt: null, ...dept, ...(search && { name: ciContains(search) }) };
   const [staff, total] = await Promise.all([
     // `user` is included so lists can show contact details (the staff
     // directory and birthday list both need a phone number); Staff itself
     // has no email/phone column — those live on the linked User.
-    prisma.staff.findMany({ where, skip, take: parseInt(limit), include: { department: true, user: { select: { email: true, phone: true } } }, orderBy: { name: 'asc' } }),
+    prisma.staff.findMany({ where, skip, take, include: { department: true, user: { select: { email: true, phone: true } } }, orderBy: { name: 'asc' } }),
     prisma.staff.count({ where })
   ]);
   res.json({ success: true, data: staff, total });
@@ -143,6 +172,13 @@ router.put('/:id', wrap(async (req, res) => {
 
   const existing = await prisma.staff.findFirst({ where: { id, schoolId: req.schoolId } });
   if (!existing) return res.status(404).json({ success: false, message: 'Staff not found.' });
+
+  // A department from another school, or one deleted meanwhile, would fail
+  // on the foreign key with a bare 500; say what is wrong instead.
+  if (departmentId) {
+    const dept = await prisma.department.findFirst({ where: { id: parseInt(departmentId), schoolId: req.schoolId }, select: { id: true } });
+    if (!dept) return res.status(400).json({ success: false, message: 'That department no longer exists. Pick another one.' });
+  }
 
   // Staff photos could never be saved: this update ignored the field, so a
   // teacher's photo added on the ID Cards page vanished on the next visit.

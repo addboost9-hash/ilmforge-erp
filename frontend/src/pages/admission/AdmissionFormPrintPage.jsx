@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import api from '../../api/client';
+import { Link } from 'react-router-dom';
 import { printHTML } from '../../utils/print';
 import { useDebounce } from '../../hooks/useDebounce';
 import { Printer, Search, FileText, ChevronRight, Pencil } from 'lucide-react';
@@ -324,6 +325,11 @@ export default function AdmissionFormPrintPage() {
             Professional A4 admission form — blank or pre-filled with student data
           </p>
         </div>
+        {/* The blank form comes back filled in by hand: read it straight
+            into a new admission instead of typing it all again. */}
+        <Link to="/admissions/wizard" state={{ readForm: true }} className="btn btn-teal btn-sm">
+          📄 Filled form came back? Read it in
+        </Link>
       </div>
 
       {/* Mode + Search */}

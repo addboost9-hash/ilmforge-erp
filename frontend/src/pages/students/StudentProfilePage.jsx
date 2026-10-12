@@ -162,6 +162,27 @@ function FeeDetailsPanel({ studentId }) {
 /* The edit form is shared with the student list and the import results:
    components/EditStudentModal.jsx */
 
+/* A titled list of label/value rows. A row marked `always` shows "—" when
+   empty; the others only show once filled in, and an empty block is hidden. */
+function InfoBlock({ title, rows, onEdit }) {
+  const shown = rows.filter(([, v, always]) => always || (v !== null && v !== undefined && v !== '' && v !== false));
+  if (!shown.length) return null;
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <h3 style={{ fontSize: 12, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+        {title}
+        {onEdit && <button type="button" onClick={onEdit} className="btn btn-outline btn-sm" style={{ marginLeft: 'auto', textTransform: 'none', letterSpacing: 0, fontSize: 11.5 }}>Correct details</button>}
+      </h3>
+      {shown.map(([l, v]) => (
+        <div key={l} className="info-row">
+          <span className="info-label">{l}</span>
+          <span className="info-value">{v || '—'}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── Generate & print certificate HTML ──────────────────── */
 function printCert(type, s, school) {
   const sName = school?.name || 'IlmForge School';
@@ -429,40 +450,67 @@ export default function StudentProfilePage() {
 
           {/* ── Personal Info ── */}
           {tab==='info' && (
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:24}}>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:24}}>
+              {/* Everything from the admission form. The rest of the form
+                  used to be saved but never shown, so a typing mistake there
+                  went unnoticed. Optional details show once filled in. */}
               <div>
-                <h3 style={{fontSize:12,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>Student Details</h3>
-                {[
-                  ['Full Name',       s.name],
-                  ['Roll Number',     s.rollNo||'—'],
-                  ['Gender',          s.gender||'—'],
-                  ['Date of Birth',   s.dob ? new Date(s.dob).toLocaleDateString('en-PK') : '—'],
-                  ['Class',           s.class?.name||'—'],
-                  ['Section',         s.section?.name||'—'],
-                  ['Admission Date',  new Date(s.admissionDate||Date.now()).toLocaleDateString('en-PK')],
-                  ['B-Form / CNIC',   s.bFormNo||'—'],
-                  ['Status',          s.status],
-                ].map(([l,v]) => (
-                  <div key={l} className="info-row">
-                    <span className="info-label">{l}</span>
-                    <span className="info-value">{v}</span>
-                  </div>
-                ))}
+                <InfoBlock title="Student Details" onEdit={() => setEditing(true)} rows={[
+                  ['Full Name',       [s.name, s.lastName].filter(Boolean).join(' '), true],
+                  ['Name (Urdu)',     [s.firstNameUrdu, s.lastNameUrdu].filter(Boolean).join(' ')],
+                  ['Roll Number',     s.rollNo, true],
+                  ['Gender',          s.gender, true],
+                  ['Date of Birth',   s.dob && new Date(s.dob).toLocaleDateString('en-PK'), true],
+                  ['Class',           s.class?.name, true],
+                  ['Section',         s.section?.name, true],
+                  ['Admission Date',  new Date(s.admissionDate||Date.now()).toLocaleDateString('en-PK'), true],
+                  ['Family No.',      s.familyNo],
+                  ['B-Form / CNIC',   s.bFormNo, true],
+                  ['Religion',        s.religion],
+                  ['Caste',           s.caste],
+                  ['Nationality',     s.nationality],
+                  ['Admission Test',  s.admissionTestMarks != null && String(s.admissionTestMarks)],
+                  ['Free Student',    s.isFreeStudent && 'Yes (no fee)'],
+                  ['Status',          s.status, true],
+                ]}/>
+                <InfoBlock title="Previous School" rows={[
+                  ['School',          s.prevSchoolName],
+                  ['Contact Person',  s.prevSchoolFocalPerson],
+                  ['Phone',           s.prevSchoolPhone],
+                  ['Admission No.',   s.prevAdmissionNo],
+                  ['Last Class',      s.prevGrade],
+                  ['Grade / Result',  s.prevTestGrade],
+                  ['Address',         s.prevSchoolAddress],
+                ]}/>
+                <InfoBlock title="Health" rows={[
+                  ['Blood Group',     s.bloodGroup],
+                  ['Allergies',       s.allergies],
+                  ['Food / Diet',     s.foodDietaryReq],
+                  ['Condition',       s.childCondition],
+                ]}/>
               </div>
 
               <div>
-                <h3 style={{fontSize:12,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>Family Details</h3>
-                {[
-                  ['Father Name',     s.fatherName||'—'],
-                  ['Mother Name',     s.motherName||'—'],
-                  ['Emergency Phone', s.emergencyPhone||'—'],
-                  ['Address',         s.address||'—'],
-                ].map(([l,v]) => (
-                  <div key={l} className="info-row">
-                    <span className="info-label">{l}</span>
-                    <span className="info-value">{v}</span>
-                  </div>
-                ))}
+                <InfoBlock title="Family Details" rows={[
+                  ['Father Name',     s.fatherName, true],
+                  ['Father (Urdu)',   s.fatherNameUrdu],
+                  ['Father CNIC',     s.fatherCnic],
+                  ['Father Qualification', s.fatherQualification],
+                  ['Father Occupation', s.fatherOccupation],
+                  ['Mother Name',     s.motherName, true],
+                  ['Mother CNIC',     s.motherCnic],
+                  ['Mother Qualification', s.motherQualification],
+                  ['Mother Occupation', s.motherOccupation],
+                  ['Mother Mobile',   s.motherPhone],
+                ]}/>
+                <InfoBlock title="Contact & Address" rows={[
+                  ['Emergency Phone', s.emergencyPhone, true],
+                  ['Parent Email',    s.parentInfo?.email],
+                  ['Student Email',   s.email],
+                  ['City',            [s.city, s.province].filter(Boolean).join(', ')],
+                  ['Postal Address',  s.postalAddress],
+                  ['Address',         s.address, true],
+                ]}/>
 
                 {/* ── Certificates — now work with in-browser print ── */}
                 <h3 style={{fontSize:12,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:1,margin:'20px 0 10px'}}>

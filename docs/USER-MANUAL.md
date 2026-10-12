@@ -96,7 +96,7 @@ See [Past records](#past-records) in Part 5.
 
 **Sidebar → Staff Directory → Add Staff** (`/staff/new`)
 
-1. Fill in **Add New Staff Member**: name, father name, CNIC, phone, email, date of joining.
+1. Fill in **Add New Staff Member**: name, CNIC, phone, email, department, date of joining. An email **or** a phone number is enough: without an email the person signs in with their phone number.
 2. Click **Upload Photo** and attach a photograph (used on the staff ID card).
 3. Enter the **Designation** — for example *Teacher*, *Accounts Officer*, *Security Guard*.
 4. Choose the **Role**. This decides which portal the person gets and what they can see:
@@ -118,7 +118,7 @@ See [Past records](#past-records) in Part 5.
 As soon as the staff member is saved, a box appears with their sign-in details:
 
 - **Portal link** — the web address to open
-- **Login ID** — their email address
+- **Login ID** — their email address, or their phone number if no email was given
 - **Password** — a temporary password
 - **Employee code**
 - **Portal** — which portal they will land in
@@ -136,6 +136,27 @@ You can look the **portal link** up again any time — see [Part 8](#part-8).
 **Sidebar → Staff Directory** (`/staff`). Switch between **Table** and **Cards** view.
 Click a row to open and edit. The Role cannot be changed here after creation — ask an
 admin if someone's role must change.
+
+The list shows **every** staff member (it used to stop at 25). Use the search box, or the
+department buttons above the list (*All*, *English*, *Science*, … *No department*) to see
+one department. **Group by department** shows the list in department sections.
+
+### Departments
+
+A teacher's department is chosen on the staff form (**Department**). If the one you need
+is not in the list, click **+ New** next to it, type the name and click **Add**: it is
+created and picked straight away. Choose **— No department —** to take someone out of
+their department.
+
+**Staff Directory → Manage departments** (`/staff/departments`) lists the departments
+with how many staff work in each. Click **View / assign** on a department to see its staff:
+
+- **Remove** takes one person out of the department.
+- Tick people on the right (those with no department are listed first) and click
+  **Add … to (department)** to move several at once.
+
+Departments are also a filter on **Staff Attendance** (mark one department at a time) and
+on the **Staff Attendance Report**.
 
 ---
 
@@ -174,10 +195,63 @@ On the success screen:
 > the admission form can be reprinted any time from **Admissions → Admission Form Print**
 > (`/admissions/form-print`) by searching the student and choosing **Filled Form**.
 
+**Typed something wrong?** Click **✏️ Correct a mistake in this admission** on the same
+screen, fix it, save, and then print. Every field of the admission form can be corrected
+later too — see *Correcting an admission* below.
+
+### Correcting an admission
+
+Any detail entered at admission can be changed afterwards. Open the student's **Edit**
+from the **Student Registry**, the student's profile (**Edit** or **Correct details**), or
+**Admission Form Print → Filled Form → Edit details**. The form has the same parts as the
+admission form:
+
+| Tab | What you can correct |
+|---|---|
+| Student | Name, last name, names in Urdu, gender, date of birth, B-Form, religion, caste, nationality, photo |
+| Admission & class | Class, section, roll number, status, family number, admission date, admission test marks, free student |
+| Father & mother | Names (also in Urdu), CNICs, qualifications, occupations, mother's mobile |
+| Contact & address | Parent mobile, student email, parent's email and CNIC, province, city, postal and permanent address |
+| Previous school | School, contact person, phone, admission number, last class, grade, address |
+| Health | Blood group, food needs, allergies, medical condition |
+
+Each changed field says *changed*, and the bottom of the form counts them. Only what you
+change is saved. If something is wrong (a CNIC with a digit missing, a date in the future),
+the form opens the tab with the problem and says what to fix; nothing is saved until it is
+right. The parent's email and CNIC belong to the parent account, so a change there also
+shows for the student's brothers and sisters. The **Personal Info** tab of the profile now
+shows every detail that has been filled in.
+
 ### Blank admission forms
 
 **Admissions → Admission Form Print** → choose **Blank Form** → **Print Blank Form**.
 Useful for walk-in enquiries and for keeping printed forms at the front desk.
+
+### A filled paper form came back: read it in instead of typing
+
+When a parent returns the blank form filled in by hand (or sends a photo of it on
+WhatsApp), IlmForge can read it and fill the admission wizard for you.
+
+1. **Admission Form Print → 📄 Filled form came back? Read it in**, or on the first step of
+   **New Admission** click **Got a filled paper form back?**
+2. Add the pages: **Choose photo / scan / PDF**, **📷 Take a photo** (on a phone or
+   tablet), drag the files onto the box, or press **Ctrl+V** to paste a picture you have
+   copied. You can also click **Paste details as text** and paste a message with the
+   details. Take photos straight on, in good light, one page per photo.
+3. Click **Read the form** (10 to 40 seconds).
+4. Check the list of what was read. Correct anything in the boxes, untick what you do not
+   want. Boxes marked **· check** were hard to read; anything that could not be read at
+   all is listed to fill in by hand.
+5. Click **Fill the admission form**. The wizard is filled in, including class and section,
+   and a green note lists the fields to look at closely. Go through every step against the
+   paper, add the student's photo, and click **Complete Admission** as usual.
+
+Nothing is saved until you complete the admission. The pages are sent to an AI reading
+service to be read and are not stored by IlmForge.
+
+> If the panel says *Reading paper forms is not switched on yet*, the server needs an AI
+> key. Whoever runs your IlmForge server sets `ANTHROPIC_API_KEY` (Claude) or
+> `GEMINI_API_KEY` (Google Gemini) in the server settings.
 
 ### Adding many students and staff from Excel
 
@@ -264,10 +338,9 @@ everyone gets a new password in the login details sheet.
   the whole class.
 - **Active** / **Inactive** switches between current students and those who have left.
 - The **Record** column says **Missing: photo, date of birth, …** for anything not filled in yet.
-- **Edit** fixes a wrong or missing detail: name, father's and mother's name, date of birth,
-  gender, class and section, roll number, parent mobile, B-Form, address and status. Only
-  what you change is saved. If the parent mobile changes, the parent signs in with the new
-  number from then on; IlmForge tells you when that happens.
+- **Edit** fixes any wrong or missing detail from the admission form (see *Correcting an
+  admission* above). Only what you change is saved. If the parent mobile changes, the
+  parent signs in with the new number from then on; IlmForge tells you when that happens.
 - **Delete** gives two choices:
   - **Mark as left school** — for a student who has left. Everything is kept; the student
     moves to Inactive and can still be given a leaving or character certificate.
@@ -354,6 +427,8 @@ classes still need doing today.
 ### Staff attendance
 
 **Attendance Tracker → Staff Attendance** (`/attendance/staff`) → **Mark Attendance**.
+To mark one department at a time, choose it in the **All departments** box first; **Mark
+All** then applies only to that department.
 
 ### Other attendance methods
 

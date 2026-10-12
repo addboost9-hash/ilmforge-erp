@@ -54,4 +54,49 @@ describe('student edit checks', () => {
     expect(norm({ rollNo: ' C5A-26-001 ' }).data.rollNo).toBe('C5A-26-001');
     expect(norm({ name: ' ' }).errors.name).toBeTruthy();
   });
+
+  it('corrects every other field of the admission form', () => {
+    const r = norm({
+      lastName: ' Khan ', firstNameUrdu: 'عائشہ', fatherOccupation: 'Shop  keeper', motherQualification: '',
+      caste: 'Rajput', nationality: 'Pakistani', province: 'Punjab', familyNo: 'F-12',
+      prevSchoolName: 'City School', prevGrade: '4', prevSchoolPhone: '051-1234567',
+      allergies: 'Peanuts', childCondition: '',
+    });
+    expect(r.errors).toEqual({});
+    expect(r.data).toMatchObject({
+      lastName: 'Khan', firstNameUrdu: 'عائشہ', fatherOccupation: 'Shop keeper', motherQualification: null,
+      caste: 'Rajput', nationality: 'Pakistani', province: 'Punjab', familyNo: 'F-12',
+      prevSchoolName: 'City School', prevGrade: '4', prevSchoolPhone: '051-1234567',
+      allergies: 'Peanuts', childCondition: null,
+    });
+    expect(norm({ motherCnic: '3520212345671' }).data.motherCnic).toBe('35202-1234567-1');
+    expect(norm({ motherCnic: '123' }).errors.motherCnic).toMatch(/13 digits/);
+    expect(norm({ prevSchoolPhone: '12' }).errors.prevSchoolPhone).toBeTruthy();
+  });
+
+  it('reads blood groups the way people write them', () => {
+    expect(norm({ bloodGroup: 'b+' }).data.bloodGroup).toBe('B+');
+    expect(norm({ bloodGroup: 'O negative' }).data.bloodGroup).toBe('O-');
+    expect(norm({ bloodGroup: 'AB +ve' }).data.bloodGroup).toBe('AB+');
+    expect(norm({ bloodGroup: '' }).data.bloodGroup).toBeNull();
+    expect(norm({ bloodGroup: 'C+' }).errors.bloodGroup).toBeTruthy();
+  });
+
+  it('lets the admission date be corrected, never into the future', () => {
+    const d = norm({ admissionDate: '2026-04-01' }).data.admissionDate;
+    expect(d.toISOString()).toBe('2026-04-01T07:00:00.000Z');
+    expect(norm({ admissionDate: '01/04/2026' }).data.admissionDate.toISOString()).toBe('2026-04-01T07:00:00.000Z');
+    expect(norm({ admissionDate: '2026-12-01' }).errors.admissionDate).toMatch(/future/);
+    expect(norm({ admissionDate: '' }).errors.admissionDate).toBeTruthy();
+    expect(norm({ isFreeStudent: true }).data.isFreeStudent).toBe(true);
+    expect(norm({ isFreeStudent: false }).data.isFreeStudent).toBe(false);
+  });
+
+  it('keeps the parent\'s email and CNIC apart from the student record', () => {
+    const r = norm({ parentEmail: ' Ali@Mail.com ', parentCnic: '3520212345671' });
+    expect(r.parent).toEqual({ email: 'ali@mail.com', cnic: '35202-1234567-1' });
+    expect(r.data).toEqual({});
+    expect(norm({ parentEmail: 'not-an-email' }).errors.parentEmail).toBeTruthy();
+    expect(norm({ parentEmail: '' }).parent.email).toBeNull();
+  });
 });

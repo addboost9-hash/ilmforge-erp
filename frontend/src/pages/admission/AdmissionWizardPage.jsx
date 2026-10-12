@@ -16,6 +16,9 @@ import api from '../../api/client';
 import { validatePhone, validateCNIC, formatCNIC } from '../../utils/validation';
 import { printAdmissionForm } from './AdmissionFormPrintPage';
 import { compressPhoto, pickProblem } from '../../utils/photo';
+import EditStudentModal from '../../components/EditStudentModal';
+import FormReaderPanel, { READER_LABELS } from '../../components/FormReaderPanel';
+import { matchClass } from '../../utils/scan';
 
 /* ═══════════════════════════════════════════════════════
    LIVE PHOTO CAPTURE COMPONENT
@@ -159,6 +162,37 @@ function withPrefill(form, p) {
   };
 }
 
+/* A paper form says "Muslim", "KPK" or "F.Sc"; the wizard's lists say
+   "Islam", "KPK" and "Intermediate". Returns the wizard's values and the
+   keys whose value fits no choice (those are left for the office). */
+const PAPER_LISTS = {
+  religion: [['Islam', /^(islam|muslim|musalman)/], ['Christianity', /^christ/], ['Hinduism', /^hindu/], ['Sikhism', /^sikh/]],
+  nationality: [['Pakistani', /^pak/], ['Afghan', /^afghan/], ['Iranian', /^iran/], ['Indian', /^india/]],
+  province: [['ICT', /^(ict|islamabad|federal)/], ['Punjab', /^punjab/], ['Sindh', /^sind/], ['KPK', /^(kpk|kp\b|khyber|nwfp)/], ['Balochistan', /^baloch|^baluch/], ['AJK', /^(ajk|azad|kashmir)/], ['GB', /^(gb|gilgit)/]],
+  qualification: [['Matric', /^(matric|ssc|10)/], ['Intermediate', /^(inter|fsc|f\.?\s?sc|fa\b|f\.a|hssc|ics|i\.com|12)/], ['Bachelor', /^(bachelor|ba\b|b\.a|bsc|b\.sc|bs\b|b\.?com|bba|be\b|mbbs|graduat)/], ['Master', /^(master|ma\b|m\.a|msc|m\.sc|m\.?com|mba|ms\b|mphil|m\.phil)/], ['PhD', /^(phd|ph\.d|doctor)/], ['None', /^(none|illiterate|no\b|uneducated)/]],
+};
+const PAPER_FIELD_LIST = { religion: 'religion', nationality: 'nationality', province: 'province', fatherQualification: 'qualification', motherQualification: 'qualification' };
+function fitToWizard(fields) {
+  const values = {};
+  const unmatched = [];
+  Object.entries(fields).forEach(([k, v]) => {
+    if (k === 'className' || k === 'sectionName') return;
+    const list = PAPER_FIELD_LIST[k];
+    if (!list) { values[k] = v; return; }
+    const t = String(v).trim().toLowerCase();
+    const hit = PAPER_LISTS[list].find(([, re]) => re.test(t));
+    if (hit) values[k] = hit[0];
+    else if (list === 'qualification' || list === 'religion' || list === 'nationality') values[k] = 'Other';
+    else unmatched.push(k);
+  });
+  return { values, unmatched };
+}
+
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const defaultDob = () => {
   const d = new Date();
   d.setFullYear(d.getFullYear() - 5);
@@ -174,6 +208,7 @@ export default function AdmissionWizardPage() {
   const [stepVisible, setStepVisible] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [fixing, setFixing] = useState(false); // correcting the record just admitted
   const [errors, setErrors] = useState({});
 
   // Collapsible sections state
@@ -187,7 +222,9 @@ export default function AdmissionWizardPage() {
   const [form, setForm] = useState(() => withPrefill({
     // ── Step 1: Student Info ──
     familyNo: '',
-    admissionDate: new Date().toISOString().slice(0, 10),
+    // Today on this computer's calendar (toISOString is UTC: before 5 a.m.
+    // in Pakistan it is still yesterday, and the date is now saved).
+    admissionDate: localToday(),
     // Name
     name: '',          // First Name
     lastName: '',
@@ -280,6 +317,36 @@ export default function AdmissionWizardPage() {
   });
   const selectedClass = classes.find(c => String(c.id) === String(form.classId));
   const sections = selectedClass?.sections || [];
+
+  /* Values read from a filled paper form go into this form for checking.
+     Lists (class, province, religion...) take the wizard's own wording; a
+     value that fits none is left for the office and named in the banner. */
+  const [readerCheck, setReaderCheck] = useState(null);
+  const applyPaperForm = (fields, unclear) => {
+    const { values, unmatched } = fitToWizard(fields);
+    if (fields.className) {
+      const classId = matchClass(classes, fields.className);
+      if (classId) {
+        values.classId = classId;
+        const secs = classes.find((c) => String(c.id) === classId)?.sections || [];
+        const sec = fields.sectionName && secs.find((s) => s.name.trim().toLowerCase() === fields.sectionName.trim().toLowerCase());
+        values.sectionId = sec ? String(sec.id) : '';
+      } else unmatched.push('className');
+    }
+    setForm((f) => ({
+      ...f,
+      ...values,
+      // The parent account's CNIC is the father's unless told otherwise.
+      ...(values.fatherCnic && !f.parentCnic ? { parentCnic: values.fatherCnic } : {}),
+    }));
+    setErrors({});
+    // Open the folded sections that now hold values, so they get checked too.
+    if (Object.keys(values).some((k) => k.startsWith('prev'))) setPrevHistoryOpen(true);
+    if (['bloodGroup', 'foodDietaryReq', 'allergies', 'childCondition'].some((k) => values[k])) setHealthOpen(true);
+    const doubt = [...new Set([...unclear, ...unmatched])];
+    setReaderCheck({ filled: Object.keys(values).length, unclear: doubt });
+    toast.success(`${Object.keys(values).length} fields filled from the paper form. Please check them.`);
+  };
 
   const { data: feeStructures = [] } = useQuery({
     queryKey: ['wizard-fee-structures'],
@@ -388,6 +455,9 @@ export default function AdmissionWizardPage() {
         address: form.address || null,
         // Extended
         familyNo: form.familyNo || null,
+        // Shown on step 1 but never sent: every admission was dated today.
+        admissionDate: form.admissionDate || null,
+        isFreeStudent: !!form.isFreeStudent,
         firstNameUrdu: form.firstNameUrdu || null,
         lastNameUrdu: form.lastNameUrdu || null,
         fatherNameUrdu: form.fatherNameUrdu || null,
@@ -586,7 +656,17 @@ export default function AdmissionWizardPage() {
             + Admit Another Student
           </button>
         </div>
+        {/* Typed something wrong? Correct any field of the form right here,
+            before printing; it used to need a trip to the student list. */}
+        <button onClick={() => setFixing(true)}
+          className="w-full mt-3 flex items-center justify-center gap-2 border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 font-semibold py-2.5 rounded-xl transition text-sm">
+          ✏️ Correct a mistake in this admission
+        </button>
         <button onClick={() => navigate(`/students/${s.id}`)} className="w-full mt-3 text-sm text-teal-600 hover:underline">View Student Profile →</button>
+        {fixing && (
+          <EditStudentModal student={s} onClose={() => setFixing(false)}
+            onSaved={() => api.get(`/students/${s.id}`).then((r) => setResult((x) => ({ ...x, data: { ...x.data, ...r.data.data } }))).catch(() => {})} />
+        )}
       </div>
     );
   }
@@ -634,6 +714,20 @@ export default function AdmissionWizardPage() {
         {/* ─── STEP 1: Student Info (School Mentor style) ─── */}
         {step === 1 && (
           <div>
+            <FormReaderPanel onApply={applyPaperForm} startOpen={!!location.state?.readForm} />
+            {readerCheck && (
+              <div role="status" className="mb-5 flex items-start gap-2 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2.5 text-xs text-teal-900">
+                <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <strong>{readerCheck.filled} field{readerCheck.filled === 1 ? '' : 's'} filled from the paper form.</strong>{' '}
+                  Check every step against the paper before admitting.
+                  {readerCheck.unclear.length > 0 && (
+                    <div className="mt-1 text-amber-800"><strong>Look closely at:</strong> {readerCheck.unclear.map((k) => READER_LABELS[k] || k).join(', ').replace(/\.$/, '')}.</div>
+                  )}
+                </div>
+                <button type="button" onClick={() => setReaderCheck(null)} aria-label="Dismiss" className="text-teal-700">✕</button>
+              </div>
+            )}
             {/* ── General Information header ── */}
             <div className="flex items-center gap-3 mb-5 pb-3 border-b border-slate-100">
               <div className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center">

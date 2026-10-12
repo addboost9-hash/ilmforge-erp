@@ -92,6 +92,11 @@ async function createStaff(ctx, input) {
   const canonicalPhone = phone ? (phoneUtil.canonical(phone) || String(phone).trim()) : null;
   if (!email && !canonicalPhone) fail('An email address or a phone number is required, so the staff member can sign in.');
 
+  if (departmentId) {
+    const dept = await prisma.department.findFirst({ where: { id: parseInt(departmentId), schoolId }, select: { id: true } });
+    if (!dept) fail('That department no longer exists. Pick another one.');
+  }
+
   const campusId = ctx.campusId;
   if (!campusId) fail('No campus found for this school. Create one first in Settings → Campuses.');
 

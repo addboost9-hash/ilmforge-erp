@@ -711,6 +711,23 @@ router.get('/:id', wrap(async (req, res) => {
     delete student.feeInvoices;
   }
 
+  // The parent's email and CNIC from the admission form, for the edit form.
+  // A made-up sign-in address (name.0300…@school.parent) is not an email.
+  if (['admin', 'super_admin', 'accountant'].includes(req.user?.role)) {
+    const link = await prisma.parentStudent.findFirst({
+      where: { schoolId: req.schoolId, studentId },
+      orderBy: { id: 'asc' },
+      include: { parent: { select: { cnic: true, user: { select: { email: true } } } } },
+    });
+    if (link?.parent) {
+      const email = link.parent.user?.email || '';
+      student.parentInfo = {
+        email: /\.(parent|student|staff)$/.test(email) ? '' : email,
+        cnic: link.parent.cnic || '',
+      };
+    }
+  }
+
   res.json({ success: true, data: student });
 }));
 
@@ -728,13 +745,15 @@ router.put('/:id', wrap(async (req, res) => {
     'admissionTestMarks','bloodGroup','foodDietaryReq','allergies','childCondition',
     'prevSchoolName','prevSchoolFocalPerson','prevSchoolPhone','prevSchoolAddress',
     'prevAdmissionNo','prevGrade','prevTestGrade',
+    // On the admission form too, but could not be corrected afterwards.
+    'admissionDate','isFreeStudent',
   ];
   const data = {};
   allowed.forEach(k => { if (req.body[k] !== undefined) data[k] = req.body[k]; });
 
   // Tidy and check the fields people edit; explain mistakes instead of
   // storing them (an invalid date used to crash the save).
-  const { errors, data: clean } = normalizeStudentUpdate(req.body);
+  const { errors, data: clean, parent: parentFix } = normalizeStudentUpdate(req.body);
   if (Object.keys(errors).length) {
     return res.status(400).json({ success: false, message: Object.values(errors)[0], errors });
   }
@@ -784,7 +803,38 @@ router.put('/:id', wrap(async (req, res) => {
     }
   }
 
-  const updated = await prisma.student.update({ where: { id: student.id }, data });
+  // Parent's email and CNIC live on the parent account (shared by brothers
+  // and sisters). The email is the parent's sign-in, so it must be free.
+  let parentRec = null;
+  if (Object.keys(parentFix).length) {
+    const link = await prisma.parentStudent.findFirst({
+      where: { schoolId: req.schoolId, studentId: student.id },
+      orderBy: { id: 'asc' },
+      include: { parent: { include: { user: { select: { id: true, email: true } } } } },
+    });
+    parentRec = link?.parent || null;
+    if (!parentRec) {
+      const msg = 'This student has no parent account yet, so the parent\'s email and CNIC cannot be saved.';
+      return res.status(400).json({ success: false, message: msg, errors: { [parentFix.email !== undefined ? 'parentEmail' : 'parentCnic']: msg } });
+    }
+    if (parentFix.email && parentFix.email !== parentRec.user?.email) {
+      const taken = await prisma.user.findFirst({ where: { schoolId: req.schoolId, email: parentFix.email, deletedAt: null, NOT: { id: parentRec.userId } }, select: { id: true } });
+      if (taken) {
+        const msg = 'Another account at this school already uses this email.';
+        return res.status(409).json({ success: false, message: msg, errors: { parentEmail: msg } });
+      }
+    }
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const s = await tx.student.update({ where: { id: student.id }, data });
+    if (parentRec) {
+      if (parentFix.cnic !== undefined) await tx.parent.update({ where: { id: parentRec.id }, data: { cnic: parentFix.cnic } });
+      // An emptied email keeps the parent's current sign-in.
+      if (parentFix.email) await tx.user.update({ where: { id: parentRec.userId }, data: { email: parentFix.email } });
+    }
+    return s;
+  });
 
   let parentLogin = null;
   if (data.emergencyPhone && !phoneUtil.same(data.emergencyPhone, student.emergencyPhone)) {

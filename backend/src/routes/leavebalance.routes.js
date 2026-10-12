@@ -139,7 +139,13 @@ router.post('/initialize', wrap(async (req, res) => {
     });
   } else if (personType === 'staff' || personType === 'teacher') {
     const staffWhere = { schoolId: req.schoolId, deletedAt: null };
-    if (department) staffWhere.department = department;
+    // department is the department's name (or id); it used to be put on the
+    // query as a plain string, which Prisma rejects for a relation.
+    if (department) {
+      staffWhere.department = /^\d+$/.test(String(department))
+        ? { id: parseInt(department) }
+        : { name: String(department).trim() };
+    }
     persons = await prisma.staff.findMany({ where: staffWhere, select: { id: true } });
   } else {
     return res.status(400).json({ success: false, message: 'personType must be student, staff, or teacher.' });

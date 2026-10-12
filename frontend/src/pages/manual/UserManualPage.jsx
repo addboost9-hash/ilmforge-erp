@@ -518,8 +518,36 @@ const SECTIONS = [
     icon: '✨',
     color: '#0F3D33',
     title: 'Latest Additions',
-    desc: 'Fee corrections, portal links, admission form printing, card designs, dashboard',
+    desc: 'Paper forms read in, admissions corrected, departments, fee corrections, portal links, card designs',
     chapters: [
+      {
+        title: 'New: read a filled paper admission form',
+        steps: [
+          { n:1, text:'Admission Form Print → "Filled form came back? Read it in" (or New Admission → "Got a filled paper form back?")' },
+          { n:2, text:'Add the pages: choose photos, a scan or a PDF, take a photo, drag them in, or press Ctrl+V to paste a picture. A message with the details can be pasted as text' },
+          { n:3, text:'Click "Read the form", then check the list: correct any box, untick what you do not want. "check" marks a value that was hard to read' },
+          { n:4, text:'Click "Fill the admission form": the wizard is filled in, class and section included. Check every step against the paper, add the photo, then Complete Admission' },
+        ],
+        note: 'Nothing is saved until you admit the student. Needs an AI key on the server (ANTHROPIC_API_KEY or GEMINI_API_KEY); without it the panel says it is not switched on.',
+      },
+      {
+        title: 'New: correct any detail of an admission',
+        steps: [
+          { n:1, text:'Right after admitting: "Correct a mistake in this admission" on the success screen, then print' },
+          { n:2, text:'Later: Edit on the Student Registry, Edit or "Correct details" on the profile, or Edit details on the Admission Form page' },
+          { n:3, text:'Tabs: Student, Admission & class, Father & mother, Contact & address, Previous school, Health: every field of the admission form' },
+          { n:4, text:'Changed fields are marked and counted; a mistake opens its tab with what to fix. Only what you change is saved' },
+        ],
+      },
+      {
+        title: 'New: departments for staff',
+        steps: [
+          { n:1, text:'Staff form → Department: pick one, or "+ New" to add one there and then; "No department" takes someone out' },
+          { n:2, text:'Staff Directory: department buttons above the list, and "Group by department"; the list now shows everyone (not just 25)' },
+          { n:3, text:'Manage departments → "View / assign": remove staff, or tick several and add them in one go' },
+          { n:4, text:'Staff Attendance and the Staff Attendance Report filter by department' },
+        ],
+      },
       {
         title: 'New: old records, earlier dates, fixing student records',
         steps: [

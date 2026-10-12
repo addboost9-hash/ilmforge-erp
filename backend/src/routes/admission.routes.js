@@ -61,4 +61,31 @@ router.get('/stats', wrap(async (req, res) => {
   res.json({ success: true, data: { todayCount, monthCount, active, deactivated } });
 }));
 
+/* ── Read a filled paper admission form ──────────────────────────
+   The office downloads the blank form, the parent fills it in by hand, and
+   the office photographs or scans it. These read it into the admission
+   wizard (services/formReader.service.js); nothing is saved here. */
+const formReader = require('../services/formReader.service');
+
+router.get('/read-form/status', (req, res) => {
+  res.json({ success: true, data: { enabled: !!formReader.provider() } });
+});
+
+router.post('/read-form', wrap(async (req, res) => {
+  try {
+    const out = await formReader.readAdmissionForm({ files: req.body.files, text: req.body.text });
+    // Which pages were read and when; never the form's contents.
+    prisma.auditLog.create({
+      data: {
+        schoolId: req.schoolId, userId: req.user?.id, action: 'ADMISSION_FORM_READ', resource: 'admission',
+        details: JSON.stringify({ pages: (req.body.files || []).length, pasted: !!req.body.text, found: Object.keys(out.fields).length }),
+      },
+    }).catch(() => null);
+    res.json({ success: true, data: out });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+    throw err;
+  }
+}));
+
 module.exports = router;

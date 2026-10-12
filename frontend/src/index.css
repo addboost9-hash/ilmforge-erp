@@ -1863,9 +1863,12 @@ body.lang-ur .metric-value { font-family: 'Noto Nastaliq Urdu', serif; }
     flex-wrap: wrap;
   }
   /* ...but not when the author asked for a column, and not for the fixed
-     card faces in the ID card preview. */
-  .page-content [style*="flex-direction:column"],
-  .page-content [style*="flex-direction: column"],
+     card faces in the ID card preview. The :not()s give this rule the same
+     weight as the one above, so it wins: before, a column with a height
+     limit (every pop-up form) wrapped its body into a second column off
+     the right edge, and phones showed an empty white dialog. */
+  .page-content [style*="flex-direction:column"]:not(.tab-bar):not(.tabs),
+  .page-content [style*="flex-direction: column"]:not(.tab-bar):not(.tabs),
   .idcard-face, .idcard-face * {
     flex-wrap: nowrap;
   }

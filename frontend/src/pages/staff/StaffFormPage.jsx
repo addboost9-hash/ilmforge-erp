@@ -145,6 +145,8 @@ export default function StaffFormPage() {
     },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['staff'] });
+      // Department counts and the other staff lists show this person too.
+      ['departments', 'staff-list', 'staff-stats'].forEach(k => qc.invalidateQueries({ queryKey: [k] }));
       // The API returns the portal link, login ID and one-time password.
       // These used to be discarded and the page navigated away, leaving no
       // way to tell the new staff member where or how to sign in.
@@ -160,13 +162,34 @@ export default function StaffFormPage() {
     onError: err => toast.error('Failed to save staff: ' + (err.response?.data?.message || err.message || 'Unknown error')),
   });
 
+  // Add a department without leaving the form (the list used to be empty
+  // until someone found Staff → Departments, so nothing could be picked).
+  const [newDept, setNewDept] = useState(null); // null = closed, string = typing
+  const addDept = useMutation({
+    mutationFn: name => api.post('/staff/departments', { name }),
+    onSuccess: r => {
+      const d = r.data.data;
+      qc.setQueryData(['departments'], (old = []) => [...old, { ...d, staffCount: 0 }].sort((a, b) => a.name.localeCompare(b.name)));
+      qc.invalidateQueries({ queryKey: ['departments'] });
+      setForm(f => ({ ...f, departmentId: String(d.id) }));
+      setNewDept(null);
+      toast.success(`Department "${d.name}" added`);
+    },
+    onError: err => toast.error(err.response?.data?.message || 'Could not add the department'),
+  });
+
   const handleSubmit = () => {
-    if (!form.name || !form.email) return toast.error('Name and email are required');
-    save.mutate({
+    if (!form.name.trim()) return toast.error('Full name is required');
+    // The server signs staff in with a phone number when there is no email.
+    if (!form.email.trim() && !form.phone.trim()) return toast.error('Enter an email address or a phone number');
+    const body = {
       ...form,
       basicSalary: Math.round(parseFloat(form.basicSalary||0) * 100),
-      departmentId: form.departmentId ? parseInt(form.departmentId) : undefined,
-    });
+      // null clears it: sending nothing used to leave the old department on.
+      departmentId: form.departmentId ? parseInt(form.departmentId) : null,
+    };
+    if (!form.email.trim()) delete body.email;
+    save.mutate(body);
   };
 
   return (
@@ -254,7 +277,7 @@ export default function StaffFormPage() {
             <input className="form-input" placeholder="Muhammad Ali Khan" value={form.name} onChange={set('name')}/>
           </div>
           <div className="form-group">
-            <label className="form-label">Phone Number</label>
+            <label className="form-label">Phone Number {!form.email && <span style={{ color:'#94A3B8', fontWeight:400 }}>(or email below)</span>}</label>
             <input className="form-input" placeholder="03001234567" value={form.phone} onChange={set('phone')}/>
           </div>
           <div className="form-group">
@@ -315,13 +338,28 @@ export default function StaffFormPage() {
                 "Science" sent parseInt("Science") === NaN to the backend and
                 the department was silently never saved. Departments are a
                 real table — pick one (managed at /staff/departments). */}
-            <select className="form-select" value={form.departmentId} onChange={set('departmentId')}>
-              <option value="">— No department —</option>
-              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-            {departments.length === 0 && (
+            {newDept === null ? (
+              <div style={{ display:'flex', gap:6 }}>
+                <select aria-label="Department" className="form-select" style={{ flex:1, minWidth:0 }} value={form.departmentId} onChange={set('departmentId')}>
+                  <option value="">— No department —</option>
+                  {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+                <button type="button" className="btn btn-outline btn-sm" title="Add a new department" onClick={() => setNewDept('')}>+ New</button>
+              </div>
+            ) : (
+              <div style={{ display:'flex', gap:6 }}>
+                <input aria-label="New department name" className="form-input" style={{ flex:1, minWidth:0 }} autoFocus placeholder="e.g. Science, Primary Section"
+                  value={newDept} onChange={e => setNewDept(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newDept.trim()) addDept.mutate(newDept.trim()); if (e.key === 'Escape') setNewDept(null); }}/>
+                <button type="button" className="btn btn-teal btn-sm" disabled={!newDept.trim() || addDept.isPending} onClick={() => addDept.mutate(newDept.trim())}>
+                  {addDept.isPending ? 'Adding…' : 'Add'}
+                </button>
+                <button type="button" className="btn btn-outline btn-sm" aria-label="Cancel new department" onClick={() => setNewDept(null)}><X size={13}/></button>
+              </div>
+            )}
+            {departments.length === 0 && newDept === null && (
               <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 4 }}>
-                No departments yet — add them under Staff → Departments.
+                No departments yet. Click + New to add one.
               </div>
             )}
           </div>
@@ -354,7 +392,7 @@ export default function StaffFormPage() {
       >
         {isEdit ? (
           <div className="form-group" style={{ margin: 0, maxWidth: 320 }}>
-            <label className="form-label">Email Address *</label>
+            <label className="form-label">Email Address</label>
             <input className="form-input" type="email" placeholder="teacher@school.com" value={form.email} onChange={set('email')}/>
           </div>
         ) : (
@@ -392,12 +430,12 @@ export default function StaffFormPage() {
             {createAccount && (
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:14 }}>
                 <div className="form-group" style={{ margin:0 }}>
-                  <label className="form-label">Email Address *</label>
+                  <label className="form-label">Email Address</label>
                   <input className="form-input" type="email" placeholder="teacher@school.com" value={form.email} onChange={set('email')}/>
                 </div>
                 <div className="form-group" style={{ margin:0 }}>
                   <label className="form-label">Temporary Password</label>
-                  <input aria-label="Temporary Password" className="form-input" value="teacher" disabled style={{ color:'#94a3b8', background:'#f8fafc' }}/>
+                  <input aria-label="Temporary Password" className="form-input" value="Made for you when you save" disabled style={{ color:'#94a3b8', background:'#f8fafc' }}/>
                   <div style={{ fontSize:11, color:'#94a3b8', marginTop:4 }}>Staff must change this on first login</div>
                 </div>
               </div>

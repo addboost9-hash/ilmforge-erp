@@ -14,6 +14,7 @@ const bcrypt = require('bcryptjs');
 const prisma = require('../config/prisma');
 const phoneUtil = require('../utils/phone');
 const { checkPhoto } = require('../utils/photo');
+const { pastDate } = require('../utils/pastDate');
 
 const genPassword = (len = 8) => {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -110,7 +111,7 @@ async function admitStudent(ctx, input) {
     admissionTestMarks, bloodGroup, foodDietaryReq, allergies, childCondition,
     prevSchoolName, prevSchoolFocalPerson, prevSchoolPhone, prevSchoolAddress,
     prevAdmissionNo, prevGrade, prevTestGrade,
-    admissionDate, status, photoUrl,
+    admissionDate, status, photoUrl, isFreeStudent,
   } = input;
 
   if (!name) {
@@ -126,6 +127,19 @@ async function admitStudent(ctx, input) {
     const e = new Error(photo.error);
     e.status = 400;
     throw e;
+  }
+
+  // The admission date on the form: today means now, an earlier day is kept
+  // on that day (midday Pakistan time), a future one is refused.
+  let admittedOn = null;
+  if (admissionDate instanceof Date) admittedOn = Number.isNaN(admissionDate.getTime()) ? null : admissionDate;
+  else if (admissionDate && String(admissionDate).trim()) {
+    const r = pastDate(admissionDate, { label: 'Admission date' });
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(admissionDate));
+    if (!r.error) admittedOn = r.date;
+    // Records of long-standing students (before 2000) from an import.
+    else if (/too far/.test(r.error) && m) admittedOn = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 7));
+    else { const e = new Error(r.error); e.status = 400; throw e; }
   }
 
   const testMarks = testMarksValue(admissionTestMarks);
@@ -190,9 +204,10 @@ async function admitStudent(ctx, input) {
         photoUrl: photo.value,
         // A migrated or back-dated student keeps their real admission date
         // and status; a new admission takes today and "active".
-        ...(admissionDate && !Number.isNaN(new Date(admissionDate).getTime())
-          ? { admissionDate: new Date(admissionDate) } : {}),
+        ...(admittedOn ? { admissionDate: admittedOn } : {}),
         ...(['active', 'inactive', 'passout'].includes(status) ? { status } : {}),
+        // "Free student" was ticked on the admission form but never kept.
+        isFreeStudent: isFreeStudent === true || isFreeStudent === 'true',
         familyNo: familyNo || null,
         firstNameUrdu: firstNameUrdu || null,
         lastNameUrdu: lastNameUrdu || null,

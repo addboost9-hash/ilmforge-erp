@@ -35,7 +35,17 @@ export default function StaffAttendancePage() {
         .catch(() => []),
   });
 
-  const staff = staffData?.data || [];
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => api.get('/staff/departments').then(r => r.data.data || []).catch(() => []),
+  });
+  // Department-wise marking: '' everyone, 'none' no department, or an id.
+  const [dept, setDept] = useState('');
+
+  const allStaff = staffData?.data || [];
+  const staff = dept
+    ? allStaff.filter(s => (dept === 'none' ? !s.departmentId : String(s.departmentId) === dept))
+    : allStaff;
 
   // Populate form from saved records when date changes
   useEffect(() => {
@@ -60,7 +70,8 @@ export default function StaffAttendancePage() {
     mutationFn: () =>
       postOrQueue('/attendance/staff', {
         date,
-        records: staff
+        // Everyone marked, also in departments not shown right now.
+        records: allStaff
           .filter(s => attendance[s.id])
           .map(s => ({
             staffId: s.id,
@@ -84,11 +95,13 @@ export default function StaffAttendancePage() {
     setAttendance(m);
   }
 
-  const present = Object.values(attendance).filter(v => v === 'present').length;
-  const absent  = Object.values(attendance).filter(v => v === 'absent').length;
-  const late    = Object.values(attendance).filter(v => v === 'late').length;
-  const leave   = Object.values(attendance).filter(v => v === 'leave').length;
-  const marked  = Object.keys(attendance).length;
+  // Counts for the staff on screen (one department, or everyone).
+  const count = v => staff.filter(s => attendance[s.id] === v).length;
+  const present = count('present');
+  const absent  = count('absent');
+  const late    = count('late');
+  const leave   = count('leave');
+  const marked  = staff.filter(s => attendance[s.id]).length;
 
   return (
     <div className="page-content fade-in">
@@ -98,7 +111,14 @@ export default function StaffAttendancePage() {
           <h1 className="page-title">Staff Attendance</h1>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>Mark daily attendance for all staff members</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {departments.length > 0 && (
+            <select className="form-select" aria-label="Department" value={dept} onChange={e => setDept(e.target.value)} style={{ width: 190 }}>
+              <option value="">All departments</option>
+              {departments.map(d => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
+              <option value="none">No department</option>
+            </select>
+          )}
           <input
             className="form-input"
             type="date"
@@ -139,7 +159,7 @@ export default function StaffAttendancePage() {
                   <th>#</th>
                   <th>Staff ID</th>
                   <th>Name</th>
-                  <th>Father Name</th>
+                  <th>Department</th>
                   <th>Designation</th>
                   <th style={{ textAlign: 'center' }}>Status</th>
                   <th style={{ textAlign: 'center' }}>Time In</th>
@@ -171,7 +191,7 @@ export default function StaffAttendancePage() {
                           <span style={{ fontWeight: 600 }}>{s.name}</span>
                         </div>
                       </td>
-                      <td style={{ fontSize: 12.5, color: '#64748B' }}>{s.fatherName || '—'}</td>
+                      <td style={{ fontSize: 12.5, color: '#64748B' }}>{s.department?.name || '—'}</td>
                       <td style={{ fontSize: 12.5, color: '#64748B' }}>{s.designation || '—'}</td>
                       <td style={{ textAlign: 'center' }}>
                         {so ? (
@@ -227,7 +247,7 @@ export default function StaffAttendancePage() {
                   Mark Staff Attendance
                 </h2>
                 <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>
-                  {date} — {staff.length} staff members
+                  {date} — {staff.length} staff members{dept ? ' in ' + (dept === 'none' ? 'no department' : departments.find(d => String(d.id) === dept)?.name || 'this department') : ''}
                 </p>
               </div>
               <button aria-label="Close" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff' }}>
@@ -262,7 +282,7 @@ export default function StaffAttendancePage() {
                     <th>#</th>
                     <th>Staff ID</th>
                     <th>Name</th>
-                    <th>Father Name</th>
+                    <th>Department</th>
                     <th>Designation</th>
                     <th style={{ minWidth: 240 }}>Status</th>
                     <th>Time In</th>
@@ -291,7 +311,7 @@ export default function StaffAttendancePage() {
                           <span style={{ fontWeight: 600, fontSize: 13 }}>{s.name}</span>
                         </div>
                       </td>
-                      <td style={{ fontSize: 12.5, color: '#64748B' }}>{s.fatherName || '—'}</td>
+                      <td style={{ fontSize: 12.5, color: '#64748B' }}>{s.department?.name || '—'}</td>
                       <td style={{ fontSize: 12.5, color: '#64748B' }}>{s.designation || '—'}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 5 }}>

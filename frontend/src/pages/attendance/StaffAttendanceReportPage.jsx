@@ -10,11 +10,18 @@ export default function StaffAttendanceReportPage() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear]   = useState(now.getFullYear());
+  const [dept, setDept]   = useState('');
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => api.get('/staff/departments').then(r => r.data.data || []).catch(() => []),
+  });
 
   const { data = [], isLoading } = useQuery({
-    queryKey: ['staff-att-report', month, year],
-    queryFn: () => api.get('/attendance/staff/report', { params: { month, year } }).then(r => r.data.data || []).catch(() => []),
+    queryKey: ['staff-att-report', month, year, dept],
+    queryFn: () => api.get('/attendance/staff/report', { params: { month, year, ...(dept && { departmentId: dept }) } }).then(r => r.data.data || []).catch(() => []),
   });
+  const deptName = dept ? (departments.find(d => String(d.id) === dept)?.name || '') : '';
 
   const years = [now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
 
@@ -40,6 +47,12 @@ export default function StaffAttendanceReportPage() {
           <select className="form-select" style={{ flex: '0 0 120px' }} value={year} onChange={e => setYear(+e.target.value)}>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
+          {departments.length > 0 && (
+            <select className="form-select" style={{ flex: '0 0 200px' }} aria-label="Department" value={dept} onChange={e => setDept(e.target.value)}>
+              <option value="">All departments</option>
+              {departments.map(d => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
+            </select>
+          )}
         </div>
       </div>
 
@@ -56,12 +69,12 @@ export default function StaffAttendanceReportPage() {
       ) : (
         <div className="card" style={{ overflowX: 'auto' }}>
           <div className="card-header">
-            <h3>{MONTHS[month - 1]} {year} — Staff Attendance</h3>
+            <h3>{MONTHS[month - 1]} {year} — {deptName ? deptName + ' department' : 'Staff Attendance'}</h3>
             <span style={{ fontSize: 13, color: '#64748b' }}>{data.length} staff members</span>
           </div>
           <table className="table-modern">
             <thead>
-              <tr>{['Staff Name', 'Designation', 'Present', 'Absent', 'Late', 'Leave', 'Attendance %', 'Remarks'].map(h => <th key={h}>{h}</th>)}</tr>
+              <tr>{['Staff Name', 'Department', 'Designation', 'Present', 'Absent', 'Late', 'Leave', 'Attendance %', 'Remarks'].map(h => <th key={h}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {data.map((r, i) => {
@@ -70,6 +83,7 @@ export default function StaffAttendanceReportPage() {
                 return (
                   <tr key={r.staffId || i}>
                     <td style={{ fontWeight: 600 }}>{r.name || '—'}</td>
+                    <td style={{ fontSize: 12, color: '#64748b' }}>{r.department || '—'}</td>
                     <td style={{ fontSize: 12, color: '#64748b' }}>{r.designation || '—'}</td>
                     <td style={{ textAlign: 'center', color: '#10b981', fontWeight: 700 }}>{r.present || 0}</td>
                     <td style={{ textAlign: 'center', color: '#ef4444', fontWeight: 700 }}>{r.absent || 0}</td>

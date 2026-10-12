@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { UserPlus, Edit, Award, Users, UserCheck, UserX, UserMinus, Phone, Mail, LayoutGrid, Table, X, GraduationCap, ShieldCheck, Activity } from 'lucide-react';
+import { UserPlus, Edit, Users, UserMinus, LayoutGrid, Table, X, GraduationCap, ShieldCheck, Activity, Search, Building2 } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
 import { SkeletonRows, SkeletonCard } from '../../components/Skeleton';
 
@@ -126,11 +126,65 @@ function StaffCard({ s, idx }) {
   );
 }
 
+/* Department of a staff member as a filter key: its id, or 'none'. */
+const deptKey = s => (s.departmentId ? String(s.departmentId) : 'none');
+
+/* ── One row of the staff table ────────────────────────────────────── */
+function StaffRow({ s, idx, onOffboard, busy }) {
+  return (
+    <tr>
+      <td style={{ color:'#94a3b8', fontSize:12 }}>{idx+1}</td>
+      <td><span style={{ fontFamily:'monospace', fontWeight:700, color:'#0D9488', fontSize:12 }}>{s.empCode||'S-'+s.id}</span></td>
+      <td>
+        <div style={{ display:'flex', alignItems:'center', gap:9 }}>
+          <div style={{ width:32, height:32, borderRadius:'50%', background:'linear-gradient(135deg,#7C3AED,#6D28D9)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700, fontSize:12, flexShrink:0, overflow:'hidden' }}>
+            {s.photoUrl ? <img src={s.photoUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/> : s.name?.charAt(0)}
+          </div>
+          <div>
+            <div style={{ fontWeight:600, fontSize:13, color:'#1E3A5F' }}>{s.name}</div>
+            <div style={{ fontSize:11, color:'#94a3b8' }}>{s.user?.email || s.user?.phone || '—'}</div>
+          </div>
+        </div>
+      </td>
+      <td style={{ fontSize:12.5, color: s.department?.name ? '#475569' : '#CBD5E1' }}>{s.department?.name||'—'}</td>
+      <td style={{ fontSize:12.5 }}>{s.designation||'—'}</td>
+      <td style={{ fontSize:12, color:'#64748B' }}>
+        {s.joiningDate ? new Date(s.joiningDate).toLocaleDateString('en-PK') : '—'}
+      </td>
+      <td style={{ fontWeight:700, color:'#15803D' }}>{money(s.basicSalary)}</td>
+      <td>
+        <div style={{ display:'flex', gap:5 }}>
+          <Link to={'/staff/'+s.id+'/edit'} className="btn btn-outline btn-sm btn-icon" title="Edit" aria-label={`Edit ${s.name}`}>
+            <Edit size={13}/>
+          </Link>
+          {/* Staff could be added but never removed — an
+              offboarded employee stayed in every list and kept
+              their login. This soft-deletes and deactivates. */}
+          <button
+            className="btn btn-outline btn-sm btn-icon"
+            style={{ color:'#B91C1C', borderColor:'#FECACA' }}
+            title="Offboard"
+            aria-label={`Offboard ${s.name}`}
+            disabled={busy}
+            onClick={() => onOffboard(s)}
+          >
+            <UserMinus size={13}/>
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+const readPref = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const writePref = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } };
+
 /* ── Main page ─────────────────────────────────────────────────────── */
 export default function StaffPage() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey:['staff'], queryFn:()=>api.get('/staff').then(r=>r.data) });
   const { data:stats } = useQuery({ queryKey:['staff-stats'], queryFn:()=>api.get('/staff/stats').then(r=>r.data.data) });
+  const { data:departments = [] } = useQuery({ queryKey:['departments'], queryFn:()=>api.get('/staff/departments').then(r=>r.data.data||[]) });
 
   const offboard = useMutation({
     mutationFn: (id) => api.delete(`/staff/${id}`),
@@ -138,6 +192,7 @@ export default function StaffPage() {
       toast.success(r.data?.message || 'Staff offboarded');
       qc.invalidateQueries({ queryKey:['staff'] });
       qc.invalidateQueries({ queryKey:['staff-stats'] });
+      qc.invalidateQueries({ queryKey:['departments'] });
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to offboard'),
   });
@@ -148,14 +203,47 @@ export default function StaffPage() {
   };
 
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'card'
-  const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem('staff_visited'));
+  const [showOnboarding, setShowOnboarding] = useState(!readPref('staff_visited', ''));
+  const [search, setSearch] = useState('');
+  const [dept, setDept] = useState('');            // '' all, 'none', or a department id
+  const [grouped, setGrouped] = useState(readPref('staff_grouped', '1') === '1');
 
   const dismissOnboarding = () => {
-    localStorage.setItem('staff_visited', '1');
+    writePref('staff_visited', '1');
     setShowOnboarding(false);
   };
+  const toggleGrouped = () => setGrouped(g => { writePref('staff_grouped', g ? '0' : '1'); return !g; });
 
   const staffList = data?.data || [];
+
+  /* How many staff in each department, counted from the list itself, so the
+     chips always match what is shown. */
+  const counts = useMemo(() => {
+    const c = {};
+    staffList.forEach(s => { c[deptKey(s)] = (c[deptKey(s)] || 0) + 1; });
+    return c;
+  }, [staffList]);
+
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return staffList.filter(s =>
+      (!dept || deptKey(s) === dept) &&
+      (!q || [s.name, s.empCode, s.designation, s.department?.name, s.user?.email, s.user?.phone, s.cnic]
+        .some(v => v && String(v).toLowerCase().includes(q))));
+  }, [staffList, search, dept]);
+
+  /* Department sections, in name order, "No department" last. */
+  const groups = useMemo(() => {
+    if (!grouped) return [{ key:'all', name:null, list:shown }];
+    const by = new Map();
+    shown.forEach(s => {
+      const k = deptKey(s);
+      if (!by.has(k)) by.set(k, { key:k, name:s.department?.name || 'No department', list:[] });
+      by.get(k).list.push(s);
+    });
+    return [...by.values()].sort((a, b) =>
+      a.key === 'none' ? 1 : b.key === 'none' ? -1 : a.name.localeCompare(b.name));
+  }, [shown, grouped]);
 
   /* Derive counts from list for granular stats */
   const teacherCount = staffList.filter(s =>
@@ -171,10 +259,33 @@ export default function StaffPage() {
   ).length;
   const activeCount = staffList.filter(s => s.status === 'active' || s.isActive !== false).length;
 
+  const chip = (key, label, n) => {
+    const on = dept === key;
+    return (
+      <button key={key || 'all'} type="button" onClick={() => setDept(key)} aria-pressed={on}
+        style={{
+          padding:'5px 12px', borderRadius:99, fontSize:12, fontWeight:600, cursor:'pointer',
+          border:`1px solid ${on ? '#1B2F6E' : '#E2E8F0'}`,
+          background: on ? '#1B2F6E' : '#fff', color: on ? '#fff' : '#475569',
+          display:'inline-flex', alignItems:'center', gap:6,
+        }}>
+        {label}
+        <span style={{ fontSize:11, fontWeight:700, padding:'0 6px', borderRadius:99, background: on ? 'rgba(255,255,255,0.2)' : '#F1F5F9', color: on ? '#fff' : '#64748B' }}>{n}</span>
+      </button>
+    );
+  };
+
+  const groupHeading = (g) => g.name && (
+    <div style={{ display:'flex', alignItems:'center', gap:8, fontWeight:700, fontSize:13, color: g.key === 'none' ? '#94A3B8' : '#1B2F6E' }}>
+      <Building2 size={14}/> {g.name}
+      <span style={{ fontWeight:600, fontSize:11.5, color:'#94A3B8' }}>· {g.list.length} staff</span>
+    </div>
+  );
+
   return (
     <div className="page-content fade-in">
       {/* Header */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, flexWrap:'wrap', gap:10 }}>
         <div>
           <h1 className="page-title">Staff Directory</h1>
           <p style={{ color:'#64748B', fontSize:13, marginTop:2 }}>Manage teachers and non-teaching staff members</p>
@@ -239,7 +350,29 @@ export default function StaffPage() {
       {/* Info banner */}
       <div className="alert alert-info" style={{ marginBottom:14 }}>
         <span>📱</span>
-        <span>Staff app login: <strong>Email</strong> / Password: <strong>teacher</strong> (must change on first login). Teacher portal available on iOS &amp; Android.</span>
+        <span>Each new staff member gets their own sign-in (email or phone number) and a one-time password, shown when you save them. They set their own password on first sign-in.</span>
+      </div>
+
+      {/* Search, department filter and grouping */}
+      <div className="card" style={{ padding:'12px 14px', marginBottom:14, display:'flex', flexDirection:'column', gap:10 }}>
+        <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
+          <div style={{ position:'relative', flex:'1 1 240px', maxWidth:360 }}>
+            <Search size={14} color="#94A3B8" style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)' }}/>
+            <input className="form-input" style={{ paddingLeft:30 }} placeholder="Search name, code, designation, phone…"
+              value={search} onChange={e => setSearch(e.target.value)} aria-label="Search staff"/>
+          </div>
+          <label style={{ display:'inline-flex', alignItems:'center', gap:7, fontSize:12.5, fontWeight:600, color:'#475569', cursor:'pointer' }}>
+            <input type="checkbox" checked={grouped} onChange={toggleGrouped}/> Group by department
+          </label>
+          <Link to="/staff/departments" className="btn btn-outline btn-sm" style={{ marginLeft:'auto' }}>
+            <Building2 size={13}/> Manage departments
+          </Link>
+        </div>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }} role="group" aria-label="Filter by department">
+          {chip('', 'All', staffList.length)}
+          {departments.map(d => chip(String(d.id), d.name, counts[String(d.id)] || 0))}
+          {(counts.none || 0) > 0 && chip('none', 'No department', counts.none)}
+        </div>
       </div>
 
       {/* ── Loading — skeleton matches the active view mode ── */}
@@ -266,23 +399,33 @@ export default function StaffPage() {
         </div>
       )}
 
+      {!isLoading && staffList.length > 0 && shown.length === 0 && (
+        <div className="card" style={{ padding:28, textAlign:'center', color:'#64748B', fontSize:13 }}>
+          No staff match{search ? ` "${search}"` : ''}{dept ? ' in this department' : ''}.{' '}
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => { setSearch(''); setDept(''); }}>Show everyone</button>
+        </div>
+      )}
+
       {/* ── Card Grid view ── */}
       {!isLoading && viewMode === 'card' && (
         staffList.length === 0
           ? <EmptyState type="staff" title="No staff members added" description="Add your teachers and staff to get started" action={() => window.location.href='/staff/new'} actionLabel="Add Staff Member"/>
           : (
-            <div className="skeleton-content-fade" style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))',
-              gap: 16,
-            }}>
-              {staffList.map((s, i) => <StaffCard key={s.id} s={s} idx={i}/>)}
+            <div className="skeleton-content-fade" style={{ display:'flex', flexDirection:'column', gap:18 }}>
+              {groups.filter(g => g.list.length).map(g => (
+                <section key={g.key} style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {groupHeading(g)}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
+                    {g.list.map((s, i) => <StaffCard key={s.id} s={s} idx={i}/>)}
+                  </div>
+                </section>
+              ))}
             </div>
           )
       )}
 
       {/* ── Table view ── */}
-      {!isLoading && viewMode === 'table' && (
+      {!isLoading && viewMode === 'table' && (staffList.length === 0 || shown.length > 0) && (
         <div className="card skeleton-content-fade" style={{ padding:0, overflow:'hidden' }}>
           <div className="table-wrap" style={{ borderRadius:0, border:'none' }}>
             <table className="data-table">
@@ -298,51 +441,20 @@ export default function StaffPage() {
                   <th>Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {staffList.map((s, idx) => (
-                  <tr key={s.id}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{idx+1}</td>
-                    <td><span style={{ fontFamily:'monospace', fontWeight:700, color:'#0D9488', fontSize:12 }}>{s.empCode||'S-'+s.id}</span></td>
-                    <td>
-                      <div style={{ display:'flex', alignItems:'center', gap:9 }}>
-                        <div style={{ width:32, height:32, borderRadius:'50%', background:'linear-gradient(135deg,#7C3AED,#6D28D9)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700, fontSize:12, flexShrink:0 }}>
-                          {s.name?.charAt(0)}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight:600, fontSize:13, color:'#1E3A5F' }}>{s.name}</div>
-                          <div style={{ fontSize:11, color:'#94a3b8' }}>{s.user?.email || '—'}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ fontSize:12.5, color:'#475569' }}>{s.department?.name||'—'}</td>
-                    <td style={{ fontSize:12.5 }}>{s.designation||'—'}</td>
-                    <td style={{ fontSize:12, color:'#64748B' }}>
-                      {s.joiningDate ? new Date(s.joiningDate).toLocaleDateString('en-PK') : '—'}
-                    </td>
-                    <td style={{ fontWeight:700, color:'#15803D' }}>{money(s.basicSalary)}</td>
-                    <td>
-                      <div style={{ display:'flex', gap:5 }}>
-                        <Link to={'/staff/'+s.id+'/edit'} className="btn btn-outline btn-sm btn-icon" title="Edit">
-                          <Edit size={13}/>
-                        </Link>
-                        {/* Staff could be added but never removed — an
-                            offboarded employee stayed in every list and kept
-                            their login. This soft-deletes and deactivates. */}
-                        <button
-                          className="btn btn-outline btn-sm btn-icon"
-                          style={{ color:'#B91C1C', borderColor:'#FECACA' }}
-                          title="Offboard"
-                          aria-label={`Offboard ${s.name}`}
-                          disabled={offboard.isPending}
-                          onClick={() => confirmOffboard(s)}
-                        >
-                          <UserMinus size={13}/>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {staffList.length === 0 && (
+              {groups.filter(g => g.list.length).map(g => (
+                <tbody key={g.key}>
+                  {g.name && (
+                    <tr style={{ background:'#F8FAFC' }}>
+                      <td colSpan={8} style={{ padding:'9px 14px', borderTop:'2px solid #E2E8F0' }}>{groupHeading(g)}</td>
+                    </tr>
+                  )}
+                  {g.list.map((s, idx) => (
+                    <StaffRow key={s.id} s={s} idx={idx} onOffboard={confirmOffboard} busy={offboard.isPending}/>
+                  ))}
+                </tbody>
+              ))}
+              {staffList.length === 0 && (
+                <tbody>
                   <tr><td colSpan={8}>
                     <EmptyState
                       type="staff"
@@ -352,8 +464,8 @@ export default function StaffPage() {
                       actionLabel="Add Staff Member"
                     />
                   </td></tr>
-                )}
-              </tbody>
+                </tbody>
+              )}
             </table>
           </div>
         </div>
