@@ -29,19 +29,35 @@ const shell = (orient, inner) => {
    label against a bare em-dash. */
 const blank = (v) => v == null || ['', '-', '—'].includes(String(v).trim());
 
-/* A labelled detail row. Values are clipped, never wrapped, so a long name
+/* Names and values come from the school's records: printed as text. */
+const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+/* A school or person name, printed in full. It used to be cut off on one
+   line ("Future Foundation Sch…"); now it wraps to a second line, and a very
+   long one gets a little smaller so it still fits. `perLine` is about how
+   many letters fit on one line at the design's normal size. */
+const fitted = (text, basePt, perLine, style = '') => {
+  const t = String(text || '');
+  const len = t.length;
+  let size = basePt;
+  if (len > perLine) size = basePt * 0.9;                                   // two lines
+  if (len > perLine * 2 * 0.95) size = Math.max(basePt * 0.62, basePt * 0.9 * ((perLine * 2 * 0.95) / len));
+  return `<div style="font-size:${size.toFixed(2)}pt;line-height:1.12;white-space:normal;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;${style}">${esc(t)}</div>`;
+};
+
+/* A labelled detail row. Values are clipped, never wrapped, so a long value
    cannot quietly push the rest of the card out of view. */
 const row = (label, value, c) => blank(value) ? '' : `
   <div style="display:flex;margin-bottom:${c.dense ? '0.9mm' : '1.3mm'};font-size:${c.dense ? '5.6pt' : '6pt'};">
     <span style="color:#8A8F98;width:${c.labelW || '17mm'};flex-shrink:0;">${label}</span>
-    <span style="color:#1F2430;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${value}</span>
+    <span style="color:#1F2430;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(value)}</span>
   </div>`;
 
 /* Same, but ruled — the underlined field style the reference cards use. */
 const ruledRow = (label, value, c) => blank(value) ? '' : `
   <div style="display:flex;align-items:baseline;gap:2mm;padding-bottom:1mm;margin-bottom:1.1mm;border-bottom:1px solid ${c.primary}22;font-size:6pt;">
     <span style="color:#8A8F98;width:${c.labelW || '17mm'};flex-shrink:0;">${label}</span>
-    <span style="color:#1F2430;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${value}</span>
+    <span style="color:#1F2430;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(value)}</span>
   </div>`;
 
 /* The white chip a scanner needs: dark bars on a light ground. */
@@ -95,8 +111,8 @@ const academic = {
       <div style="position:absolute;top:-6mm;left:-7mm;width:18mm;height:18mm;border-radius:50%;background:#ffffff14;"></div>
       <div style="position:relative;display:flex;align-items:center;justify-content:center;gap:2mm;">
         <div style="width:8mm;height:8mm;border-radius:2mm;background:#ffffff28;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${c.logoHtml}</div>
-        <div style="text-align:left;min-width:0;">
-          <div style="font-size:7.5pt;font-weight:900;color:#fff;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.schoolName}</div>
+        <div style="text-align:left;min-width:0;flex:0 1 auto;">
+          ${fitted(c.schoolName, 7.5, 24, 'font-weight:900;color:#fff;')}
           <div style="font-size:4.6pt;color:#ffffffbb;letter-spacing:0.5px;">${c.typeLabel} IDENTITY CARD</div>
         </div>
       </div>
@@ -105,8 +121,8 @@ const academic = {
       <div style="width:19mm;height:19mm;border-radius:50%;overflow:hidden;border:2.5px solid ${c.secondary};box-shadow:0 2px 8px rgba(0,0,0,0.22);">${c.photoBox('100%', '100%', true)}</div>
     </div>
     <div style="flex-shrink:0;text-align:center;padding:1.5mm 3mm 1mm;">
-      <div style="font-size:9.5pt;font-weight:900;color:#1F2430;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</div>
-      <div style="font-size:5.8pt;color:${c.primary};font-weight:700;margin-top:0.4mm;">${c.subtitle}</div>
+      ${fitted(c.name, 9.5, 26, 'font-weight:900;color:#1F2430;')}
+      <div style="font-size:5.8pt;color:${c.primary};font-weight:700;margin-top:0.4mm;">${esc(c.subtitle)}</div>
     </div>
     <div style="flex:1;min-height:0;overflow:hidden;padding:0 4mm;">
       ${c.fields.map(([l, v]) => ruledRow(l, v, c)).join('')}
@@ -147,7 +163,7 @@ const campusArc = {
       <div style="position:absolute;bottom:-22mm;left:-12mm;width:40mm;height:40mm;border-radius:50%;background:${c.primary}55;"></div>
       <div style="position:relative;padding:3.5mm 4mm;display:flex;align-items:center;gap:2mm;">
         <div style="min-width:0;">
-          <div style="font-size:8pt;font-weight:900;color:#fff;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.schoolName}</div>
+          ${fitted(c.schoolName, 8, 23, 'font-weight:900;color:#fff;')}
           <div style="font-size:4.6pt;color:${c.primary};font-weight:700;letter-spacing:0.6px;">${c.typeLabel} CARD</div>
         </div>
         <div style="margin-left:auto;width:8mm;height:8mm;border-radius:50%;background:#ffffff1f;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${c.logoHtml}</div>
@@ -157,8 +173,8 @@ const campusArc = {
       <div style="width:21mm;height:21mm;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.25);">${c.photoBox('100%', '100%', true)}</div>
     </div>
     <div style="flex-shrink:0;text-align:center;padding:1.5mm 3mm 1mm;">
-      <div style="font-size:9.5pt;font-weight:900;color:${c.dark};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</div>
-      <div style="font-size:5.8pt;color:${c.primary};font-weight:800;letter-spacing:0.3px;text-transform:uppercase;">${c.subtitle}</div>
+      ${fitted(c.name, 9.5, 26, `font-weight:900;color:${c.dark};`)}
+      <div style="font-size:5.8pt;color:${c.primary};font-weight:800;letter-spacing:0.3px;text-transform:uppercase;">${esc(c.subtitle)}</div>
     </div>
     <div style="flex:1;min-height:0;overflow:hidden;padding:0 4mm;">
       ${c.fields.map(([l, v]) => row(l, v, c)).join('')}
@@ -193,7 +209,7 @@ const executive = {
     <div style="flex-shrink:0;display:flex;align-items:center;gap:2mm;background:${c.primary};padding:2mm 3mm;">
       <div style="width:6.5mm;height:6.5mm;border-radius:1.5mm;background:#ffffff28;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${c.logoHtml}</div>
       <div style="min-width:0;">
-        <div style="font-size:7pt;font-weight:900;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.schoolName}</div>
+        ${fitted(c.schoolName, 7, 52, 'font-weight:900;color:#fff;')}
         <div style="font-size:4.4pt;color:#ffffffb0;letter-spacing:0.5px;">${c.typeLabel} IDENTITY CARD</div>
       </div>
     </div>
@@ -202,8 +218,8 @@ const executive = {
         <div style="width:16mm;height:19mm;border-radius:1.5mm;overflow:hidden;border:1.5px solid ${c.primary}55;flex-shrink:0;">${c.photoBox('100%', '100%')}</div>
       </div>
       <div style="flex:1;min-width:0;overflow:hidden;padding:2mm 3mm;">
-        <div style="font-size:8.5pt;font-weight:900;color:#1F2430;margin-bottom:0.5mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</div>
-        <div style="display:inline-block;font-size:5pt;font-weight:800;color:#fff;background:${c.secondary};padding:0.6mm 2mm;border-radius:99px;margin-bottom:1.5mm;">${c.subtitle}</div>
+        ${fitted(c.name, 8.5, 34, 'font-weight:900;color:#1F2430;margin-bottom:0.5mm;')}
+        <div style="display:inline-block;font-size:5pt;font-weight:800;color:#fff;background:${c.secondary};padding:0.6mm 2mm;border-radius:99px;margin-bottom:1.5mm;">${esc(c.subtitle)}</div>
         ${c.fields.slice(0, 4).map(([l, v]) => row(l, v, { ...c, dense: true, labelW: '14mm' })).join('')}
       </div>
     </div>
@@ -241,12 +257,12 @@ const minimal = {
       <div style="flex:1;min-width:0;display:flex;flex-direction:column;padding:2.5mm 3mm;">
         <div style="flex-shrink:0;display:flex;align-items:center;gap:1.5mm;margin-bottom:1.5mm;">
           <div style="width:5.5mm;height:5.5mm;border-radius:50%;background:${c.primary};display:flex;align-items:center;justify-content:center;flex-shrink:0;">${c.logoHtml}</div>
-          <div style="font-size:6.5pt;font-weight:800;color:${c.primary};min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.schoolName}</div>
+          <div style="min-width:0;">${fitted(c.schoolName, 6.5, 54, `font-weight:800;color:${c.primary};`)}</div>
         </div>
         <div style="flex:1;min-height:0;display:flex;gap:2.5mm;">
           <div style="flex:1;min-width:0;overflow:hidden;">
-            <div style="font-size:9pt;font-weight:900;color:#1F2430;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</div>
-            <div style="font-size:5.4pt;color:#8A8F98;margin-bottom:1.5mm;">${c.subtitle}</div>
+            ${fitted(c.name, 9, 28, 'font-weight:900;color:#1F2430;')}
+            <div style="font-size:5.4pt;color:#8A8F98;margin-bottom:1.5mm;">${esc(c.subtitle)}</div>
             ${c.fields.slice(0, 3).map(([l, v]) => row(l, v, { ...c, dense: true, labelW: '13mm' })).join('')}
           </div>
           <div style="width:16mm;height:20mm;border-radius:1.5mm;overflow:hidden;border:1px solid #E3E7ED;flex-shrink:0;">${c.photoBox('100%', '100%')}</div>
@@ -263,7 +279,7 @@ const minimal = {
       <div style="flex:1;min-width:0;display:flex;flex-direction:column;padding:2.5mm 3mm;">
         <div style="flex-shrink:0;font-size:6pt;font-weight:800;color:${c.primary};margin-bottom:1.5mm;">IF FOUND</div>
         <div style="flex:1;min-height:0;overflow:hidden;font-size:5.4pt;color:#454B55;line-height:1.55;">
-          Please return this card to ${c.schoolName}. ${c.rules[1] || ''}
+          Please return this card to ${esc(c.schoolName)}. ${c.rules[1] || ''}
         </div>
         <div style="flex-shrink:0;">
           ${ruledRow('Phone', c.phone, { ...c, labelW: '13mm' })}
@@ -290,7 +306,7 @@ const boldBand = {
     <div style="flex-shrink:0;background:${c.primary};padding:3mm 4mm 2.5mm;display:flex;align-items:center;gap:2mm;">
       <div style="width:7mm;height:7mm;border-radius:1.5mm;background:#ffffff28;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${c.logoHtml}</div>
       <div style="min-width:0;">
-        <div style="font-size:7pt;font-weight:900;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.schoolName}</div>
+        ${fitted(c.schoolName, 7, 27, 'font-weight:900;color:#fff;')}
         <div style="font-size:4.4pt;color:#ffffffb0;letter-spacing:0.6px;">${c.typeLabel}</div>
       </div>
     </div>
@@ -298,8 +314,8 @@ const boldBand = {
       <div style="width:24mm;height:28mm;border-radius:2mm;overflow:hidden;border:2px solid ${c.primary};flex-shrink:0;">${c.photoBox('100%', '100%')}</div>
     </div>
     <div style="flex-shrink:0;text-align:center;padding:0 3mm 1.5mm;">
-      <div style="font-size:10pt;font-weight:900;color:#1F2430;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</div>
-      <div style="display:inline-block;margin-top:1mm;font-size:5pt;font-weight:800;color:#fff;background:${c.secondary};padding:0.7mm 2.5mm;border-radius:99px;">${c.subtitle}</div>
+      ${fitted(c.name, 10, 24, 'font-weight:900;color:#1F2430;')}
+      <div style="display:inline-block;margin-top:1mm;font-size:5pt;font-weight:800;color:#fff;background:${c.secondary};padding:0.7mm 2.5mm;border-radius:99px;">${esc(c.subtitle)}</div>
     </div>
     <div style="flex:1;min-height:0;overflow:hidden;padding:0 4mm;">
       ${c.fields.slice(0, 4).map(([l, v]) => row(l, v, c)).join('')}

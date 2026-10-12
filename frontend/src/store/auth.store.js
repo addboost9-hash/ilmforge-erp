@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import api from '../api/client';
 import { clearSession, clearOfflineData } from '../utils/session';
+import { syncSchoolBranding } from '../utils/schoolBranding';
 
 /* ── helpers ─────────────────────────────────────── */
 const ls = (key, fallback = null) => {
@@ -79,10 +80,9 @@ const useAuthStore = create((set) => ({
       if (school?.slug) {
         localStorage.setItem('schoolSlug', school.slug);
       }
-      /* persist school name for branding */
-      if (school?.name) {
-        localStorage.setItem('registeredSchoolName', school.name);
-      }
+      // The school's name, logo and address for every printed document:
+      // the logo used to stay behind on the computer it was chosen on.
+      syncSchoolBranding(school);
       applyBranding();
       set({
         user, school,
@@ -106,11 +106,13 @@ const useAuthStore = create((set) => ({
 
   /* update branding ─────────────── */
   updateBranding: (updates) => {
-    if (updates.logo)         localStorage.setItem('schoolLogoPreview',    updates.logo);
-    if (updates.primaryColor) localStorage.setItem('brandPrimaryColor',    updates.primaryColor);
-    if (updates.tagline)      localStorage.setItem('brandTagline',         updates.tagline);
-    if (updates.motto)        localStorage.setItem('brandMotto',           updates.motto);
-    if (updates.schoolName)   localStorage.setItem('registeredSchoolName', updates.schoolName);
+    // A full browser storage must not undo a save the server already made.
+    const put = (k, v) => { try { localStorage.setItem(k, v); } catch { /* storage full */ } };
+    if (updates.logo)         put('schoolLogoPreview',    updates.logo);
+    if (updates.primaryColor) put('brandPrimaryColor',    updates.primaryColor);
+    if (updates.tagline)      put('brandTagline',         updates.tagline);
+    if (updates.motto)        put('brandMotto',           updates.motto);
+    if (updates.schoolName)   put('registeredSchoolName', updates.schoolName);
     applyBranding();
     set(s => ({ branding: { ...s.branding, ...updates } }));
   },
@@ -128,7 +130,24 @@ const useAuthStore = create((set) => ({
 
   /* helpers ─────────────────────── */
   updateUser:   (user)   => { localStorage.setItem('user', JSON.stringify(user)); set({ user }); },
-  updateSchool: (school) => { localStorage.setItem('school', JSON.stringify(school)); set({ school }); },
+  updateSchool: (school) => {
+    try { localStorage.setItem('school', JSON.stringify(school)); } catch { /* storage full */ }
+    syncSchoolBranding(school);
+    set((s) => ({ school, branding: { ...s.branding, logo: school?.logoUrl || s.branding.logo, schoolName: school?.name || s.branding.schoolName } }));
+  },
+
+  /* The school's details as saved now: a logo or name changed on another
+     computer reaches this one without signing in again. */
+  refreshSchool: async () => {
+    try {
+      const { data } = await api.get('/auth/me', { silent: true });
+      const fresh = data?.data?.school;
+      if (!fresh?.id) return;
+      const current = ls('school') || {};
+      // /auth/me sends the public fields only; keep the campuses from sign-in.
+      useAuthStore.getState().updateSchool({ ...current, ...fresh, campuses: current.campuses || fresh.campuses });
+    } catch { /* offline or signed out: keep what is stored */ }
+  },
 }));
 
 /* Apply branding on app boot */

@@ -55,6 +55,21 @@ router.put('/school', wrap(async (req, res) => {
   const allowed = ['name','address','city','phone','email','logoUrl','subdomain'];
   const data = {};
   allowed.forEach(k => { if (req.body[k] !== undefined) data[k] = req.body[k]; });
+  // The logo prints on every card, certificate and voucher and travels with
+  // every sign-in: a picture, of a sensible size.
+  if (data.logoUrl) {
+    const logo = String(data.logoUrl);
+    if (!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(logo) && !/^https:\/\//i.test(logo)) {
+      return res.status(400).json({ success: false, message: 'The logo must be a PNG, JPG or WebP picture.' });
+    }
+    if (logo.length > 1_500_000) {
+      return res.status(400).json({ success: false, message: 'This logo is too large. Choose a picture under 1 MB.' });
+    }
+  }
+  if (data.name !== undefined) {
+    data.name = String(data.name).replace(/\s+/g, ' ').trim().slice(0, 150);
+    if (data.name.length < 3) return res.status(400).json({ success: false, message: 'Enter the school\'s full name.' });
+  }
   const school = await prisma.school.update({ where: { id: req.schoolId }, data });
   res.json({ success: true, data: school });
 }));

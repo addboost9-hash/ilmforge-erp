@@ -9,7 +9,9 @@ import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { compressPhoto, pickProblem } from '../../utils/photo';
+import { compressPhoto, compressLogo, pickProblem, PICK_RULES } from '../../utils/photo';
+import useAuthStore from '../../store/auth.store';
+import { schoolLogoOf, logoOnlyInBrowser } from '../../utils/schoolBranding';
 import { TEMPLATES, templateById, DEFAULT_RULES } from './cardTemplates';
 import {
   CreditCard, Users, Award, Printer, Search, Settings,
@@ -130,7 +132,7 @@ const buildCard = (p, opts, side = 'front') => {
   const isStaff = type === 'staff';
 
   const logoHtml = logoSrc
-    ? `<img src="${logoSrc}" style="width:100%;height:100%;object-fit:contain;border-radius:3px;"/>`
+    ? `<img src="${String(logoSrc).replace(/"/g, '&quot;')}" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:3px;"/>`
     : `<span style="font-size:13px;">🎓</span>`;
 
   /* Photo, or a neutral silhouette when none has been uploaded. */
@@ -270,8 +272,41 @@ export default function IDCardsPage() {
   const fileRefs = useRef({});
 
   const { data:classes } = useQuery({ queryKey:['classes'], queryFn:()=>api.get('/classes').then(r=>r.data.data) });
-  const { data:school  } = useQuery({ queryKey:['school-settings'], queryFn:()=>api.get('/settings/school').then(r=>r.data.data) });
-  const logoSrc = typeof window!=='undefined' ? localStorage.getItem('schoolLogoPreview') : null;
+  const { school: signedInSchool, user, updateSchool } = useAuthStore();
+  const isAdmin = ['admin', 'super_admin'].includes(user?.role);
+  // The school's saved record (admins); everyone else has the school as it
+  // was at sign-in, refreshed when the app opens.
+  const { data:savedSchool } = useQuery({
+    queryKey:['school-settings'],
+    queryFn:()=>api.get('/settings/school', { silent: true }).then(r=>r.data.data),
+    enabled: isAdmin,
+    retry: false,
+  });
+  const school = { ...(signedInSchool || {}), ...(savedSchool || {}) };
+  // The logo is the one saved on the school's record. It used to be read
+  // from this browser only, so cards printed on any other computer (or after
+  // the browser was cleared) came out with no logo.
+  const logoSrc = schoolLogoOf(school) || null;
+  const logoLocalOnly = logoOnlyInBrowser(school);
+
+  /* Add or change the school logo here, where it is needed. It is saved to
+     the school's profile, so every card, certificate and voucher uses it. */
+  const logoRef = useRef(null);
+  const [savingLogo, setSavingLogo] = useState(false);
+  const saveLogo = async (fileOrDataUrl) => {
+    setSavingLogo(true);
+    try {
+      const logoUrl = typeof fileOrDataUrl === 'string' ? fileOrDataUrl : await compressLogo(fileOrDataUrl);
+      await api.put('/settings/school', { logoUrl });
+      updateSchool({ ...(signedInSchool || {}), logoUrl });
+      qc.invalidateQueries({ queryKey: ['school-settings'] });
+      toast.success('School logo saved: it now prints on every card');
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'The logo could not be saved.');
+    } finally {
+      setSavingLogo(false);
+    }
+  };
 
   /* One request is capped (each student row carries its photo), so the
      whole school may not fit. The API's total says how many there are, and
@@ -384,8 +419,9 @@ export default function IDCardsPage() {
 
   const opts = {
     primary, secondary,
-    schoolName: school?.name || 'IlmForge School',
-    address:    school?.city  || school?.address || 'Islamabad, Pakistan',
+    // The full name as registered; the card designs print it in full.
+    schoolName: school?.name || localStorage.getItem('registeredSchoolName') || 'School',
+    address:    [school?.address, school?.city].filter(Boolean).join(', ') || '',
     phone:      school?.phone || '',
     type, template, photoMap, logoSrc,
   };
@@ -463,6 +499,44 @@ export default function IDCardsPage() {
 
         {/* ═══ LEFT SETTINGS ═══ */}
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+
+          {/* School logo: printed on every card */}
+          <div className="card">
+            <div style={{ fontSize:12.5, fontWeight:700, color:'#374151', marginBottom:10 }}>School Logo</div>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:52, height:52, borderRadius:10, border:`1.5px ${logoSrc ? 'solid' : 'dashed'} ${logoSrc ? '#E5E7EB' : '#F59E0B'}`, background:'#F8FAFC', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', flexShrink:0 }}>
+                {logoSrc
+                  ? <img src={logoSrc} alt="School logo" style={{ width:'100%', height:'100%', objectFit:'contain' }}/>
+                  : <span style={{ fontSize:20 }} aria-hidden="true">🎓</span>}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#111827', lineHeight:1.3 }}>{opts.schoolName}</div>
+                <div style={{ fontSize:11, color: logoSrc && !logoLocalOnly ? '#059669' : '#B45309', marginTop:2 }}>
+                  {!logoSrc ? 'No logo yet: cards print without one'
+                    : logoLocalOnly ? 'Saved only on this computer'
+                    : '✓ Prints on every card'}
+                </div>
+              </div>
+            </div>
+            {isAdmin ? (
+              <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
+                <button type="button" className={`btn btn-sm ${logoSrc ? 'btn-outline' : 'btn-teal'}`} disabled={savingLogo}
+                  onClick={() => logoRef.current?.click()}>
+                  <Camera size={12}/> {savingLogo ? 'Saving…' : logoSrc ? 'Change logo' : 'Add logo'}
+                </button>
+                {logoLocalOnly && (
+                  <button type="button" className="btn btn-sm btn-teal" disabled={savingLogo} onClick={() => saveLogo(logoSrc)}>
+                    Save to school profile
+                  </button>
+                )}
+                <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" aria-label="School logo file" style={{ display:'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) saveLogo(f); }}/>
+              </div>
+            ) : !logoSrc && (
+              <div style={{ fontSize:11, color:'#6B7280', marginTop:8 }}>Ask the school admin to add the logo (School Settings › School Profile).</div>
+            )}
+            {isAdmin && <div style={{ fontSize:10.5, color:'#9CA3AF', marginTop:6 }}>{PICK_RULES.replace('photo', 'logo').replace('about 40 KB', 'a small size')}</div>}
+          </div>
 
           {/* Card type */}
           <div className="card">
@@ -572,8 +646,10 @@ export default function IDCardsPage() {
             <div style={{ background:'#F1F5F9', borderRadius:8, padding:12, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
               {/* Both faces, so the design can be judged as a whole card
                   rather than a front whose back is a surprise at print time. */}
-              <div style={{ transform:`scale(${isPortrait?0.62:0.74})`, transformOrigin:'top center', marginBottom: isPortrait?'-30mm':'-13mm' }}>
-                <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+              {/* Landscape faces are stacked: side by side they were wider
+                  than this panel, which cut both ends of the school name. */}
+              <div style={{ transform:`scale(${isPortrait?0.62:0.72})`, transformOrigin:'top center', marginBottom: isPortrait?'-30mm':'-33mm' }}>
+                <div style={{ display:'flex', flexDirection: isPortrait ? 'row' : 'column', gap:10, alignItems: isPortrait ? 'flex-start' : 'center' }}>
                   {['front','back'].map(face => (
                     <div key={face} style={{ textAlign:'center' }}>
                       <div style={{ fontSize:9, letterSpacing:1, color:'#94A3B8', marginBottom:4, textTransform:'uppercase' }}>{face}</div>
@@ -589,7 +665,7 @@ export default function IDCardsPage() {
               <div style={{ display:'flex', alignItems:'center', gap:6, background:'#fff', border:'1px solid #E5E7EB', borderRadius:7, padding:'6px 10px', width:'100%' }}>
                 <Camera size={12} color={primary}/>
                 <span style={{ fontSize:11, color:'#374151' }}>
-                  Tap <strong style={{ color:primary }}>📷</strong> icon on each row to add photo
+                  Click <strong style={{ color:primary }}>Add photo</strong> (or 📷) on a row to add or change that person's photo
                 </span>
               </div>
             </div>

@@ -9,6 +9,8 @@ import { useQuery } from '@tanstack/react-query';
 import StudentPhotoButton from '../../components/StudentPhotoButton';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import useAuthStore from '../../store/auth.store';
+import { schoolLogoOf } from '../../utils/schoolBranding';
 import { useDebounce } from '../../hooks/useDebounce';
 import {
   FileText, Award, GraduationCap, User, Calendar, Gift,
@@ -46,10 +48,12 @@ const toList = r => ({ rows: r.data.data || [], total: r.data.total ?? (r.data.d
    CERTIFICATE HTML BUILDERS
 ════════════════════════════════════════════════════ */
 const getCertHTML = (type, person, school, extras = {}) => {
-  const sName = school?.name    || 'IlmForge School';
-  const addr  = school?.address || 'Islamabad, Pakistan';
+  const sName = school?.name    || 'School';
+  const addr  = [school?.address, school?.city].filter(Boolean).join(', ');
   const phone = school?.phone   || '';
-  const logo  = typeof window !== 'undefined' ? localStorage.getItem('schoolLogoPreview') : null;
+  // The logo saved on the school's record: it used to come from this
+  // browser only, so certificates printed elsewhere had none.
+  const logo  = schoolLogoOf(school) || null;
   const date  = new Date().toLocaleDateString('en-PK', { day:'2-digit', month:'long', year:'numeric' });
   const year  = new Date().getFullYear();
   const dob   = person.dob
@@ -515,10 +519,13 @@ export default function CertificatesPage() {
 
   const sections = classes?.find(c => c.id === Number(classId))?.sections || [];
 
-  const { data:school } = useQuery({
+  const signedInSchool = useAuthStore(s => s.school);
+  const { data:savedSchool } = useQuery({
     queryKey: ['school-settings'],
-    queryFn:  () => api.get('/settings/school').then(r => r.data.data),
+    queryFn:  () => api.get('/settings/school', { silent: true }).then(r => r.data.data),
+    retry: false,
   });
+  const school = { ...(signedInSchool || {}), ...(savedSchool || {}) };
 
   const studentGroup = STUDENT_GROUPS.find(g => g.id === group) || STUDENT_GROUPS[0];
   const listParams = {

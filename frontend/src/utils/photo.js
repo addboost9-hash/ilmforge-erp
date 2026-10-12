@@ -75,3 +75,37 @@ export function pickProblem(file) {
 
 /** Size of a data URL in KB, for "Ready · 38 KB". */
 export const dataUrlKB = (url) => Math.round(((String(url || '').split(',')[1] || '').length * 3) / 4 / 1024);
+
+/**
+ * Shrink a school logo for cards, letterheads and the sign-in page. Unlike a
+ * photo it is never cropped and keeps a transparent background (PNG); a logo
+ * picked straight from a phone used to be saved at full size, a few MB that
+ * travelled with every sign-in and could overflow the browser's storage.
+ * Returns a data URL of at most about 150 KB.
+ */
+export async function compressLogo(file) {
+  const problem = pickProblem(file);
+  if (problem) throw new Error(problem.replace(/photo/g, 'logo'));
+  const img = await loadImage(await fileToDataUrl(file));
+  const MAX = 320;
+  const scale = Math.min(1, MAX / img.width, MAX / img.height);
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  const png = canvas.toDataURL('image/png');
+  if (dataUrlKB(png) <= 150) return png;
+  // A photographic logo: WebP keeps the transparency at a fraction of the size.
+  const webp = canvas.toDataURL('image/webp', 0.9);
+  if (webp.startsWith('data:image/webp') && dataUrlKB(webp) <= 150) return webp;
+  const flat = document.createElement('canvas');
+  flat.width = w;
+  flat.height = h;
+  const ctx = flat.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  return flat.toDataURL('image/jpeg', 0.88);
+}

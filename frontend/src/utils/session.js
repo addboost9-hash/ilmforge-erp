@@ -13,7 +13,7 @@
 /* Kept across sign-outs. */
 const KEEP_KEYS = [
   'schoolLogoPreview', 'brandPrimaryColor', 'brandSidebarColor', 'registeredSchoolName',
-  'brandTagline', 'brandMotto', 'schoolSlug',
+  'brandTagline', 'brandMotto', 'schoolSlug', 'brandSchoolId',
 ];
 /* ilm.* = per-user conveniences and waiting saves (each tagged with its user). */
 const KEEP_PREFIXES = ['ilm.'];

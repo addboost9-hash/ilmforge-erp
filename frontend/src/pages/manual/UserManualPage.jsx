@@ -564,9 +564,10 @@ const SECTIONS = [
         title: 'ID card designs',
         steps: [
           { n:1, text:'Five ready-made designs: Academic, Campus Arc, Executive, Minimal, Bold Band' },
-          { n:2, text:'Pick a design first, then set the primary and accent colours to match the school' },
-          { n:3, text:'Every card prints front and back together, with a QR code on both sides' },
-          { n:4, text:'Fields with no value are left off the card instead of printing as a dash' },
+          { n:2, text:'School Logo (top left of the ID Cards page): "Add logo" saves it to the school profile, so it prints on every card on every computer' },
+          { n:3, text:'Pick a design first, then set the primary and accent colours to match the school' },
+          { n:4, text:'Every card prints front and back together, with a QR code on both sides. The full school name is printed; a long name takes two lines' },
+          { n:5, text:'"Add photo" on a row adds or changes that person\'s photo; fields with no value are left off the card' },
         ],
       },
       {

@@ -326,6 +326,10 @@ const SmartLogin = () => {
 };
 
 export default function App() {
+  // The school's saved name and logo, fetched once per visit, so documents
+  // printed here use the current ones even when they changed elsewhere.
+  const signedIn = useAuthStore(s => s.isAuthenticated);
+  React.useEffect(() => { if (signedIn) useAuthStore.getState().refreshSchool(); }, [signedIn]);
   return (
     <QueryClientProvider client={qc}>
       <BrowserRouter>

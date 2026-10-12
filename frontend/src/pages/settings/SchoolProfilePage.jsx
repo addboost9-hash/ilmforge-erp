@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import api from '../../api/client';
 import useAuthStore from '../../store/auth.store';
 import { useBranding } from '../../hooks/useBranding';
+import { compressLogo } from '../../utils/photo';
 import { Save, Upload, Camera, Palette, Building2, Globe, Phone, Mail, MapPin, CheckCircle, BookOpen, Clock } from 'lucide-react';
 
 const THEME_PRESETS = [
@@ -62,17 +63,20 @@ export default function SchoolProfilePage() {
   }, [school]);
 
   /* Logo upload */
-  const handleLogo = (e) => {
+  // Shrunk before it is kept: a logo saved at full size travelled with every
+  // sign-in and could overflow the browser's storage.
+  const handleLogo = async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    if (!file.type.startsWith('image/')) return toast.error('Please select an image file');
-    if (file.size > 2 * 1024 * 1024) return toast.error('Logo must be smaller than 2MB');
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setLogoPreview(ev.target.result);
-      updateBranding({ logo: ev.target.result });
-    };
-    reader.readAsDataURL(file);
+    try {
+      const small = await compressLogo(file);
+      setLogoPreview(small);
+      updateBranding({ logo: small });
+      toast('Logo ready: press Save to keep it', { icon: '🖼️' });
+    } catch (err) {
+      toast.error(err.message || 'That logo could not be used. Choose a JPG, PNG or WebP picture.');
+    }
   };
 
   /* Save */

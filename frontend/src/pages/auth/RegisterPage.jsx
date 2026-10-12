@@ -3,6 +3,7 @@ import { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { compressLogo } from '../../utils/photo';
 import { ArrowRight, Loader2, CheckCircle, Upload, Camera, Mail, Phone, Building2 } from 'lucide-react';
 import IlmForgeLogo from '../../components/brand/IlmForgeLogo';
 
@@ -35,17 +36,18 @@ export default function RegisterPage() {
     .slice(0, 42);
   const brandedLinkPreview = `${window.location.origin}/login?slug=${linkSlugPreview || 'your-school'}`;
 
-  const handleLogoChange = (e) => {
+  // Shrunk first, like every logo: it prints on cards and travels with every sign-in.
+  const handleLogoChange = async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    if (!file.type.startsWith('image/')) return toast.error('Please select an image file');
-    if (file.size > 2 * 1024 * 1024) return toast.error('Logo must be smaller than 2MB');
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setLogoPreview(ev.target.result);
-      try { localStorage.setItem('schoolLogoPreview', ev.target.result); } catch {}
-    };
-    reader.readAsDataURL(file);
+    try {
+      const small = await compressLogo(file);
+      setLogoPreview(small);
+      try { localStorage.setItem('schoolLogoPreview', small); } catch {}
+    } catch (err) {
+      toast.error(err.message || 'That logo could not be used. Choose a JPG, PNG or WebP picture.');
+    }
   };
 
   const handleSubmit = async (e) => {

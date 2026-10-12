@@ -637,13 +637,16 @@ Teachers can do this for their own classes from the Teacher Portal.
    | Bold Band | Portrait | Strong colour band, large QR |
 
 5. Change the **Primary** and **Accent** colours to match your school.
-6. Add a photo for anyone missing one using the small camera button on their row.
-7. Click **Print [n] Cards** — the button shows how many you selected, for example
+6. **School Logo** (top left): if it says *No logo yet*, click **Add logo** (admin). The logo is
+   saved to the school's profile, so it prints on every card, certificate and voucher, on every
+   computer.
+7. Add a photo for anyone missing one: **Add photo** (or the camera button) on their row.
+8. Click **Print [n] Cards** — the button shows how many you selected, for example
    *Print 12 Cards*. A preview window opens; click **Print ID Cards** in it to send to the printer.
 
 Every card prints front and back together, with a scannable QR code on **both** sides
-and a barcode of the ID. Fields with no value are left off the card rather than printed
-as a dash.
+and a barcode of the ID. The school's full name is printed; a long name takes two lines.
+Fields with no value are left off the card rather than printed as a dash.
 
 > Print on card stock if you have it. The cards are standard CR80 size (the same as a
 > bank card), so they fit normal ID card holders and lanyards.
