@@ -293,7 +293,7 @@ const buildPrintHTML = ({
    MAIN COMPONENT
 ════════════════════════════════════════════════════ */
 export default function ExaminationSlipPage() {
-  const [examId,    setExamId]    = useState('');
+  const [examId,    setExamId]    = useState(() => new URLSearchParams(window.location.search).get('examId') || '');
   const [classId,   setClassId]   = useState('');
   const [sectionId, setSectionId] = useState('');
   const [generated, setGenerated] = useState(false);

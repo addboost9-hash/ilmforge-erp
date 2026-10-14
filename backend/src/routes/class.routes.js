@@ -97,8 +97,14 @@ router.get('/:classId/subjects', wrap(async (req, res) => {
   res.json({ success: true, data: subjects });
 }));
 
+/* What a subject is marked out of: a whole number, 1 to 1000. */
+const maxMarksError = (v) => (v === undefined || v === null || v === ''
+  ? null
+  : (/^\d+$/.test(String(v).trim()) && +v >= 1 && +v <= 1000 ? null : 'Max marks must be a whole number from 1 to 1000.'));
+
 router.post('/subjects', wrap(async (req, res) => {
   const { classId, name, code, totalMarks, teacherId } = req.body;
+  if (maxMarksError(totalMarks)) return res.status(400).json({ success: false, message: maxMarksError(totalMarks) });
 
   if (!name || !String(name).trim()) {
     return res.status(400).json({ success: false, message: 'Subject name is required.' });
@@ -127,6 +133,7 @@ router.put('/subjects/:id', wrap(async (req, res) => {
   if (!existing) return res.status(404).json({ success: false, message: 'Subject not found.' });
 
   const { classId, name, code, totalMarks, teacherId } = req.body;
+  if (maxMarksError(totalMarks)) return res.status(400).json({ success: false, message: maxMarksError(totalMarks) });
 
   // IDOR: classId was not verified to belong to this school — a user could
   // re-parent this subject onto another school's class by guessing its id.
@@ -158,6 +165,16 @@ router.delete('/subjects/:id', wrap(async (req, res) => {
   const id = parseInt(req.params.id);
   const existing = await prisma.subject.findFirst({ where: { id, schoolId: req.schoolId } });
   if (!existing) return res.status(404).json({ success: false, message: 'Subject not found.' });
+  // Exam marks point at the subject; deleting it failed with a bare 500.
+  const marks = await prisma.examMark.count({ where: { subjectId: id } });
+  if (marks) {
+    return res.status(400).json({ success: false, message: `${existing.name} has ${marks} exam mark(s) entered, so it cannot be deleted. Rename it instead.` });
+  }
+  const markedTests = await prisma.test.count({ where: { subjectId: id, marks: { some: {} } } });
+  if (markedTests) {
+    return res.status(400).json({ success: false, message: `${existing.name} has class tests with marks, so it cannot be deleted. Rename it instead.` });
+  }
+  await prisma.test.updateMany({ where: { subjectId: id, schoolId: req.schoolId }, data: { subjectId: null } });
   await prisma.subject.delete({ where: { id } });
   res.json({ success: true, message: 'Subject deleted.' });
 }));

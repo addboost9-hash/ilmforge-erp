@@ -50,9 +50,9 @@ const getDivision = (pct, thresholds) => {
    MAIN COMPONENT
 ════════════════════════════════════════════════════ */
 export default function GazetteSheetPage() {
-  const [classId,   setClassId]   = useState('');
-  const [sectionId, setSectionId] = useState('');
-  const [examId,    setExamId]    = useState('');
+  const [classId,   setClassId]   = useState(() => new URLSearchParams(window.location.search).get('classId') || '');
+  const [sectionId, setSectionId] = useState(() => new URLSearchParams(window.location.search).get('sectionId') || '');
+  const [examId,    setExamId]    = useState(() => new URLSearchParams(window.location.search).get('examId') || '');
 
   /* Master data */
   const { data: classes = [] } = useQuery({
@@ -67,9 +67,9 @@ export default function GazetteSheetPage() {
 
   /* Gazette data */
   const { data: gazette, isLoading, error } = useQuery({
-    queryKey: ['gazette', examId, sectionId],
+    queryKey: ['gazette', examId, classId, sectionId],
     queryFn: () =>
-      api.get(`/exams/${examId}/gazette`, { params: { sectionId: sectionId || undefined } })
+      api.get(`/exams/${examId}/gazette`, { params: { classId: classId || undefined, sectionId: sectionId || undefined } })
         .then(r => r.data.data),
     enabled: !!examId,
   });
@@ -96,7 +96,7 @@ export default function GazetteSheetPage() {
     if (!examId) return;
     try {
       const resp = await api.get(`/exams/${examId}/results/excel`, {
-        params: { sectionId: sectionId || undefined },
+        params: { classId: classId || undefined, sectionId: sectionId || undefined },
         responseType: 'blob',
       });
       const url  = URL.createObjectURL(new Blob([resp.data]));

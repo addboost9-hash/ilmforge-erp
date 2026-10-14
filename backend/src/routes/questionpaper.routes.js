@@ -131,16 +131,10 @@ router.post('/generate-ai', wrap(async (req, res) => {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
+  // Without a key this used to return made-up "Sample question about ..."
+  // lines as if they were real questions.
   if (!apiKey) {
-    const n = Math.min(Math.max(parseInt(numQuestions) || 5, 1), 50);
-    const samples = Array.from({ length: n }, (_, i) => ({
-      text:    `Q${i + 1}: Sample question about ${topic} for ${subject} (${className})?`,
-      type:    i % 3 === 0 ? 'mcq' : i % 3 === 1 ? 'short' : 'long',
-      marks:   i % 3 === 0 ? 1 : i % 3 === 1 ? 3 : 5,
-      options: i % 3 === 0 ? [`Option A about ${topic}`, `Option B about ${topic}`, `Option C about ${topic}`, `Option D about ${topic}`] : undefined,
-      answer:  i % 3 === 0 ? `Option A about ${topic}` : `Sample answer ${i + 1}`,
-    }));
-    return res.json({ success: true, data: samples });
+    return res.status(503).json({ success: false, message: 'AI questions are not switched on: the server needs GEMINI_API_KEY (free from Google AI Studio).' });
   }
 
   const n = Math.min(Math.max(parseInt(numQuestions) || 5, 1), 50);
@@ -154,7 +148,7 @@ For MCQ, include 4 options and the correct answer. For short/long questions omit
 
   const options = {
     hostname: 'generativelanguage.googleapis.com',
-    path:     `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    path:     `/v1beta/models/${process.env.GEMINI_MODEL || 'gemini-2.5-flash'}:generateContent?key=${apiKey}`,
     method:   'POST',
     headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) },
   };

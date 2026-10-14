@@ -335,6 +335,8 @@ app.use('/api/v1/events',          protect, R('./routes/events.routes'));
 app.use('/api/v1/automation',      protect, ADMIN_ONLY, R('./routes/automation.routes'));
 /* ═══ v3.7: Question Papers / Lesson Plans / Scheme / Calendar / Payroll ═══ */
 app.use('/api/v1/question-papers', protect, ACADEMIC,   R('./routes/questionpaper.routes'));
+// Question papers with real questions, made in the Exam Vault (paper.routes.js).
+app.use('/api/v1/papers',          protect, ACADEMIC,   R('./routes/paper.routes'));
 app.use('/api/v1/lesson-plans',    protect, ACADEMIC,   R('./routes/lessonplan.routes'));
 app.use('/api/v1/scheme',          protect, ACADEMIC,   R('./routes/scheme.routes'));
 app.use('/api/v1/calendar',        protect,             R('./routes/calendar.routes'));

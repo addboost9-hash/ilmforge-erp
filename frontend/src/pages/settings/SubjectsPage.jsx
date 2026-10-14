@@ -21,7 +21,9 @@ function toArrayPayload(payload) {
   return [];
 }
 
-const emptyForm = { name: '', code: '', classId: '', description: '' };
+// totalMarks: what the subject is marked out of in exams (Urdu 75, Drawing 50...).
+const emptyForm = { name: '', code: '', classId: '', totalMarks: '100' };
+const marksOk = (v) => /^\d+$/.test(String(v).trim()) && +v >= 1 && +v <= 1000;
 
 export default function SubjectsPage() {
   const queryClient = useQueryClient();
@@ -103,7 +105,8 @@ export default function SubjectsPage() {
     // Every subject belongs to a class (Subject.classId is required), so ask
     // for it here rather than letting the save fail server-side.
     if (!form.classId) { toast.error('Select the class this subject belongs to'); return; }
-    addMutation.mutate(form);
+    if (!marksOk(form.totalMarks)) { toast.error('Max marks must be a whole number from 1 to 1000'); return; }
+    addMutation.mutate({ ...form, totalMarks: parseInt(form.totalMarks, 10) });
   };
 
   const handleEditStart = (subject) => {
@@ -112,13 +115,14 @@ export default function SubjectsPage() {
       name: subject.name || '',
       code: subject.code || '',
       classId: subject.classId || '',
-      description: subject.description || '',
+      totalMarks: String(subject.totalMarks ?? 100),
     });
   };
 
   const handleEditSave = (id) => {
     if (!editForm.name.trim()) return;
-    editMutation.mutate({ id, data: editForm });
+    if (!marksOk(editForm.totalMarks)) { toast.error('Max marks must be a whole number from 1 to 1000'); return; }
+    editMutation.mutate({ id, data: { ...editForm, totalMarks: parseInt(editForm.totalMarks, 10) } });
   };
 
   const handleEditCancel = () => {
@@ -187,13 +191,16 @@ export default function SubjectsPage() {
               </select>
             </div>
             <div>
-              <label className="form-label">Description</label>
+              <label className="form-label" htmlFor="subject-max">Max marks in exams</label>
               <input
+                id="subject-max"
                 className="form-input"
-                type="text"
-                placeholder="Brief description"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                type="number"
+                min="1"
+                max="1000"
+                placeholder="100"
+                value={form.totalMarks}
+                onChange={(e) => setForm({ ...form, totalMarks: e.target.value })}
               />
             </div>
             <div style={{ paddingBottom: '1px' }}>
@@ -264,7 +271,7 @@ export default function SubjectsPage() {
                 <th>Subject Name</th>
                 <th>Code</th>
                 <th>Class</th>
-                <th>Description</th>
+                <th>Max Marks</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -309,9 +316,13 @@ export default function SubjectsPage() {
                       <td>
                         <input
                           className="form-input"
-                          style={{ minWidth: '160px' }}
-                          value={editForm.description}
-                          onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                          type="number"
+                          min="1"
+                          max="1000"
+                          aria-label="Max marks"
+                          style={{ maxWidth: '90px' }}
+                          value={editForm.totalMarks}
+                          onChange={(e) => setEditForm({ ...editForm, totalMarks: e.target.value })}
                         />
                       </td>
                       <td>
@@ -350,9 +361,7 @@ export default function SubjectsPage() {
                         )}
                       </td>
                       <td>{getClassName(subject.classId)}</td>
-                      <td style={{ color: subject.description ? 'inherit' : 'var(--text-muted)' }}>
-                        {subject.description || '-'}
-                      </td>
+                      <td style={{ fontWeight: 600 }}>{subject.totalMarks ?? 100}</td>
                       <td>
                         <div style={{ display: 'flex', gap: '0.4rem' }}>
                           <button

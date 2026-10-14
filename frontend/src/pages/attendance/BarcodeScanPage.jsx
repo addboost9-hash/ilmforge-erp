@@ -1,113 +1,208 @@
+/**
+ * Scan Attendance — mark attendance by scanning ID cards, the way a shop
+ * till scans products.
+ *
+ * Plug in any USB or Bluetooth barcode/QR scanner (they type the code and
+ * press Enter, like a keyboard) and scan the QR code or barcode printed on
+ * the IlmForge ID card. Every scan is sent at once and the next card can be
+ * scanned straight away: scans are never held up waiting for the last one,
+ * and the page catches the scanner's typing even when nothing is selected.
+ * A phone or webcam camera can scan too.
+ *
+ *   student card → present (or late after the time set here)
+ *   staff card   → checked in; scanned again later → checked out
+ *   second scan  → "already marked at 7:52", nothing saved twice
+ */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { Link } from 'react-router-dom';
 import api from '../../api/client';
-import { Scan, Search, X, CheckCircle, User, Clock, RefreshCw, Camera, CameraOff } from 'lucide-react';
+import { postOrQueue, isNetworkError } from '../../utils/offlineQueue';
+import { Scan, Camera, CameraOff, Volume2, VolumeX, Maximize2, Clock, ClipboardList } from 'lucide-react';
 
-// ── Success beep via Web Audio API ──────────────────────────────────────────
-function playSuccessSound() {
+const localDate = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const timeOf = (d) => new Date(d).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+const pref = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const savePref = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } };
+
+/* Short tones: one AudioContext for the whole page (browsers allow only a
+   few), started on the first key press or click. */
+let audioCtx = null;
+function tone(freqs, type = 'sine', each = 0.12) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
-    gain.gain.setValueAtTime(0.35, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.4);
-  } catch (_) {
-    // Audio not supported — silently ignore
-  }
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    let t = audioCtx.currentTime;
+    for (const f of freqs) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.value = f;
+      gain.gain.setValueAtTime(0.25, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + each);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(t); osc.stop(t + each);
+      t += each + 0.03;
+    }
+  } catch { /* no sound on this device */ }
 }
+const SOUNDS = {
+  ok: () => tone([1046, 1318], 'sine', 0.09),
+  already: () => tone([660, 660], 'sine', 0.08),
+  out: () => tone([1318, 1046], 'sine', 0.09),
+  error: () => tone([220], 'square', 0.35),
+};
+
+/* How each result looks. */
+const LOOK = {
+  present: { bg: '#DCFCE7', border: '#22C55E', fg: '#166534', label: 'PRESENT' },
+  late: { bg: '#FEF3C7', border: '#F59E0B', fg: '#92400E', label: 'LATE' },
+  already: { bg: '#E0F2FE', border: '#38BDF8', fg: '#075985', label: 'ALREADY MARKED' },
+  in: { bg: '#DCFCE7', border: '#22C55E', fg: '#166534', label: 'STAFF CHECKED IN' },
+  out: { bg: '#EDE9FE', border: '#8B5CF6', fg: '#5B21B6', label: 'STAFF CHECKED OUT' },
+  queued: { bg: '#F1F5F9', border: '#94A3B8', fg: '#334155', label: 'SAVED OFFLINE' },
+  error: { bg: '#FEE2E2', border: '#EF4444', fg: '#991B1B', label: 'NOT MARKED' },
+  pending: { bg: '#F8FAFC', border: '#CBD5E1', fg: '#475569', label: 'SAVING…' },
+};
+const lookOf = (e) => {
+  if (e.state === 'pending') return LOOK.pending;
+  if (e.state === 'queued') return LOOK.queued;
+  if (e.state === 'error') return LOOK.error;
+  if (e.kind === 'staff') return e.action === 'out' ? LOOK.out : e.already ? LOOK.already : LOOK.in;
+  if (e.already) return LOOK.already;
+  return e.status === 'late' ? LOOK.late : LOOK.present;
+};
+
+/* A box someone is typing in (then the keys are theirs, not the scanner's).
+   A ticked checkbox or a clicked button does not count. */
+const TEXT_INPUTS = new Set(['text', 'search', 'email', 'tel', 'number', 'password', 'time', 'date', 'url']);
+const isTyping = (el) => !!el && !el.dataset?.scanInput
+  && (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable || (el.tagName === 'INPUT' && TEXT_INPUTS.has(el.type)));
 
 export default function BarcodeScanPage() {
-  const navigate   = useNavigate();
-  const inputRef   = useRef(null);
-  const videoRef   = useRef(null);
-  const streamRef  = useRef(null);
+  const inputRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const bufferRef = useRef('');
+  const recentRef = useRef(new Map()); // code -> time, to ignore a double read
+  const seqRef = useRef(0);
 
-  const [inputVal, setInputVal]       = useState('');
-  const [scanning, setScanning]       = useState(false);
-  const [entriesLoading, setEntriesLoading] = useState(false);
-  const [student, setStudent]         = useState(null);
-  const [studentOpen, setStudentOpen] = useState(true);
-  const [entriesOpen, setEntriesOpen] = useState(true);
-  const [entries, setEntries]         = useState([]);   // last 10 scans (local list)
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
-  const [flashSuccess, setFlashSuccess] = useState(false);
-
-  // Camera states
-  const [cameraOn, setCameraOn]       = useState(false);
+  const [manual, setManual] = useState('');
+  const [entries, setEntries] = useState([]); // newest first
+  const [presentToday, setPresentToday] = useState(null);
+  const [lateOn, setLateOn] = useState(pref('scan_late_on', '0') === '1');
+  const [lateAfter, setLateAfter] = useState(pref('scan_late_after', '08:00'));
+  const [sound, setSound] = useState(pref('scan_sound', '1') === '1');
+  const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState('');
-  const [cameraLoading, setCameraLoading] = useState(false);
+  const [focused, setFocused] = useState(true);
 
-  const schoolName = localStorage.getItem('schoolName') || 'IlmForge School';
+  const schoolName = pref('schoolName', '') || pref('registeredSchoolName', '');
+  const today = localDate();
+  const todayLabel = new Date().toLocaleDateString('en-PK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  const todayDate = new Date().toISOString().split('T')[0];
-  const todayLabel = new Date().toLocaleDateString('en-PK', {
-    weekday: 'long',
-    year:    'numeric',
-    month:   'long',
-    day:     'numeric',
-  });
+  const settingsRef = useRef({ lateOn, lateAfter, sound });
+  settingsRef.current = { lateOn, lateAfter, sound };
 
-  // ── Camera helpers ─────────────────────────────────────────────────────────
-  const startCamera = useCallback(async () => {
-    setCameraLoading(true);
-    setCameraError('');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 360 } },
-        audio: false,
+  /* ── One scan: show it at once, save it in the background ─────────── */
+  const submit = useCallback((raw) => {
+    const code = String(raw || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+    if (!code) return;
+    const now = Date.now();
+    // A scanner can read one card twice in a blink; count it once.
+    const last = recentRef.current.get(code.toUpperCase());
+    if (last && now - last < 2500) return;
+    recentRef.current.set(code.toUpperCase(), now);
+
+    const id = ++seqRef.current;
+    setEntries((list) => [{ id, code, state: 'pending', at: now }, ...list].slice(0, 60));
+    const { lateOn: lo, lateAfter: la, sound: snd } = settingsRef.current;
+    const update = (patch) => setEntries((list) => list.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+
+    postOrQueue('/attendance/barcode-scan', { barcode: code, date: today, ...(lo && la && { lateAfter: la }) }, { label: `Scan ${code}` })
+      .then((res) => {
+        if (res?.queued) {
+          update({ state: 'queued', message: 'No internet: saved on this computer, sent when back online.' });
+          if (snd) SOUNDS.already();
+          return;
+        }
+        const d = res.data?.data || {};
+        update({
+          state: 'done', kind: d.kind, status: d.status, already: !!d.already, action: d.action,
+          markedAt: d.markedAt, person: d.person || null, message: res.data?.message,
+        });
+        if (typeof d.presentToday === 'number') setPresentToday(d.presentToday);
+        if (snd) (d.already ? SOUNDS.already : d.action === 'out' ? SOUNDS.out : SOUNDS.ok)();
+      })
+      .catch((err) => {
+        const msg = err.response?.data?.message || (isNetworkError(err) ? 'No connection to the server.' : 'Could not mark this card.');
+        update({ state: 'error', message: msg });
+        if (settingsRef.current.sound) SOUNDS.error();
+        // A wrong read can be scanned again at once.
+        recentRef.current.delete(code.toUpperCase());
       });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+  }, [today]);
+
+  /* ── The scanner types into the page: catch it wherever focus is ─── */
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (isTyping(e.target)) return; // a settings box being typed in
+      if (e.target?.dataset?.scanInput) return; // the scan box handles itself
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        if (bufferRef.current) {
+          e.preventDefault();
+          submit(bufferRef.current);
+          bufferRef.current = '';
+        }
+        return;
       }
-      setCameraOn(true);
-    } catch (err) {
-      const msg =
-        err.name === 'NotAllowedError'
-          ? 'Camera permission denied. Allow camera access and try again.'
-          : err.name === 'NotFoundError'
-          ? 'No camera found on this device.'
-          : 'Could not start camera: ' + err.message;
-      setCameraError(msg);
-      setCameraOn(false);
-    } finally {
-      setCameraLoading(false);
-    }
+      if (e.key.length === 1) {
+        bufferRef.current += e.key;
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [submit]);
+
+  // Keep the scan box ready: back into it whenever nothing else is in use.
+  useEffect(() => {
+    const t = setInterval(() => {
+      const el = document.activeElement;
+      if (!el || el === document.body) inputRef.current?.focus();
+    }, 800);
+    inputRef.current?.focus();
+    return () => clearInterval(t);
   }, []);
 
+  // Today's count when the page opens.
+  useEffect(() => {
+    api.get('/attendance/summary-today', { params: { date: today }, silent: true })
+      .then((r) => setPresentToday(r.data?.data?.present ?? null))
+      .catch(() => {});
+  }, [today]);
+
+  /* ── Camera: phone or webcam ─────────────────────────────────────── */
   const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraOn(false);
-    setCameraError('');
   }, []);
-
-  // Stop camera when component unmounts
-  useEffect(() => {
-    return () => stopCamera();
-  }, [stopCamera]);
-
-  /* ── Reading codes from the camera ─────────────────────────────────────────
-     The camera used to open and show video, but nothing ever looked at the
-     frames, so holding an ID card up to it did nothing. Now a few times a
-     second a frame is decoded: with the browser's own BarcodeDetector where
-     it exists (Chrome, Edge, Android), otherwise with jsQR, which reads the
-     QR code printed on both faces of every IlmForge ID card. */
-  const handleScanRef = useRef(null);
-  handleScanRef.current = handleScan;
-  const lastCodeRef = useRef({ code: '', at: 0 });
+  const startCamera = useCallback(async () => {
+    setCameraError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      streamRef.current = stream;
+      setCameraOn(true);
+      setTimeout(() => { if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play().catch(() => {}); } }, 0);
+    } catch (err) {
+      setCameraError(err.name === 'NotAllowedError' ? 'Camera permission was refused.' : err.name === 'NotFoundError' ? 'No camera found.' : 'The camera could not start.');
+    }
+  }, []);
+  useEffect(() => () => stopCamera(), [stopCamera]);
 
   useEffect(() => {
     if (!cameraOn) return undefined;
@@ -117,638 +212,195 @@ export default function BarcodeScanPage() {
     let jsQR = null;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
     const setup = async () => {
       try {
         if ('BarcodeDetector' in window) {
           const formats = await window.BarcodeDetector.getSupportedFormats();
-          const want = ['qr_code', 'code_39', 'code_128'].filter(f => formats.includes(f));
+          const want = ['qr_code', 'code_39', 'code_128'].filter((f) => formats.includes(f));
           if (want.length) detector = new window.BarcodeDetector({ formats: want });
         }
       } catch { detector = null; }
       if (!detector) jsQR = (await import('jsqr')).default;
     };
-
     const tick = async () => {
       if (stopped) return;
       const v = videoRef.current;
       if (v && v.readyState >= 2 && v.videoWidth) {
         let code = null;
         try {
-          if (detector) {
-            const found = await detector.detect(v);
-            code = found[0]?.rawValue || null;
-          } else if (jsQR) {
-            canvas.width = v.videoWidth;
-            canvas.height = v.videoHeight;
+          if (detector) code = (await detector.detect(v))[0]?.rawValue || null;
+          else if (jsQR) {
+            canvas.width = v.videoWidth; canvas.height = v.videoHeight;
             ctx.drawImage(v, 0, 0);
             const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
             code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' })?.data || null;
           }
         } catch { code = null; }
-
-        // The same card stays in view for a second or two; count it once.
-        const now = Date.now();
-        if (code && !(code === lastCodeRef.current.code && now - lastCodeRef.current.at < 4000)) {
-          lastCodeRef.current = { code, at: now };
-          try { navigator.vibrate?.(60); } catch { /* not supported */ }
-          handleScanRef.current?.(code);
-        }
+        if (code) { try { navigator.vibrate?.(50); } catch { /* none */ } submit(code); }
       }
-      timer = setTimeout(tick, 250);
+      timer = setTimeout(tick, 200);
     };
-
     setup().then(tick);
     return () => { stopped = true; clearTimeout(timer); };
-  }, [cameraOn]);
+  }, [cameraOn, submit]);
 
-  // ── Load today's barcode entries from backend ─────────────────────────────
-  const loadEntries = useCallback(async () => {
-    setEntriesLoading(true);
-    try {
-      const res = await api.get('/attendance', {
-        params: { date: todayDate, method: 'barcode' },
-      });
-      // GET /attendance returns students (with a matching Attendance
-      // record nested under `.attendance` once method= is applied), not
-      // raw attendance rows with a nested student.
-      const raw = res.data?.data || [];
-      const normalised = Array.isArray(raw)
-        ? raw
-            .slice(-10)           // keep only last 10
-            .reverse()            // newest first
-            .map((r) => ({
-              id:        r.attendance?.id || r.id,
-              name:      r.name || '—',
-              rollNo:    r.rollNo || r.admissionNo || '—',
-              className: r.class?.name || '—',
-              photo:     r.photo || r.photoUrl || null,
-              status:    r.attendance?.status || 'present',
-              time:      r.attendance?.createdAt
-                ? new Date(r.attendance.createdAt).toLocaleTimeString('en-PK', {
-                    hour: '2-digit', minute: '2-digit', second: '2-digit',
-                  })
-                : '—',
-            }))
-        : [];
-      setEntries(normalised);
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to load today's entries");
-    } finally {
-      setEntriesLoading(false);
-    }
-  }, [todayDate]);
+  const current = entries.find((e) => e.state !== 'pending') || entries[0] || null;
+  const look = current ? lookOf(current) : null;
+  const pendingCount = entries.filter((e) => e.state === 'pending').length;
+  const sessionCount = entries.filter((e) => e.state === 'done' && !e.already).length;
 
-  // Focus input and load entries on mount
-  useEffect(() => {
-    inputRef.current?.focus();
-    loadEntries();
-  }, [loadEntries]);
+  const fullScreen = () => { document.documentElement.requestFullscreen?.().catch(() => {}); };
 
-  // ── Trigger success flash animation ───────────────────────────────────────
-  function triggerSuccessFlash() {
-    setFlashSuccess(true);
-    setTimeout(() => setFlashSuccess(false), 900);
-  }
-
-  // ── Handle barcode scan ────────────────────────────────────────────────────
-  async function handleScan(fromCamera) {
-    const barcode = String(fromCamera ?? inputVal).trim();
-    if (!barcode) return;
-
-    setScanning(true);
-    try {
-      // Step 1 – look up student by roll/barcode
-      let foundStudent = null;
-      try {
-        const lookup = await api.get('/attendance/student-by-barcode', {
-          params: { roll: barcode },
-        });
-        foundStudent = lookup.data?.data || lookup.data || null;
-      } catch (_) {
-        // endpoint may not exist; fall through and let barcode-scan provide student info
-      }
-
-      // Step 2 – mark attendance
-      const res = await api.post('/attendance/barcode-scan', {
-        barcode,
-        date: todayDate,
-      });
-
-      const data = res.data?.data || res.data || {};
-      const scannedStudent = foundStudent || data.student || data;
-      setStudent(scannedStudent);
-      setStudentOpen(true);
-
-      const studentName = scannedStudent.name || 'Student';
-      const className   =
-        scannedStudent.class?.name ||
-        scannedStudent.className ||
-        (typeof scannedStudent.class === 'string' ? scannedStudent.class : '') ||
-        '';
-
-      playSuccessSound();
-      triggerSuccessFlash();
-      toast.success(
-        `${studentName}${className ? ' (' + className + ')' : ''} marked Present`,
-        { duration: 3000 }
-      );
-
-      // Prepend to local recent-scans list (keep max 10)
-      const newEntry = {
-        id:        scannedStudent.id || scannedStudent._id || Date.now(),
-        name:      studentName,
-        rollNo:    scannedStudent.rollNo || scannedStudent.admissionNo || barcode,
-        className: className || '—',
-        photo:     scannedStudent.photo || scannedStudent.photoUrl || null,
-        status:    'Present',
-        time:      new Date().toLocaleTimeString('en-PK', {
-          hour: '2-digit', minute: '2-digit', second: '2-digit',
-        }),
-      };
-      setEntries((prev) => [newEntry, ...prev].slice(0, 10));
-    } catch (err) {
-      const status = err.response?.status;
-      const msg    = err.response?.data?.message;
-      if (status === 404) {
-        toast.error('Student not found for this barcode');
-      } else if (status === 409) {
-        toast.error(msg || 'Attendance already marked for this student today');
-      } else {
-        toast.error(msg || 'Error recording attendance');
-      }
-      setStudent(null);
-    } finally {
-      setScanning(false);
-      setInputVal('');
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }
-
-  function handleKey(e) {
-    if (e.key === 'Enter') handleScan();
-  }
-
-  function handleCloseAttendance() { setShowCloseConfirm(true); }
-  function confirmClose() {
-    stopCamera();
-    setShowCloseConfirm(false);
-    navigate('/attendance');
-  }
-
-  // ── Spinner ────────────────────────────────────────────────────────────────
-  function Spinner({ size = 16, color = '#fff' }) {
-    return (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-        stroke={color} strokeWidth={2.5} strokeLinecap="round"
-        style={{ animation: 'spin 0.8s linear infinite' }}
-      >
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-      </svg>
-    );
-  }
-
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="page-content fade-in"
-      style={{ padding: 0, background: '#F1F5F9', minHeight: '100vh' }}
-    >
-      {/* Success flash overlay */}
-      {flashSuccess && (
-        <div style={{
-          position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 99999,
-          background: 'rgba(21,128,61,0.18)',
-          animation: 'flashFadeOut 0.9s ease forwards',
-        }}>
-          <style>{`@keyframes flashFadeOut { 0%{opacity:1} 100%{opacity:0} }`}</style>
+    <div className="page-content fade-in" style={{ maxWidth: 1100, margin: '0 auto' }} onClick={() => { if (!isTyping(document.activeElement)) inputRef.current?.focus(); }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+        <div style={{ flex: '1 1 260px' }}>
+          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Scan size={22} color="#0D9488" /> Scan Attendance</h1>
+          <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>{schoolName ? `${schoolName} · ` : ''}{todayLabel}</p>
         </div>
-      )}
-
-      {/* Yellow header banner */}
-      <div style={{
-        background: 'linear-gradient(90deg,#F59E0B,#FBBF24)',
-        padding: '10px 20px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Scan size={20} color="#78350F" />
-          <span style={{ fontWeight: 800, fontSize: 15, color: '#78350F', letterSpacing: 0.3 }}>
-            Digital Attendance System - {schoolName}
-          </span>
-          <span style={{
-            background: '#FEF3C7', color: '#92400E', borderRadius: 6,
-            padding: '2px 10px', fontSize: 12, fontWeight: 600, marginLeft: 6,
-          }}>
-            {todayLabel}
-          </span>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <Stat label="Present today" value={presentToday ?? '—'} color="#15803D" />
+          <Stat label="Scanned here" value={sessionCount} color="#1B2F6E" />
+          {pendingCount > 0 && <Stat label="Saving" value={pendingCount} color="#B45309" />}
         </div>
       </div>
 
-      {/* Green LIVE banner */}
-      <div style={{
-        background: 'linear-gradient(90deg,#15803D,#16A34A)',
-        padding: '9px 20px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{
-            width: 10, height: 10, borderRadius: '50%', background: '#86EFAC',
-            boxShadow: '0 0 6px #86EFAC', display: 'inline-block',
-          }} />
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>
-            LIVE&nbsp;-&nbsp;Barcode Machine Attendance
-          </span>
-        </div>
-        <button onClick={handleCloseAttendance} style={{
-          background: '#fff', color: '#15803D', border: 'none', borderRadius: 6,
-          padding: '5px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 5,
-        }}>
-          <CheckCircle size={14} /> Close Attendance
-        </button>
-      </div>
-
-      <div style={{ padding: '20px 20px 30px', maxWidth: 960, margin: '0 auto' }}>
-
-        {/* ── Scan area card ──────────────────────────────────────────────── */}
-        <div className="card" style={{ padding: '20px 24px', marginBottom: 16 }}>
-
-          {/* Camera toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <span style={{ fontWeight: 700, fontSize: 14, color: '#1E3A5F', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Camera size={16} color="#0D9488" /> Camera Feed
-            </span>
-            <button
-              onClick={cameraOn ? stopCamera : startCamera}
-              disabled={cameraLoading}
-              style={{
-                background: cameraOn ? '#FEE2E2' : '#DCFCE7',
-                color: cameraOn ? '#B91C1C' : '#15803D',
-                border: 'none', borderRadius: 6, padding: '5px 14px',
-                fontWeight: 700, fontSize: 12, cursor: cameraLoading ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}
-            >
-              {cameraLoading ? <Spinner size={13} color="#15803D" /> : cameraOn ? <CameraOff size={13} /> : <Camera size={13} />}
-              {cameraLoading ? 'Starting...' : cameraOn ? 'Stop Camera' : 'Start Camera'}
-            </button>
-          </div>
-
-          {/* Camera viewport */}
-          <div style={{
-            background: '#0F172A', borderRadius: 10, overflow: 'hidden',
-            position: 'relative', marginBottom: 16,
-            height: cameraOn ? 240 : 100,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'height 0.3s ease',
-          }}>
-            <video
-              ref={videoRef}
-              muted playsInline autoPlay
-              style={{
-                width: '100%', height: '100%', objectFit: 'cover',
-                display: cameraOn ? 'block' : 'none',
-              }}
-            />
-            {!cameraOn && !cameraError && (
-              <div style={{ textAlign: 'center', color: '#64748B' }}>
-                <CameraOff size={28} style={{ marginBottom: 6, opacity: 0.4 }} />
-                <div style={{ fontSize: 12, opacity: 0.6 }}>Camera is off</div>
-              </div>
-            )}
-            {cameraError && (
-              <div style={{ textAlign: 'center', color: '#EF4444', padding: '0 16px' }}>
-                <CameraOff size={24} style={{ marginBottom: 6 }} />
-                <div style={{ fontSize: 12 }}>{cameraError}</div>
-              </div>
-            )}
-            {/* Scan-line overlay when camera active */}
-            {cameraOn && (
-              <div style={{
-                position: 'absolute', inset: 0, pointerEvents: 'none',
-                background: 'linear-gradient(transparent 45%, rgba(21,128,61,0.18) 50%, transparent 55%)',
-                animation: 'scanLine 2s ease-in-out infinite',
-              }}>
-                <style>{`@keyframes scanLine { 0%,100%{background-position:0 0} 50%{background-position:0 100%} }`}</style>
-              </div>
-            )}
-          </div>
-
-          {/* Input row */}
-          <div style={{ display: 'flex', gap: 8, maxWidth: 520, margin: '0 auto 8px' }}>
-            <input
-              ref={inputRef}
-              value={inputVal}
-              onChange={(e) => setInputVal(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder="Scan barcode or type roll number manually..."
-              autoFocus
-              disabled={scanning}
-              style={{
-                flex: 1, border: `2px solid ${flashSuccess ? '#15803D' : '#CBD5E1'}`,
-                borderRadius: 8, padding: '10px 14px', fontSize: 15,
-                fontWeight: 600, outline: 'none', letterSpacing: 1,
-                color: '#1E3A5F', background: scanning ? '#F1F5F9' : '#F8FAFC',
-                transition: 'border-color 0.3s',
-              }}
-            />
-            <button
-              onClick={() => handleScan()}
-              disabled={scanning || !inputVal.trim()}
-              style={{
-                background: scanning ? '#FB923C' : 'linear-gradient(135deg,#F97316,#EA580C)',
-                color: '#fff', border: 'none', borderRadius: 8,
-                padding: '10px 18px', cursor: scanning || !inputVal.trim() ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: 6,
-                fontWeight: 700, fontSize: 14, opacity: !inputVal.trim() ? 0.6 : 1,
-              }}
-            >
-              {scanning ? <Spinner size={16} color="#fff" /> : <Search size={16} />}
-              {scanning ? 'Scanning...' : 'Search'}
-            </button>
-          </div>
-
-          <div style={{ textAlign: 'center', fontSize: 12, color: '#94A3B8' }}>
-            Point a barcode at the camera or type/paste a roll number above and press Enter
-          </div>
-        </div>
-
-        {/* ── Student Information section ─────────────────────────────────── */}
-        <div className="card" style={{ padding: 0, marginBottom: 14, overflow: 'hidden' }}>
-          <button
-            onClick={() => setStudentOpen((v) => !v)}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-              padding: '11px 16px', background: '#F8FAFC', border: 'none',
-              borderBottom: studentOpen ? '1px solid #E2E8F0' : 'none',
-              cursor: 'pointer', textAlign: 'left',
-            }}
-          >
-            <span style={{ fontSize: 18, color: '#0D9488', fontWeight: 700, lineHeight: 1 }}>
-              {studentOpen ? '⊖' : '⊕'}
-            </span>
-            <span style={{ fontWeight: 700, fontSize: 13.5, color: '#1E3A5F' }}>
-              Student Information
-            </span>
-            {student && (
-              <span style={{
-                marginLeft: 8, background: '#DCFCE7', color: '#15803D',
-                borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700,
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}>
-                <CheckCircle size={10} /> Marked Present
-              </span>
-            )}
-          </button>
-
-          {studentOpen && (
-            <div style={{ padding: '14px 18px' }}>
-              {student ? (
-                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  {/* Student photo */}
-                  <div style={{
-                    width: 80, height: 80, borderRadius: 10, overflow: 'hidden',
-                    background: '#E2E8F0', border: '2px solid #CBD5E1', flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {student.photo || student.photoUrl ? (
-                      <img
-                        src={student.photo || student.photoUrl}
-                        alt={student.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                      />
-                    ) : null}
-                    <div style={{
-                      width: '100%', height: '100%', display: 'flex',
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <User size={36} color="#94A3B8" />
-                    </div>
-                  </div>
-
-                  {/* Info grid */}
-                  <div style={{
-                    flex: 1, display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(150px,1fr))', gap: 10,
-                  }}>
-                    {[
-                      { label: 'Name',           value: student.name },
-                      { label: 'Roll No',         value: student.rollNo || student.admissionNo || '—' },
-                      { label: 'Parent',          value: student.parentName || student.fatherName || '—' },
-                      {
-                        label: 'Class / Section',
-                        value: (
-                          (student.class?.name || student.className || (typeof student.class === 'string' ? student.class : '')) +
-                          (student.section?.name || student.sectionName ? ' / ' + (student.section?.name || student.sectionName) : '')
-                        ) || '—',
-                      },
-                      { label: 'Campus', value: student.campus?.name || student.campusName || '—' },
-                      { label: 'Dues',   value: student.dues != null ? `Rs. ${student.dues}` : '—', red: true },
-                    ].map(({ label, value, red }) => (
-                      <div key={label} style={{
-                        background: '#F8FAFC', borderRadius: 8,
-                        padding: '8px 12px', border: '1px solid #E2E8F0',
-                      }}>
-                        <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, marginBottom: 3 }}>{label}</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: red ? '#DC2626' : '#1E3A5F' }}>
-                          {value || '—'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '12px 0' }}>
-                  No student scanned yet. Scan a card to see information here.
-                </div>
-              )}
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        {/* Left: scan box and the last result */}
+        <div style={{ flex: '2 1 420px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="card" style={{ padding: 16 }}>
+            <form onSubmit={(e) => { e.preventDefault(); submit(manual); setManual(''); }} style={{ display: 'flex', gap: 8 }}>
+              <input
+                ref={inputRef}
+                data-scan-input="1"
+                className="form-input"
+                value={manual}
+                onChange={(e) => setManual(e.target.value)}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                placeholder="Scan an ID card — or type a roll number and press Enter"
+                aria-label="Scanned code"
+                autoComplete="off"
+                spellCheck={false}
+                style={{ flex: 1, fontSize: 16, fontFamily: 'monospace', letterSpacing: 1 }}
+              />
+              <button type="submit" className="btn btn-teal">Mark</button>
+            </form>
+            <div style={{ marginTop: 8, fontSize: 12, color: focused ? '#15803D' : '#64748B', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: focused ? '#22C55E' : '#94A3B8', display: 'inline-block' }} />
+              {focused ? 'Ready: scan the next card.' : 'Ready: the scanner still works while you look at another part of the page.'}
             </div>
-          )}
-        </div>
-
-        {/* ── Recent Scans (last 10) ─────────────────────────────────────── */}
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', background: '#F8FAFC',
-            borderBottom: entriesOpen ? '1px solid #E2E8F0' : 'none',
-          }}>
-            <button
-              onClick={() => setEntriesOpen((v) => !v)}
-              style={{
-                flex: 1, display: 'flex', alignItems: 'center', gap: 8,
-                padding: '11px 16px', background: 'transparent', border: 'none',
-                cursor: 'pointer', textAlign: 'left',
-              }}
-            >
-              <span style={{ fontSize: 18, color: '#0D9488', fontWeight: 700, lineHeight: 1 }}>
-                {entriesOpen ? '⊖' : '⊕'}
-              </span>
-              <span style={{ fontWeight: 700, fontSize: 13.5, color: '#1E3A5F' }}>
-                Recent Scans
-              </span>
-              {entries.length > 0 && (
-                <span style={{
-                  background: '#DCFCE7', color: '#15803D', borderRadius: 20,
-                  padding: '2px 10px', fontSize: 11.5, fontWeight: 700,
-                }}>
-                  {entries.length} / 10
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={loadEntries}
-              disabled={entriesLoading}
-              title="Refresh from server"
-              style={{
-                background: 'transparent', border: 'none',
-                cursor: entriesLoading ? 'not-allowed' : 'pointer',
-                padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 5,
-                color: '#0D9488', fontWeight: 600, fontSize: 12,
-              }}
-            >
-              {entriesLoading ? <Spinner size={14} color="#0D9488" /> : <RefreshCw size={14} />}
-              Refresh
-            </button>
           </div>
 
-          {entriesOpen && (
-            entriesLoading ? (
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                gap: 10, padding: '24px 0', color: '#64748B', fontSize: 13,
-              }}>
-                <Spinner size={18} color="#0D9488" /> Loading entries...
-              </div>
-            ) : entries.length === 0 ? (
-              <div style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
-                No scans yet today. Entries will appear here after scanning.
+          <div role="status" aria-live="polite" aria-label="Last scan"
+            style={{
+              borderRadius: 16, padding: 18, minHeight: 190, transition: 'background .2s',
+              background: look ? look.bg : '#F8FAFC', border: `3px solid ${look ? look.border : '#E2E8F0'}`,
+              display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap',
+            }}>
+            {!current ? (
+              <div style={{ textAlign: 'center', width: '100%', color: '#64748B' }}>
+                <Scan size={44} color="#94A3B8" style={{ margin: '0 auto 8px' }} />
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#334155' }}>Scan the first ID card</div>
+                <div style={{ fontSize: 13, marginTop: 4 }}>Hold the card's QR code or barcode under the scanner.</div>
               </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: '#F1F5F9' }}>
-                      {['#', 'Photo', 'Time', 'Name', 'Roll No', 'Class', 'Status'].map((h) => (
-                        <th key={h} style={{
-                          padding: '9px 12px', textAlign: 'left', fontWeight: 700,
-                          color: '#64748B', fontSize: 11.5, borderBottom: '1px solid #E2E8F0',
-                        }}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.map((e, i) => (
-                      <tr key={e.id || i} style={{
-                        borderBottom: '1px solid #F1F5F9',
-                        background: i === 0 ? '#F0FDF4' : i % 2 === 0 ? '#fff' : '#F8FAFC',
-                        transition: 'background 0.3s',
-                      }}>
-                        <td style={{ padding: '7px 12px', color: '#94A3B8', fontSize: 12 }}>{i + 1}</td>
-                        <td style={{ padding: '7px 12px' }}>
-                          <div style={{
-                            width: 32, height: 32, borderRadius: '50%', overflow: 'hidden',
-                            background: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            border: '1.5px solid #CBD5E1',
-                          }}>
-                            {e.photo ? (
-                              <img src={e.photo} alt={e.name}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                onError={(ev) => { ev.target.style.display = 'none'; }}
-                              />
-                            ) : (
-                              <User size={16} color="#94A3B8" />
-                            )}
-                          </div>
-                        </td>
-                        <td style={{ padding: '7px 12px', color: '#64748B', whiteSpace: 'nowrap' }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <Clock size={11} color="#94A3B8" /> {e.time}
-                          </span>
-                        </td>
-                        <td style={{ padding: '7px 12px', fontWeight: 600, color: '#1E3A5F' }}>{e.name}</td>
-                        <td style={{ padding: '7px 12px', color: '#475569', fontFamily: 'monospace' }}>{e.rollNo}</td>
-                        <td style={{ padding: '7px 12px', color: '#475569' }}>{e.className}</td>
-                        <td style={{ padding: '7px 12px' }}>
-                          <span style={{
-                            background: '#DCFCE7', color: '#15803D', borderRadius: 20,
-                            padding: '2px 10px', fontSize: 11, fontWeight: 700,
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                          }}>
-                            <CheckCircle size={10} /> {e.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )
+              <>
+                <div style={{ width: 110, height: 130, borderRadius: 12, overflow: 'hidden', background: '#fff', border: '2px solid rgba(0,0,0,.08)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 800, color: '#94A3B8' }}>
+                  {current.person?.photoUrl ? <img src={current.person.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (current.person?.name || '?').charAt(0)}
+                </div>
+                <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                  <div style={{ display: 'inline-block', fontSize: 13, fontWeight: 800, letterSpacing: 1, color: '#fff', background: look.border, borderRadius: 999, padding: '4px 12px' }}>
+                    {look.label}
+                  </div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', marginTop: 8, lineHeight: 1.15, overflowWrap: 'anywhere' }}>
+                    {current.person?.name || current.code}
+                  </div>
+                  {current.person && (
+                    <div style={{ fontSize: 15, color: '#334155', marginTop: 4 }}>
+                      {[current.person.className, current.person.sectionName].filter(Boolean).join(' — ')}
+                      {current.person.rollNo && <span style={{ fontFamily: 'monospace', marginLeft: 8, color: '#64748B' }}>{current.person.rollNo}</span>}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 14, color: look.fg, marginTop: 8, fontWeight: 600 }}>
+                    {current.state === 'done'
+                      ? (current.already
+                        ? `Already marked ${current.kind === 'staff' ? 'in' : current.status} at ${timeOf(current.markedAt)}. Nothing changed.`
+                        : current.kind === 'staff'
+                          ? `${current.action === 'out' ? 'Out' : 'In'} at ${timeOf(current.markedAt)}`
+                          : `Marked ${current.status} at ${timeOf(current.markedAt)}`)
+                      : current.message || (current.state === 'pending' ? 'Saving…' : '')}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Settings */}
+          <div className="card" style={{ padding: '12px 16px', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', fontSize: 13 }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input type="checkbox" checked={lateOn} onChange={(e) => { setLateOn(e.target.checked); savePref('scan_late_on', e.target.checked ? '1' : '0'); }} />
+              <Clock size={14} /> Mark late after
+            </label>
+            <input type="time" className="form-input" aria-label="Late after" value={lateAfter} disabled={!lateOn}
+              onChange={(e) => { setLateAfter(e.target.value); savePref('scan_late_after', e.target.value); }}
+              style={{ width: 120, padding: '4px 8px' }} />
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => { const v = !sound; setSound(v); savePref('scan_sound', v ? '1' : '0'); if (v) SOUNDS.ok(); }}>
+              {sound ? <Volume2 size={14} /> : <VolumeX size={14} />} {sound ? 'Sound on' : 'Sound off'}
+            </button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={cameraOn ? stopCamera : startCamera}>
+              {cameraOn ? <CameraOff size={14} /> : <Camera size={14} />} {cameraOn ? 'Stop camera' : 'Use camera'}
+            </button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={fullScreen}><Maximize2 size={14} /> Full screen</button>
+            <Link to="/attendance" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }}><ClipboardList size={14} /> Today's register</Link>
+          </div>
+          {cameraError && <div style={{ fontSize: 13, color: '#B91C1C' }}>{cameraError}</div>}
+          {cameraOn && (
+            <div className="card" style={{ padding: 8 }}>
+              <video ref={videoRef} playsInline muted style={{ width: '100%', maxHeight: 320, borderRadius: 10, background: '#000', objectFit: 'cover' }} />
+              <div style={{ fontSize: 12, color: '#64748B', marginTop: 6 }}>Hold the card's QR code in front of the camera.</div>
+            </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div style={{
-          marginTop: 20, textAlign: 'center',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        }}>
-          <span style={{
-            background: '#1E3A5F', color: '#fff', borderRadius: 6,
-            padding: '6px 18px', fontSize: 13, fontWeight: 700,
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-          }}>
-            Running Session: 2025-2026
-            <span style={{ fontSize: 11 }}>&#9660;</span>
-          </span>
-        </div>
-      </div>
-
-      {/* Close confirm modal */}
-      {showCloseConfirm && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
-        }}>
-          <div style={{
-            background: '#fff', borderRadius: 12, padding: '28px 32px',
-            maxWidth: 380, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-            textAlign: 'center',
-          }}>
-            <div style={{
-              width: 52, height: 52, borderRadius: '50%', background: '#FEE2E2',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
-            }}>
-              <X size={24} color="#DC2626" />
-            </div>
-            <h3 style={{ fontSize: 17, fontWeight: 800, color: '#1E3A5F', marginBottom: 8 }}>
-              Close Attendance Session?
-            </h3>
-            <p style={{ fontSize: 13, color: '#64748B', marginBottom: 22, lineHeight: 1.6 }}>
-              Are you sure you want to close the barcode attendance session? All scanned entries have been saved to the server.
-            </p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setShowCloseConfirm(false)} style={{
-                background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 7,
-                padding: '9px 22px', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-              }}>
-                Cancel
-              </button>
-              <button onClick={confirmClose} style={{
-                background: 'linear-gradient(135deg,#DC2626,#B91C1C)', color: '#fff',
-                border: 'none', borderRadius: 7, padding: '9px 22px',
-                fontWeight: 700, fontSize: 13, cursor: 'pointer',
-              }}>
-                Yes, Close
-              </button>
-            </div>
+        {/* Right: this session's scans */}
+        <div className="card" style={{ flex: '1 1 300px', minWidth: 0, padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', fontWeight: 700, color: '#1E3A5F', fontSize: 14 }}>
+            Scanned on this computer ({entries.length})
+          </div>
+          <div style={{ maxHeight: 560, overflowY: 'auto' }} aria-label="Recent scans">
+            {entries.length === 0 && <div style={{ padding: 16, color: '#94A3B8', fontSize: 13 }}>Scans appear here, newest first.</div>}
+            {entries.map((e) => {
+              const l = lookOf(e);
+              return (
+                <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid #F8FAFC' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: l.border, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.person?.name || e.code}</div>
+                    <div style={{ fontSize: 11.5, color: '#64748B' }}>
+                      {e.person ? [e.person.className, e.person.sectionName].filter(Boolean).join(' — ') : (e.state === 'error' ? e.message : '')}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 800, color: l.fg }}>{l.label}</div>
+                    <div style={{ fontSize: 11, color: '#94A3B8' }}>{timeOf(e.at)}</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, color }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '8px 14px', minWidth: 110 }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: '#64748B' }}>{label}</div>
     </div>
   );
 }

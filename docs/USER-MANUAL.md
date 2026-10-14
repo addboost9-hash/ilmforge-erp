@@ -453,38 +453,54 @@ The school may use any of these instead of marking by hand:
 | Period-wise (per subject) | `/attendance/period` | Works |
 
 Whatever the method, a student gets **one** attendance record per day. A scan or punch
-marks a student present only if nobody has marked them yet, so it never overwrites a
+marks a student present; a student marked *Absent* or *Leave* who then scans in is changed to present (they are there). It never changes a
 teacher's "Leave" or "Absent".
 
-### Setting up ID card scanning at the gate
+### Scanning ID cards for attendance (like a shop till)
 
-Every student ID card printed from **ID Cards** carries a QR code and a barcode of the
-student's **roll number**. Scanning either one marks the student present.
+Every ID card printed from **ID Cards** carries a QR code and a barcode: a student's
+**roll number**, a staff member's **employee code**. A scanner reads them the way a shop
+till reads products.
 
-**Option A — a handheld scanner (recommended for a busy gate)**
+**Option A — a handheld scanner (recommended: fastest)**
 
 1. Buy any USB or Bluetooth barcode scanner that reads **QR codes and Code 39**
-   (sold as "1D/2D scanner"; roughly Rs 4,000–9,000). It must work in
-   "keyboard mode" (HID), which nearly all of them do out of the box. No driver is needed.
-2. Plug it into the gate computer. To test, open Notepad and scan a card: the roll number
-   should appear followed by a new line. If it doesn't add a new line, scan the
-   "Enter suffix / CR" setting code in the scanner's own booklet.
+   (sold as a "1D/2D scanner"; roughly Rs 4,000–9,000). It works as a keyboard (HID
+   mode), which nearly all do out of the box. No driver is needed.
+2. Plug it in. To test, open Notepad and scan a card: the roll number should appear
+   followed by a new line. If there is no new line, scan the "Enter suffix / CR" code in
+   the scanner's own booklet.
 3. Sign in to IlmForge on that computer and open **Attendance → Barcode scan**
-   (`/attendance/barcode`). Click once in the scan box.
-4. Scan cards. Each scan shows the student's name and photo and marks them present.
-   Scanning the same card twice is ignored.
+   (`/attendance/barcode`). **Full screen** makes it a gate screen.
+4. Scan card after card. There is no need to click anywhere first: the page catches the
+   scanner even when nothing is selected, and every card is saved the moment it is
+   scanned, so scanning quickly loses nothing. Each scan shows the photo, name, class
+   and roll number:
 
-**Option B — a webcam or the computer's own camera**
+   | Screen says | Meaning |
+   |---|---|
+   | **PRESENT** (green) | Marked present now |
+   | **LATE** (amber) | Scanned after the late time (see below) |
+   | **ALREADY MARKED** (blue) | Scanned earlier today; the first time is shown and nothing changes |
+   | **STAFF CHECKED IN / OUT** | A staff card: first scan is arrival, a scan 30 minutes or more later is leaving |
+   | **NOT MARKED** (red) | Unknown card, or a student who has left the school; the reason is shown |
 
-1. Use any USB webcam (720p is enough) or a laptop camera. Place the card about
-   15–25 cm from the camera, in good light.
-2. Open **Attendance → Barcode scan** and click **Start Camera**. Allow camera access when
-   the browser asks. The page must be opened over `https://` (the live site is), or the
-   browser will refuse the camera.
-3. Hold the card up; the page reads it by itself, about four times a second.
+   A short beep tells you the result without looking (**Sound on / off**).
+5. **Mark late after**: tick it and set the time (for example 08:00); students scanned
+   after it are marked *Late*. The setting stays on that computer.
+6. **Present today** counts everyone marked so far. **Today's register** opens the class
+   registers to mark the rest absent or on leave.
 
-Use Google Chrome or Microsoft Edge. Staff ID cards are not read by this screen; mark
-staff on **Staff Attendance**.
+If the internet drops, scans are kept on that computer and sent when it is back
+(the screen says *SAVED OFFLINE*).
+
+**Option B — a webcam or phone camera**
+
+On the same screen click **Use camera**, allow camera access, and hold the card's QR code
+15–25 cm from the camera in good light. The page must be opened on `https://` (the
+live site is).
+
+Use Google Chrome or Microsoft Edge.
 
 ### Photo check-in (no face recognition)
 
@@ -646,60 +662,105 @@ those receipts stay correct.
 <a name="part-6"></a>
 ## Part 6 — Exams and results
 
-### Setting up exam rules (once)
+**Sidebar → Exam Vault** (`/examination`) takes an exam from start to finish in six
+numbered steps, in the order a school works: **1 Exam Setup → 2 Date Sheet → 3 Syllabus →
+4 Question Papers → 5 Marks Entry → 6 Results**.
 
-**School Settings → Exam Settings** (`/settings/exam-settings`)
+### Before the first exam (once)
 
-Set **Pass / Fail Criteria**, **Grade Boundaries (%)**, **Division Thresholds (%)** and
-**Admit Card Instructions**. Click **Save Exam Settings**.
+**School Settings → Exam Settings** (`/settings/exam-settings`): set the **pass mark**,
+**grade boundaries** (A+, A, B, C, D; below D is F), **division thresholds** and **exam
+terms** (how many terms your school runs in a session, 1 to 6; most run two). Before a
+school changes them, grades are A+ 90, A 80, B 65, C 50, D 40 (40% passes).
 
-**Exams → Result Configuration** (`/exams/result-config`)
+**Settings → Subjects** (`/settings/subjects`): add each class's subjects with **Max marks
+in exams**: what the subject is marked out of (for example Urdu 75, Drawing 50). Marks
+entry, question papers and result cards all use it.
 
-- **Grade Configuration** — **Add Grade** for each grade band (A+, A, B …)
-- **Signatories** — **Add Signatory** for the names printed on result cards
-- **Final Remarks** — **Add Remark** for the comments teachers can choose
+### Step 1 — Exam Setup
 
-Click **Save Preferences**.
+1. Choose the term (*1st Term*, *2nd Term*…) and click **Add Exam**.
+2. Pick **all the classes** the exam is for (one *First Term* exam can cover the whole
+   school), name it, and set the dates. **Submit**.
+3. Each exam row shows its classes and dates, and its next steps: **Date sheet**,
+   **Papers**, **Roll no. slips**, **Enter marks**, **Results**. **PDF** and **Word** at the
+   top give the term's exam list.
 
-### How many terms your school runs
+### Step 2 — Date Sheet
 
-**School Settings → Exam Settings → Exam Terms**
+Choose the exam. Only that exam's classes are listed, with how many papers are planned
+for each. **Edit** adds a subject with its date and time (one class can be copied to all).
+**Print** prints a class's date sheet; **Print all date sheets** prints every class, one
+per page. The bin clears a class's date sheet.
 
-Choose how many exam terms your school holds in a session, from 1 to 6. Most schools
-run two. The Exam Vault then shows one tab per term — *1st Term*, *2nd Term*, and so on
-up to *6th Term*.
+### Step 3 — Syllabus
 
-Set this before creating exams, so each exam can be filed under the right term.
+Each class shows how many of its subjects have a syllabus, and which are missing.
+**Write / edit** opens the syllabus page; **Print** prints the class's whole syllabus.
 
-> Lowering the number later does not delete exams already recorded under a removed term.
-> They stay in the system and reappear if you raise the count again.
+### Step 4 — Question Papers
 
-### Creating an exam
+1. **Paper setup (defaults)** (once per class): the instructions and part headings every
+   new paper starts with.
+2. Choose the **exam** and **class**: every subject of the class is listed with its paper,
+   or *No paper yet*. Click **Make**.
+3. Write the paper. Choose time in minutes; each part has a heading, a note and, if
+   wanted, **Attempt any N**. Add questions with the buttons: **Multiple choice** (tick the
+   correct option), **True / False**, **Fill in the blank**, **Short question**, **Long
+   question**, each with its marks. Questions can be moved, copied and deleted. Urdu
+   is written right to left automatically.
+4. The total is worked out as you go (with *attempt any* counted), and the screen warns
+   when it differs from the subject's maximum marks.
+5. **Suggest with AI** writes questions on a topic for you to tick and add (it needs an
+   AI key on the server; read every question before using it).
+6. **Save draft**, or **Save · ready to print**. **Print paper** prints it on A4 with your
+   letterhead and boxes for name and roll number; **Answer key** prints it with the
+   answers for the teacher.
+7. In the list, **Copy** makes the same paper for another section, class or exam (then
+   change what differs).
 
-**Sidebar → Exam Vault** (`/exams`)
+### Roll number slips
 
-1. Click **Add Exam**.
-2. Enter the exam name (Mid Term, Final Term), class, and dates.
-3. Choose the **Term** — the dropdown lists the terms your school has configured.
-4. Save.
+From the exam row, **Roll no. slips** (`/exams/exam-slip`) prints each student's slip
+with the date sheet.
 
-### Entering marks
+### Step 5 — Marks Entry
 
-From the exam row, click **Marks**. Enter marks per student per subject and save.
-Teachers can do this for their own classes from the Teacher Portal.
+The tab shows each class of the exam with how many marks are in (*Not started*, *In
+progress*, *Complete*). Click **Enter marks** for a class to open its sheet:
 
-### Results and printing
+- Each subject column says what it is out of. Type the marks; **A** means absent.
+- **Enter** or **↓** moves to the next student, **↑** back, **Tab** across.
+- An orange box is changed but not saved; a red one needs fixing (more than the maximum,
+  or half marks: marks are whole numbers).
+- Each student's total, percentage and grade update as you type.
+- **Save N changes** saves only what changed. Empty a box and save to take a mark out.
+- Teachers can enter marks only for the classes they teach.
 
-| Output | Where |
+### Step 6 — Results
+
+Choose the exam, class and section: the screen shows students, passed, failed, average
+and the top positions.
+
+- **Result sheet and report cards**: the whole class with every subject, total,
+  percentage, grade, **position in the class** and pass/fail; **Print result sheet**
+  (landscape) and **Print report cards (A4)**, one per student with photo, father's name,
+  subjects, totals, position, division and signatures.
+- **Gazette**, **Merit list** and **Failed students** open for the class (and section)
+  chosen.
+- **Publish result** shows the result to parents and students in their portal; **Hide
+  again** takes it back. A result cannot be published before any marks are entered.
+- **Result card settings** (the second sub-tab) only changes how result cards look; it
+  does not publish anything.
+
+A student passes when the overall grade is not F and no subject is F. Absent from a paper
+counts as failing that paper. Positions are within the student's own class.
+
+| Also available | Where |
 |---|---|
-| Result cards | `/exams/:id/results` |
-| Admit cards / exam slips | `/exams/exam-slip` |
-| Gazette sheet | `/exams/gazette` |
-| Merit list | `/exams/merit-list` |
-| Annual report card | `/exams/annual-report` |
+| Annual report card (all terms) | `/exams/annual-report` |
 | Subject analysis | `/exams/subject-analysis` |
-| Exam timetable | `/exams/timetable` |
-| Question papers | `/exams/question-papers` |
+| BISE-style result card | `/exams/bise-result-card` |
 
 ---
 

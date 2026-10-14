@@ -486,6 +486,33 @@ model Exam {
   @@index([schoolId, classId])
 }
 
+// A question paper written in the Exam Vault: for one exam, class and
+// subject, with its questions. Papers used to be rows of the class-test table
+// with a "[BANK]" title and no questions, so they printed as empty templates.
+// sections: JSON text (both databases) — [{ title, note, attempt, questions:
+// [{ type, text, marks, options, answer }] }].
+model QuestionPaper {
+  id           Int      @id @default(autoincrement())
+  schoolId     Int
+  examId       Int?
+  classId      Int?
+  sectionId    Int?
+  subjectId    Int?
+  subjectName  String?
+  title        String
+  totalMarks   Int      @default(0)
+  durationMin  Int?
+  instructions String?
+  sections     String   @default("[]")
+  status       String   @default("draft") // draft|ready
+  createdBy    Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([schoolId, examId])
+  @@index([schoolId, classId])
+}
+
 model ExamMark {
   id             Int      @id @default(autoincrement())
   examId         Int

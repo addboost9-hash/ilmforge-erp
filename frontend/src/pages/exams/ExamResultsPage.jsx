@@ -1,416 +1,209 @@
-import { useParams, Link } from 'react-router-dom';
+/**
+ * IlmForge — Exam Results for one class or section
+ *
+ * The result sheet (every student, every subject, total, percentage, grade,
+ * position in class, pass or fail) and A4 report cards to print, worked out
+ * on the server (GET /exams/:id/gazette) with the school's own grading.
+ *
+ * Report cards used to print without names, and every subject as "General":
+ * the marks came back without the student or subject attached.
+ */
+import { useEffect, useMemo } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
-import { ArrowLeft, Printer, Trophy, BarChart2 } from 'lucide-react';
-import { SkeletonRows } from '../../components/Skeleton';
+import { printHTML } from '../../utils/print';
+import { ArrowLeft, Printer, PencilLine } from 'lucide-react';
 
-const gradeColor = g => {
-  if (!g || g==='ABS') return {c:'#94a3b8', bg:'#F1F5F9'};
-  if (g==='A+' || g==='A') return {c:'#15803D', bg:'#DCFCE7'};
-  if (g==='B' || g==='C') return {c:'#1D4ED8', bg:'#DBEAFE'};
-  if (g==='D' || g==='E') return {c:'#B45309', bg:'#FEF3C7'};
-  return {c:'#B91C1C', bg:'#FEE2E2'};
-};
+const NAVY = '#1B2F6E';
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ordinal = (n) => (n ? `${n}${[, 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th'}` : '—');
 
-const calcGrade = pct => {
-  if (pct >= 90) return 'A+';
-  if (pct >= 80) return 'A';
-  if (pct >= 70) return 'B';
-  if (pct >= 60) return 'C';
-  if (pct >= 50) return 'D';
-  if (pct >= 40) return 'E';
-  return 'F';
-};
-
-/* ─── A4 Print styles injected once ──────────────────────── */
-const PRINT_STYLES = `
-@media print {
-  @page { size: A4 portrait; margin: 14mm 12mm; }
-  body * { visibility: hidden !important; }
-  #exam-result-print-area,
-  #exam-result-print-area * { visibility: visible !important; }
-  #exam-result-print-area {
-    position: fixed; inset: 0;
-    width: 100%; height: 100%;
-    overflow: visible;
-    background: #fff;
-  }
-  .no-print { display: none !important; }
-
-  /* One report card per page */
-  .result-report-card { page-break-after: always; }
-  .result-report-card:last-child { page-break-after: avoid; }
-}
-`;
-
-/* ─── Single student report card (print) ──────────────────── */
-function StudentReportCard({ student, exam, serialNo }) {
-  const subjects = student.subjects || [];
-  const totalMax = subjects.reduce((s, r) => s + (r.totalMarks || 0), 0) || student.totalMarks || 0;
-  const totalObt = subjects.reduce((s, r) => s + (r.isAbsent ? 0 : (r.obtainedMarks || 0)), 0) || (student.isAbsent ? 0 : student.obtainedMarks || 0);
-  const pct = totalMax > 0 ? Math.round((totalObt / totalMax) * 100) : 0;
-  const overallGrade = calcGrade(pct);
-  const gc = gradeColor(overallGrade);
-  const pass = pct >= 40;
-
-  /* If there are no per-subject rows, show the single row */
-  const rows = subjects.length > 0 ? subjects : [
-    {
-      subjectName: student.subject?.name || 'General',
-      totalMarks: student.totalMarks,
-      obtainedMarks: student.obtainedMarks,
-      isAbsent: student.isAbsent,
-      grade: student.grade,
-    }
-  ];
-
-  return (
-    <div className="result-report-card" style={{
-      fontFamily: "'Times New Roman', Times, serif",
-      background: '#fff',
-      border: '2px solid #1E3A5F',
-      borderRadius: 6,
-      padding: '18px 22px',
-      maxWidth: 720,
-      margin: '0 auto',
-    }}>
-      {/* School Header */}
-      <div style={{ textAlign: 'center', borderBottom: '2px solid #1E3A5F', paddingBottom: 10, marginBottom: 12 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#1E3A5F', letterSpacing: 1 }}>
-          {exam?.schoolName || 'School Name'}
-        </div>
-        {exam?.schoolAddress && (
-          <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{exam.schoolAddress}</div>
-        )}
-        <div style={{ marginTop: 8, fontSize: 14, fontWeight: 700, color: '#0D9488', letterSpacing: 3, textTransform: 'uppercase' }}>
-          Progress Report Card
-        </div>
-      </div>
-
-      {/* Student Info strip */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 12 }}>
-        <tbody>
-          <tr>
-            <td style={{ width: '40%', padding: '3px 0' }}>
-              <span style={{ color: '#64748B' }}>Student:</span>{' '}
-              <strong style={{ color: '#1E3A5F' }}>{student.student?.name || student.name || '—'}</strong>
-            </td>
-            <td style={{ width: '20%', padding: '3px 0' }}>
-              <span style={{ color: '#64748B' }}>Roll No:</span>{' '}
-              <strong>{student.student?.rollNo || student.rollNo || serialNo || '—'}</strong>
-            </td>
-            <td style={{ width: '40%', padding: '3px 0', textAlign: 'right' }}>
-              <span style={{ color: '#64748B' }}>Exam:</span>{' '}
-              <strong style={{ color: '#1E3A5F' }}>{exam?.title || '—'}</strong>
-            </td>
-          </tr>
-          <tr>
-            <td style={{ padding: '3px 0' }}>
-              <span style={{ color: '#64748B' }}>Class:</span>{' '}
-              <strong>{exam?.class?.name || (exam?.classId ? `Class ${exam.classId}` : '—')}</strong>
-            </td>
-            <td style={{ padding: '3px 0' }}>
-              <span style={{ color: '#64748B' }}>Term:</span>{' '}
-              <strong>{exam?.term || exam?.type || '—'}</strong>
-            </td>
-            <td style={{ padding: '3px 0', textAlign: 'right' }}>
-              <span style={{ color: '#64748B' }}>Session:</span>{' '}
-              <strong>{exam?.session?.name || '—'}</strong>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* Marks Table */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-        <thead>
-          <tr style={{ background: '#1E3A5F', color: '#fff' }}>
-            <th style={{ padding: '7px 10px', textAlign: 'left', border: '1px solid #1E3A5F' }}>Subject</th>
-            <th style={{ padding: '7px 8px', textAlign: 'center', border: '1px solid #1E3A5F', width: 60 }}>Max</th>
-            <th style={{ padding: '7px 8px', textAlign: 'center', border: '1px solid #1E3A5F', width: 60 }}>Obtained</th>
-            <th style={{ padding: '7px 8px', textAlign: 'center', border: '1px solid #1E3A5F', width: 60 }}>%</th>
-            <th style={{ padding: '7px 8px', textAlign: 'center', border: '1px solid #1E3A5F', width: 60 }}>Grade</th>
-            <th style={{ padding: '7px 8px', textAlign: 'center', border: '1px solid #1E3A5F', width: 60 }}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => {
-            const rowPct = r.isAbsent ? 0 : r.totalMarks > 0 ? Math.round((r.obtainedMarks / r.totalMarks) * 100) : 0;
-            const rowPass = !r.isAbsent && rowPct >= 40;
-            const rowGrade = r.grade || (r.isAbsent ? 'ABS' : calcGrade(rowPct));
-            const rgc = gradeColor(rowGrade);
-            return (
-              <tr key={i} style={{ background: i % 2 === 0 ? '#F8FAFC' : '#fff' }}>
-                <td style={{ padding: '5px 10px', fontWeight: 600, color: '#1E3A5F', border: '1px solid #E2E8F0' }}>
-                  {r.subjectName || r.subject?.name || 'General'}
-                </td>
-                <td style={{ padding: '5px 8px', textAlign: 'center', border: '1px solid #E2E8F0' }}>{r.totalMarks}</td>
-                <td style={{ padding: '5px 8px', textAlign: 'center', border: '1px solid #E2E8F0', fontWeight: 700,
-                  color: r.isAbsent ? '#94a3b8' : rowPass ? '#15803D' : '#B91C1C' }}>
-                  {r.isAbsent ? 'ABS' : r.obtainedMarks}
-                </td>
-                <td style={{ padding: '5px 8px', textAlign: 'center', border: '1px solid #E2E8F0' }}>
-                  {r.isAbsent ? '—' : `${rowPct}%`}
-                </td>
-                <td style={{ padding: '5px 8px', textAlign: 'center', border: '1px solid #E2E8F0', fontWeight: 800,
-                  color: rgc.c }}>
-                  {rowGrade}
-                </td>
-                <td style={{ padding: '5px 8px', textAlign: 'center', border: '1px solid #E2E8F0' }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
-                    background: r.isAbsent ? '#F1F5F9' : rowPass ? '#DCFCE7' : '#FEE2E2',
-                    color: r.isAbsent ? '#64748B' : rowPass ? '#15803D' : '#B91C1C',
-                  }}>
-                    {r.isAbsent ? 'Absent' : rowPass ? 'Pass' : 'Fail'}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-        <tfoot>
-          <tr style={{ background: '#1E3A5F', color: '#fff', fontWeight: 800 }}>
-            <td style={{ padding: '7px 10px', border: '1px solid #1E3A5F' }}>Total</td>
-            <td style={{ padding: '7px 8px', textAlign: 'center', border: '1px solid #1E3A5F' }}>{totalMax}</td>
-            <td style={{ padding: '7px 8px', textAlign: 'center', border: '1px solid #1E3A5F' }}>{totalObt}</td>
-            <td style={{ padding: '7px 8px', textAlign: 'center', border: '1px solid #1E3A5F' }}>{pct}%</td>
-            <td style={{ padding: '7px 8px', textAlign: 'center', border: '1px solid #1E3A5F',
-              color: gc.c, background: gc.bg }}>
-              {overallGrade}
-            </td>
-            <td style={{ padding: '7px 8px', textAlign: 'center', border: '1px solid #1E3A5F',
-              color: pass ? '#DCFCE7' : '#FEE2E2' }}>
-              {pass ? 'PASS' : 'FAIL'}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
-
-      {/* Remarks + Signature */}
-      <div style={{ marginTop: 16, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, color: '#374151', marginBottom: 24 }}>
-            <strong>Teacher Remarks:</strong>&nbsp;
-            <span style={{ borderBottom: '1px solid #CBD5E1', display: 'inline-block', minWidth: 260 }}>&nbsp;</span>
-          </div>
-          <div style={{ fontSize: 12, color: '#374151' }}>
-            <strong>Promoted to:</strong>&nbsp; Class{' '}
-            <span style={{ borderBottom: '1px solid #CBD5E1', display: 'inline-block', minWidth: 70 }}>&nbsp;</span>
-            &nbsp;&nbsp;
-            <span style={{ border: '1px solid #374151', padding: '1px 6px', marginRight: 4 }}>Promoted</span>
-            <span style={{ border: '1px solid #374151', padding: '1px 6px' }}>Not Promoted</span>
-          </div>
-        </div>
-        <div style={{ width: 160, textAlign: 'center', flexShrink: 0 }}>
-          <div style={{ height: 40 }} />
-          <div style={{ borderTop: '1px solid #374151', paddingTop: 4, fontSize: 12, color: '#374151', fontWeight: 600 }}>
-            Principal Signature
-          </div>
-        </div>
-      </div>
-
-      {/* Date */}
-      <div style={{ marginTop: 10, fontSize: 10, color: '#94a3b8', textAlign: 'right' }}>
-        Date: {new Date().toLocaleDateString('en-PK')}
-      </div>
+function reportCardsHTML(rows, { exam, school, settings }) {
+  const logo = school?.logoUrl || '';
+  const show = (k, d = true) => (settings?.[k] ?? d);
+  const cards = rows.map((r) => `
+  <div class="card">
+    <div class="head">
+      ${logo ? `<img class="logo" src="${esc(logo)}" alt=""/>` : ''}
+      <div><div class="sch">${esc(school?.name || 'School')}</div><div class="sub">${esc(school?.address || '')}</div></div>
+      <div class="title">RESULT CARD<br/><span>${esc(exam?.title || '')}</span></div>
     </div>
-  );
+    <table class="info">
+      <tr><td><b>Name:</b> ${esc(r.name)}</td><td><b>Roll No:</b> ${esc(r.rollNo || '—')}</td>${r.photoUrl ? `<td rowspan="2" class="ph"><img src="${esc(r.photoUrl)}" alt=""/></td>` : ''}</tr>
+      <tr><td><b>Father's name:</b> ${esc(r.fatherName || '—')}</td><td><b>Class:</b> ${esc([r.className, r.sectionName].filter(Boolean).join(' — '))}</td></tr>
+    </table>
+    <table class="marks">
+      <tr><th>Subject</th><th>Total</th><th>Obtained</th><th>%</th>${show('showGradeOnMarksheet') ? '<th>Grade</th>' : ''}</tr>
+      ${r.subjects.map((s) => `<tr><td dir="auto">${esc(s.subjectName)}</td><td>${s.total}</td><td>${s.isAbsent ? 'Absent' : s.obtained}</td><td>${s.isAbsent ? '—' : Math.round((s.obtained / s.total) * 100)}</td>${show('showGradeOnMarksheet') ? `<td>${esc(s.grade)}</td>` : ''}</tr>`).join('')}
+      <tr class="tot"><td>Total</td><td>${r.totalMarks}</td><td>${r.totalObtained}</td><td>${r.percentage}</td>${show('showGradeOnMarksheet') ? `<td>${esc(r.grade)}</td>` : ''}</tr>
+    </table>
+    <table class="sum"><tr>
+      ${show('showPercentageOnMarksheet') ? `<td><b>Percentage</b><br/>${r.percentage}%</td>` : ''}
+      ${show('showGradeOnMarksheet') ? `<td><b>Grade</b><br/>${esc(r.grade)}</td>` : ''}
+      ${show('showRankOnMarksheet') ? `<td><b>Position</b><br/>${ordinal(r.position)}</td>` : ''}
+      <td><b>Division</b><br/>${esc(r.division)}</td>
+      <td><b>Result</b><br/><span class="${r.passed ? 'pass' : 'fail'}">${r.passed ? 'PASS' : 'FAIL'}</span></td>
+    </tr></table>
+    <div class="signs">
+      ${show('showTeacherSignature') ? '<div>Class Teacher</div>' : ''}
+      <div>Parent / Guardian</div>
+      ${show('showPrincipalSignature') ? '<div>Principal</div>' : ''}
+    </div>
+  </div>`).join('');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(exam?.title || 'Results')} — Report cards</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;color:#000}
+    .card{width:190mm;min-height:130mm;margin:0 auto 8mm;padding:8mm;border:2px solid #000;page-break-inside:avoid;page-break-after:always}
+    .card:last-child{page-break-after:auto}
+    .head{display:flex;align-items:center;gap:10px;border-bottom:2px solid #000;padding-bottom:6px}
+    .logo{width:54px;height:54px;object-fit:contain}.sch{font-size:18px;font-weight:800}.sub{font-size:11px}
+    .title{margin-left:auto;text-align:center;font-weight:800;font-size:14px}.title span{font-size:11px;font-weight:600}
+    table{width:100%;border-collapse:collapse;margin-top:8px}td,th{border:1px solid #000;padding:5px 7px;font-size:12px;text-align:left}
+    th{background:#eee}.marks td:not(:first-child),.marks th:not(:first-child){text-align:center}
+    .tot td{font-weight:800;background:#f5f5f5}.sum td{text-align:center}
+    .ph{width:28mm;text-align:center}.ph img{width:24mm;height:28mm;object-fit:cover}
+    .pass{color:#0a6a2a;font-weight:800}.fail{color:#b00;font-weight:800}
+    .signs{display:flex;justify-content:space-between;margin-top:16mm}.signs div{border-top:1px solid #000;padding-top:3px;width:45mm;text-align:center;font-size:11px}
+    @page{size:A4;margin:8mm}
+  </style></head><body>${cards}</body></html>`;
+}
+
+function resultSheetHTML(rows, subjects, { exam, school, label }) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(exam?.title)} — ${esc(label)}</title><style>
+    body{font-family:Arial,sans-serif;margin:0;padding:6mm;color:#000}
+    h2{margin:0}h3{margin:2px 0 8px;font-weight:600}
+    table{width:100%;border-collapse:collapse}td,th{border:1px solid #000;padding:4px 5px;font-size:11px;text-align:center}
+    td.l,th.l{text-align:left}th{background:#eee}.fail{color:#b00;font-weight:700}
+    @page{size:A4 landscape;margin:7mm}
+  </style></head><body>
+  <h2>${esc(school?.name || 'School')}</h2><h3>${esc(exam?.title)} — Result sheet — ${esc(label)}</h3>
+  <table><tr><th>Pos.</th><th>Roll</th><th class="l">Name</th>${subjects.map((s) => `<th>${esc(s.name)}<br/>/${s.total}</th>`).join('')}<th>Total</th><th>%</th><th>Grade</th><th>Result</th></tr>
+  ${rows.map((r) => `<tr><td>${r.position}</td><td>${esc(r.rollNo || '')}</td><td class="l">${esc(r.name)}</td>${subjects.map((s) => {
+    const m = r.subjects.find((x) => x.subjectId === s.id);
+    return `<td${m && m.grade === 'F' ? ' class="fail"' : ''}>${m ? (m.isAbsent ? 'A' : m.obtained) : ''}</td>`;
+  }).join('')}<td>${r.totalObtained}/${r.totalMarks}</td><td>${r.percentage}</td><td>${esc(r.grade)}</td><td class="${r.passed ? '' : 'fail'}">${r.passed ? 'Pass' : 'Fail'}</td></tr>`).join('')}
+  </table></body></html>`;
 }
 
 export default function ExamResultsPage() {
   const { id } = useParams();
+  const [params, setParams] = useSearchParams();
+  const classId = params.get('classId') || '';
+  const sectionId = params.get('sectionId') || '';
+  const setPick = (patch) => {
+    const next = new URLSearchParams(params);
+    Object.entries(patch).forEach(([k, v]) => (v ? next.set(k, v) : next.delete(k)));
+    setParams(next, { replace: true });
+  };
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['exam-results', id],
-    queryFn: () => api.get('/exams/'+id+'/results').then(r => r.data.data),
+  const { data: exams = [] } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams').then((r) => r.data.data || []) });
+  const { data: classes = [] } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes').then((r) => r.data.data || []) });
+  const { data: school } = useQuery({ queryKey: ['school-profile'], queryFn: () => api.get('/settings/school').then((r) => r.data.data).catch(() => ({})) });
+  const { data: settings } = useQuery({ queryKey: ['exam-settings'], queryFn: () => api.get('/settings/exam').then((r) => r.data.data).catch(() => null), staleTime: 300_000 });
+  const exam = exams.find((e) => e.id === parseInt(id));
+  const forClasses = useMemo(() => {
+    let ids = [];
+    try { ids = JSON.parse(exam?.classIds || '[]').map((c) => Number(c.classId ?? c)); } catch { ids = []; }
+    if (!ids.length && exam?.classId) ids = [exam.classId];
+    return ids.length ? classes.filter((c) => ids.includes(c.id)) : classes;
+  }, [exam, classes]);
+  useEffect(() => { if (!classId && forClasses.length) setPick({ classId: String(forClasses[0].id) }); }, [forClasses]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cls = classes.find((c) => String(c.id) === classId);
+
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ['exam-results-sheet', id, classId, sectionId],
+    queryFn: () => api.get(`/exams/${id}/gazette`, { params: { classId, sectionId: sectionId || undefined, photos: '1' } }).then((r) => r.data.data || []),
+    enabled: !!classId,
   });
 
-  const { data:allExams } = useQuery({ queryKey:['exams'], queryFn:()=>api.get('/exams').then(r=>r.data.data) });
-  const exam = allExams?.find(e => e.id === parseInt(id));
-
-  const results = data || [];
-
-  /* Group by student so each card shows all subjects */
-  const studentMap = {};
-  results.forEach(m => {
-    const sid = m.studentId;
-    if (!studentMap[sid]) {
-      studentMap[sid] = {
-        studentId: sid,
-        student: m.student,
-        rollNo: m.student?.rollNo,
-        name: m.student?.name,
-        subjects: [],
-        totalMarks: 0,
-        obtainedMarks: 0,
-        isAbsent: false,
-      };
-    }
-    studentMap[sid].subjects.push({
-      subjectName: m.subject?.name || 'General',
-      totalMarks: m.totalMarks,
-      obtainedMarks: m.obtainedMarks,
-      isAbsent: m.isAbsent,
-      grade: m.grade,
-    });
-    studentMap[sid].totalMarks += m.totalMarks || 0;
-    studentMap[sid].obtainedMarks += m.isAbsent ? 0 : (m.obtainedMarks || 0);
-  });
-  const studentCards = Object.values(studentMap);
-
-  const passed = results.filter(r => !r.isAbsent && r.obtainedMarks/r.totalMarks>=0.4).length;
-  const failed = results.filter(r => !r.isAbsent && r.obtainedMarks/r.totalMarks<0.4).length;
-  const absent = results.filter(r => r.isAbsent).length;
-
-  const handlePrintCards = () => window.print();
+  const subjects = useMemo(() => {
+    const m = new Map();
+    rows.forEach((r) => r.subjects.forEach((s) => { if (!m.has(s.subjectId)) m.set(s.subjectId, { id: s.subjectId, name: s.subjectName, total: s.total }); }));
+    return [...m.values()];
+  }, [rows]);
+  const sorted = useMemo(() => [...rows].sort((a, b) => a.position - b.position || String(a.rollNo).localeCompare(String(b.rollNo), undefined, { numeric: true })), [rows]);
+  const passed = rows.filter((r) => r.passed).length;
+  const absentAny = rows.filter((r) => r.subjects.some((s) => s.isAbsent)).length;
+  const avg = rows.length ? Math.round((rows.reduce((a, r) => a + r.percentage, 0) / rows.length) * 10) / 10 : 0;
+  const label = [cls?.name, cls?.sections?.find((s) => String(s.id) === sectionId)?.name].filter(Boolean).join(' — ');
 
   return (
     <div className="page-content fade-in">
-      {/* Inject print styles */}
-      <style>{PRINT_STYLES}</style>
-
-      {/* Header — hidden at print */}
-      <div className="no-print" style={{display:'flex', alignItems:'center', gap:12, marginBottom:20}}>
-        <Link to="/exams" className="btn btn-outline btn-sm btn-icon"><ArrowLeft size={15}/></Link>
-        <div style={{flex:1}}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <Link to="/examination?tab=results" className="btn btn-outline btn-sm btn-icon" aria-label="Back to the Exam Vault"><ArrowLeft size={15} /></Link>
+        <div style={{ flex: '1 1 260px' }}>
           <h1 className="page-title">Exam Results</h1>
-          <p style={{color:'#64748B', fontSize:13, marginTop:2}}>{exam?.title}</p>
+          <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>{exam?.title}{label ? ` · ${label}` : ''}{exam ? (exam.isPublished ? ' · published to parents' : ' · not published yet') : ''}</p>
         </div>
-        <div style={{display:'flex', gap:8}}>
-          <Link to={`/exams/${id}/marks`} className="btn btn-outline btn-sm">Edit Marks</Link>
-          <button className="btn btn-outline btn-sm" onClick={() => window.print()}>
-            <Printer size={14}/> Print Marksheet
-          </button>
-          {studentCards.length > 0 && (
-            <button className="btn btn-teal btn-sm" onClick={handlePrintCards}>
-              <Printer size={14}/> Print Report Cards (A4)
-            </button>
-          )}
-        </div>
+        <Link to={`/exams/${id}/marks?classId=${classId}${sectionId ? `&sectionId=${sectionId}` : ''}`} className="btn btn-outline btn-sm"><PencilLine size={14} /> Edit marks</Link>
+        <button type="button" className="btn btn-outline btn-sm" disabled={!rows.length} onClick={() => printHTML(resultSheetHTML(sorted, subjects, { exam, school, label }), { title: 'Result sheet' })}><Printer size={14} /> Print result sheet</button>
+        <button type="button" className="btn btn-teal btn-sm" disabled={!rows.length} onClick={() => printHTML(reportCardsHTML([...rows].sort((a, b) => String(a.rollNo).localeCompare(String(b.rollNo), undefined, { numeric: true })), { exam, school, settings }), { title: 'Report cards' })}><Printer size={14} /> Print report cards (A4)</button>
       </div>
 
-      {/* Summary — hidden at print */}
-      {results.length > 0 && (
-        <div className="stats-grid-4 no-print" style={{marginBottom:16}}>
-          {[
-            {l:'Total Students', v:studentCards.length, c:'#1E3A5F', bg:'#EFF6FF'},
-            {l:'Passed', v:passed, c:'#15803D', bg:'#DCFCE7'},
-            {l:'Failed', v:failed, c:'#B91C1C', bg:'#FEE2E2'},
-            {l:'Absent', v:absent, c:'#64748B', bg:'#F1F5F9'},
-          ].map(item => (
-            <div key={item.l} className="card" style={{background:item.bg, border:'none', padding:14, textAlign:'center'}}>
-              <div style={{fontSize:22, fontWeight:800, color:item.c}}>{item.v}</div>
-              <div style={{fontSize:12, color:'#64748B', marginTop:2}}>{item.l}</div>
+      <div className="card" style={{ padding: 14, marginBottom: 14, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: '#374151', flex: '1 1 200px' }}>
+          Class
+          <select className="form-select" aria-label="Class" value={classId} onChange={(e) => setPick({ classId: e.target.value, sectionId: '' })}>
+            {forClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: '#374151', flex: '1 1 160px' }}>
+          Section
+          <select className="form-select" aria-label="Section" value={sectionId} disabled={!cls?.sections?.length} onChange={(e) => setPick({ sectionId: e.target.value })}>
+            <option value="">All sections</option>
+            {(cls?.sections || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </label>
+      </div>
+
+      {rows.length > 0 && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }} aria-label="Summary">
+          {[['Students', rows.length, NAVY], ['Passed', passed, '#15803D'], ['Failed', rows.length - passed, '#B91C1C'], ['Absent in a paper', absentAny, '#64748B'], ['Average', `${avg}%`, '#0073b7']].map(([l, v, c]) => (
+            <div key={l} style={{ flex: '1 1 120px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '10px 14px' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: c, fontVariantNumeric: 'tabular-nums' }}>{v}</div>
+              <div style={{ fontSize: 12, color: '#64748B' }}>{l}</div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Marksheet table — hidden at print */}
-      <div className="card no-print" style={{padding:0, overflow:'hidden'}}>
-        {isLoading ? (
-          <div className="table-wrap" style={{borderRadius:0, border:'none'}}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Student</th>
-                  <th>Subject</th>
-                  <th>Total</th>
-                  <th>Obtained</th>
-                  <th>%</th>
-                  <th>Grade</th>
-                  <th>Status</th>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table" aria-label="Result sheet">
+            <thead>
+              <tr>
+                <th>Pos.</th><th>Roll</th><th>Name</th>
+                {subjects.map((s) => <th key={s.id} style={{ textAlign: 'center' }}>{s.name}<div style={{ fontWeight: 500, opacity: 0.7 }}>/{s.total}</div></th>)}
+                <th>Total</th><th>%</th><th>Grade</th><th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading && <tr><td colSpan={subjects.length + 7} style={{ padding: 20, color: '#94A3B8' }}>Loading…</td></tr>}
+              {!isLoading && rows.length === 0 && (
+                <tr><td colSpan={subjects.length + 7}>
+                  <div className="empty-state"><div className="empty-state-icon">📊</div><div className="empty-state-text">No marks for this class yet</div>
+                    <div className="empty-state-sub"><Link to={`/exams/${id}/marks?classId=${classId}`}>Enter the marks</Link> first.</div></div>
+                </td></tr>
+              )}
+              {sorted.map((r) => (
+                <tr key={r.studentId}>
+                  <td style={{ fontWeight: 800, color: r.position <= 3 ? '#B45309' : '#475569' }}>{ordinal(r.position)}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{r.rollNo}</td>
+                  <td style={{ fontWeight: 600 }}>{r.name}</td>
+                  {subjects.map((s) => {
+                    const m = r.subjects.find((x) => x.subjectId === s.id);
+                    return <td key={s.id} style={{ textAlign: 'center', color: m?.grade === 'F' ? '#B91C1C' : undefined, fontWeight: m?.grade === 'F' ? 700 : 400 }}>{m ? (m.isAbsent ? 'A' : m.obtained) : '—'}</td>;
+                  })}
+                  <td style={{ fontVariantNumeric: 'tabular-nums' }}>{r.totalObtained}/{r.totalMarks}</td>
+                  <td style={{ fontVariantNumeric: 'tabular-nums' }}>{r.percentage}</td>
+                  <td style={{ fontWeight: 700 }}>{r.grade}</td>
+                  <td><span style={{ fontWeight: 700, color: r.passed ? '#15803D' : '#B91C1C' }}>{r.passed ? 'Pass' : 'Fail'}</span></td>
                 </tr>
-              </thead>
-              <tbody>
-                <SkeletonRows rows={8} cols={8} />
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="table-wrap skeleton-content-fade" style={{borderRadius:0, border:'none'}}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Student</th>
-                  <th>Subject</th>
-                  <th>Total</th>
-                  <th>Obtained</th>
-                  <th>%</th>
-                  <th>Grade</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((m, idx) => {
-                  const pct = m.isAbsent ? 0 : Math.round((m.obtainedMarks/m.totalMarks)*100);
-                  const gc = gradeColor(m.grade);
-                  const pass = !m.isAbsent && m.obtainedMarks/m.totalMarks >= 0.4;
-                  return (
-                    <tr key={idx}>
-                      <td style={{color:'#94a3b8', fontSize:12}}>{idx+1}</td>
-                      <td style={{fontWeight:600, color:'#1E3A5F'}}>{m.student?.name || m.studentId}</td>
-                      <td style={{fontSize:12.5, color:'#64748B'}}>{m.subject?.name || 'General'}</td>
-                      <td>{m.totalMarks}</td>
-                      <td style={{fontWeight:700, color:m.isAbsent?'#94a3b8':pass?'#15803D':'#B91C1C'}}>
-                        {m.isAbsent ? 'ABS' : m.obtainedMarks}
-                      </td>
-                      <td>
-                        {!m.isAbsent && (
-                          <div>
-                            <div className="progress-bar" style={{width:60, display:'inline-block', verticalAlign:'middle', marginRight:6}}>
-                              <div className="progress-fill" style={{width:`${pct}%`, background:pass?'#0D9488':'#DC2626'}}/>
-                            </div>
-                            <span style={{fontSize:11, fontWeight:600}}>{pct}%</span>
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        <span style={{fontWeight:800, fontSize:13, color:gc.c, background:gc.bg, padding:'3px 8px', borderRadius:4}}>
-                          {m.grade || '—'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${m.isAbsent?'badge-gray':pass?'badge-green':'badge-red'}`}>
-                          {m.isAbsent ? 'Absent' : pass ? 'Pass' : 'Fail'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {results.length===0 && (
-                  <tr><td colSpan={8}>
-                    <div className="empty-state">
-                      <div className="empty-state-icon">📊</div>
-                      <div className="empty-state-text">No results yet</div>
-                      <div className="empty-state-sub">
-                        <Link to={`/exams/${id}/marks`} style={{color:'#0D9488'}}>Enter marks →</Link>
-                      </div>
-                    </div>
-                  </td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ── A4 Report Cards (only shown at print) ─────────────────────── */}
-      {studentCards.length > 0 && (
-        <div id="exam-result-print-area">
-          {studentCards.map((s, i) => (
-            <StudentReportCard
-              key={s.studentId}
-              student={s}
-              exam={exam}
-              serialNo={i + 1}
-            />
-          ))}
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
   );
 }

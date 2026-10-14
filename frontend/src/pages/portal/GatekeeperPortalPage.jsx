@@ -429,9 +429,13 @@ export default function GatekeeperPortalPage() {
       setShowEntries(true);
 
       const dirLabel = direction === 'IN' ? 'Entry' : 'Exit';
+      // The server says what happened: marked, already marked earlier, or a
+      // staff member checked in / out.
       showToast(
-        `${student.name || 'Student'} marked Present (${dirLabel}) - ${student.class || student.className || ''}`,
-        'success'
+        res.data?.message
+          ? `${res.data.message} (${dirLabel})`
+          : `${student.name || 'Student'} marked Present (${dirLabel}) - ${student.class || student.className || ''}`,
+        data.already ? 'warning' : 'success'
       );
 
       await loadEntries();

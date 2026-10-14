@@ -57,9 +57,9 @@ const printDateTime = () =>
    MAIN COMPONENT
 ════════════════════════════════════════════════════ */
 export default function MeritListPage() {
-  const [classId,   setClassId]   = useState('');
-  const [sectionId, setSectionId] = useState('');
-  const [examId,    setExamId]    = useState('');
+  const [classId,   setClassId]   = useState(() => new URLSearchParams(window.location.search).get('classId') || '');
+  const [sectionId, setSectionId] = useState(() => new URLSearchParams(window.location.search).get('sectionId') || '');
+  const [examId,    setExamId]    = useState(() => new URLSearchParams(window.location.search).get('examId') || '');
 
   /* Master data */
   const { data: classes = [] } = useQuery({
@@ -74,9 +74,9 @@ export default function MeritListPage() {
 
   /* Merit list */
   const { data: meritData, isLoading, error } = useQuery({
-    queryKey: ['merit-list', examId, sectionId],
+    queryKey: ['merit-list', examId, classId, sectionId],
     queryFn: () =>
-      api.get(`/exams/${examId}/merit-list`, { params: { sectionId: sectionId || undefined } })
+      api.get(`/exams/${examId}/merit-list`, { params: { classId: classId || undefined, sectionId: sectionId || undefined } })
         .then(r => r.data.data),
     enabled: !!examId,
   });

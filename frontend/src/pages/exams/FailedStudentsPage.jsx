@@ -15,9 +15,9 @@ const errMsg = (err) => err?.response?.data?.message || err?.message || 'Somethi
    MAIN COMPONENT
 ════════════════════════════════════════════════════ */
 export default function FailedStudentsPage() {
-  const [classId,   setClassId]   = useState('');
-  const [sectionId, setSectionId] = useState('');
-  const [examId,    setExamId]    = useState('');
+  const [classId,   setClassId]   = useState(() => new URLSearchParams(window.location.search).get('classId') || '');
+  const [sectionId, setSectionId] = useState(() => new URLSearchParams(window.location.search).get('sectionId') || '');
+  const [examId,    setExamId]    = useState(() => new URLSearchParams(window.location.search).get('examId') || '');
   const [smsBlasting, setSmsBlasting] = useState(false);
   const [smsRowIds,   setSmsRowIds]   = useState({});
 
@@ -34,9 +34,9 @@ export default function FailedStudentsPage() {
 
   /* Failed students */
   const { data: reportData, isLoading, error } = useQuery({
-    queryKey: ['failed-students', examId, sectionId],
+    queryKey: ['failed-students', examId, classId, sectionId],
     queryFn: () =>
-      api.get(`/exams/${examId}/failed`, { params: { sectionId: sectionId || undefined } })
+      api.get(`/exams/${examId}/failed`, { params: { classId: classId || undefined, sectionId: sectionId || undefined } })
         .then(r => r.data.data),
     enabled: !!examId,
   });
@@ -57,7 +57,7 @@ export default function FailedStudentsPage() {
     if (!window.confirm(`Send SMS to parents of all ${students.length} failed student(s)? This cannot be undone.`)) return;
     setSmsBlasting(true);
     try {
-      const res = await api.post(`/exams/${examId}/results/sms-blast`, { sectionId: sectionId || undefined });
+      const res = await api.post(`/exams/${examId}/results/sms-blast`, { classId: classId || undefined, sectionId: sectionId || undefined });
       const sent = res.data?.data?.sent ?? res.data?.sent ?? students.length;
       toast.success(`SMS sent to ${sent} parent(s) successfully.`);
     } catch (err) {
@@ -87,7 +87,7 @@ export default function FailedStudentsPage() {
     if (!examId) return;
     try {
       const resp = await api.get(`/exams/${examId}/results/excel`, {
-        params: { sectionId: sectionId || undefined, filter: 'failed' },
+        params: { classId: classId || undefined, sectionId: sectionId || undefined, filter: 'failed' },
         responseType: 'blob',
       });
       const url  = URL.createObjectURL(new Blob([resp.data]));

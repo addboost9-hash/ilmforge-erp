@@ -18,7 +18,27 @@ const validate = (req, res, next) => {
 };
 
 const canManageExams = (role) => ['super_admin', 'admin', 'teacher'].includes(role);
+// Whole-class result lists (gazette, merit list, failed list) are for staff
+// only: they had no role check, so a parent's or student's sign-in could read
+// every child's marks.
+const canSeeResults = (role) => ['super_admin', 'admin', 'teacher', 'principal', 'accountant'].includes(role);
 const { teacherCanAccessClass } = require('../utils/teacherScope');
+
+/* The classes an exam is for: its classIds list, or the single classId. */
+const examClassIds = (exam) => {
+  let list = [];
+  try {
+    list = JSON.parse(exam.classIds || '[]').map((c) => parseInt(c && typeof c === 'object' ? c.classId : c)).filter(Number.isInteger);
+  } catch { list = []; }
+  if (!list.length && exam.classId) list = [exam.classId];
+  return [...new Set(list)];
+};
+
+/* ?classId=&sectionId= as a filter on the student. */
+const studentScope = (q = {}) => ({
+  ...(q.classId && Number.isInteger(parseInt(q.classId)) && { classId: parseInt(q.classId) }),
+  ...(q.sectionId && Number.isInteger(parseInt(q.sectionId)) && { sectionId: parseInt(q.sectionId) }),
+});
 
 // ---------------------------------------------------------------------------
 // Grade calculation helpers
@@ -66,10 +86,18 @@ const calcGrade = (obtained, total) => calcGradeFromThresholds(obtained, total, 
  * below, completely ignoring whatever the school configured on the Exam
  * Settings page. Build the thresholds from the real columns instead.
  */
+// The grades the Exam Settings page shows before a school changes anything
+// (A+ 90, A 80, B 65, C 50, D 40: below 40 fails). Without saved settings
+// marks used to be graded on 90/80/70/60/50, so 45% failed here while the
+// settings page said 40% passes.
+const DEFAULT_THRESHOLDS = [
+  { minPercent: 90, grade: 'A+' }, { minPercent: 80, grade: 'A' }, { minPercent: 65, grade: 'B' },
+  { minPercent: 50, grade: 'C' }, { minPercent: 40, grade: 'D' },
+];
 const loadThresholds = async (schoolId) => {
   try {
     const settings = await prisma.examSettings.findFirst({ where: { schoolId } });
-    if (!settings) return null;
+    if (!settings) return DEFAULT_THRESHOLDS;
     return [
       { minPercent: settings.gradeAPlus, grade: 'A+' },
       { minPercent: settings.gradeA,     grade: 'A'  },
@@ -80,16 +108,16 @@ const loadThresholds = async (schoolId) => {
   } catch (_) {
     // ExamSettings model may not exist in older schema versions
   }
-  return null;
+  return DEFAULT_THRESHOLDS;
 };
 
 /**
  * Derive division string from percentage.
  */
-const calcDivision = (pct) => {
-  if (pct >= 60) return 'First';
-  if (pct >= 45) return 'Second';
-  if (pct >= 33) return 'Third';
+const calcDivision = (pct, settings = null) => {
+  if (pct >= (settings?.firstDivision ?? 60)) return 'First';
+  if (pct >= (settings?.secondDivision ?? 45)) return 'Second';
+  if (pct >= (settings?.thirdDivision ?? 33)) return 'Third';
   return 'Fail';
 };
 
@@ -225,9 +253,10 @@ router.get('/:examId/datesheet', wrap(async (req, res) => {
   const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
   if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
 
-  // Get all classes with sections for this school
+  // The exam's own classes (every class used to be listed, for any exam).
+  const forClasses = examClassIds(exam);
   const classes = await prisma.class.findMany({
-    where: { schoolId: req.schoolId, isActive: true },
+    where: { schoolId: req.schoolId, isActive: true, ...(forClasses.length && { id: { in: forClasses } }) },
     include: { sections: true },
     orderBy: { orderNo: 'asc' },
   });
@@ -764,7 +793,7 @@ router.get('/:id/marks', wrap(async (req, res) => {
   // A teacher may only view marks for an exam belonging to a class they're
   // actually assigned to — previously any teacher could pull marks for any
   // class in the school just by knowing the exam id.
-  if (!(await teacherCanAccessClass(req, exam.classId))) {
+  if (!(await teacherCanAccessClass(req, classId || exam.classId))) {
     return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
   }
 
@@ -796,6 +825,7 @@ router.post(
     body('marks.*.studentId')
       .isInt().withMessage('Each mark must have an integer studentId.'),
     body('marks.*.obtainedMarks')
+      .optional({ nullable: true })
       .isNumeric().withMessage('Each mark must have a numeric obtainedMarks.'),
   ],
   validate,
@@ -812,77 +842,153 @@ router.post(
   // Ownership check: verify exam belongs to this school
   const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
   if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
-  if (!(await teacherCanAccessClass(req, exam.classId))) {
-    return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+
+  // The students and subjects being marked, checked against this school.
+  const studentIds = [...new Set(marks.map((m) => parseInt(m.studentId)))];
+  const subjectIds = [...new Set(marks.map((m) => (m.subjectId ? parseInt(m.subjectId) : null)).filter(Boolean))];
+  const [students, subjects] = await Promise.all([
+    prisma.student.findMany({ where: { id: { in: studentIds }, schoolId: req.schoolId, deletedAt: null }, select: { id: true, name: true, classId: true } }),
+    subjectIds.length ? prisma.subject.findMany({ where: { id: { in: subjectIds }, schoolId: req.schoolId }, select: { id: true, name: true, classId: true, totalMarks: true } }) : [],
+  ]);
+  const studentById = new Map(students.map((x) => [x.id, x]));
+  const subjectById = new Map(subjects.map((x) => [x.id, x]));
+  if (students.length !== studentIds.length) return res.status(400).json({ success: false, message: 'Some students are not in this school.' });
+  if (subjects.length !== subjectIds.length) return res.status(400).json({ success: false, message: 'Some subjects are not in this school.' });
+
+  // A teacher may mark only the classes they teach. This used to check only
+  // the exam's first class, so in an exam for several classes the teacher of
+  // the second class was always refused.
+  for (const cid of new Set(students.map((x) => x.classId))) {
+    if (!(await teacherCanAccessClass(req, cid))) {
+      return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+    }
+  }
+  const forClasses = examClassIds(exam);
+  const outside = students.filter((x) => forClasses.length && !forClasses.includes(x.classId));
+  if (outside.length) {
+    return res.status(400).json({ success: false, message: `${outside[0].name} is not in a class this exam is for.` });
   }
 
   const thresholds = await loadThresholds(req.schoolId);
-  const results = [];
 
-  // Pre-validate all marks before saving any
+  // What is already saved for these students (its grace marks are kept
+  // when an entry does not send any).
+  const existing = await prisma.examMark.findMany({
+    where: { examId, studentId: { in: studentIds } },
+    select: { id: true, studentId: true, subjectId: true, graceMarks: true },
+  });
+  const key = (st, sub) => `${st}:${sub ?? ''}`;
+  const existingByKey = new Map(existing.map((e) => [key(e.studentId, e.subjectId), e]));
+
+  // Check every entry before saving any. Marks are whole numbers (the
+  // column is an integer: 32.5 used to fail the whole save with an error).
   const validationErrors = [];
-  for (let i = 0; i < marks.length; i++) {
-    const m = marks[i];
-    const obtained = parseFloat(m.obtainedMarks);
-    const total    = parseFloat(m.totalMarks) || 100;
+  const isWhole = (v) => Number.isInteger(v);
+  const prepared = [];
+  for (const m of marks) {
+    const studentId = parseInt(m.studentId);
+    const subjectId = m.subjectId ? parseInt(m.subjectId) : null;
+    const who = studentById.get(studentId)?.name || `Student ${studentId}`;
+    const subject = subjectId ? subjectById.get(subjectId) : null;
+    const what = subject ? ` (${subject.name})` : '';
+    // A subject is marked out of its own maximum (Urdu 75, Drawing 50...);
+    // every subject used to be saved out of 100.
+    const totalMarks = subject ? subject.totalMarks : (parseInt(m.totalMarks) || 100);
     const isAbsent = m.isAbsent === true || m.isAbsent === 'true';
-    if (!isAbsent && !isNaN(obtained) && obtained > total) {
-      validationErrors.push(
-        `Student ${m.studentId}: obtained marks (${obtained}) exceed total marks (${total}).`
-      );
+    const remove = m.remove === true || (!isAbsent && (m.obtainedMarks === null || m.obtainedMarks === ''));
+    if (remove) { prepared.push({ studentId, subjectId, remove: true }); continue; }
+    const obtained = isAbsent ? 0 : Number(m.obtainedMarks);
+    const graceGiven = m.graceMarks !== undefined && m.graceMarks !== null && m.graceMarks !== '';
+    const graceMarks = graceGiven ? Number(m.graceMarks) : (existingByKey.get(key(studentId, subjectId))?.graceMarks || 0);
+    const theoryMarks = m.theoryMarks !== undefined && m.theoryMarks !== null && m.theoryMarks !== '' ? Number(m.theoryMarks) : null;
+    const practicalMarks = m.practicalMarks !== undefined && m.practicalMarks !== null && m.practicalMarks !== '' ? Number(m.practicalMarks) : null;
+    if (!isAbsent) {
+      if (Number.isNaN(obtained)) validationErrors.push(`${who}${what}: enter a number, or A for absent.`);
+      else if (!isWhole(obtained)) validationErrors.push(`${who}${what}: marks are whole numbers (${obtained} is not).`);
+      else if (obtained < 0) validationErrors.push(`${who}${what}: marks cannot be negative.`);
+      else if (obtained + graceMarks > totalMarks) validationErrors.push(`${who}${what}: ${obtained + graceMarks} is more than the subject's ${totalMarks} marks.`);
     }
-    if (!isAbsent && !isNaN(obtained) && obtained < 0) {
-      validationErrors.push(
-        `Student ${m.studentId}: obtained marks cannot be negative.`
-      );
+    for (const [label, v] of [['grace', graceMarks], ['theory', theoryMarks], ['practical', practicalMarks]]) {
+      if (v !== null && (!isWhole(v) || v < 0)) validationErrors.push(`${who}${what}: ${label} marks must be a whole number.`);
     }
+    const effectiveObtained = isAbsent ? 0 : obtained + (graceMarks || 0);
+    prepared.push({
+      studentId, subjectId,
+      data: {
+        obtainedMarks: effectiveObtained,
+        totalMarks,
+        grade: isAbsent ? 'F' : calcGradeFromThresholds(effectiveObtained, totalMarks, thresholds),
+        isAbsent,
+        ...(theoryMarks !== null && { theoryMarks }),
+        ...(practicalMarks !== null && { practicalMarks }),
+        graceMarks: graceMarks || 0,
+      },
+    });
   }
   if (validationErrors.length > 0) {
     return res.status(400).json({
       success: false,
-      message: 'Marks validation failed.',
+      message: validationErrors[0] + (validationErrors.length > 1 ? ` (and ${validationErrors.length - 1} more)` : ''),
       errors: validationErrors,
     });
   }
 
-  for (const m of marks) {
-    const studentId = parseInt(m.studentId);
-    const subjectId = m.subjectId ? parseInt(m.subjectId) : null;
-    const obtainedMarks = parseFloat(m.obtainedMarks) || 0;
-    const totalMarks = parseFloat(m.totalMarks) || 100;
-    const theoryMarks = m.theoryMarks !== undefined ? parseFloat(m.theoryMarks) : null;
-    const practicalMarks = m.practicalMarks !== undefined ? parseFloat(m.practicalMarks) : null;
-    const graceMarks = m.graceMarks !== undefined ? parseFloat(m.graceMarks) : 0;
-    const isAbsent = m.isAbsent === true || m.isAbsent === 'true';
-    const effectiveObtained = isAbsent ? 0 : obtainedMarks + (graceMarks || 0);
-    const grade = isAbsent ? 'F' : calcGradeFromThresholds(effectiveObtained, totalMarks, thresholds);
-
-    const existing = await prisma.examMark.findFirst({
-      where: { examId, studentId, subjectId },
-    });
-
-    const payload = {
-      obtainedMarks: effectiveObtained,
-      totalMarks,
-      grade,
-      isAbsent,
-      ...(theoryMarks !== null && { theoryMarks }),
-      ...(practicalMarks !== null && { practicalMarks }),
-      ...(graceMarks && { graceMarks }),
-    };
-
-    let record;
-    if (existing) {
-      record = await prisma.examMark.update({ where: { id: existing.id }, data: payload });
+  // One transaction for everything.
+  const ops = [];
+  let removed = 0;
+  for (const p of prepared) {
+    const id = existingByKey.get(key(p.studentId, p.subjectId))?.id;
+    if (p.remove) {
+      if (id) { ops.push(prisma.examMark.delete({ where: { id } })); removed++; }
+    } else if (id) {
+      ops.push(prisma.examMark.update({ where: { id }, data: p.data }));
     } else {
-      record = await prisma.examMark.create({
-        data: { examId, studentId, subjectId, ...payload },
-      });
+      ops.push(prisma.examMark.create({ data: { examId, schoolId: req.schoolId, studentId: p.studentId, subjectId: p.subjectId, ...p.data } }));
     }
-    results.push(record);
   }
+  const results = ops.length ? await prisma.$transaction(ops) : [];
+  const saved = results.length - removed;
+  const markedStudents = new Set(prepared.filter((p) => !p.remove).map((p) => p.studentId)).size;
 
-  res.json({ success: true, data: results, message: `Marks saved for ${results.length} students.` });
+  res.json({
+    success: true,
+    data: results,
+    saved, removed,
+    message: `Saved ${saved} mark(s) for ${markedStudents} student(s)${removed ? `, cleared ${removed}` : ''}.`,
+  });
+}));
+
+// GET /exams/:id/progress — how far marks entry has got, class by class:
+// students, subjects, and how many of the student × subject marks are in.
+router.get('/:id/progress', wrap(async (req, res) => {
+  if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const examId = parseInt(req.params.id);
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  let classIds = examClassIds(exam);
+  if (!classIds.length) {
+    classIds = (await prisma.class.findMany({ where: { schoolId: req.schoolId }, select: { id: true } })).map((c) => c.id);
+  }
+  const [classes, studentCounts, subjects, marks] = await Promise.all([
+    prisma.class.findMany({ where: { id: { in: classIds }, schoolId: req.schoolId }, select: { id: true, name: true }, orderBy: { id: 'asc' } }),
+    prisma.student.groupBy({ by: ['classId'], where: { schoolId: req.schoolId, classId: { in: classIds }, status: 'active', deletedAt: null }, _count: { _all: true } }),
+    prisma.subject.findMany({ where: { schoolId: req.schoolId, classId: { in: classIds } }, select: { id: true, classId: true } }),
+    prisma.examMark.findMany({ where: { examId }, select: { studentId: true, student: { select: { classId: true } } } }),
+  ]);
+  const data = classes.map((c) => {
+    const students = studentCounts.find((x) => x.classId === c.id)?._count._all || 0;
+    const subjectCount = subjects.filter((x) => x.classId === c.id).length;
+    const classMarks = marks.filter((m) => m.student?.classId === c.id);
+    const expected = students * Math.max(subjectCount, 1);
+    return {
+      classId: c.id, className: c.name, students, subjects: subjectCount,
+      entered: classMarks.length,
+      studentsWithMarks: new Set(classMarks.map((m) => m.studentId)).size,
+      expected,
+      percent: expected ? Math.min(100, Math.round((classMarks.length / expected) * 100)) : 0,
+    };
+  });
+  res.json({ success: true, data, exam: { id: exam.id, title: exam.title, isPublished: exam.isPublished } });
 }));
 
 // GET /exams/:id/my-results — a student's or parent's own (child's) marks for
@@ -1030,9 +1136,19 @@ router.get('/:id/results', wrap(async (req, res) => {
   const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
   if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
 
+  const scope = studentScope(req.query);
+  if (scope.classId && !(await teacherCanAccessClass(req, scope.classId))) {
+    return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+  }
+  // Names and subjects were left out, so report cards printed with no names
+  // and every subject as "General".
   const marks = await prisma.examMark.findMany({
-    where: { examId },
-    include: { exam: true },
+    where: { examId, ...(Object.keys(scope).length && { student: scope }) },
+    include: {
+      student: { select: { id: true, name: true, rollNo: true, fatherName: true, classId: true, sectionId: true } },
+      subject: { select: { id: true, name: true, totalMarks: true } },
+    },
+    orderBy: [{ studentId: 'asc' }, { subjectId: 'asc' }],
   });
   res.json({ success: true, data: marks });
 }));
@@ -1040,22 +1156,32 @@ router.get('/:id/results', wrap(async (req, res) => {
 // ---------------------------------------------------------------------------
 // Shared gazette builder — used by gazette, merit-list, failed, excel export
 // ---------------------------------------------------------------------------
-const buildGazette = async (examId, schoolId) => {
+const buildGazette = async (examId, schoolId, scope = {}, { photos = false } = {}) => {
   const exam = await prisma.exam.findFirst({
     where: { id: examId, schoolId },
     include: { class: true },
   });
   if (!exam) return null;
 
+  // The class and section chosen on the page. They were ignored, so every
+  // list showed the whole exam, all classes mixed together.
   const marks = await prisma.examMark.findMany({
-    where: { examId },
+    where: { examId, ...(Object.keys(scope).length && { student: scope }) },
     include: {
-      student: { select: { id: true, name: true, rollNo: true } },
+      student: {
+        select: {
+          id: true, name: true, rollNo: true, fatherName: true, classId: true, sectionId: true,
+          class: { select: { name: true } }, section: { select: { name: true } },
+          ...(photos && { photoUrl: true }),
+        },
+      },
       subject: { select: { id: true, name: true } },
     },
+    orderBy: { subjectId: 'asc' },
   });
 
   const thresholds = await loadThresholds(schoolId);
+  const settings = await prisma.examSettings.findFirst({ where: { schoolId } }).catch(() => null);
 
   // Group by student
   const studentMap = {};
@@ -1066,6 +1192,12 @@ const buildGazette = async (examId, schoolId) => {
         studentId: sid,
         rollNo: m.student?.rollNo,
         name: m.student?.name,
+        fatherName: m.student?.fatherName || null,
+        classId: m.student?.classId || null,
+        sectionId: m.student?.sectionId || null,
+        className: m.student?.class?.name || '',
+        sectionName: m.student?.section?.name || '',
+        ...(photos && { photoUrl: m.student?.photoUrl || null }),
         subjects: [],
         totalObtained: 0,
         totalMarks: 0,
@@ -1099,26 +1231,29 @@ const buildGazette = async (examId, schoolId) => {
       ...s,
       percentage: parseFloat(pct.toFixed(2)),
       grade: overallGrade,
-      division: calcDivision(pct),
+      division: calcDivision(pct, settings),
       passed,
     };
   });
 
   rows.sort((a, b) => b.percentage - a.percentage);
 
-  // Assign position (rank) handling ties
-  let rank = 0;
-  let prevPct = null;
-  let skipped = 0;
+  // Position within the student's own class (tied percentages share one).
+  // An exam for several classes used to rank all of them together.
+  const byClass = new Map();
   for (const row of rows) {
-    if (row.percentage !== prevPct) {
-      rank += 1 + skipped;
-      skipped = 0;
-    } else {
-      skipped += 1;
-    }
-    row.position = rank;
-    prevPct = row.percentage;
+    const k = row.classId || 0;
+    if (!byClass.has(k)) byClass.set(k, []);
+    byClass.get(k).push(row);
+  }
+  for (const list of byClass.values()) {
+    let rank = 0;
+    let prevPct = null;
+    list.forEach((row, i) => {
+      if (row.percentage !== prevPct) rank = i + 1;
+      row.position = rank;
+      prevPct = row.percentage;
+    });
   }
 
   return { exam, rows };
@@ -1126,18 +1261,20 @@ const buildGazette = async (examId, schoolId) => {
 
 // GET /exams/:id/gazette
 router.get('/:id/gazette', wrap(async (req, res) => {
+  if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
   const examId = parseInt(req.params.id);
   // Ownership check is enforced inside buildGazette via findFirst({where:{id,schoolId}})
-  const result = await buildGazette(examId, req.schoolId);
+  const result = await buildGazette(examId, req.schoolId, studentScope(req.query), { photos: req.query.photos === '1' });
   if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
   res.json({ success: true, data: result.rows, exam: result.exam });
 }));
 
 // GET /exams/:id/merit-list — sorted by percentage desc with rank
 router.get('/:id/merit-list', wrap(async (req, res) => {
+  if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
   const examId = parseInt(req.params.id);
   // Ownership check is enforced inside buildGazette via findFirst({where:{id,schoolId}})
-  const result = await buildGazette(examId, req.schoolId);
+  const result = await buildGazette(examId, req.schoolId, studentScope(req.query));
   if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
   // Already sorted; expose rank as alias of position
   const data = result.rows.map((r) => ({ ...r, rank: r.position }));
@@ -1147,9 +1284,10 @@ router.get('/:id/merit-list', wrap(async (req, res) => {
 // GET /exams/:id/failed — students with any F grade subject or absent (when failCriteria=absent)
 router.get('/:id/failed', wrap(async (req, res) => {
   const examId = parseInt(req.params.id);
+  if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
   const { failCriteria } = req.query; // 'absent' | undefined
   // Ownership check is enforced inside buildGazette via findFirst({where:{id,schoolId}})
-  const result = await buildGazette(examId, req.schoolId);
+  const result = await buildGazette(examId, req.schoolId, studentScope(req.query));
   if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
 
   const failed = result.rows.filter((s) => {
@@ -1168,7 +1306,7 @@ router.get('/:id/results/excel', wrap(async (req, res) => {
   }
   const examId = parseInt(req.params.id);
   // Ownership check is enforced inside buildGazette via findFirst({where:{id,schoolId}})
-  const result = await buildGazette(examId, req.schoolId);
+  const result = await buildGazette(examId, req.schoolId, studentScope(req.query));
   if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
 
   const { exam, rows } = result;
@@ -1358,6 +1496,9 @@ router.post('/:id/publish', wrap(async (req, res) => {
   // Ownership check: verify exam belongs to this school
   const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
   if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  // Parents would open an empty result.
+  const markCount = await prisma.examMark.count({ where: { examId } });
+  if (!markCount) return res.status(400).json({ success: false, message: 'No marks have been entered for this exam yet, so there is nothing to publish.' });
 
   const updated = await prisma.exam.update({
     where: { id: examId },
@@ -1467,8 +1608,8 @@ router.post('/:id/results/sms-blast', wrap(async (req, res) => {
   const examId = parseInt(req.params.id);
   const portalLink = req.body?.portalLink || process.env.PARENT_PORTAL_URL || 'https://portal.ilmforge.com';
 
-  // Load exam and result rows
-  const result = await buildGazette(examId, req.schoolId);
+  // Load exam and result rows (one class or section when chosen)
+  const result = await buildGazette(examId, req.schoolId, studentScope(req.body || {}));
   if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
 
   const { exam, rows } = result;

@@ -80,7 +80,7 @@ Return ONLY valid JSON (no markdown): {"topic":"...","duration":"...","objective
 
   const reqOptions = {
     hostname: 'generativelanguage.googleapis.com',
-    path:     `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    path:     `/v1beta/models/${process.env.GEMINI_MODEL || 'gemini-2.5-flash'}:generateContent?key=${apiKey}`,
     method:   'POST',
     headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) },
   };
