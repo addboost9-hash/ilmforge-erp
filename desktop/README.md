@@ -70,6 +70,10 @@ cannot be made or changed without the private key.
 - Issue: Platform Control → a school → **License** → **Make desktop licence**
   (`POST /api/v1/platform/schools/:id/desktop-license`). Optional Computer ID ties it to
   one computer.
+- A school that uses only the desktop app is not in Platform Control. Make its licence
+  locally: `node backend/scripts/desktop-licence.js --key <license-private.txt>
+  --school "Name" --days 365 [--machine XXXX-XXXX-XXXX-XXXX]`. Such a licence cannot be
+  suspended from Platform Control; it ends on its expiry date.
 - Suspend: Platform Control → **Revoke**. A desktop app that has internet checks
   `POST /api/v1/platform/check-license` on start and every 12 hours, and stops at the
   licence screen once suspended (remembered while offline).
