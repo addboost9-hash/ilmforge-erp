@@ -262,8 +262,8 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Demo access subtle collapsible */}
-          <div style={{marginTop:12,textAlign:'center'}}>
+          {/* Demo access subtle collapsible (not on a school's own desktop app) */}
+          {!localServer && <div style={{marginTop:12,textAlign:'center'}}>
             <button onClick={()=>setShowDemo(s=>!s)}
               type="button"
               style={{background:'none',border:'none',color:'#94a3b8',fontSize:11,cursor:'pointer',textDecoration:'underline'}}>
@@ -283,7 +283,7 @@ export default function LoginPage() {
                 ))}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Public separator */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 0 12px' }}>
