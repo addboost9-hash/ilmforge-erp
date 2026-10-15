@@ -41,6 +41,8 @@ const platformAuth = (req, res, next) => {
 
 /* ── License Key Generator / Validator (shared with license.routes.js) ── */
 const { generateLicenseKey, validateLicenseKey } = require('../utils/license');
+const { signLicense } = require('../utils/desktopLicense');
+const crypto = require('crypto');
 
 /* ── POST /platform/check-license (public — offline remote suspend check) ──
    Called by offline app on startup to check if platform owner suspended it
@@ -293,14 +295,50 @@ router.post('/schools/:id/license', wrap(async (req, res) => {
   });
 }));
 
+/* ── POST /platform/schools/:id/desktop-license ─────────────────
+   A signed licence for the desktop app (utils/desktopLicense.js): the app
+   checks it offline and it cannot be made up. Body: { days | expires,
+   plan, machine? } — machine ties it to one computer (the "Computer ID"
+   the app shows). The licence id is kept on the school so a suspended
+   school's desktop app stops at its next online check. */
+router.post('/schools/:id/desktop-license', wrap(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { days, expires, plan } = req.body || {};
+  const machine = req.body?.machine ? String(req.body.machine).trim().toUpperCase() : null;
+  const school = await prisma.school.findUnique({ where: { id }, select: { id: true, name: true, plan: true } });
+  if (!school) return res.status(404).json({ success: false, message: 'School not found' });
+  const expiry = expires ? new Date(expires) : new Date(Date.now() + (parseInt(days) || 365) * 86400000);
+  if (Number.isNaN(expiry.getTime()) || expiry < new Date()) return res.status(400).json({ success: false, message: 'Choose an expiry date in the future.' });
+  if (machine && !/^[A-Z0-9-]{8,40}$/i.test(String(machine).trim())) return res.status(400).json({ success: false, message: 'The Computer ID does not look right: copy it from the desktop app.' });
+  const lid = `D${id}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+  let license;
+  try {
+    license = signLicense({ lid, school: school.name, plan: plan || school.plan || 'standard', expires: expiry, machine: machine || null });
+  } catch (e) {
+    return res.status(e.status || 500).json({ success: false, message: e.message });
+  }
+  await prisma.school.update({
+    where: { id },
+    data: { licenseKey: lid, licenseExpiry: expiry, ...(plan && { plan }), status: 'active' },
+  });
+  res.json({
+    success: true,
+    message: `Desktop licence made for "${school.name}"`,
+    data: { license, lid, expires: expiry.toISOString().slice(0, 10), plan: plan || school.plan, machine: machine || null },
+  });
+}));
+
 /* ── DELETE /platform/schools/:id/license ───────────────────── */
 router.delete('/schools/:id/license', wrap(async (req, res) => {
   const id = parseInt(req.params.id);
   const school = await prisma.school.findUnique({ where: { id }, select: { name: true } });
 
+  // The key is kept (only the school is suspended): offline and desktop
+  // apps look themselves up by it, and with the key cleared a revoked
+  // licence could no longer be found and so kept working.
   await prisma.school.update({
     where: { id },
-    data: { licenseKey: null, licenseExpiry: null, status: 'suspended', suspendReason: 'License revoked by platform admin' },
+    data: { status: 'suspended', suspendReason: 'License revoked by platform admin' },
   });
 
   res.json({ success: true, message: `License revoked for "${school?.name}". Offline access disabled.` });

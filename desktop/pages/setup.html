@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <title>Set up IlmForge</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="brand">
+      <img src="icon.png" alt="">
+      <h1>Ilm<span>Forge</span></h1>
+      <p class="tag">School management that runs on this computer, with or without internet.</p>
+      <ol class="steps">
+        <li class="done"><b>✓</b>Activate this computer</li>
+        <li class="on"><b>2</b>Set up the school</li>
+        <li><b>3</b>Start working</li>
+      </ol>
+      <p class="foot">The school's records are kept on this computer only, in your Windows user folder. Reinstalling or upgrading IlmForge never removes them.</p>
+    </aside>
+
+    <main class="main">
+      <header>
+        <h2>Set up the school on this computer</h2>
+        <p>Choose how to begin. This is done once.</p>
+      </header>
+
+      <div class="choices" id="choices">
+        <button class="choice" data-pick="new" type="button">
+          <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
+          <h3>Start a new school</h3>
+          <p>An empty IlmForge for a school that has not used it before.</p>
+        </button>
+        <button class="choice" data-pick="import" type="button">
+          <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8A6 6 0 0 0 4.3 12.7 3.5 3.5 0 0 0 6.5 19z"/><path d="M12 12v7M9 16l3 3 3-3"/></svg></span>
+          <h3>Bring the school from IlmForge online</h3>
+          <p>Every record the school has online: students, fees, results, staff, settings.</p>
+        </button>
+        <button class="choice" data-pick="restore" type="button">
+          <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></span>
+          <h3>Restore a desktop backup</h3>
+          <p>Moving to a new computer, or putting back an .ilmbackup file.</p>
+        </button>
+      </div>
+
+      <!-- New school -->
+      <form class="panel" id="new" hidden novalidate>
+        <div class="field" data-f="schoolName">
+          <label for="schoolName">School name</label>
+          <input type="text" id="schoolName" autocomplete="organization" placeholder="e.g. Al-Noor Public School, Rawalpindi">
+          <div class="err"></div>
+        </div>
+        <div class="grid2">
+          <div class="field" data-f="name">
+            <label for="name">Your name</label>
+            <input type="text" id="name" autocomplete="name">
+            <div class="err"></div>
+          </div>
+          <div class="field" data-f="phone">
+            <label for="phone">Mobile number <span class="hint">(optional)</span></label>
+            <input type="tel" id="phone" autocomplete="tel" placeholder="03xx-xxxxxxx">
+            <div class="err"></div>
+          </div>
+        </div>
+        <div class="field" data-f="email">
+          <label for="email">Email</label>
+          <input type="email" id="email" autocomplete="username">
+          <div class="hint">You sign in with this email. No email is sent; internet is not needed.</div>
+          <div class="err"></div>
+        </div>
+        <div class="grid2">
+          <div class="field" data-f="password">
+            <label for="password">Password</label>
+            <input type="password" id="password" autocomplete="new-password">
+            <div class="hint">At least 8 characters.</div>
+            <div class="err"></div>
+          </div>
+          <div class="field" data-f="confirm">
+            <label for="confirm">Password again</label>
+            <input type="password" id="confirm" autocomplete="new-password">
+            <div class="err"></div>
+          </div>
+        </div>
+        <div class="note" data-msg hidden></div>
+        <div class="row"><button class="btn" type="submit">Create the school</button></div>
+      </form>
+
+      <!-- From online -->
+      <section class="panel" id="import" hidden>
+        <div class="label">First, in IlmForge online</div>
+        <ol class="how">
+          <li>Sign in as the school admin.</li>
+          <li>Open <b>Settings → Backup &amp; Restore</b>.</li>
+          <li>Click <b>Download everything for the desktop app</b>. A file ending in <b>.ilmforge</b> is saved.</li>
+          <li>Bring that file to this computer (USB drive, email, WhatsApp).</li>
+        </ol>
+        <p class="sub">Everyone signs in here with the same email and password they use online. Records are copied, not moved: the online school is left as it is.</p>
+        <div class="note" data-msg hidden></div>
+        <div class="row"><button class="btn" data-go type="button">Choose the .ilmforge file…</button></div>
+      </section>
+
+      <!-- Restore -->
+      <section class="panel" id="restore" hidden>
+        <p>Choose an <b>.ilmbackup</b> file made by IlmForge desktop: from <b>File → Save a backup copy</b>, or from the <b>backups</b> folder of the old computer.</p>
+        <p class="sub">Everyone signs in with the passwords they had when the backup was made.</p>
+        <div class="note" data-msg hidden></div>
+        <div class="row"><button class="btn" data-go type="button">Choose the backup…</button></div>
+      </section>
+
+      <!-- Working / done -->
+      <section class="panel" id="busy" hidden>
+        <div class="busy"><span class="spin"></span><span id="busyText">Working…</span></div>
+      </section>
+      <section class="panel done" id="done" hidden>
+        <span class="tick"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+        <h3 id="doneTitle">The school is ready</h3>
+        <p id="doneText"></p>
+        <div class="counts" id="counts" hidden></div>
+        <button class="btn gold" id="open" type="button">Open IlmForge</button>
+      </section>
+    </main>
+  </div>
+  <script src="setup.js"></script>
+</body>
+</html>

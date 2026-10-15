@@ -1,0 +1,5 @@
+# Made by `npm run stage` / `npm run dist`
+app/
+dist/
+node_modules/
+*.log

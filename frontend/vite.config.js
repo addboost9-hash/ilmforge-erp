@@ -2,6 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// The desktop app (VITE_DESKTOP=1) is served by the server on the school's own
+// computer and needs no service worker: it is never offline from itself.
+const DESKTOP = process.env.VITE_DESKTOP === '1';
+
 export default defineConfig({
   plugins: [
     react({
@@ -12,7 +16,7 @@ export default defineConfig({
     /* ─── Progressive Web App (PWA) ─────────────────────────
        Install prompt on mobile/desktop + offline caching
     ─────────────────────────────────────────────────────── */
-    VitePWA({
+    !DESKTOP && VitePWA({
       registerType: 'autoUpdate',        // auto-update SW when new version deployed
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icons/*.png'],
       injectRegister: 'auto',
@@ -189,7 +193,7 @@ export default defineConfig({
         enabled: false,  // disable in dev to avoid caching issues
       },
     }),
-  ],
+  ].filter(Boolean),
 
   server: {
     port: 3000,

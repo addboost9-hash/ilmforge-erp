@@ -15,6 +15,7 @@
  * register under another's name.
  */
 import api from '../api/client';
+import { isDesktop, localServer } from './desktop';
 
 const KEY = 'ilm.offline.queue';
 const EVENT = 'ilm-offline-queue';
@@ -61,7 +62,9 @@ function enqueue({ url, body, label }) {
   write(kept);
 }
 
-const QUEUED_MESSAGE = 'No internet: saved on this device. It will be sent automatically when you are back online.';
+const QUEUED_MESSAGE = localServer
+  ? 'The school\'s IlmForge computer could not be reached: saved on this device. It will be sent automatically when the connection is back.'
+  : 'No internet: saved on this device. It will be sent automatically when you are back online.';
 
 /**
  * POST now if possible; if there is no connection, keep it and send later.
@@ -69,7 +72,9 @@ const QUEUED_MESSAGE = 'No internet: saved on this device. It will be sent autom
  * `queued: true` and `data.message` explaining what happened.
  */
 export async function postOrQueue(url, body, { label } = {}) {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+  // In the desktop app the server is on this same computer: having no
+  // network says nothing about reaching it, so always try.
+  if (!isDesktop && typeof navigator !== 'undefined' && navigator.onLine === false) {
     enqueue({ url, body, label });
     return { queued: true, data: { success: true, queued: true, message: QUEUED_MESSAGE } };
   }

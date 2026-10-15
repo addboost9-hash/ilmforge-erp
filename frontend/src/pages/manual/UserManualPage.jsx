@@ -732,6 +732,79 @@ const SECTIONS = [
   },
 
   /* ──────────────────────────────────────────
+     ILMFORGE DESKTOP
+  ────────────────────────────────────────── */
+  {
+    id: 'desktop',
+    icon: '🖥️',
+    color: '#0d2056',
+    title: 'IlmForge Desktop (No Internet)',
+    desc: 'IlmForge on the school\'s own computer: install, licence, setup, other computers, backups, updates',
+    chapters: [
+      {
+        title: "Installing and activating",
+        steps: [
+          { n:1, text:"Windows 10 or 11 (64-bit), about 1 GB free. Double-click IlmForge-Setup-<version>.exe" },
+          { n:2, text:"If Windows says \"Windows protected your PC\": More info → Run anyway (the installer is not yet code-signed)" },
+          { n:3, text:"Accept the licence agreement → Install. No administrator password is needed" },
+          { n:4, text:"IlmForge asks for the licence and shows This computer's ID (send it to IlmForge for a one-computer licence)" },
+          { n:5, text:"Paste the licence (starts with ILMF1.) or Open a licence file… → Activate. No internet needed" },
+        ],
+      },
+      {
+        title: "Setting up the school (once)",
+        steps: [
+          { n:1, text:"Start a new school: school name, your name, email (your sign-in), password. Then do First-time setup" },
+          { n:2, text:"Or bring it from IlmForge online: online, Backup & Restore → Download everything for the desktop app → a .ilmforge file" },
+          { n:3, text:"Bring that file to the computer, choose \"Bring the school from IlmForge online\" and pick it: every record comes across" },
+          { n:4, text:"Everyone signs in with the same email or phone and password as online" },
+          { n:5, text:"Or Restore a desktop backup: for a school moving to a new computer" },
+        ],
+        warning: 'The online school is copied, not moved, and the two do not stay in step. Once the school works on the desktop app, enter everything there.',
+      },
+      {
+        title: "Other computers and phones in the school",
+        steps: [
+          { n:1, text:"This Computer (sidebar) → Other computers and phones in the school → On" },
+          { n:2, text:"It shows an address like http://192.168.1.10:8090: open it in Chrome or Edge on any device on the school Wi-Fi" },
+          { n:3, text:"First time: Windows asks about the network → tick Private networks → Allow" },
+          { n:4, text:"Keep IlmForge open on the main computer; closing the window keeps it running by the clock (right-click the icon → Quit)" },
+        ],
+        note: 'If the address stops working after the router restarts, This Computer shows the new one. A fixed address in the router stops it changing.',
+      },
+      {
+        title: "Backups",
+        steps: [
+          { n:1, text:"Automatic: every day while open (last 14 kept), on closing if none in 4 hours, before an update or a restore" },
+          { n:2, text:"This Computer → Back up now, or Save a copy to… (USB drive)" },
+          { n:3, text:"To put one back: Put back next to it, or Restore from a file… IlmForge asks first and keeps the current data" },
+          { n:4, text:"Files: C:\\Users\\<you>\\AppData\\Roaming\\IlmForge (This Computer → Open folder)" },
+        ],
+        warning: 'Save a copy to a USB drive every week and keep it away from the computer: a backup on the same computer does not survive a broken disk, theft or a virus.',
+      },
+      {
+        title: "Passwords, new computer, updates",
+        steps: [
+          { n:1, text:"Forgotten password: on the main computer, Forgot Password? on the sign-in page (or Help → Reset a password…). No emailed code" },
+          { n:2, text:"New computer: Save a copy to… on the old one; install and activate on the new one; choose Restore a desktop backup" },
+          { n:3, text:"A licence for one computer does not work on another: ask IlmForge for one for the new computer's ID" },
+          { n:4, text:"Updating: run the new installer over the old one. Records stay; the database is updated after a copy is kept" },
+        ],
+      },
+      {
+        title: "The licence",
+        steps: [
+          { n:1, text:"This Computer shows who it is licensed to, until when, and the days left" },
+          { n:2, text:"From 14 days before the end, IlmForge reminds you each time it opens" },
+          { n:3, text:"Renew: get a new licence from IlmForge (WhatsApp 0346-5146609) → This Computer → Enter a new licence" },
+          { n:4, text:"If it ends, IlmForge opens at the licence screen until a new one is entered. The records stay untouched" },
+        ],
+        note: 'SMS, WhatsApp and email to parents need the computer to have internet. AI help is not switched on in the desktop app. Uninstalling removes the program only, never the school\'s records.',
+      },
+    ],
+  },
+
+  /* ──────────────────────────────────────────
      ONLINE ADMISSIONS & SCHOOL LINKS
   ────────────────────────────────────────── */
   {

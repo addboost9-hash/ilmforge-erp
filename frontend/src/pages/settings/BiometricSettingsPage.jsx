@@ -19,8 +19,9 @@ const genToken = () => {
 
 /* derive base host from current API base */
 const getHostUrl = () => {
-  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
-  return apiBase.replace('/api/v1', '').replace('/api/v1/', '');
+  // A relative API address (the desktop edition) is on this page's own host.
+  const apiBase = new URL(import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1', window.location.origin).href;
+  return apiBase.replace(/\/api\/v1\/?$/, '');
 };
 
 const DEVICES = [

@@ -57,8 +57,13 @@ const authMiddleware = async (req, res, next) => {
         });
       }
 
+      // The desktop app checks its own signed licence before the server
+      // even starts; the online trial and licence dates (copied over with a
+      // transferred school) do not apply on that computer.
+      const desktop = process.env.ILMFORGE_DESKTOP === '1';
+
       // ── TRIAL EXPIRED ──
-      if (school.trialEndsAt && new Date(school.trialEndsAt) < new Date() && school.plan === 'free') {
+      if (!desktop && school.trialEndsAt && new Date(school.trialEndsAt) < new Date() && school.plan === 'free') {
         return res.status(403).json({
           success: false,
           code: 'TRIAL_EXPIRED',
@@ -69,7 +74,7 @@ const authMiddleware = async (req, res, next) => {
       }
 
       // ── LICENSE EXPIRED (offline mode) ──
-      if (school.licenseKey && school.licenseExpiry && new Date(school.licenseExpiry) < new Date()) {
+      if (!desktop && school.licenseKey && school.licenseExpiry && new Date(school.licenseExpiry) < new Date()) {
         return res.status(403).json({
           success: false,
           code: 'LICENSE_EXPIRED',

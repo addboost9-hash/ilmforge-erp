@@ -24,6 +24,7 @@ uses (see *Who can do what* at the end).
 11. [The dashboard](#part-11)
 12. [Who can do what](#part-12)
 13. [When something goes wrong](#part-13)
+14. [IlmForge desktop — no internet needed](#part-14)
 
 ---
 
@@ -339,6 +340,9 @@ On the old server, open **Import & Export** and click **Export records**. On the
 import that same file. Classes, sections, students, parents and staff move across, with their
 roll numbers and employee codes. Fee history, attendance and exam marks are not included, and
 everyone gets a new password in the login details sheet.
+
+To move the whole school, with fees, attendance and results, to IlmForge desktop on the
+school's own computer, see Part 14.
 
 ### Finding and fixing student records
 
@@ -1009,7 +1013,8 @@ turned away rather than shown the page.
 
 ### Working without internet
 
-IlmForge keeps working when the school's internet drops:
+IlmForge keeps working when the school's internet drops. (To run the school with no internet
+at all, use **IlmForge desktop**: see Part 14.)
 
 | | Without internet |
 |---|---|
@@ -1068,6 +1073,157 @@ cached copy of the page: reload the page and print again.
 
 **The password was lost before it was written down**
 An admin must reset it from the Staff Directory. Passwords cannot be recovered, only reset.
+
+---
+
+<a name="part-14"></a>
+## Part 14 — IlmForge desktop: no internet needed
+
+IlmForge desktop is the whole of IlmForge installed on one of the school's own Windows
+computers. It needs no internet. The school's records are kept on that computer, and other
+computers, tablets and phones in the school can use it over the school's Wi-Fi or network.
+Everything in Parts 1 to 13 works the same way in it.
+
+### Installing
+
+You need a Windows 10 or 11 computer (64-bit) with about 1 GB of free space, the installer
+(**IlmForge-Setup-<version>.exe**) and a licence from IlmForge (WhatsApp 0346-5146609).
+
+1. Double-click the installer. If Windows says **Windows protected your PC**, click
+   **More info → Run anyway**. (Windows says this about programs not yet signed with a
+   code-signing certificate.)
+2. Accept the licence agreement, keep the suggested folder (or choose another) and click
+   **Install**. No administrator password is needed.
+3. IlmForge opens. It also has a shortcut on the desktop and in the Start menu.
+
+### Activating
+
+The first time, IlmForge asks for the licence. The screen shows **This computer's ID**
+(four groups such as `A684-640A-00FA-8899`). A licence can be made for one computer only;
+for that, send this ID to IlmForge.
+
+Paste the licence (it starts with `ILMF1.`) or click **Open a licence file…**, then
+**Activate**. It is checked on the computer itself, with no internet.
+
+| Message | What to do |
+|---|---|
+| That is not an IlmForge desktop licence | Copy the whole licence, from `ILMF1.` to the end. |
+| This licence was not issued by IlmForge, or it was changed | Copy it again exactly as you received it. |
+| This licence is for a different computer | Ask IlmForge for a licence for this computer's ID. |
+| This licence has expired | Ask IlmForge for a renewal. |
+| This computer's date is earlier than when IlmForge last ran | Set the correct date and time in Windows, then open IlmForge again. |
+
+### Setting up the school (once)
+
+After the licence, choose how to begin:
+
+- **Start a new school**: the school's name, your name, your email (your sign-in) and a
+  password. No email is sent. Then do Part 1 of this manual.
+- **Bring the school from IlmForge online**: for a school already using IlmForge on the
+  internet. First, online, an admin opens **Backup & Restore** and clicks **Download
+  everything for the desktop app**. That saves a file ending in **.ilmforge**; bring it to
+  this computer (USB drive, email, WhatsApp) and choose it. Every record comes across:
+  students, parents, staff, classes, fees and payments, attendance, exams and marks,
+  settings and photos. Everyone signs in with the same email or phone and password as
+  online.
+- **Restore a desktop backup**: for a school moving to a new computer (see below).
+
+> The online school is copied, not moved, and the two do not stay in step afterwards. Once
+> the school works on the desktop app, enter everything there: records added online later
+> do not reach the desktop.
+
+### Every day
+
+Open IlmForge from the desktop shortcut and sign in as usual. Admins have **This Computer**
+in the sidebar (also **Help → This computer**): the school's data folder, backups, the
+licence and the school network.
+
+Close IlmForge at the end of the day like any program. If no backup was made in the last
+four hours, one is made as it closes.
+
+### Other computers and phones in the school
+
+1. On the IlmForge computer: **This Computer → Other computers and phones in the school →
+   On** (or the **School network** menu).
+2. It shows an address such as `http://192.168.1.10:8090`. On another computer, tablet or
+   phone connected to the same Wi-Fi or network, open that address in Chrome or Edge and
+   sign in.
+3. The first time, Windows may ask whether IlmForge may use the network: tick **Private
+   networks** and click **Allow**.
+
+Keep IlmForge open on the main computer while others use it. With the network on, closing
+its window keeps it running next to the clock (the IlmForge icon); right-click that icon
+and choose **Quit IlmForge** to stop it.
+
+> If the address stops working after the Wi-Fi router restarts, the main computer may have
+> been given a new address: **This Computer** shows the current one. Whoever looks after the
+> Wi-Fi can give that computer a fixed address so it does not change.
+
+Attendance marked on another device while the network is down is kept on that device and
+sent when it is connected again, as in Part 13.
+
+### Backups
+
+IlmForge makes a complete backup of the school by itself:
+
+- every day while it is open (the last 14 are kept);
+- when it closes, if none was made in the last four hours;
+- before an update, and before a backup is put back.
+
+On **This Computer**, **Back up now** makes one straight away and **Save a copy to…** saves
+one wherever you choose. **Do this every week to a USB drive and keep it away from the
+computer**: a backup on the same computer does not survive a broken disk, theft or a virus.
+
+To put a backup back: **This Computer → Put back** next to it, or **Restore from a file…**
+for a copy on a USB drive. IlmForge asks first and keeps the current data as a backup
+(*Before a restore*); then everyone signs in again.
+
+The school's files are in `C:\Users\<Windows user>\AppData\Roaming\IlmForge`
+(**This Computer → Open folder**): `data` holds the records, `backups` the backups and
+`logs` what support may ask for.
+
+### A forgotten password
+
+On the main computer, click **Forgot Password?** on the sign-in page (or **Help → Reset a
+password…**), choose the person, type the new password twice and click **Save the new
+password**. No emailed code is needed. On other computers the sign-in page says to ask an
+admin or use the main computer. An admin can also give teachers, parents and students a new
+password in **Portal Management**.
+
+### Moving to a new computer
+
+1. On the old computer: **This Computer → Save a copy to…** onto a USB drive.
+2. On the new computer: install IlmForge and enter the licence. A licence for one computer
+   does not work on another: ask IlmForge for a licence for the new computer's ID.
+3. Choose **Restore a desktop backup** and pick the file from the USB drive.
+
+### Updating IlmForge
+
+Run the new installer; there is no need to uninstall first. The school's records stay. When
+it first opens, IlmForge brings the database up to the new version by itself, after keeping
+a copy (*Before an update* in the backups list).
+
+### The licence
+
+**This Computer** shows who it is licensed to, until when, and the days left. From 14 days
+before the end, IlmForge reminds you each time it opens. To renew, get a new licence from
+IlmForge and click **Enter a new licence** (or **Help → Licence…**).
+
+If the licence ends, IlmForge opens at the licence screen until a new one is entered. The
+records stay on the computer, untouched. When the computer has internet, IlmForge checks that
+the licence is still in good standing; only the licence number is sent.
+
+### What still needs the internet
+
+SMS, WhatsApp and email messages to parents go out only while the computer has internet.
+AI help (AI Copilot, reading a paper admission form, question suggestions) is not switched on
+in the desktop app.
+
+### Removing IlmForge
+
+Windows **Settings → Apps → IlmForge School Management → Uninstall** removes the program
+only: the school's records and backups stay in the folder above. To remove those too, first
+save a backup copy somewhere safe, then delete that folder.
 
 ---
 

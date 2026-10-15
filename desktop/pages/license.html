@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <title>Activate IlmForge</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="brand">
+      <img src="icon.png" alt="">
+      <h1>Ilm<span>Forge</span></h1>
+      <p class="tag">School management that runs on this computer, with or without internet.</p>
+      <ol class="steps">
+        <li class="on"><b>1</b>Activate this computer</li>
+        <li><b>2</b>Set up the school</li>
+        <li><b>3</b>Start working</li>
+      </ol>
+      <p class="foot">Need a licence or a renewal?<br>WhatsApp <b>0346-5146609</b><br>Send the computer ID shown here.</p>
+    </aside>
+
+    <main class="main">
+      <header>
+        <h2>Activate IlmForge on this computer</h2>
+        <p id="why">Enter the licence you received from IlmForge. It is checked on this computer; no internet is needed.</p>
+      </header>
+
+      <section class="panel">
+        <div class="label">This computer's ID</div>
+        <div class="machine">
+          <code id="machine">····-····-····-····</code>
+          <button class="btn ghost small" id="copy" type="button">Copy</button>
+        </div>
+        <p class="sub">A licence can be for this computer only. If yours is, IlmForge needs this ID to make it.</p>
+      </section>
+
+      <section class="panel">
+        <div class="field">
+          <label for="lic">Licence</label>
+          <textarea id="lic" spellcheck="false" placeholder="ILMF1.eyJ2Ijox…  (paste the whole licence here)"></textarea>
+        </div>
+        <div class="note" id="msg" hidden></div>
+        <div class="row">
+          <button class="btn" id="activate" type="button">Activate</button>
+          <button class="btn ghost" id="file" type="button">Open a licence file…</button>
+          <span class="grow"></span>
+          <button class="link" id="quit" type="button">Quit</button>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="license.js"></script>
+</body>
+</html>

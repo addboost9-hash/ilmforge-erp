@@ -18,6 +18,15 @@ import toast from 'react-hot-toast';
 import { WifiOff, Wifi, UploadCloud, RefreshCw } from 'lucide-react';
 import { flush, pending, onQueueChange } from '../utils/offlineQueue';
 import useAuthStore from '../store/auth.store';
+import { isDesktop, localServer } from '../utils/desktop';
+
+/* What "connected" means: the internet for the online app; the school's
+   own IlmForge computer for the desktop edition used across the school
+   network. In the desktop app itself the server is on the same computer,
+   so it never goes offline. */
+const WORDS = localServer
+  ? { offline: 'This device is not connected to the school network.', later: 'when it is connected again', back: 'Connected again' }
+  : { offline: 'You\'re offline. Pages you opened earlier still show their saved data.', later: 'when you\'re back online', back: 'Back online' };
 
 const pill = (bg) => ({
   position: 'fixed', left: '50%', transform: 'translateX(-50%)',
@@ -31,7 +40,7 @@ const pill = (bg) => ({
 export default function OfflineStatus() {
   const qc = useQueryClient();
   const signedIn = useAuthStore((s) => s.isAuthenticated);
-  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine !== false));
+  const [online, setOnline] = useState(() => (isDesktop || typeof navigator === 'undefined' ? true : navigator.onLine !== false));
   const [justBack, setJustBack] = useState(false);
   const [waiting, setWaiting] = useState(() => pending().length);
   const [sending, setSending] = useState(false);
@@ -63,7 +72,7 @@ export default function OfflineStatus() {
       qc.invalidateQueries({ refetchType: 'active' }); // offline data may be old
       send({ quiet: true });
     };
-    const goOffline = () => { setOnline(false); setJustBack(false); };
+    const goOffline = () => { if (isDesktop) return; setOnline(false); setJustBack(false); };
     window.addEventListener('online', goOnline);
     window.addEventListener('offline', goOffline);
     const off = onQueueChange((items) => setWaiting(items.length));
@@ -80,7 +89,7 @@ export default function OfflineStatus() {
     if (!signedIn) return undefined;
     setWaiting(pending().length);
     if (online) send({ quiet: true });
-    const t = setInterval(() => { if (navigator.onLine !== false && pending().length) send({ quiet: true }); }, 60_000);
+    const t = setInterval(() => { if ((isDesktop || navigator.onLine !== false) && pending().length) send({ quiet: true }); }, 60_000);
     return () => clearInterval(t);
   }, [signedIn, online, send]);
 
@@ -89,10 +98,10 @@ export default function OfflineStatus() {
       <div role="status" aria-live="polite" style={pill('#1F2937')}>
         <WifiOff size={16} color="#FCA5A5" aria-hidden="true" />
         <span>
-          You're offline. Pages you opened earlier still show their saved data.
+          {WORDS.offline}
           {' '}{waiting > 0
-            ? `${waiting} attendance ${waiting === 1 ? 'save is' : 'saves are'} kept on this device and will be sent when you're back online.`
-            : 'Attendance you mark now is kept on this device and sent when you’re back online.'}
+            ? `${waiting} attendance ${waiting === 1 ? 'save is' : 'saves are'} kept on this device and will be sent ${WORDS.later}.`
+            : `Attendance you mark now is kept on this device and sent ${WORDS.later}.`}
         </span>
       </div>
     );
@@ -118,7 +127,7 @@ export default function OfflineStatus() {
   if (justBack) {
     return (
       <div role="status" aria-live="polite" style={pill('#15803D')}>
-        <Wifi size={16} aria-hidden="true" /> Back online
+        <Wifi size={16} aria-hidden="true" /> {WORDS.back}
       </div>
     );
   }

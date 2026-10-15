@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import toast from 'react-hot-toast';
-import { Database, Download, ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Database, Download, ShieldCheck, Monitor } from 'lucide-react';
+import { isDesktop, localServer } from '../../utils/desktop';
 
 export default function BackupPage() {
   const qc = useQueryClient();
@@ -12,6 +14,7 @@ export default function BackupPage() {
   const [useClasses, setUseClasses] = useState(true);
   const [useStudents, setUseStudents] = useState(true);
   const [restoreResult, setRestoreResult] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const { data: backups = [] } = useQuery({ queryKey: ['backups'], queryFn: () => api.get('/backups').then(r => r.data.data || []) });
 
   const create = useMutation({
@@ -42,6 +45,27 @@ export default function BackupPage() {
     onError: (e) => toast.error(e?.response?.data?.message || 'Restore failed'),
   });
 
+  /* Everything the school has, in one file, for IlmForge desktop's
+     "Bring the school from IlmForge online". */
+  const exportAll = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get('/transfer/export', { responseType: 'blob', timeout: 15 * 60 * 1000, silent: true });
+      const name = /filename="?([^";]+)"?/.exec(res.headers['content-disposition'] || '')?.[1] || `ilmforge-school-${new Date().toISOString().slice(0, 10)}.ilmforge`;
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url; a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      toast.success('Downloaded. In IlmForge desktop choose "Bring the school from IlmForge online" and open this file.', { duration: 8000 });
+    } catch (e) {
+      let message = 'The download did not finish. Try again.';
+      try { message = JSON.parse(await e.response.data.text()).message || message; } catch { /* not a server answer */ }
+      toast.error(message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const onFileChange = async (evt) => {
     const file = evt.target.files?.[0];
     if (!file) return;
@@ -58,6 +82,15 @@ export default function BackupPage() {
 
   return (
     <div className="space-y-4 max-w-2xl">
+      {isDesktop && (
+        <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5 flex items-start gap-3">
+          <Monitor className="w-5 h-5 text-teal-700 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="text-sm text-teal-900">
+            <b>Complete backups of this computer are in This Computer.</b> They hold every record and are made automatically each day; the JSON file below is a partial export.
+            {' '}<Link to="/settings/desktop" className="font-bold underline">Open This Computer</Link>
+          </div>
+        </div>
+      )}
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white">
         <div className="flex items-center gap-2 mb-2"><Database className="w-5 h-5 text-teal-400" /><span className="font-bold">Full Data Backup</span></div>
         <p className="text-xs text-slate-300 mb-4">Students, staff, classes, fees, attendance, exams — everything downloads as one JSON file. Taking a backup every week is best practice.</p>
@@ -66,6 +99,20 @@ export default function BackupPage() {
           <Download className="w-4 h-4" /> {create.isPending ? 'Exporting…' : 'Create & Download Backup'}
         </button>
       </div>
+
+      {!localServer && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-1.5"><Monitor className="w-4 h-4 text-teal-600" aria-hidden="true" /><h4 className="font-bold text-sm text-slate-800">Move the school to IlmForge desktop</h4></div>
+          <p className="text-xs text-slate-600 mb-3">
+            One file with every record of the school (students, staff, fees, attendance, exams, results, settings, photos), for the desktop app that runs on the school's own computer without internet.
+            Everyone signs in there with the same email and password. The school here online is left as it is.
+          </p>
+          <button type="button" onClick={exportAll} disabled={exporting}
+            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2.5 rounded-lg disabled:opacity-50">
+            <Download className="w-4 h-4" /> {exporting ? 'Preparing the file… (a large school takes a few minutes)' : 'Download everything for the desktop app'}
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
         <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Restore Backup</h4>

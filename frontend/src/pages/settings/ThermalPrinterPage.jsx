@@ -1,6 +1,7 @@
 import { Download, Printer, CheckCircle, AlertTriangle, Plug, Monitor } from 'lucide-react';
 
-const hostUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1').replace('/api/v1','').replace('/api/v1/','');
+// A relative API address (the desktop edition) is on this page's own host.
+const hostUrl = new URL(import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1', window.location.origin).href.replace(/\/api\/v1\/?$/, '');
 
 const STEPS = [
   {

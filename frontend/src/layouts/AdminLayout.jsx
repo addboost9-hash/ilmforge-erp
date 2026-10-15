@@ -23,8 +23,9 @@ import {
   CalendarDays, Rocket, Truck, Link2, Upload,
   TrendingUp, BookMarked, Globe, QrCode, UserPlus, Receipt, Award,
   BookOpenCheck,
-  History,
+  History, Monitor,
 } from 'lucide-react';
+import { isDesktop as inDesktopApp } from '../utils/desktop';
 import LicenseBanner from '../components/license/LicenseBanner';
 
 /* ═══════════════════════════════════════════════════
@@ -105,13 +106,18 @@ const NAV = [
       { to: '/settings/import-export', icon: Upload, label: 'Import & Export', roles: ['super_admin','admin'] },
       { to: '/settings/past-records', icon: History, label: 'Past Records', roles: ['super_admin','admin'] },
       { to: '/launch-setup',    icon: Rocket,      label: 'Quick Setup',       roles: ['super_admin','admin'] },
-      { to: '/settings/backup', icon: Database,    label: 'Backup & Restore',  roles: ['super_admin','admin'] },
+      { to: '/settings/backup', icon: Database,    label: 'Backup & Restore',  roles: ['super_admin','admin'], webOnly: true },
+      { to: '/settings/desktop', icon: Monitor,    label: 'This Computer',     roles: ['super_admin','admin'], desktopOnly: true },
       { to: '/manual',          icon: BookOpen,    label: 'User Manual' },
     ],
   },
 ];
 
 const canAccessItem = (item, role) => {
+  // The desktop app has its own complete backups (This Computer); the online
+  // JSON backup is for the web app.
+  if (item.desktopOnly && !inDesktopApp) return false;
+  if (item.webOnly && inDesktopApp) return false;
   if (!Array.isArray(item.roles) || item.roles.length === 0) return true;
   return item.roles.includes(role);
 };

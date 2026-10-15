@@ -310,6 +310,10 @@ app.use('/api/v1/gatepasses',      protect, R('./routes/gatepass.routes'));
 app.use('/api/v1/visitors',        protect, R('./routes/visitor.routes'));
 app.use('/api/v1/crm',             protect, FINANCE, R('./routes/crm.routes'));
 app.use('/api/v1/backups',         protect, ADMIN_ONLY, R('./routes/backup.routes'));
+// The whole school as one file, for the desktop app ("Download everything").
+app.use('/api/v1/transfer',        protect, ADMIN_ONLY, R('./routes/transfer.routes'));
+// Desktop app only (its own computer and token; see desktop.routes.js).
+app.use('/api/v1/desktop',         R('./routes/desktop.routes'));
 app.use('/api/v1/sops',            protect, R('./routes/sop.routes'));
 app.use('/api/v1/bulk',            protect, ADMIN_ONLY, R('./routes/bulkimport.routes'));
 app.use('/api/v1/history',         protect, ADMIN_ONLY, R('./routes/history.routes'));

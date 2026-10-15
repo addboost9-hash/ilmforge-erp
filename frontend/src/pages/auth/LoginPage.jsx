@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import useAuthStore from '../../store/auth.store';
 import IlmForgeLogo from '../../components/brand/IlmForgeLogo';
 import api from '../../api/client';
+import { desktop, localServer } from '../../utils/desktop';
 
 // Which portal a link was issued for. Shown so whoever opens it knows
 // it is theirs; the actual destination is still decided by the role on
@@ -235,9 +236,19 @@ export default function LoginPage() {
             </div>
 
             <div style={{ textAlign: 'right', marginBottom: 18 }}>
-              <Link to="/forgot-password" style={{ fontSize: 12.5, fontWeight: 700, color: brandColor, textDecoration: 'none' }}>
-                Forgot Password?
-              </Link>
+              {/* Desktop edition: no internet for an emailed code; the
+                  password is reset on the school's own computer. */}
+              {desktop ? (
+                <button type="button" onClick={() => desktop.openPasswordReset()} style={{ fontSize: 12.5, fontWeight: 700, color: brandColor, background: 'none', border: 0, padding: 0, cursor: 'pointer' }}>
+                  Forgot Password?
+                </button>
+              ) : localServer ? (
+                <span style={{ fontSize: 12, color: '#64748B' }}>Forgot it? Ask the admin, or reset it on the school's main computer: IlmForge → Help → Reset a password.</span>
+              ) : (
+                <Link to="/forgot-password" style={{ fontSize: 12.5, fontWeight: 700, color: brandColor, textDecoration: 'none' }}>
+                  Forgot Password?
+                </Link>
+              )}
             </div>
 
             <button type="submit" disabled={isLoading} className="btn-shine"

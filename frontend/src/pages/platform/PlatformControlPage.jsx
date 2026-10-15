@@ -48,6 +48,7 @@ export default function PlatformControlPage() {
   const [selectedSchool, setSelectedSchool] = useState(null);
   const [licenseModal, setLicenseModal] = useState(null);
   const [generatedLicense, setGeneratedLicense] = useState(null);
+  const [licForm, setLicForm] = useState({ days: '365', plan: 'standard', machine: '' });
 
   /* ── API helper with platform key ── */
   const platformApi = axios.create({
@@ -97,12 +98,14 @@ export default function PlatformControlPage() {
     onError: err => toast.error(err.response?.data?.message || 'Failed'),
   });
 
+  /* A signed licence for IlmForge desktop: checked offline by the app, and
+     cannot be made up or changed (backend utils/desktopLicense.js). */
   const licenseMut = useMutation({
-    mutationFn: ({ id, days, plan }) => platformApi.post(`/platform/schools/${id}/license`, { days, plan }),
+    mutationFn: ({ id, days, plan, machine }) => platformApi.post(`/platform/schools/${id}/desktop-license`, { days, plan, machine: machine || undefined }),
     onSuccess: (data) => {
       qc.invalidateQueries(['platform-schools']);
       setGeneratedLicense(data.data.data);
-      toast.success('License generated!');
+      toast.success('Desktop licence made');
     },
     onError: err => toast.error(err.response?.data?.message || 'Failed'),
   });
@@ -323,7 +326,7 @@ export default function PlatformControlPage() {
                               </button>
                             )}
                             {/* License */}
-                            <button onClick={() => { setLicenseModal(school); setGeneratedLicense(null); }}
+                            <button onClick={() => { setLicenseModal(school); setGeneratedLicense(null); setLicForm({ days: '365', plan: school.plan || 'standard', machine: '' }); }}
                               title="License Management"
                               style={{ padding:'5px 10px', background:'#fef3c7', border:'1px solid #fde68a', color:'#92400e', borderRadius:6, cursor:'pointer', fontSize:11, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}>
                               <Key size={11}/> License
@@ -367,56 +370,79 @@ export default function PlatformControlPage() {
             </h3>
 
             {generatedLicense ? (
-              <div style={{ padding:16, background:'#f0fdf4', border:'2px solid #86efac', borderRadius:10, marginBottom:16 }}>
-                <div style={{ fontWeight:800, color:'#15803d', marginBottom:8 }}>✅ License Generated!</div>
-                <div style={{ fontFamily:'monospace', fontSize:16, fontWeight:800, color:'#1e3a5f', letterSpacing:2, marginBottom:8 }}>{generatedLicense.licenseKey}</div>
-                <div style={{ fontSize:12, color:'#64748b' }}>
-                  Valid until: <strong>{generatedLicense.expiryDate}</strong> ({generatedLicense.daysValid} days)<br/>
-                  Plan: <strong>{generatedLicense.plan}</strong>
+              <div style={{ padding:16, background:'#f0fdf4', border:'2px solid #86efac', borderRadius:10, marginBottom:4 }}>
+                <div style={{ fontWeight:800, color:'#15803d', marginBottom:6 }}>Desktop licence ready</div>
+                <div style={{ fontSize:12, color:'#475569', lineHeight:1.6, marginBottom:10 }}>
+                  Valid until <strong>{generatedLicense.expires}</strong> · Plan <strong>{generatedLicense.plan}</strong> · No. <code>{generatedLicense.lid}</code><br/>
+                  {generatedLicense.machine
+                    ? <>Works only on the computer <strong style={{ fontFamily:'monospace' }}>{generatedLicense.machine}</strong></>
+                    : 'Works on any computer the school installs IlmForge on'}
                 </div>
-                <div style={{ marginTop:10, padding:'8px 12px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:7, fontSize:12, color:'#92400e' }}>
-                  📋 Give this key to the school admin — enter it under App → Settings → License
+                <textarea readOnly value={generatedLicense.license} onFocus={e => e.target.select()} rows={5}
+                  style={{ width:'100%', fontFamily:'monospace', fontSize:11, padding:10, border:'1px solid #bbf7d0', borderRadius:8, background:'white', color:'#1e293b', resize:'none', wordBreak:'break-all' }} />
+                <div style={{ display:'flex', gap:8, marginTop:10, flexWrap:'wrap' }}>
+                  <button onClick={() => { navigator.clipboard?.writeText(generatedLicense.license).then(() => toast.success('Licence copied')).catch(() => toast.error('Select the text and copy it')); }}
+                    style={{ padding:'8px 14px', background:'#1B2F6E', color:'white', border:'none', borderRadius:7, cursor:'pointer', fontSize:12, fontWeight:700 }}>
+                    Copy licence
+                  </button>
+                  <button onClick={() => {
+                    const blob = new Blob([generatedLicense.license], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = `IlmForge-licence-${(licenseModal.slug || licenseModal.name || 'school').replace(/[^a-z0-9]+/gi, '-')}.txt`; a.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                  }}
+                    style={{ padding:'8px 14px', background:'white', color:'#1B2F6E', border:'1px solid #1B2F6E', borderRadius:7, cursor:'pointer', fontSize:12, fontWeight:700 }}>
+                    Download as a file
+                  </button>
                 </div>
-                <button onClick={() => { navigator.clipboard?.writeText(generatedLicense.licenseKey); toast.success('Key copied!'); }}
-                  style={{ marginTop:10, padding:'7px 14px', background:'#1B2F6E', color:'white', border:'none', borderRadius:7, cursor:'pointer', fontSize:12, fontWeight:700 }}>
-                  📋 Copy License Key
-                </button>
+                <div style={{ marginTop:10, padding:'8px 12px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:7, fontSize:12, color:'#92400e', lineHeight:1.5 }}>
+                  Send it to the school (WhatsApp or email). They paste it, or open the file, when IlmForge desktop asks for the licence, or later in Help → Licence.
+                </div>
               </div>
             ) : (
               <div>
-                <div style={{ marginBottom:12 }}>
-                  <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>License Duration</label>
-                  <select id="lic-days" style={{ width:'100%', padding:'9px 12px', border:'1px solid #e2e8f0', borderRadius:8, fontSize:13 }}>
-                    <option value="30">30 Days (1 Month)</option>
-                    <option value="90">90 Days (3 Months)</option>
-                    <option value="180">180 Days (6 Months)</option>
-                    <option value="365" selected>365 Days (1 Year)</option>
-                    <option value="730">730 Days (2 Years)</option>
-                    <option value="3650">3650 Days (10 Years — Permanent)</option>
-                  </select>
+                <p style={{ margin:'0 0 14px', fontSize:12, color:'#64748b', lineHeight:1.55 }}>
+                  A licence for IlmForge desktop, the app that runs on the school's own computer without internet. It is checked on that computer and cannot be changed or made up.
+                </p>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+                  <div>
+                    <label htmlFor="lic-days" style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Valid for</label>
+                    <select id="lic-days" value={licForm.days} onChange={e => setLicForm(f => ({ ...f, days: e.target.value }))} style={{ width:'100%', padding:'9px 12px', border:'1px solid #e2e8f0', borderRadius:8, fontSize:13 }}>
+                      <option value="15">15 days (trial)</option>
+                      <option value="30">1 month</option>
+                      <option value="90">3 months</option>
+                      <option value="180">6 months</option>
+                      <option value="365">1 year</option>
+                      <option value="730">2 years</option>
+                      <option value="3650">10 years</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="lic-plan" style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Plan</label>
+                    <select id="lic-plan" value={licForm.plan} onChange={e => setLicForm(f => ({ ...f, plan: e.target.value }))} style={{ width:'100%', padding:'9px 12px', border:'1px solid #e2e8f0', borderRadius:8, fontSize:13 }}>
+                      <option value="free">Free</option>
+                      <option value="starter">Starter</option>
+                      <option value="standard">Standard</option>
+                      <option value="premium">Premium</option>
+                    </select>
+                  </div>
                 </div>
                 <div style={{ marginBottom:14 }}>
-                  <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Plan</label>
-                  <select id="lic-plan" style={{ width:'100%', padding:'9px 12px', border:'1px solid #e2e8f0', borderRadius:8, fontSize:13 }}>
-                    <option value="free">Free (100 students)</option>
-                    <option value="starter">Starter (300 students)</option>
-                    <option value="standard" selected>Standard (800 students)</option>
-                    <option value="premium">Premium (Unlimited)</option>
-                  </select>
+                  <label htmlFor="lic-machine" style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Computer ID <span style={{ fontWeight:400, color:'#94a3b8' }}>(optional)</span></label>
+                  <input id="lic-machine" value={licForm.machine} onChange={e => setLicForm(f => ({ ...f, machine: e.target.value.toUpperCase() }))} placeholder="e.g. 7F3A-91C2-0B5E-44D8"
+                    style={{ width:'100%', padding:'9px 12px', border:'1px solid #e2e8f0', borderRadius:8, fontSize:13, fontFamily:'monospace', boxSizing:'border-box' }} />
+                  <div style={{ fontSize:11, color:'#94a3b8', marginTop:4 }}>The ID IlmForge desktop shows on its licence screen. With it, the licence works on that computer only; leave it empty for any computer.</div>
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
-                  <button onClick={() => {
-                    const days = document.getElementById('lic-days').value;
-                    const plan = document.getElementById('lic-plan').value;
-                    licenseMut.mutate({ id: licenseModal.id, days: parseInt(days), plan });
-                  }} disabled={licenseMut.isPending}
+                  <button onClick={() => licenseMut.mutate({ id: licenseModal.id, days: parseInt(licForm.days, 10), plan: licForm.plan, machine: licForm.machine.trim() })} disabled={licenseMut.isPending}
                     style={{ flex:1, padding:'10px', background:'linear-gradient(135deg,#1B2F6E,#0073b7)', border:'none', borderRadius:9, color:'white', fontWeight:700, fontSize:13, cursor:'pointer' }}>
-                    {licenseMut.isPending ? 'Generating...' : '🔑 Generate License Key'}
+                    {licenseMut.isPending ? 'Making the licence…' : 'Make desktop licence'}
                   </button>
                   {licenseModal.licenseKey && (
-                    <button onClick={() => { if(window.confirm('Revoke this license? The school will no longer be able to run offline.')) revokeLicenseMut.mutate(licenseModal.id); }}
+                    <button onClick={() => { if (window.confirm('Revoke this licence? The school is suspended, and its desktop app stops the next time it is online.')) revokeLicenseMut.mutate(licenseModal.id); }}
                       style={{ padding:'10px 16px', background:'#fee2e2', border:'1px solid #fca5a5', borderRadius:9, color:'#dc2626', fontWeight:700, fontSize:12, cursor:'pointer' }}>
-                      ❌ Revoke
+                      Revoke
                     </button>
                   )}
                 </div>

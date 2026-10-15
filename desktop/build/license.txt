@@ -1,0 +1,44 @@
+IlmForge School Management System, Desktop Edition
+Licence agreement
+
+Please read this before installing.
+
+1. The licence
+IlmForge desktop runs only with a licence issued by IlmForge. A licence names
+the school, the plan and the last day it is valid. Some licences are for one
+computer only. You may install IlmForge on the computers your licence allows.
+You may not copy, change, sell or share the program or a licence with anyone
+else, or try to get around the licence check.
+
+2. Your school's data
+The records you enter (students, staff, fees, attendance, results and all
+others) belong to your school. They are kept on this computer, in the Windows
+user's AppData\Roaming\IlmForge folder, and are not sent anywhere by
+IlmForge. Installing, upgrading or uninstalling IlmForge does not remove them.
+
+You are responsible for keeping that data safe. IlmForge makes an automatic
+backup every day on this computer, but a backup on the same computer does not
+protect against a broken disk, theft or a virus. Save a backup copy to a USB
+drive or another place regularly (File > Save a backup copy).
+
+3. When the licence ends
+When a licence ends or is suspended, IlmForge stops opening the school's
+records until a new licence is entered. The records themselves stay on the
+computer and are not changed or removed.
+
+4. Internet
+IlmForge desktop works without internet. When the internet is available it
+may contact IlmForge to check that the licence is still in good standing.
+Only the licence number is sent. Features that by their nature need the
+internet (SMS, WhatsApp and email messages, AI help) work only when it is
+available.
+
+5. No warranty
+IlmForge is provided as it is. IlmForge is not liable for any loss of data or
+business that results from using it, including loss caused by not keeping
+backups, to the extent the law allows.
+
+6. Support
+WhatsApp 0346-5146609
+
+By clicking "I Agree" you accept this agreement on behalf of your school.

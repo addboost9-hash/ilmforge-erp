@@ -5,6 +5,7 @@ import React from 'react';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import OfflineStatus from './components/OfflineStatus';
 import useAuthStore from './store/auth.store';
+import { localServer } from './utils/desktop';
 import ErrorBoundary from './components/ErrorBoundary';
 import AdminLayout from './layouts/AdminLayout';
 import LandingPage from './pages/public/LandingPage';
@@ -163,6 +164,7 @@ import DailyBalancesheetPage from './pages/accounting/DailyBalancesheetPage';
 import AttendanceDeficitPage from './pages/attendance/AttendanceDeficitPage';
 // Previously unrouted — now wired
 import BackupPage              from './pages/backup/BackupPage';
+import DesktopPage             from './pages/settings/DesktopPage';
 import LicenseRenewalPage      from './pages/settings/LicenseRenewalPage';
 import AdmissionCRMPage        from './pages/crm/AdmissionCRMPage';
 import GatePassPage            from './pages/gatepass/GatePassPage';
@@ -291,10 +293,12 @@ const Public = ({ children }) => {
   const ok = useAuthStore(s => s.isAuthenticated);
   return ok ? <Navigate to="/dashboard" replace /> : children;
 };
-/* Home: landing if logged out, dashboard if logged in */
+/* Home: landing if logged out, dashboard if logged in. The desktop edition
+   is one school's own app: straight to sign-in. */
 const Home = () => {
   const ok = useAuthStore(s => s.isAuthenticated);
-  return ok ? <Navigate to="/dashboard" replace /> : <LandingPage />;
+  if (ok) return <Navigate to="/dashboard" replace />;
+  return localServer ? <Navigate to="/login" replace /> : <LandingPage />;
 };
 
 /* PortalRedirect — sends user to their role-specific portal */
@@ -355,7 +359,7 @@ export default function App() {
           {/* ── Public ──────────────────────────── */}
           <Route path="/"                element={<Home />} />
           <Route path="/login"           element={<SmartLogin />} />
-          <Route path="/register"        element={<Public><RegisterPage /></Public>} />
+          <Route path="/register"        element={localServer ? <Navigate to="/login" replace /> : <Public><RegisterPage /></Public>} />
           <Route path="/verify-phone"    element={<VerifyPhonePage />} />
           <Route path="/forgot-password" element={<Public><ForgotPasswordPage /></Public>} />
           <Route path="/reset-password"  element={<Public><ResetPasswordPage /></Public>} />
@@ -619,6 +623,7 @@ export default function App() {
 
             {/* ── Previously unrouted — now wired ── */}
             <Route path="/settings/backup"            element={<BackupPage />} />
+            <Route path="/settings/desktop"           element={<DesktopPage />} />
             <Route path="/settings/license"           element={<LicenseRenewalPage />} />
             <Route path="/admissions/crm"             element={<AdmissionCRMPage />} />
             <Route path="/gate-passes"                element={<GatePassPage />} />

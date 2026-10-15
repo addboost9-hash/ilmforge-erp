@@ -1,0 +1,76 @@
+{
+  "name": "ilmforge-desktop",
+  "productName": "IlmForge",
+  "version": "3.4.0",
+  "description": "IlmForge School Management System, desktop edition: works on this computer without internet",
+  "main": "main.js",
+  "author": "IlmForge",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "stage": "node scripts/build.js",
+    "dist": "node scripts/build.js && electron-builder --win nsis --publish never",
+    "test:e2e": "node tests/e2e.js"
+  },
+  "build": {
+    "appId": "com.ilmforge.desktop",
+    "productName": "IlmForge",
+    "copyright": "IlmForge",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**",
+      "pages/**",
+      "license-public.txt",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "app",
+        "to": ".",
+        "filter": [
+          "backend/**/*",
+          "frontend/**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "executableName": "IlmForge"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "IlmForge",
+      "menuCategory": false,
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "license": "build/license.txt",
+      "artifactName": "IlmForge-Setup-${version}.exe",
+      "uninstallDisplayName": "IlmForge School Management"
+    }
+  },
+  "devDependencies": {
+    "electron": "44.7.2",
+    "electron-builder": "26.15.3",
+    "playwright": "1.62.1"
+  }
+}

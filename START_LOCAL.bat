@@ -30,7 +30,7 @@ if not exist "%~dp0backend\prisma\dev.db" (
 
 :: Start Backend
 echo  Backend server shuru ho raha hai (Port 5000)...
-start "IlmForge Backend" cmd /k "cd /d "%~dp0backend" && set DATABASE_URL=file:./prisma/dev.db && set NODE_ENV=development && set PORT=5000 && set FRONTEND_URL=http://localhost:3000 && set APP_URL=http://localhost:5000 && set JWT_SECRET=IlmForgeLocal@2026#OfflineKey!XyZ789 && set JWT_EXPIRES_IN=24h && set PLATFORM_OWNER_KEY=IlmForge@GhulamMujtaba#PlatformOwner2026!Master && set LICENSE_SECRET=IlmForgeLicense@Secret#2026!OfflineKey && node src/server.js"
+start "IlmForge Backend" cmd /k "cd /d "%~dp0backend" && set DATABASE_URL=file:./prisma/dev.db && set NODE_ENV=development && set PORT=5000 && set FRONTEND_URL=http://localhost:3000 && set APP_URL=http://localhost:5000 && set JWT_SECRET=IlmForgeLocal@2026#OfflineKey!XyZ789 && set JWT_EXPIRES_IN=24h && set LICENSE_SECRET=IlmForgeLicense@Secret#2026!OfflineKey && node src/server.js"
 
 timeout /t 5 /nobreak >nul
 

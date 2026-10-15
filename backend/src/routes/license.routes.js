@@ -30,6 +30,10 @@ function validateKeyFormat(key) {
 
 // GET /api/v1/license/status — returns current license info
 router.get('/status', authMiddleware, (req, res) => {
+  // IlmForge desktop checks its own signed licence before the server starts.
+  if (process.env.ILMFORGE_DESKTOP === '1') {
+    return res.json({ success: true, data: { mode: 'desktop', message: 'Licensed by the IlmForge desktop app' } });
+  }
   const lic = readLicense();
   const isOffline = (process.env.DATABASE_URL || '').startsWith('file:');
 

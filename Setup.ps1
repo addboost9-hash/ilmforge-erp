@@ -176,17 +176,28 @@ function Run-Install($cfg) {
     S "Copying app files..." 20
     L ">>> Copying files to: $dir" "a"
     try{
+        # A reinstall replaces the program, never the school's records: the
+        # database and licence are put aside first and put back after the copy.
+        # (This used to delete the whole folder, database included.)
+        $keep = Join-Path $env:TEMP ("IlmForge-keep-" + (Get-Date -Format yyyyMMddHHmmss))
+        $kept = @()
+        foreach($f in @("backend\prisma\dev.db","backend\prisma\dev.db-wal","backend\prisma\dev.db-shm","backend\license.json","license.json")){
+            if(Test-Path "$dir\$f"){ $t = Join-Path $keep $f; New-Item -ItemType Directory -Path (Split-Path $t) -Force | Out-Null; Copy-Item "$dir\$f" $t -Force; $kept += $f }
+        }
+        if($kept.Count){ L "School data kept aside: $keep" "g" }
         if(Test-Path $dir){Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue}
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         Copy-Item "$APP_DIR\backend"  "$dir\backend"  -Recurse -Force
         Copy-Item "$APP_DIR\frontend" "$dir\frontend" -Recurse -Force
+        foreach($f in $kept){ $t = "$dir\$f"; New-Item -ItemType Directory -Path (Split-Path $t) -Force | Out-Null; Copy-Item (Join-Path $keep $f) $t -Force }
+        if($kept.Count){ L "School data put back ($($kept.Count) files)" "g" }
         L "Files copied OK" "g"
     }catch{L "Copy FAILED: $_" "r";$pf.Close();return $false}
 
     # 3 - Write .env for local SQLite (Prisma reads this automatically)
     S "Setting up local database config..." 35
     L ">>> Writing .env for SQLite..." "a"
-    $envContent = "DATABASE_URL=`"file:./prisma/dev.db`"`r`nNODE_ENV=production`r`nPORT=5000`r`nJWT_SECRET=IlmForgeLocal@2026#OfflineKey`r`nJWT_EXPIRES_IN=24h`r`nPLATFORM_OWNER_KEY=IlmForge@GhulamMujtaba#PlatformOwner2026!Master`r`nLICENSE_SECRET=IlmForgeLicense@Secret#2026!OfflineKey`r`nFRONTEND_URL=http://localhost:3000`r`nAPP_URL=http://localhost:5000"
+    $envContent = "DATABASE_URL=`"file:./prisma/dev.db`"`r`nNODE_ENV=production`r`nPORT=5000`r`nJWT_SECRET=IlmForgeLocal@2026#OfflineKey`r`nJWT_EXPIRES_IN=24h`r`nLICENSE_SECRET=IlmForgeLicense@Secret#2026!OfflineKey`r`nFRONTEND_URL=http://localhost:3000`r`nAPP_URL=http://localhost:5000"
     [System.IO.File]::WriteAllText("$dir\backend\.env", $envContent, [System.Text.Encoding]::ASCII)
     L ".env file written" "g"
 
@@ -240,7 +251,6 @@ function Run-Install($cfg) {
     $bat += "set PORT=5000`r`n"
     $bat += "set JWT_SECRET=IlmForgeLocal@2026#OfflineKey`r`n"
     $bat += "set JWT_EXPIRES_IN=24h`r`n"
-    $bat += "set PLATFORM_OWNER_KEY=IlmForge@GhulamMujtaba#PlatformOwner2026!Master`r`n"
     $bat += "set LICENSE_SECRET=IlmForgeLicense@Secret#2026!OfflineKey`r`n"
     $bat += "set FRONTEND_URL=http://localhost:3000`r`n"
     $bat += "set APP_URL=http://localhost:5000`r`n"

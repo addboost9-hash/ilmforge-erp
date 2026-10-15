@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <title>IlmForge could not start</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="main">
+    <header>
+      <h2>IlmForge could not start</h2>
+      <p>The school's data is safe: nothing was removed.</p>
+    </header>
+    <div class="note bad" id="message"></div>
+    <section class="panel">
+      <div class="label">What to do</div>
+      <ol class="how">
+        <li>Close IlmForge and open it again.</li>
+        <li>Restart the computer if it happens again.</li>
+        <li>Still not working? Send the files in the logs folder to IlmForge support on WhatsApp <b>0346-5146609</b>.</li>
+      </ol>
+      <div class="row">
+        <button class="btn ghost" id="logs" type="button">Open the logs folder</button>
+        <button class="btn ghost" id="data" type="button">Open the data folder</button>
+        <span class="grow"></span>
+        <button class="btn" id="quit" type="button">Close IlmForge</button>
+      </div>
+    </section>
+  </main>
+  <script src="error.js"></script>
+</body>
+</html>
