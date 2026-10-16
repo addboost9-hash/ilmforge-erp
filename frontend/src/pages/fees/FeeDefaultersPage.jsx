@@ -3,20 +3,25 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import useAuthStore from '../../store/auth.store';
 import { feePeriod } from '../../utils/feeMonth';
 import { MessageSquare, DollarSign, AlertTriangle, RefreshCw, Printer } from 'lucide-react';
 
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const rs = (paisa) => (Number(paisa || 0) / 100).toLocaleString('en-PK');
+
 function printDefaultersReport(invoices, schoolName) {
-  // Group by parent
+  // One family per father's name and phone: by name alone, two families
+  // with a father called Muhammad Ali were printed as one.
   const byParent = {};
   invoices.forEach(inv => {
-    const parentId = inv.student?.parent?.id || inv.student?.fatherName || 'unknown';
+    const parentId = `${(inv.student?.fatherName || '').trim().toLowerCase()}|${inv.student?.emergencyPhone || inv.studentId}`;
     if (!byParent[parentId]) {
       byParent[parentId] = {
-        parentName: inv.student?.fatherName || inv.student?.parent?.name || '—',
-        phone:      inv.student?.emergencyPhone || inv.student?.parent?.phone || '00',
-        whatsapp:   inv.student?.parent?.phone || '',
-        cnic:       inv.student?.parent?.cnic  || '',
+        parentName: inv.student?.fatherName || '—',
+        phone:      inv.student?.emergencyPhone || '—',
+        whatsapp:   inv.student?.motherPhone || inv.student?.emergencyPhone || '',
+        cnic:       inv.student?.fatherCnic || '',
         children:   [],
       };
     }
@@ -24,31 +29,38 @@ function printDefaultersReport(invoices, schoolName) {
   });
 
   const rows = Object.entries(byParent).map(([, p], idx) => {
-    const childRows = p.children.map((c, ci) => `
+    // Amounts are kept in paisa: they printed a hundred times too large.
+    const kids = {};
+    p.children.forEach(c => { (kids[c.studentId] = kids[c.studentId] || []).push(c); });
+    const childRows = Object.values(kids).map((bills, ci) => {
+      const s = bills[0].student || {};
+      return `
       <tr>
         <td>Child : ${ci + 1}</td>
-        <td>Roll : ${c.student?.rollNo || '—'}</td>
-        <td colspan="2">Name: ${c.student?.name || '—'}</td>
-        <td>Class/Section : ${c.student?.class?.name || '—'}</td>
-        <td>Unpaid Invoices : ${1}</td>
-        <td>Total Amount: ${Number(c.dueAmount || 0).toLocaleString('en-PK')}</td>
-      </tr>`).join('');
+        <td>Roll : ${esc(s.rollNo || '—')}</td>
+        <td colspan="2">Name: ${esc(s.name || '—')}</td>
+        <td>Class/Section : ${esc([s.class?.name, s.section?.name].filter(Boolean).join(' / ') || '—')}</td>
+        <td>Unpaid Invoices : ${bills.length}</td>
+        <td>Total Amount: Rs. ${rs(bills.reduce((t, c) => t + Number(c.dueAmount || 0), 0))}</td>
+      </tr>`;
+    }).join('');
     const total = p.children.reduce((s, c) => s + Number(c.dueAmount || 0), 0);
     return `
       <tr style="background:#e5e7eb">
         <td><strong>PARENT# ${idx + 1}</strong></td>
-        <td>P. NAME : ${p.parentName}</td>
-        <td>PHONE : ${p.phone}</td>
-        <td>WHATSAPP : ${p.whatsapp}</td>
-        <td colspan="3">CNIC : ${p.cnic}</td>
+        <td>P. NAME : ${esc(p.parentName)}</td>
+        <td>PHONE : ${esc(p.phone)}</td>
+        <td>WHATSAPP : ${esc(p.whatsapp)}</td>
+        <td colspan="3">CNIC : ${esc(p.cnic)}</td>
       </tr>
       ${childRows}
       <tr>
-        <td colspan="5" style="padding-left:12px">Total Invoices : ${p.children.length} - Amount Due : ${total.toLocaleString('en-PK')}</td>
+        <td colspan="5" style="padding-left:12px">Total Invoices : ${p.children.length} - Amount Due : Rs. ${rs(total)}</td>
         <td colspan="2">Remarks (if any) : ___________________________</td>
       </tr>`;
   }).join('');
 
+  schoolName = esc(schoolName);
   const html = `<!DOCTYPE html><html><head><title>Defaulters Report — ${schoolName}</title>
     <style>
       body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 20px; }
@@ -60,7 +72,7 @@ function printDefaultersReport(invoices, schoolName) {
     </style>
   </head><body>
     <h2>${schoolName}</h2>
-    <h3>Defaulter Parents Report | Main Campus</h3>
+    <h3>Defaulter Parents Report</h3>
     <div style="text-align:right;margin-bottom:8px">
       <button class="no-print" onclick="window.print()" style="background:#dc2626;color:#fff;border:none;padding:7px 18px;border-radius:6px;cursor:pointer;font-size:12px">
         🖨️ Print Report
@@ -72,6 +84,7 @@ function printDefaultersReport(invoices, schoolName) {
     </div>
   </body></html>`;
   const w = window.open('', '_blank', 'width=1000,height=700');
+  if (!w) { toast.error('Allow pop-ups for this site to print.'); return; }
   w.document.write(html); w.document.close();
 }
 
@@ -79,64 +92,36 @@ const money = v => 'Rs. ' + ((v||0)/100).toLocaleString();
 
 export default function FeeDefaultersPage() {
   const [filter, setFilter] = useState('');
-  const [reminderProgress, setReminderProgress] = useState(null); // null | { sent, total }
+  // SMS or WhatsApp, through the school's own account (Settings → Channels).
+  const [channel, setChannel] = useState('sms');
+  const schoolName = useAuthStore(s => s.school?.name || s.branding?.schoolName || 'School');
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['defaulters'],
-    queryFn: () => api.get('/fees/defaulters').then(r => r.data),
+    queryFn: () => api.get('/fees/defaulters?limit=500').then(r => r.data),
   });
 
   // Derive invoices early so mutations can close over the ref
   const invoices = data?.data || [];
 
-  // Bulk reminder: collect all unique parent phones from defaulter invoices, then POST /notifications/sms
+  // The server writes each parent's reminder with the amount due and the
+  // months, in the school's words, and counts only what went. This sent one
+  // generic text signed "IlmForge School" and counted every number as sent.
   const sendSMS = useMutation({
-    mutationFn: async () => {
-      const phones = [...new Set(
-        invoices
-          .map(inv => inv.student?.emergencyPhone || inv.student?.parent?.phone)
-          .filter(Boolean)
-      )];
-      if (!phones.length) throw new Error('No phone numbers available for defaulters.');
-      const total = phones.length;
-      setReminderProgress({ sent: 0, total });
-      const message = `Dear Parent, your child has an outstanding fee balance. Please clear dues at the earliest. — IlmForge School`;
-      // Send in batches of 10, updating progress between batches
-      const batchSize = 10;
-      let sent = 0;
-      for (let i = 0; i < phones.length; i += batchSize) {
-        const batch = phones.slice(i, i + batchSize);
-        await api.post('/notifications/sms', { phones: batch, message });
-        sent += batch.length;
-        setReminderProgress({ sent, total });
-      }
-      return { sent, total };
-    },
-    onSuccess: ({ sent, total }) => {
-      setReminderProgress({ sent, total, done: true });
-      toast.success(`Sent to ${sent} parent${sent !== 1 ? 's' : ''} successfully!`);
-      setTimeout(() => setReminderProgress(null), 4000);
-    },
-    onError: err => {
-      setReminderProgress(null);
-      toast.error(err.response?.data?.message || err.message || 'Failed to send SMS reminder');
-    },
+    mutationFn: () => api.post('/fees/defaulters/sms', { channel }).then(r => r.data),
+    onSuccess: (d) => (d.data?.sent > 0 ? toast.success(d.message, { duration: 7000 }) : toast.error(d.message, { duration: 7000 })),
+    onError: err => toast.error(err.response?.data?.message || 'Failed to send reminders'),
   });
 
   // Per-student reminder
   const sendSingleSMS = useMutation({
-    mutationFn: (inv) => {
-      const phone = inv.student?.emergencyPhone || inv.student?.parent?.phone;
-      if (!phone) return Promise.reject(new Error('No phone number for this student.'));
-      const message = `Dear Parent, ${inv.student?.name || 'your child'} has an outstanding fee of Rs. ${((inv.dueAmount || 0) / 100).toLocaleString()}. Please clear dues at the earliest. — IlmForge School`;
-      return api.post('/notifications/sms', { phones: [phone], message });
-    },
-    onSuccess: () => toast.success('Reminder sent to parent.'),
-    onError: err => toast.error(err.response?.data?.message || err.message || 'Failed to send reminder'),
+    mutationFn: (inv) => api.post('/fees/defaulters/sms', { channel, studentIds: [inv.studentId] }).then(r => r.data),
+    onSuccess: (d) => (d.data?.sent > 0 ? toast.success(d.message) : toast.error(d.message, { duration: 6000 })),
+    onError: err => toast.error(err.response?.data?.message || 'Failed to send reminder'),
   });
   const filtered = filter ? invoices.filter(i => i.student?.name?.toLowerCase().includes(filter.toLowerCase())) : invoices;
-  const totalDue = invoices.reduce((s, i) => s + (i.dueAmount||0), 0);
-  const uniqueStudents = new Set(invoices.map(i => i.studentId)).size;
+  const totalDue = data?.summary?.totalDue ?? invoices.reduce((s, i) => s + (i.dueAmount||0), 0);
+  const uniqueStudents = data?.summary?.students ?? new Set(invoices.map(i => i.studentId)).size;
 
   return (
     <div className="page-content fade-in">
@@ -150,16 +135,16 @@ export default function FeeDefaultersPage() {
         </div>
         <div style={{display:'flex', gap:8}}>
           <button aria-label="Refresh" className="btn btn-outline btn-sm" onClick={() => refetch()}><RefreshCw size={13}/></button>
-          <button className="btn btn-outline btn-sm" onClick={() => printDefaultersReport(invoices, localStorage.getItem('registeredSchoolName') || 'IlmForge School')}>
+          <button className="btn btn-outline btn-sm" onClick={() => printDefaultersReport(invoices, schoolName)}>
             <Printer size={13}/> Print Report
           </button>
-          <button className="btn btn-primary" onClick={() => sendSMS.mutate()} disabled={sendSMS.isPending || invoices.length===0}>
+          <select aria-label="Send by" className="form-select" style={{width:'auto', height:34, fontSize:13}} value={channel} onChange={e => setChannel(e.target.value)}>
+            <option value="sms">By SMS</option>
+            <option value="whatsapp">By WhatsApp</option>
+          </select>
+          <button className="btn btn-primary" onClick={() => { if (window.confirm(`Send a fee reminder by ${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} to the parents of all ${uniqueStudents} defaulter(s)?`)) sendSMS.mutate(); }} disabled={sendSMS.isPending || invoices.length===0}>
             <MessageSquare size={15}/>
-            {sendSMS.isPending && reminderProgress
-              ? `Sending... ${reminderProgress.sent}/${reminderProgress.total}`
-              : reminderProgress?.done
-              ? `Sent to ${reminderProgress.sent} parents`
-              : 'Send Reminders to All Defaulters'}
+            {sendSMS.isPending ? 'Sending…' : 'Send Reminders to All Defaulters'}
           </button>
         </div>
       </div>
@@ -221,7 +206,7 @@ export default function FeeDefaultersPage() {
                     <td><span className={`badge ${inv.status==='partial'?'badge-amber':'badge-red'}`}>{inv.status}</span></td>
                     <td>
                       <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
-                        <Link to="/fees/collect" className="btn btn-sm btn-teal"><DollarSign size={12}/> Collect</Link>
+                        <Link to={`/fees/collect?student=${inv.studentId}`} className="btn btn-sm btn-teal"><DollarSign size={12}/> Collect</Link>
                         <button
                           className="btn btn-sm btn-amber"
                           title="Send SMS reminder to parent"

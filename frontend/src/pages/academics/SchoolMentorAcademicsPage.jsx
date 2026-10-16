@@ -8,10 +8,11 @@
  * v4.0 — Onboarding wizard, animated tab switching, month progress indicator,
  *         AI sparkle button, animated calendar date cards, staggered textbook rows
  */
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import useAuthStore from '../../store/auth.store';
 import {
   Trash2, X, Eye, Bell, FileText, Plus, Edit2, Save,
 } from 'lucide-react';
@@ -581,54 +582,81 @@ function CalendarTab() {
 
 /* ═══════════════════════════════════════════════════════════════
    TEXTBOOKS EXPANDED — shows textbooks for a class
-   Reads/writes from localStorage (no backend API for textbooks)
+   Kept with the school (GET/PUT /classes/:id/textbooks). They used to be in
+   this browser's localStorage only; what it held is moved over once.
 ═══════════════════════════════════════════════════════════════ */
 function TextbooksExpanded({ classId, className }) {
-  const storageKey = `sm_textbooks_${classId}`;
-
-  const [books, setBooks] = useState(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
+  const legacyKey = `sm_textbooks_${classId}`;
+  const qc = useQueryClient();
+  const role = useAuthStore(s => s.user?.role);
+  const canEdit = ['admin', 'super_admin'].includes(role);
+  const { data: books = [], isLoading, error } = useQuery({
+    queryKey: ['textbooks', classId],
+    queryFn: () => api.get(`/classes/${classId}/textbooks`).then(r => r.data.data || []),
+  });
+  const saveList = useMutation({
+    mutationFn: (list) => api.put(`/classes/${classId}/textbooks`, { books: list }).then(r => r.data.data),
+    onSuccess: (data) => qc.setQueryData(['textbooks', classId], data),
   });
 
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ subject: '', title: '', publisher: '', edition: '' });
 
-  const saveBooks = (updated) => {
-    setBooks(updated);
-    localStorage.setItem(storageKey, JSON.stringify(updated));
+  // What this browser kept before: moved to the server once, if the class has none there yet.
+  const moved = useRef(false);
+  useEffect(() => {
+    if (moved.current || isLoading || error || !canEdit || books.length) return;
+    let local = null;
+    try { local = JSON.parse(localStorage.getItem(legacyKey) || 'null'); } catch { local = null; }
+    if (!Array.isArray(local) || !local.some(b => String(b?.title || '').trim())) return;
+    moved.current = true;
+    saveList.mutate(local.filter(b => String(b?.title || '').trim()), {
+      onSuccess: () => { try { localStorage.removeItem(legacyKey); } catch { /* blocked */ } },
+    });
+  }, [isLoading, error, books.length, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const store = async (list, done) => {
+    try {
+      await saveList.mutateAsync(list);
+      toast.success(done);
+      return true;
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'It could not be saved. Try again.');
+      return false;
+    }
   };
 
-  const addBook = () => {
+  const addBook = async () => {
+    if (saveList.isPending) return;
     if (!form.title.trim()) { toast.error('Title is required'); return; }
-    const newBook = { id: Date.now(), subject: form.subject, title: form.title, publisher: form.publisher, edition: form.edition };
-    saveBooks([...books, newBook]);
-    setForm({ subject: '', title: '', publisher: '', edition: '' });
-    setShowAdd(false);
-    toast.success('Textbook added!');
+    if (await store([...books, { subject: form.subject, title: form.title, publisher: form.publisher, edition: form.edition }], 'Textbook added')) {
+      setForm({ subject: '', title: '', publisher: '', edition: '' });
+      setShowAdd(false);
+    }
   };
 
   const removeBook = (id) => {
-    saveBooks(books.filter(b => b.id !== id));
-    toast.success('Removed');
+    if (saveList.isPending) return;
+    if (!window.confirm('Remove this textbook from the list?')) return;
+    store(books.filter(b => b.id !== id), 'Removed');
   };
 
   return (
     <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: 16, margin: '4px 0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <span style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>Textbooks — {className}</span>
+        {canEdit && (
         <button
           onClick={() => setShowAdd(s => !s)}
           style={{ background: '#eff6ff', color: TEAL, border: `1px solid ${TEAL}40`, borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
         >
           <Plus size={13} /> Add Textbook
         </button>
+        )}
       </div>
 
       {/* Add form */}
-      {showAdd && (
+      {showAdd && canEdit && (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: 14, marginBottom: 14 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
@@ -650,16 +678,22 @@ function TextbooksExpanded({ classId, className }) {
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button onClick={() => setShowAdd(false)} style={{ padding: '6px 14px', borderRadius: 6, border: '1.5px solid #D1D5DB', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Cancel</button>
-            <button onClick={addBook} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: TEAL, color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Save size={12} /> Save
+            <button onClick={addBook} disabled={saveList.isPending} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: TEAL, color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Save size={12} /> {saveList.isPending ? 'Saving…' : 'Save'}
             </button>
           </div>
         </div>
       )}
 
-      {books.length === 0 ? (
+      {isLoading ? (
+        <div style={{ textAlign: 'center', padding: '20px 0', color: '#94A3B8', fontSize: 13 }}>Loading…</div>
+      ) : error ? (
+        <div style={{ textAlign: 'center', padding: '20px 0', color: RED, fontSize: 13 }}>
+          {error.response?.data?.message || 'The textbooks could not be loaded.'}
+        </div>
+      ) : books.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '20px 0', color: '#94A3B8', fontSize: 13, fontStyle: 'italic' }}>
-          No textbooks added yet. Click "Add Textbook" to add.
+          {canEdit ? 'No textbooks added yet. Click "Add Textbook" to add.' : 'No textbooks have been listed for this class yet.'}
         </div>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -679,12 +713,15 @@ function TextbooksExpanded({ classId, className }) {
                 <td style={{ padding: '8px 10px', color: '#64748B' }}>{b.publisher}</td>
                 <td style={{ padding: '8px 10px', color: '#64748B' }}>{b.edition}</td>
                 <td style={{ padding: '8px 10px' }}>
+                  {canEdit && (
                   <button aria-label="Delete"
                     onClick={() => removeBook(b.id)}
+                    disabled={saveList.isPending}
                     style={{ background: '#FEE2E2', color: RED, border: 'none', borderRadius: 5, padding: '3px 7px', cursor: 'pointer', fontSize: 11 }}
                   >
                     <Trash2 size={11} />
                   </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -699,8 +736,6 @@ function TextbooksExpanded({ classId, className }) {
    TEXTBOOKS TAB — shows classes list with expand ▼
    Animated stagger on expanded subject rows
 ═══════════════════════════════════════════════════════════════ */
-const DEFAULT_SUBJECTS_FULL  = ['English', 'Urdu', 'Mathematics', 'Science', 'Islamiyat'];
-const DEFAULT_SUBJECTS_SHORT = ['English', 'Urdu', 'Mathematics'];
 
 function TextbooksTab() {
   const [expanded, setExpanded] = useState({});
@@ -710,16 +745,19 @@ function TextbooksTab() {
     queryFn: () => api.get('/classes').then(r => r.data.data || []).catch(() => []),
   });
 
+  // Each class's own subjects (Settings → Subjects). This tab listed the
+  // same made-up five subjects for every class, with invented textbooks.
+  const { data: allSubjects = [] } = useQuery({
+    queryKey: ['subjects-all'],
+    queryFn: () => api.get('/classes/subjects').then(r => r.data.data || []).catch(() => []),
+  });
+  const subjectsOf = (classId) => allSubjects.filter(x => x.classId === classId);
+
   const toggle = (id) => setExpanded(p => ({ ...p, [id]: !p[id] }));
 
-  // Fallback demo classes if API returns empty
-  const displayClasses = classes.length > 0 ? classes : [
-    { id: 'g1', name: 'Grade 1' },
-    { id: 'g2', name: 'Grade 2' },
-    { id: 'g3', name: 'Grade 3' },
-    { id: 'g4', name: 'Grade 4' },
-    { id: 'g5', name: 'Grade 5' },
-  ];
+  // The school's own classes only (made-up "Grade 1-5" rows used to show
+  // when there were none, and led nowhere).
+  const displayClasses = classes;
 
   return (
     <div style={{ background: 'white', borderRadius: 8, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
@@ -736,11 +774,15 @@ function TextbooksTab() {
             <tr>
               <td colSpan={3} style={{ padding: 32, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Loading classes…</td>
             </tr>
+          ) : !displayClasses.length ? (
+            <tr>
+              <td colSpan={3} style={{ padding: 32, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
+                No classes yet. Add your classes in School Settings → Classes, then their subjects and syllabus appear here.
+              </td>
+            </tr>
           ) : (
             displayClasses.map((cls, i) => {
-              const subjects = (cls.sections && cls.sections.length > 0)
-                ? DEFAULT_SUBJECTS_FULL
-                : DEFAULT_SUBJECTS_SHORT;
+              const subjects = subjectsOf(cls.id);
               return (
                 <>
                   <tr key={cls.id} style={{ borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
@@ -779,8 +821,8 @@ function TextbooksTab() {
                               <tr style={{ background: '#dbeafe' }}>
                                 <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>S. No.</th>
                                 <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>Subject</th>
-                                <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>Textbook</th>
-                                <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>Publisher</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>Code</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left', color: TEAL }}>Exam marks</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -794,13 +836,21 @@ function TextbooksTab() {
                                   }}
                                 >
                                   <td style={{ padding: '8px 12px' }}>{si + 1}</td>
-                                  <td style={{ padding: '8px 12px', color: TEAL, fontWeight: 600 }}>{subj}</td>
-                                  <td style={{ padding: '8px 12px' }}>{subj} Textbook – {cls.name}</td>
-                                  <td style={{ padding: '8px 12px', color: '#6b7280' }}>PTBB</td>
+                                  <td style={{ padding: '8px 12px', color: TEAL, fontWeight: 600 }}>{subj.name}</td>
+                                  <td style={{ padding: '8px 12px', color: '#6b7280' }}>{subj.code || '—'}</td>
+                                  <td style={{ padding: '8px 12px' }}>{subj.totalMarks}</td>
                                 </tr>
                               ))}
+                              {!subjects.length && (
+                                <tr><td colSpan={4} style={{ padding: '10px 12px', color: '#6b7280' }}>No subjects for {cls.name} yet. Add them in School Settings → Subjects.</td></tr>
+                              )}
                             </tbody>
                           </table>
+                          {/* The class's books, kept with the school. This list
+                              existed but was never shown on the Textbooks tab. */}
+                          <div style={{ marginTop: 12 }}>
+                            <TextbooksExpanded classId={cls.id} className={cls.name} />
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -1023,31 +1073,48 @@ function LessonPlanViewModal({ plan, onClose }) {
 /* ═══════════════════════════════════════════════════════════════
    SESSION & TERM SETTING TAB
 ═══════════════════════════════════════════════════════════════ */
+const TERMS_KEY = ['session-terms'];
+const LEGACY_TERMS = 'sm_session_settings';
+const useSessionTerms = () => useQuery({
+  queryKey: TERMS_KEY,
+  queryFn: () => api.get('/lesson-plans/terms').then(r => r.data.data || {}),
+});
+
+/* Kept with the school (GET/PUT /lesson-plans/terms) so every computer and
+   teacher sees the same dates. They used to be saved in this browser only. */
 function SessionTermSettingTab() {
-  const [form, setForm] = useState(() => {
-    try {
-      const saved = localStorage.getItem('sm_session_settings');
-      return saved ? JSON.parse(saved) : {
-        sessionName: '2025-2026', sessionStart: '2025-09-01', sessionEnd: '2026-06-30',
-        term1Start: '2026-03-01', term1End: '2026-06-30',
-        term2Start: '2026-09-01', term2End: '2026-11-30',
-      };
-    } catch {
-      return {
-        sessionName: '2025-2026', sessionStart: '2025-09-01', sessionEnd: '2026-06-30',
-        term1Start: '2026-03-01', term1End: '2026-06-30',
-        term2Start: '2026-09-01', term2End: '2026-11-30',
-      };
-    }
-  });
+  const qc = useQueryClient();
+  const role = useAuthStore(s => s.user?.role);
+  const canEdit = ['admin', 'super_admin'].includes(role);
+  const { data, isLoading, error } = useSessionTerms();
+  const EMPTY = { sessionName: '', sessionStart: '', sessionEnd: '', term1Start: '', term1End: '', term2Start: '', term2End: '' };
+  const [form, setForm] = useState(EMPTY);
+  const filled = useRef(false);
+  useEffect(() => {
+    if (!data || filled.current) return;
+    filled.current = true;
+    let local = null;
+    if (!data.saved) { try { local = JSON.parse(localStorage.getItem(LEGACY_TERMS) || 'null'); } catch { local = null; } }
+    const src = local && typeof local === 'object' ? local : data;
+    setForm(Object.fromEntries(Object.keys(EMPTY).map(k => [k, src[k] || ''])));
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
   const [saved, setSaved] = useState(false);
 
-  const handleSave = () => {
-    localStorage.setItem('sm_session_settings', JSON.stringify(form));
-    setSaved(true);
-    toast.success('Session settings saved!');
-    setTimeout(() => setSaved(false), 2000);
-  };
+  const save = useMutation({
+    mutationFn: (body) => api.put('/lesson-plans/terms', body).then(r => r.data.data),
+    onSuccess: (d) => {
+      qc.setQueryData(TERMS_KEY, d);
+      try { localStorage.removeItem(LEGACY_TERMS); } catch { /* blocked */ }
+      setSaved(true);
+      toast.success('Session settings saved');
+      setTimeout(() => setSaved(false), 2000);
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'It could not be saved. Try again.'),
+  });
+  const handleSave = () => { if (!save.isPending) save.mutate(form); };
+
+  if (isLoading) return <div style={{ padding: 30, textAlign: 'center', color: '#94A3B8' }}>Loading…</div>;
+  if (error) return <div style={{ padding: 30, textAlign: 'center', color: RED }}>{error.response?.data?.message || 'The session settings could not be loaded.'}</div>;
 
   return (
     <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
@@ -1059,15 +1126,15 @@ function SessionTermSettingTab() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18, marginBottom: 20 }}>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Session Name</label>
-            <input style={inp} value={form.sessionName} onChange={e => setForm(f => ({ ...f, sessionName: e.target.value }))} placeholder="e.g. 2025-2026" />
+            <input style={inp} disabled={!canEdit} value={form.sessionName} onChange={e => setForm(f => ({ ...f, sessionName: e.target.value }))} placeholder="e.g. 2025-2026" />
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Session Start Date</label>
-            <input type="date" style={inp} value={form.sessionStart} onChange={e => setForm(f => ({ ...f, sessionStart: e.target.value }))} />
+            <input type="date" style={inp} disabled={!canEdit} value={form.sessionStart} onChange={e => setForm(f => ({ ...f, sessionStart: e.target.value }))} />
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Session End Date</label>
-            <input type="date" style={inp} value={form.sessionEnd} onChange={e => setForm(f => ({ ...f, sessionEnd: e.target.value }))} />
+            <input type="date" style={inp} disabled={!canEdit} value={form.sessionEnd} onChange={e => setForm(f => ({ ...f, sessionEnd: e.target.value }))} />
           </div>
         </div>
 
@@ -1077,11 +1144,11 @@ function SessionTermSettingTab() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Start Date</label>
-              <input type="date" style={inp} value={form.term1Start} onChange={e => setForm(f => ({ ...f, term1Start: e.target.value }))} />
+              <input type="date" style={inp} disabled={!canEdit} value={form.term1Start} onChange={e => setForm(f => ({ ...f, term1Start: e.target.value }))} />
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>End Date</label>
-              <input type="date" style={inp} value={form.term1End} onChange={e => setForm(f => ({ ...f, term1End: e.target.value }))} />
+              <input type="date" style={inp} disabled={!canEdit} value={form.term1End} onChange={e => setForm(f => ({ ...f, term1End: e.target.value }))} />
             </div>
           </div>
         </div>
@@ -1092,23 +1159,29 @@ function SessionTermSettingTab() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Start Date</label>
-              <input type="date" style={inp} value={form.term2Start} onChange={e => setForm(f => ({ ...f, term2Start: e.target.value }))} />
+              <input type="date" style={inp} disabled={!canEdit} value={form.term2Start} onChange={e => setForm(f => ({ ...f, term2Start: e.target.value }))} />
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>End Date</label>
-              <input type="date" style={inp} value={form.term2End} onChange={e => setForm(f => ({ ...f, term2End: e.target.value }))} />
+              <input type="date" style={inp} disabled={!canEdit} value={form.term2End} onChange={e => setForm(f => ({ ...f, term2End: e.target.value }))} />
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        {canEdit ? (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
+          {!data?.saved && <span style={{ fontSize: 12, color: '#64748B' }}>Not saved yet: these dates are a suggestion from the academic session.</span>}
           <button
             onClick={handleSave}
+            disabled={save.isPending}
             style={{ background: saved ? '#16A34A' : TEAL, color: '#fff', border: 'none', borderRadius: 7, padding: '10px 28px', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, transition: 'background .2s' }}
           >
-            <Save size={14} /> {saved ? 'Saved!' : 'Save Settings'}
+            <Save size={14} /> {save.isPending ? 'Saving…' : saved ? 'Saved!' : 'Save Settings'}
           </button>
         </div>
+        ) : (
+          <div style={{ fontSize: 12, color: '#64748B', textAlign: 'right' }}>Set by the administrator.</div>
+        )}
       </div>
     </div>
   );
@@ -1118,12 +1191,7 @@ function SessionTermSettingTab() {
    TERM BREAKUP TAB
 ═══════════════════════════════════════════════════════════════ */
 function TermBreakupTab() {
-  const sessionSettings = (() => {
-    try {
-      const saved = localStorage.getItem('sm_session_settings');
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
-  })();
+  const { data: sessionSettings, isLoading } = useSessionTerms();
 
   const calcWeeks = (start, end) => {
     if (!start || !end) return '—';
@@ -1131,16 +1199,22 @@ function TermBreakupTab() {
     return Math.max(0, Math.round(diff));
   };
 
+  // School days, Monday to Saturday, both ends counted. This was the plain
+  // count of days between the dates, Sundays included.
   const calcDays = (start, end) => {
     if (!start || !end) return '—';
-    const diff = (new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24);
-    return Math.max(0, Math.round(diff));
+    let n = 0;
+    for (let d = new Date(`${start}T00:00:00Z`), e = new Date(`${end}T00:00:00Z`); d <= e; d = new Date(d.getTime() + 864e5)) {
+      if (d.getUTCDay() !== 0) n++;
+    }
+    return n;
   };
 
-  const term1Start = sessionSettings?.term1Start || '2026-03-02';
-  const term1End   = sessionSettings?.term1End   || '2026-06-30';
-  const term2Start = sessionSettings?.term2Start || '2026-09-01';
-  const term2End   = sessionSettings?.term2End   || '2026-11-30';
+  if (isLoading) return <div style={{ padding: 30, textAlign: 'center', color: '#94A3B8' }}>Loading…</div>;
+  if (!sessionSettings?.term1Start) {
+    return <div style={{ padding: 30, textAlign: 'center', color: '#64748B', fontSize: 13 }}>The terms have not been set. The administrator sets them under Session &amp; Term Setting.</div>;
+  }
+  const { term1Start, term1End, term2Start, term2End } = sessionSettings;
 
   const termData = [
     { term: '1st Term', start: term1Start, end: term1End, weeks: calcWeeks(term1Start, term1End), workingDays: calcDays(term1Start, term1End) },
@@ -1156,7 +1230,7 @@ function TermBreakupTab() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#F8FAFC' }}>
-              {['Term', 'Start Date', 'End Date', 'Total Weeks', 'Total Working Days'].map(h => (
+              {['Term', 'Start Date', 'End Date', 'Total Weeks', 'Working Days (Mon–Sat)'].map(h => (
                 <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#374151', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
               ))}
             </tr>
@@ -1205,7 +1279,12 @@ function CreateLessonPlanTab() {
     return () => clearInterval(interval);
   }, [aiLoading]);
 
-  const subjectsForClass = classes.find(c => String(c.id) === String(form.classId))?.subjects || [];
+  // The class list carries no subjects, so this list was always empty.
+  const { data: subjectsForClass = [] } = useQuery({
+    queryKey: ['class-subjects', form.classId],
+    queryFn: () => api.get(`/classes/${form.classId}/subjects`).then(r => r.data.data || []).catch(() => []),
+    enabled: !!form.classId,
+  });
 
   const addTopic = () => setTopics(t => [...t, {
     id: Date.now(), topicName: '', mainQuestion: '', questionType: 'table', details: '',
@@ -1215,21 +1294,33 @@ function CreateLessonPlanTab() {
     t.map(tp => tp.id === id ? { ...tp, [field]: value } : tp)
   );
 
-  const handleAIGenerate = () => {
+  /* Real AI help (POST /lesson-plans/generate-ai). This used to wait three
+     seconds and fill in the same sample questions whatever the topic. */
+  const handleAIGenerate = async () => {
     if (aiLoading) return;
+    const cls = classes.find(c => String(c.id) === String(form.classId));
+    const subject = subjectsForClass.find(s => String(s.id) === String(form.subjectId));
+    if (!cls || !subject || !form.unitName.trim()) return toast.error('Choose the class and subject and type the unit name first.');
     setAiLoading(true);
-    // Simulate AI generation (3 seconds)
-    setTimeout(() => {
+    try {
+      const r = await api.post('/lesson-plans/generate-ai', {
+        subject: subject.name, className: cls.name, topic: form.unitName.trim(), duration: `${form.timeRequired || 45} minutes`,
+      });
+      const p = r.data?.data || {};
+      const parts = [
+        ['Objectives', p.objectives], ['Warm-up', p.warmUp], ['Main activity', p.mainActivity],
+        ['Practice', p.practice], ['Assessment', p.assessment], ['Homework', p.homework], ['Resources', p.resources],
+      ].filter(([, v]) => v);
+      if (!parts.length && p.notes) parts.push(['Plan', p.notes]);
+      if (!parts.length) throw new Error('The AI gave no plan. Try again.');
+      setTopics(parts.map(([name, v], i) => ({ id: Date.now() + i, topicName: name, mainQuestion: '', questionType: 'table', details: Array.isArray(v) ? v.join('\n') : String(v) })));
+      toast.success('Plan written by AI: check it and change what you need.');
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'AI help could not write the plan.');
+    } finally {
       setAiLoading(false);
       setAiDots('');
-      // Populate with AI-generated demo content
-      setTopics([
-        { id: Date.now(), topicName: 'Word Opposites', mainQuestion: 'Match the word opposites', questionType: 'Word Opposite', details: 'day/night, morning/evening, long/short, small/big, up/down' },
-        { id: Date.now() + 1, topicName: 'Short Questions', mainQuestion: 'Answer the following questions', questionType: 'Short Answer', details: 'Q1: What is science? Q2: Name 3 living things. Q3: What is photosynthesis?' },
-      ]);
-      if (!form.unitName) setForm(f => ({ ...f, unitName: 'AI Generated Unit', timeRequired: '45' }));
-      toast.success('AI lesson plan generated!');
-    }, 3000);
+    }
   };
 
   const handleSave = async () => {
@@ -1237,17 +1328,24 @@ function CreateLessonPlanTab() {
     if (!form.unitName.trim()) return toast.error('Unit name is required');
     setSaving(true);
     try {
+      // The server takes title / unit / topic / duration / content: this
+      // form sent other names, was refused, and the error was hidden behind
+      // "Lesson plan created!".
+      const filled = topics.filter(t => t.topicName.trim() || t.details.trim() || t.mainQuestion.trim());
       await api.post('/lesson-plans', {
         classId: parseInt(form.classId),
         subjectId: form.subjectId ? parseInt(form.subjectId) : null,
-        unitNo: form.unitNo,
-        unitName: form.unitName,
-        timeRequired: form.timeRequired,
-        topics,
-      }).catch(() => null);
-      toast.success('Lesson plan created!');
+        title: `${form.unitNo ? `Unit ${form.unitNo}: ` : ''}${form.unitName.trim()}`,
+        unit: form.unitNo || undefined,
+        topic: form.unitName.trim(),
+        duration: form.timeRequired ? `${form.timeRequired} minutes` : undefined,
+        content: filled.map(t => [t.topicName && `${t.topicName}`, t.mainQuestion && `Question: ${t.mainQuestion}`, t.questionType && t.questionType !== 'table' && `Type: ${t.questionType}`, t.details].filter(Boolean).join('\n')).join('\n\n'),
+      });
+      toast.success('Lesson plan saved.');
       setForm({ classId: '', subjectId: '', unitNo: '', unitName: '', timeRequired: '45' });
       setTopics([{ id: 1, topicName: '', mainQuestion: '', questionType: 'table', details: '' }]);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'The lesson plan could not be saved.');
     } finally {
       setSaving(false);
     }

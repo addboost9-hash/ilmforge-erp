@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const https = require('https');
 const prisma = require('../config/prisma');
+// A name as typed ("class 5 ") to its row, ignoring capitals and spaces. In
+// code rather than a database filter: SQLite's = minds capitals, PostgreSQL's
+// insensitive mode does not, so the same school got different answers.
+const sameName = (a, b) => String(a || '').trim().replace(/\s+/g, ' ').toLowerCase() === String(b || '').trim().replace(/\s+/g, ' ').toLowerCase();
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -220,6 +224,26 @@ router.post('/', wrap(async (req, res) => {
 
   if (!title) return res.status(400).json({ success: false, message: 'title required.' });
 
+  // The class and subject: by id, or by name as the MCQ generator sends them
+  // ("Class 5", "Science"), which were dropped, so its papers belonged to no
+  // class. An id must be this school's.
+  let cid = classId ? parseInt(classId) : null;
+  let sid = subjectId ? parseInt(subjectId) : null;
+  if (cid && !(await prisma.class.findFirst({ where: { id: cid, schoolId }, select: { id: true } }))) {
+    return res.status(400).json({ success: false, message: 'Choose a class of this school.' });
+  }
+  if (!cid && req.body.className) {
+    const c = (await prisma.class.findMany({ where: { schoolId }, select: { id: true, name: true } })).find((x) => sameName(x.name, req.body.className));
+    cid = c?.id || null;
+  }
+  if (sid && !(await prisma.subject.findFirst({ where: { id: sid, schoolId }, select: { id: true } }))) {
+    return res.status(400).json({ success: false, message: 'Choose a subject of this school.' });
+  }
+  if (!sid && cid && req.body.subject) {
+    const s = (await prisma.subject.findMany({ where: { schoolId, classId: cid }, select: { id: true, name: true } })).find((x) => sameName(x.name, req.body.subject));
+    sid = s?.id || null;
+  }
+
   // Store questions as JSON array in testType, or store the paper type string
   const testTypeValue = (questions && questions.length > 0)
     ? JSON.stringify(questions)
@@ -228,8 +252,8 @@ router.post('/', wrap(async (req, res) => {
   const paper = await prisma.test.create({
     data: {
       schoolId,
-      classId:    classId    ? parseInt(classId)    : null,
-      subjectId:  subjectId  ? parseInt(subjectId)  : null,
+      classId:    cid,
+      subjectId:  sid,
       title,
       totalMarks: totalMarks ? parseInt(totalMarks) : 100,
       testType:   testTypeValue,

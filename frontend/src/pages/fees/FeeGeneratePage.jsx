@@ -7,6 +7,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { toPaisa } from '../../utils/currency';
+import useFeeTypes from '../../hooks/useFeeTypes';
 import {
   DollarSign,
   Bus,
@@ -38,35 +39,12 @@ const feeYears = () => {
   return Array.from({ length: 7 }, (_, i) => y - 5 + i);
 };
 
-const CAMPUSES = ['Main Campus', 'Branch Campus A', 'Branch Campus B'];
-
-const DEFAULT_FEE_TYPES = [
-  'Admission Fee',
-  'Exam Fee',
-  'Lab Fee',
-  'Books Fee',
-  'Transport Fee',
-  'Sports Fee',
-  'Computer Fee',
-  'Library Fee',
-];
 
 // The 10th of the fee month, as YYYY-MM-DD. Built as text: converting local
 // midnight with toISOString() gave the 9th on a Pakistan clock.
 function getDefaultDueDate(month, year) {
   const m = String(MONTHS.indexOf(month) + 1).padStart(2, '0');
   return `${year}-${m}-10`;
-}
-
-function loadFeeTypes() {
-  try {
-    const stored = localStorage.getItem('ilmforge_fee_types');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {/* ignore */}
-  return DEFAULT_FEE_TYPES;
 }
 
 /* ─── Shared sub-components ─────────────────────────── */
@@ -79,11 +57,16 @@ function FormGroup({ label, children }) {
   );
 }
 
+// The school's own campuses. This offered three invented ones whose names
+// the server could not read as a campus, so every choice billed all campuses.
 function CampusSelect({ value, onChange }) {
+  const { campuses } = useFeeTypes();
+  if (campuses.length < 2) return null;
   return (
     <FormGroup label="Campus">
       <select className="form-select" value={value} onChange={e => onChange(e.target.value)}>
-        {CAMPUSES.map(c => <option key={c} value={c}>{c}</option>)}
+        <option value="">All campuses</option>
+        {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
     </FormGroup>
   );
@@ -238,7 +221,7 @@ function SuccessBanner({ message, onDismiss, nothingMade }) {
    TAB 1 — Generate Monthly Fee
 ═══════════════════════════════════════════════════════ */
 function MonthlyFeeTab({ classes }) {
-  const [campus, setCampus]           = useState('Main Campus');
+  const [campus, setCampus]           = useState('');
   const [classId, setClassId]         = useState('');
   const [sectionId, setSectionId]     = useState('');
   const [month, setMonth]             = useState(() => pkNow().month);
@@ -378,7 +361,7 @@ function MonthlyFeeTab({ classes }) {
    TAB 2 — Generate Custom Fee
 ═══════════════════════════════════════════════════════ */
 function CustomFeeTab({ classes }) {
-  const [campus, setCampus]       = useState('Main Campus');
+  const [campus, setCampus]       = useState('');
   const [classId, setClassId]     = useState('');
   const [sectionId, setSectionId] = useState('');
   const [month, setMonth]         = useState(() => pkNow().month);
@@ -387,7 +370,11 @@ function CustomFeeTab({ classes }) {
   const [amount, setAmount]       = useState('');
   const [banner, setBanner]       = useState(null);
 
-  const feeTypes = loadFeeTypes();
+  // The school's fee types (Fees → Fee Types), for this campus. This read
+  // that page's list from this browser only, and drew it as text when it
+  // held { name, campus } entries, which broke the page.
+  const { types, isLoading: typesLoading } = useFeeTypes();
+  const feeTypes = types.filter(t => t.campusId == null || !campus || String(t.campusId) === String(campus)).map(t => t.name);
 
   const selectedClass = (classes || []).find(c => String(c.id) === String(classId));
   const sections = selectedClass?.sections || selectedClass?.Sections || [];
@@ -452,7 +439,7 @@ function CustomFeeTab({ classes }) {
 
       <FormGroup label="Fee Type">
         <select className="form-select" value={feeType} onChange={e => setFeeType(e.target.value)}>
-          <option value="">-- Select Fee Type --</option>
+          <option value="">{typesLoading ? 'Loading…' : feeTypes.length ? '-- Select Fee Type --' : '-- No fee types: add them under Fee Types --'}</option>
           {feeTypes.map(ft => <option key={ft} value={ft}>{ft}</option>)}
         </select>
       </FormGroup>
@@ -500,7 +487,7 @@ function CustomFeeTab({ classes }) {
    TAB 3 — Generate Transport Fee
 ═══════════════════════════════════════════════════════ */
 function TransportFeeTab({ classes }) {
-  const [campus, setCampus]       = useState('Main Campus');
+  const [campus, setCampus]       = useState('');
   const [classId, setClassId]     = useState('');
   const [sectionId, setSectionId] = useState('');
   const [month, setMonth]         = useState(() => pkNow().month);

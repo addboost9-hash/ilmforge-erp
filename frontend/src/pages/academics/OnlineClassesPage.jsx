@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import useAuthStore from '../../store/auth.store';
 import { Plus, Video, Users, Clock, Link2, X, Play, Calendar } from 'lucide-react';
 
 export default function OnlineClassesPage() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title:'', classId:'', meetingUrl:'', scheduledAt:'', description:'' });
+  const [form, setForm] = useState({ title:'', classId:'', meetingUrl:'', scheduledAt:'', durationMinutes:40 });
+  const role = useAuthStore(s => s.user?.role);
+  const canManage = ['admin', 'super_admin', 'principal', 'teacher'].includes(role);
 
   const { data: classes } = useQuery({ queryKey:['classes'], queryFn:()=>api.get('/classes').then(r=>r.data.data) });
   const { data, isLoading } = useQuery({
@@ -17,18 +20,39 @@ export default function OnlineClassesPage() {
 
   const add = useMutation({
     mutationFn: d => api.post('/online-classes', { ...d, meetingLink: d.meetingUrl }),
-    onSuccess: () => { toast.success('Class created!'); qc.invalidateQueries(['online-classes']); setShowForm(false); setForm({ title:'',classId:'',meetingUrl:'',scheduledAt:'',description:'' }); },
+    onSuccess: () => { toast.success('Online class added.'); qc.invalidateQueries({ queryKey: ['online-classes'] }); setShowForm(false); setForm({ title:'',classId:'',meetingUrl:'',scheduledAt:'',durationMinutes:40 }); },
     onError: err => toast.error(err.response?.data?.message || 'Failed to create class'),
   });
 
-  // Demo classes for when no real data
-  const classes_ = data?.length ? data : [
-    { id:1, title:'Mathematics - Chapter 5', classId:3, scheduledAt:'2026-06-29T09:00', meetingUrl:'https://meet.google.com/demo', status:'upcoming' },
-    { id:2, title:'English Grammar Session', classId:3, scheduledAt:'2026-06-28T10:00', meetingUrl:'https://zoom.us/demo', status:'live' },
-    { id:3, title:'Science - Photosynthesis', classId:4, scheduledAt:'2026-06-27T11:00', meetingUrl:'https://meet.google.com/demo2', status:'ended' },
-  ];
+  const remove = useMutation({
+    mutationFn: id => api.delete(`/online-classes/${id}`),
+    onSuccess: () => { toast.success('Online class removed.'); qc.invalidateQueries({ queryKey: ['online-classes'] }); },
+    onError: err => toast.error(err.response?.data?.message || 'It could not be removed.'),
+  });
+  const end = useMutation({
+    mutationFn: id => api.put(`/online-classes/${id}/status`, { status: 'completed' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['online-classes'] }),
+    onError: err => toast.error(err.response?.data?.message || 'It could not be updated.'),
+  });
 
-  const statusStyle = { live:{ bg:'#DCFCE7',color:'#15803D',text:'🔴 Live' }, upcoming:{ bg:'#DBEAFE',color:'#1D4ED8',text:'⏰ Upcoming' }, ended:{ bg:'#F1F5F9',color:'#64748B',text:'✓ Ended' } };
+  /* Live, upcoming or ended from the time and length of the class (the
+     record says "scheduled" until a teacher ends it). The page used to
+     show three made-up classes when there were none, and stopped on a
+     real one because "scheduled" had no style. */
+  const now = Date.now();
+  const stateOf = (c) => {
+    if (c.status === 'cancelled') return 'cancelled';
+    if (c.status === 'completed') return 'ended';
+    if (!c.scheduledAt) return 'upcoming';
+    const start = new Date(c.scheduledAt).getTime();
+    const stop = start + (c.durationMinutes || 60) * 60000;
+    return now < start ? 'upcoming' : now < stop ? 'live' : 'ended';
+  };
+  const classes_ = (data || []).map(c => ({ ...c, state: stateOf(c) }))
+    .sort((a, b) => ({ live: 0, upcoming: 1, ended: 2, cancelled: 3 }[a.state] - { live: 0, upcoming: 1, ended: 2, cancelled: 3 }[b.state])
+      || (a.state === 'upcoming' ? new Date(a.scheduledAt) - new Date(b.scheduledAt) : new Date(b.scheduledAt) - new Date(a.scheduledAt)));
+
+  const statusStyle = { live:{ bg:'#DCFCE7',color:'#15803D',text:'🔴 Live now' }, upcoming:{ bg:'#DBEAFE',color:'#1D4ED8',text:'⏰ Upcoming' }, ended:{ bg:'#F1F5F9',color:'#64748B',text:'✓ Ended' }, cancelled:{ bg:'#FEE2E2',color:'#B91C1C',text:'Cancelled' } };
 
   return (
     <div className="page-content fade-up">
@@ -37,17 +61,17 @@ export default function OnlineClassesPage() {
           <h1 className="page-title">Online Classes</h1>
           <p className="page-subtitle">Create and manage virtual classes for students</p>
         </div>
-        <button className="btn btn-teal" onClick={()=>setShowForm(s=>!s)}>
+        {canManage && <button className="btn btn-teal" onClick={()=>setShowForm(s=>!s)}>
           {showForm?<><X size={14}/> Cancel</>:<><Plus size={14}/> Create Class</>}
-        </button>
+        </button>}
       </div>
 
       {/* Stats */}
       <div className="grid-3" style={{ marginBottom:16 }}>
         {[
           { label:'Total Classes', v:classes_.length, color:'#1E3A5F', icon:'🎓' },
-          { label:'Live Now', v:classes_.filter(c=>c.status==='live').length, color:'#15803D', icon:'🔴' },
-          { label:'Upcoming', v:classes_.filter(c=>c.status==='upcoming').length, color:'#2563EB', icon:'⏰' },
+          { label:'Live Now', v:classes_.filter(c=>c.state==='live').length, color:'#15803D', icon:'🔴' },
+          { label:'Upcoming', v:classes_.filter(c=>c.state==='upcoming').length, color:'#2563EB', icon:'⏰' },
         ].map(item=>(
           <div key={item.label} className="card" style={{ padding:16, display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ fontSize:28 }}>{item.icon}</div>
@@ -83,21 +107,30 @@ export default function OnlineClassesPage() {
               <label className="form-label">Scheduled Date & Time</label>
               <input aria-label="Scheduled Date & Time" className="form-input" type="datetime-local" value={form.scheduledAt} onChange={e=>setForm({...form,scheduledAt:e.target.value})}/>
             </div>
-            <div className="form-group" style={{ gridColumn:'span 2' }}>
-              <label className="form-label">Description</label>
-              <textarea className="form-input form-textarea" rows={2} placeholder="Class description..." value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/>
+            <div className="form-group">
+              <label className="form-label">Length (minutes)</label>
+              <input aria-label="Length (minutes)" className="form-input" type="number" min="10" max="240" value={form.durationMinutes} onChange={e=>setForm({...form,durationMinutes:e.target.value})}/>
             </div>
           </div>
-          <button className="btn btn-teal" onClick={()=>add.mutate(form)} disabled={!form.title}>
+          <button className="btn btn-teal" onClick={()=>add.mutate(form)} disabled={!form.title || add.isPending}>
             <Video size={14}/> Create Online Class
           </button>
+        </div>
+      )}
+
+      {!isLoading && !classes_.length && (
+        <div className="card" style={{ textAlign:'center', padding:'36px 20px', color:'#64748B' }}>
+          <Video size={34} style={{ color:'#CBD5E1' }}/>
+          <div style={{ fontWeight:700, color:'#334155', marginTop:8 }}>No online classes yet</div>
+          <div style={{ fontSize:13, marginTop:4 }}>{canManage ? 'Create one with its Google Meet or Zoom link; students see it here.' : 'Your teachers have not scheduled any online classes yet.'}</div>
         </div>
       )}
 
       {/* Classes list */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:14 }}>
         {classes_.map(cls => {
-          const st = statusStyle[cls.status||'upcoming'];
+          const st = statusStyle[cls.state];
+          const link = cls.meetingUrl || cls.meetingLink;
           return (
             <div key={cls.id} className="card" style={{ borderTop:`3px solid ${st.color}` }}>
               <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:12 }}>
@@ -129,12 +162,18 @@ export default function OnlineClassesPage() {
                 )}
               </div>
               <div style={{ display:'flex', gap:8 }}>
-                <a href={cls.meetingUrl || cls.meetingLink || '#'} target="_blank" rel="noreferrer" className="btn btn-teal btn-sm" style={{ flex:1, justifyContent:'center', textDecoration:'none' }}>
-                  <Play size={13}/> {cls.status==='live'?'Join Now':'Open Link'}
-                </a>
-                <button className="btn btn-outline btn-sm" style={{ flex:1 }}>
-                  <Users size={13}/> View Students
-                </button>
+                {link ? (
+                  <a href={link} target="_blank" rel="noreferrer" className="btn btn-teal btn-sm" style={{ flex:1, justifyContent:'center', textDecoration:'none' }}>
+                    <Play size={13}/> {cls.state==='live'?'Join now':'Open link'}
+                  </a>
+                ) : <span style={{ flex:1, fontSize:12, color:'#94A3B8', alignSelf:'center' }}>No meeting link</span>}
+                {canManage && cls.state === 'live' && (
+                  <button type="button" className="btn btn-outline btn-sm" onClick={()=>end.mutate(cls.id)} disabled={end.isPending}>End</button>
+                )}
+                {canManage && (
+                  <button type="button" className="btn btn-outline btn-sm" style={{ color:'#B91C1C' }} aria-label={`Remove ${cls.title}`}
+                    onClick={()=>{ if (window.confirm(`Remove "${cls.title}"?`)) remove.mutate(cls.id); }}><X size={13}/></button>
+                )}
               </div>
             </div>
           );

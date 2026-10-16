@@ -13,10 +13,19 @@ import {
 
 /* ─── helpers ───────────────────────────────────────────────── */
 const fmt = (d) => d ? new Date(d).toLocaleDateString('en-PK') : '—';
-const daysOverdue = (dueDate) => {
-  const diff = Date.now() - new Date(dueDate).getTime();
-  return diff > 0 ? Math.ceil(diff / 86_400_000) : 0;
-};
+// The book and the borrower by name (the lists showed "Book #12", "Student #4").
+const BookCell = ({ iss }) => (
+  <td>
+    <div style={{ fontWeight: 600 }}>{iss.book?.title || `Book #${iss.bookId}`}</div>
+    {iss.book?.accessionNo && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Acc. {iss.book.accessionNo}</div>}
+  </td>
+);
+const MemberCell = ({ iss }) => (
+  <td style={{ fontSize: 12 }}>
+    <div style={{ fontWeight: 600 }}>{iss.borrower?.name || (iss.studentId ? `Student #${iss.studentId}` : `Staff #${iss.staffId}`)}</div>
+    {iss.borrower?.detail && <div style={{ color: 'var(--text-muted)' }}>{iss.borrower.detail}</div>}
+  </td>
+);
 const defaultDue = () => {
   const d = new Date();
   d.setDate(d.getDate() + 14);
@@ -616,11 +625,9 @@ function IssueReturnTab() {
                       const overdue = iss.dueDate && new Date(iss.dueDate) < new Date();
                       return (
                         <tr key={iss.id}>
-                          <td style={{ fontWeight: 600 }}>Book #{iss.bookId}</td>
-                          <td style={{ fontSize: 12 }}>
-                            {iss.studentId ? `Student #${iss.studentId}` : `Staff #${iss.staffId}`}
-                          </td>
-                          <td style={{ fontSize: 12 }}>{fmt(iss.createdAt)}</td>
+                          <BookCell iss={iss} />
+                          <MemberCell iss={iss} />
+                          <td style={{ fontSize: 12 }}>{fmt(iss.issueDate || iss.createdAt)}</td>
                           <td style={{ fontSize: 12, color: overdue ? 'var(--stat-red)' : 'inherit' }}>{fmt(iss.dueDate)}</td>
                           <td>
                             <span className={`badge ${overdue ? 'badge-danger' : 'badge-primary'}`}>
@@ -656,17 +663,31 @@ function IssueReturnTab() {
 function OverdueTab() {
   const qc = useQueryClient();
 
-  const issuesQ = useQuery({
-    queryKey: ['library-issues-all'],
-    queryFn: () => api.get('/library/issues?limit=100').then((r) => r.data),
+  // Every overdue book, from the server (a list of the latest 100 issues
+  // missed older ones), with the fine so far at each book's own rate.
+  const overdueQ = useQuery({
+    queryKey: ['library-issues-overdue'],
+    queryFn: () => api.get('/library/issues?overdue=1&limit=100').then((r) => r.data),
     staleTime: 15_000,
   });
+  // Books back late whose fine is not yet paid.
+  const finesQ = useQuery({
+    queryKey: ['library-issues-fines'],
+    queryFn: () => api.get('/library/issues?unpaidFine=1&limit=100').then((r) => r.data),
+    staleTime: 15_000,
+  });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['library-issues-overdue'] });
+    qc.invalidateQueries({ queryKey: ['library-issues-fines'] });
+    qc.invalidateQueries({ queryKey: ['library-issues-active'] });
+  };
 
   const returnMut = useMutation({
     mutationFn: (id) => api.post(`/library/issues/${id}/return`, {}),
-    onSuccess: () => {
-      toast.success('Book returned and fine recorded.');
-      qc.invalidateQueries({ queryKey: ['library-issues-all'] });
+    onSuccess: (res) => {
+      const fine = res.data?.fineAmount || 0;
+      toast.success(fine > 0 ? `Returned. Fine of Rs. ${fine.toLocaleString()} recorded: collect it below.` : 'Book returned.');
+      refresh();
     },
     onError: (e) => toast.error(e?.response?.data?.message || 'Failed.'),
   });
@@ -674,47 +695,48 @@ function OverdueTab() {
   const fineMut = useMutation({
     mutationFn: ({ id, amount }) => api.post(`/library/issues/${id}/fine/collect`, { amount }),
     onSuccess: () => {
-      toast.success('Fine marked as paid.');
-      qc.invalidateQueries({ queryKey: ['library-issues-all'] });
+      toast.success('Fine collected.');
+      refresh();
     },
     onError: (e) => toast.error(e?.response?.data?.message || 'Failed.'),
   });
 
-  const allIssues = issuesQ.data?.data || [];
-  const now = new Date();
-  const overdueList = allIssues.filter(
-    (i) => i.status === 'issued' && i.dueDate && new Date(i.dueDate) < now
-  );
+  const remindMut = useMutation({
+    mutationFn: (ids) => api.post('/library/issues/remind', ids ? { ids } : {}).then((r) => r.data),
+    onSuccess: (d) => (d.data?.sent > 0 ? toast.success(d.message, { duration: 6000 }) : toast.error(d.message, { duration: 6000 })),
+    onError: (e) => toast.error(e?.response?.data?.message || 'The reminders could not be sent.'),
+  });
 
-  const FINE_PER_DAY = 5;
-
-  const handleSMSAll = () => {
-    toast.success(`SMS reminder sent to ${overdueList.length} overdue members.`);
-  };
+  const overdueList = overdueQ.data?.data || [];
+  const overdueTotal = overdueQ.data?.total ?? overdueList.length;
+  const fines = finesQ.data?.data || [];
+  const accruing = overdueList.reduce((s, i) => s + (i.fineSoFar || 0), 0);
 
   return (
     <div className="card-body">
       {/* Alert bar */}
-      {overdueList.length > 0 && (
+      {overdueTotal > 0 && (
         <div
           className="alert alert-danger"
-          style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+          style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <AlertTriangle size={16} />
             <span>
-              <strong>{overdueList.length} book{overdueList.length !== 1 ? 's' : ''} overdue.</strong>
-              {' '}Total outstanding fines: Rs. {overdueList.reduce((s, i) => s + daysOverdue(i.dueDate) * FINE_PER_DAY, 0).toLocaleString()}
+              <strong>{overdueTotal} book{overdueTotal !== 1 ? 's' : ''} overdue.</strong>
+              {' '}Fines so far: Rs. {accruing.toLocaleString()} (recorded when each book comes back)
             </span>
           </div>
-          <button className="btn btn-danger btn-sm" onClick={handleSMSAll}>
-            <MessageSquare size={12} /> Send SMS to All
+          <button className="btn btn-danger btn-sm" onClick={() => remindMut.mutate(null)} disabled={remindMut.isPending}>
+            <MessageSquare size={12} /> {remindMut.isPending ? 'Sending…' : 'Send SMS to All'}
           </button>
         </div>
       )}
 
-      {issuesQ.isLoading ? (
+      {overdueQ.isLoading ? (
         <div className="loading-center"><div className="spinner" /></div>
+      ) : overdueQ.isError ? (
+        <div className="alert alert-danger">{overdueQ.error?.response?.data?.message || 'The overdue list could not be loaded.'}</div>
       ) : overdueList.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">✅</div>
@@ -730,65 +752,91 @@ function OverdueTab() {
                 <th>Member</th>
                 <th>Due Date</th>
                 <th>Days Overdue</th>
-                <th>Fine (Rs. {FINE_PER_DAY}/day)</th>
-                <th>Fine Paid</th>
+                <th>Fine So Far</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {overdueList.map((iss) => {
-                const days = daysOverdue(iss.dueDate);
-                const fine = days * FINE_PER_DAY;
-                const paid = iss.finePaid || 0;
-                const remaining = Math.max(0, fine - paid);
+              {overdueList.map((iss) => (
+                <tr key={iss.id}>
+                  <BookCell iss={iss} />
+                  <MemberCell iss={iss} />
+                  <td style={{ color: 'var(--stat-red)', fontWeight: 600 }}>{fmt(iss.dueDate)}</td>
+                  <td>
+                    <span className="badge badge-danger">{iss.daysLate} day{iss.daysLate !== 1 ? 's' : ''}</span>
+                  </td>
+                  <td style={{ fontWeight: 700, color: 'var(--stat-red)' }}>
+                    Rs. {(iss.fineSoFar || 0).toLocaleString()}
+                    {iss.book?.finePerDay != null && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>Rs. {iss.book.finePerDay}/day</div>}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      <button
+                        className="btn btn-sm btn-warning"
+                        onClick={() => remindMut.mutate([iss.id])}
+                        disabled={remindMut.isPending || !iss.borrower?.phone}
+                        title={iss.borrower?.phone ? `SMS ${iss.borrower.phone}` : 'No phone number on record'}
+                      >
+                        <MessageSquare size={11} /> SMS
+                      </button>
+                      <button
+                        className="btn btn-sm btn-outline"
+                        onClick={() => returnMut.mutate(iss.id)}
+                        disabled={returnMut.isPending}
+                      >
+                        <RotateCcw size={11} /> Return
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {overdueTotal > overdueList.length && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+              Showing the {overdueList.length} longest overdue of {overdueTotal}. "Send SMS to All" reminds every one.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Fines to collect */}
+      <h4 style={{ margin: '24px 0 10px', fontSize: 14 }}>Fines to Collect</h4>
+      {finesQ.isLoading ? (
+        <div className="loading-center"><div className="spinner" /></div>
+      ) : fines.length === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No unpaid fines.</div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Book</th>
+                <th>Member</th>
+                <th>Returned</th>
+                <th>Fine</th>
+                <th>Paid</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fines.map((iss) => {
+                const remaining = Math.max(0, (iss.fineAmount || 0) - (iss.finePaid || 0));
                 return (
                   <tr key={iss.id}>
-                    <td style={{ fontWeight: 600 }}>Book #{iss.bookId}</td>
-                    <td style={{ fontSize: 12 }}>
-                      {iss.studentId ? `Student #${iss.studentId}` : `Staff #${iss.staffId}`}
-                    </td>
-                    <td style={{ color: 'var(--stat-red)', fontWeight: 600 }}>{fmt(iss.dueDate)}</td>
+                    <BookCell iss={iss} />
+                    <MemberCell iss={iss} />
+                    <td style={{ fontSize: 12 }}>{fmt(iss.returnDate)}</td>
+                    <td style={{ fontWeight: 700 }}>Rs. {(iss.fineAmount || 0).toLocaleString()}</td>
+                    <td>{iss.finePaid > 0 ? <span className="badge badge-success">Rs. {iss.finePaid}</span> : <span className="badge badge-secondary">Unpaid</span>}</td>
                     <td>
-                      <span className="badge badge-danger">{days} day{days !== 1 ? 's' : ''}</span>
-                    </td>
-                    <td style={{ fontWeight: 700, color: 'var(--stat-red)' }}>Rs. {fine.toLocaleString()}</td>
-                    <td>
-                      {paid > 0 ? (
-                        <span className="badge badge-success">Rs. {paid}</span>
-                      ) : (
-                        <span className="badge badge-secondary">Unpaid</span>
-                      )}
-                      {remaining > 0 && paid > 0 && (
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                          Rem: Rs. {remaining}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                        <button
-                          className="btn btn-sm btn-warning"
-                          onClick={() => toast.success(`SMS reminder sent for issue #${iss.id}`)}
-                        >
-                          <MessageSquare size={11} /> SMS
-                        </button>
-                        {remaining > 0 && (
-                          <button
-                            className="btn btn-sm btn-success"
-                            onClick={() => fineMut.mutate({ id: iss.id, amount: remaining })}
-                            disabled={fineMut.isPending}
-                          >
-                            <CheckCircle size={11} /> Mark Paid
-                          </button>
-                        )}
-                        <button
-                          className="btn btn-sm btn-outline"
-                          onClick={() => returnMut.mutate(iss.id)}
-                          disabled={returnMut.isPending}
-                        >
-                          <RotateCcw size={11} /> Return
-                        </button>
-                      </div>
+                      <button
+                        className="btn btn-sm btn-success"
+                        onClick={() => fineMut.mutate({ id: iss.id, amount: remaining })}
+                        disabled={fineMut.isPending}
+                      >
+                        <CheckCircle size={11} /> Collect Rs. {remaining.toLocaleString()}
+                      </button>
                     </td>
                   </tr>
                 );
@@ -827,7 +875,8 @@ function ReportsTab() {
     return Object.entries(map)
       .map(([bookId, count]) => {
         const book = books.find((b) => b.id === parseInt(bookId, 10));
-        return { bookId, title: book?.title || `Book #${bookId}`, count };
+        const issued = issues.find((i) => String(i.bookId) === String(bookId));
+        return { bookId, title: book?.title || issued?.book?.title || `Book #${bookId}`, count };
       })
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
@@ -848,7 +897,7 @@ function ReportsTab() {
     const map = {};
     issues.forEach((i) => {
       const key = i.studentId ? `student-${i.studentId}` : `staff-${i.staffId}`;
-      if (!map[key]) map[key] = { key, type: i.studentId ? 'Student' : 'Staff', id: i.studentId || i.staffId, count: 0 };
+      if (!map[key]) map[key] = { key, type: i.studentId ? 'Student' : 'Staff', id: i.studentId || i.staffId, name: i.borrower?.name, count: 0 };
       map[key].count += 1;
     });
     return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 5);
@@ -856,7 +905,8 @@ function ReportsTab() {
 
   const totalIssues   = issues.length;
   const totalReturned = issues.filter((i) => i.status === 'returned').length;
-  const totalFines    = issues.reduce((s, i) => s + (i.fineAmount || 0), 0);
+  // Collected, as the card says: this added up the fines charged.
+  const totalFines    = issues.reduce((s, i) => s + (i.finePaid || 0), 0);
   const totalBooks    = books.length;
 
   return (
@@ -920,7 +970,7 @@ function ReportsTab() {
                   <div key={r.key} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                     <span style={{ width: 22, height: 22, borderRadius: '50%', background: i === 0 ? '#f39c12' : i === 1 ? '#6c757d' : i === 2 ? '#cd7f32' : 'var(--content-bg)', color: i < 3 ? 'white' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{r.type} #{r.id}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{r.name || `${r.type} #${r.id}`}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.count} book{r.count !== 1 ? 's' : ''} borrowed</div>
                     </div>
                     <span className={`badge ${i === 0 ? 'badge-warning' : 'badge-secondary'}`}>{r.count}x</span>

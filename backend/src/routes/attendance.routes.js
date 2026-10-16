@@ -3,6 +3,7 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const ExcelJS = require('exceljs');
 const { sendAbsentNotification } = require('../services/whatsapp.service');
+const { pkDate } = require('../services/messageTemplate');
 const { sendSMS } = require('../services/sms.service');
 const { requireRole } = require('../middleware/auth.middleware');
 const { teacherCanAccessClass } = require('../utils/teacherScope');
@@ -116,14 +117,17 @@ router.post('/save', wrap(async (req, res) => {
   if (absentIds.length > 0) {
     const absentStudents = await prisma.student.findMany({
       where: { id: { in: absentIds } },
-      select: { id: true, name: true, emergencyPhone: true },
+      select: { id: true, name: true, emergencyPhone: true, fatherName: true, class: { select: { name: true } } },
     });
 
+    // The alert named the class by its number ("(3)") and gave the date in
+    // the server's own format and time zone, where a school day's midnight
+    // is still the day before.
     for (const student of absentStudents) {
       if (student.emergencyPhone) {
         sendAbsentNotification({
-          parentPhone: student.emergencyPhone, studentName: student.name,
-          className: String(classId), date: targetDate.toLocaleDateString(),
+          schoolId, parentPhone: student.emergencyPhone, parentName: student.fatherName, studentName: student.name,
+          className: student.class?.name || '', date: pkDate(targetDate),
           schoolName: school?.name || 'School',
         }).catch(console.error);
         notified++;
@@ -428,6 +432,44 @@ router.get('/summary-today', staffOnly, wrap(async (req, res) => {
 //   student card → present (or late after lateAfter); a second scan the
 //                  same day says when they were marked instead of re-saving.
 //   staff card   → check-in, and a later scan checks them out.
+// GET /attendance/gate-log?date=YYYY-MM-DD — students in and out through the
+// gate that day, latest first. Scans from before exits were kept show as
+// the arrival the register recorded.
+router.get('/gate-log', staffOnly, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const day = req.query.date ? new Date(String(req.query.date)) : new Date(); day.setHours(0, 0, 0, 0);
+  if (Number.isNaN(day.getTime())) return res.status(400).json({ success: false, message: 'Invalid date.' });
+  const next = new Date(day.getTime() + 24 * 3600e3);
+  const [punches, scanned] = await Promise.all([
+    prisma.biometricPunch.findMany({ where: { schoolId, personType: 'student', method: 'barcode', punchTime: { gte: day, lt: next } }, orderBy: { punchTime: 'desc' }, take: 2000 }),
+    prisma.attendance.findMany({ where: { schoolId, date: day, method: 'barcode' }, select: { id: true, studentId: true, createdAt: true } }),
+  ]);
+  const cameIn = new Set(punches.filter((p) => p.direction === 'in').map((p) => p.personId));
+  const rows = [
+    ...punches.map((p) => ({ id: `p${p.id}`, studentId: p.personId, direction: p.direction === 'out' ? 'OUT' : 'IN', createdAt: p.punchTime })),
+    ...scanned.filter((a) => !cameIn.has(a.studentId)).map((a) => ({ id: `a${a.id}`, studentId: a.studentId, direction: 'IN', createdAt: a.createdAt })),
+  ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const ids = [...new Set(rows.map((r) => r.studentId))];
+  const [students, marks] = await Promise.all([
+    prisma.student.findMany({ where: { schoolId, id: { in: ids } }, select: { id: true, name: true, rollNo: true, class: { select: { name: true } }, section: { select: { name: true } } } }),
+    prisma.attendance.findMany({ where: { schoolId, date: day, studentId: { in: ids } }, select: { studentId: true, status: true } }),
+  ]);
+  const S = new Map(students.map((s) => [s.id, s]));
+  const M = new Map(marks.map((m) => [m.studentId, m.status]));
+  // Inside now: the latest pass was in.
+  const latest = new Map();
+  for (const r of rows) if (!latest.has(r.studentId)) latest.set(r.studentId, r.direction);
+  res.json({
+    success: true,
+    data: rows.map((r) => {
+      const s = S.get(r.studentId);
+      return { ...r, status: M.get(r.studentId) || null, className: s?.class?.name || '', section: s?.section?.name || '', student: { name: s?.name || `Student ${r.studentId}`, rollNo: s?.rollNo || '' } };
+    }),
+    presentToday: [...new Set(rows.filter((r) => r.direction === 'IN').map((r) => r.studentId))].length,
+    insideNow: [...latest.values()].filter((d) => d === 'IN').length,
+  });
+}));
+
 router.post('/barcode-scan', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const code = scannedCode(req.body.barcode);
@@ -481,11 +523,20 @@ router.post('/barcode-scan', staffOnly, wrap(async (req, res) => {
         },
       });
     }
+    // Every pass through the gate is kept, in or out, for the gate log. An
+    // "Exit" scan used to read as a second arrival ("already marked
+    // present") and no one could see who had left or when.
+    const leaving = String(req.body.direction || '').toLowerCase() === 'out';
+    const now = new Date();
+    await prisma.biometricPunch.create({
+      data: { schoolId, personType: 'student', personId: student.id, method: 'barcode', direction: leaving ? 'out' : 'in', punchTime: now },
+    });
     const presentToday = await prisma.attendance.count({ where: { schoolId, date: targetDate, status: { in: ['present', 'late'] } } });
+    const clock = new Date(now.getTime() + 5 * 3600e3).toISOString().slice(11, 16);
     return res.json({
       success: true,
       data: {
-        kind: 'student', status, already, markedAt, presentToday,
+        kind: 'student', status, already: leaving ? false : already, markedAt, presentToday, direction: leaving ? 'out' : 'in',
         person: {
           id: student.id, name: student.name, rollNo: student.rollNo, fatherName: student.fatherName,
           className: student.class?.name || '', sectionName: student.section?.name || '', photoUrl: student.photoUrl || null,
@@ -493,7 +544,9 @@ router.post('/barcode-scan', staffOnly, wrap(async (req, res) => {
         // the same, under the name the gate portal reads
         student: { id: student.id, name: student.name, rollNo: student.rollNo, className: student.class?.name || '', class: student.class?.name || '' },
       },
-      message: already ? `${student.name} was already marked ${status}.` : `${student.name} marked ${status}.`,
+      message: leaving
+        ? `${student.name} left at ${clock}.`
+        : already ? `${student.name} was already marked ${status}.` : `${student.name} marked ${status}.`,
     });
   }
 

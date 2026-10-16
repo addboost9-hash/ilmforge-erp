@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import useAuthStore from '../../store/auth.store';
 import { Plus, FolderOpen, FileText, Video, Link2, Image, Trash2, X, Download, Eye } from 'lucide-react';
 
 const TYPE_ICONS = { pdf:FileText, video:Video, link:Link2, image:Image };
@@ -12,6 +13,8 @@ export default function StudyMaterialsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title:'', type:'link', url:'', classId:'', subjectId:'', description:'' });
   const [filterClass, setFilterClass] = useState('');
+  const role = useAuthStore(s => s.user?.role);
+  const canManage = ['admin', 'super_admin', 'principal', 'teacher'].includes(role);
 
   const { data:classes } = useQuery({ queryKey:['classes'], queryFn:()=>api.get('/classes').then(r=>r.data.data) });
   const { data } = useQuery({
@@ -25,12 +28,14 @@ export default function StudyMaterialsPage() {
     onError: err => toast.error(err.response?.data?.message || 'Failed to add material'),
   });
 
-  // Demo materials
-  const materials = data?.length ? data : [
-    { id:1, title:'Chapter 5 - Fractions (PDF)', type:'pdf', url:'#', classId:3, description:'Complete chapter notes with examples' },
-    { id:2, title:'Science Video - Photosynthesis', type:'video', url:'https://youtube.com/watch?v=demo', classId:3, description:'Detailed explanation with diagrams' },
-    { id:3, title:'English Grammar Reference', type:'link', url:'https://example.com', classId:4, description:'Online grammar guide' },
-  ];
+  // Only the school's own materials: three made-up ones used to show
+  // whenever there were none.
+  const materials = data || [];
+  const remove = useMutation({
+    mutationFn: id => api.delete(`/study-materials/${id}`),
+    onSuccess: () => { toast.success('Material removed.'); qc.invalidateQueries({ queryKey: ['study-materials'] }); },
+    onError: err => toast.error(err.response?.data?.message || 'It could not be removed.'),
+  });
 
   return (
     <div className="page-content fade-up">
@@ -122,6 +127,10 @@ export default function StudyMaterialsPage() {
                   {mType==='pdf'?<Download size={12}/>:mType==='video'?<Video size={12}/>:<Eye size={12}/>}
                   {mType==='pdf'?'Download':mType==='video'?'Watch':'Open'}
                 </a>
+                {canManage && (
+                  <button type="button" className="btn btn-sm btn-outline" style={{ color:'#B91C1C' }} aria-label={`Remove ${m.title}`}
+                    onClick={() => { if (window.confirm(`Remove "${m.title}"?`)) remove.mutate(m.id); }}><Trash2 size={12}/></button>
+                )}
               </div>
             </div>
           );

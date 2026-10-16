@@ -114,7 +114,6 @@ import ExaminationSlipPage from './pages/exams/ExaminationSlipPage';
 import TaskManagementPage from './pages/tasks/TaskManagementPage';
 import TestManagementPage from './pages/exams/TestManagementPage';
 import ReportingAreaPage from './pages/reports/ReportingAreaPage';
-import ParentAccountsPage from './pages/students/ParentAccountsPage';
 import DiscountedStudentsPage from './pages/fees/DiscountedStudentsPage';
 import FeeIncrementPage from './pages/fees/FeeIncrementPage';
 import AttendanceAwardsPage from './pages/attendance/AttendanceAwardsPage';
@@ -533,7 +532,8 @@ export default function App() {
             <Route path="/tasks"                      element={<TaskManagementPage />} />
             <Route path="/tests"                      element={<TestManagementPage />} />
             <Route path="/reporting-area"             element={<ReportingAreaPage />} />
-            <Route path="/parents/requests"           element={<ParentAccountsPage />} />
+            {/* Parent accounts: credentials and password resets live in Portal Management. */}
+            <Route path="/parents/requests"           element={<Navigate to="/portal-management" replace />} />
             {/* Both rendered the parent-accounts list, which is neither a gate
                 pass register nor a dues report — point them at the real pages. */}
             <Route path="/parents/gate-passes"        element={<Navigate to="/gate-passes" replace />} />

@@ -55,13 +55,20 @@ function StudentQuizView() {
     },
   });
 
-  // Start quiz
-  const startQuiz = (quiz) => {
-    setActiveQuiz(quiz);
-    setAnswers({});
-    setSubmitted(false);
-    setResult(null);
-    setTimeLeft((quiz.duration || 20) * 60);
+  // Start quiz: the list has no questions in it, so load the quiz itself.
+  const startQuiz = async (quiz) => {
+    try {
+      const res = await api.get(`/quizzes/${quiz._id || quiz.id}`);
+      const full = res.data?.data || quiz;
+      if (!full.questions?.length) { toast.error('This quiz has no questions yet.'); return; }
+      setActiveQuiz(full);
+      setAnswers({});
+      setSubmitted(false);
+      setResult(null);
+      setTimeLeft((full.duration || 20) * 60);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'The quiz could not be opened.');
+    }
   };
 
   // Timer

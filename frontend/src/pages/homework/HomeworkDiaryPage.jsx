@@ -6,6 +6,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
+import useAuthStore from '../../store/auth.store';
 import toast from 'react-hot-toast';
 import { ChevronLeft, ChevronRight, Send, Plus, BookOpen, Check, Clock, Trash2 } from 'lucide-react';
 
@@ -171,13 +172,18 @@ export default function HomeworkDiaryPage() {
         const hw = homework.find(h => h.subjectId === s.id || h.subject?.id === s.id);
         return `${s.name}: ${hw?.description || 'Not assigned'}`;
       }).join(', ');
-      const msg = `Daily Homework Diary For Class ${cls?.name}: ${date}\n${diaryText}\n— IlmForge`;
+      // Signed by the school (it said "— IlmForge").
+      const schoolName = useAuthStore.getState().school?.name || '';
+      const msg = `Daily Homework Diary For Class ${cls?.name}: ${date}\n${diaryText}${schoolName ? `\n— ${schoolName}` : ''}`;
       // Get student phones for this class
       const studRes = await api.get('/students', { params: { classId, limit: 200, status: 'active' } });
       const phones = (studRes.data.data || []).map(s => s.emergencyPhone || s.parent?.phone).filter(Boolean);
       if (!phones.length) { toast.error('No parent phone numbers found'); return; }
-      await api.post('/notifications/sms', { phones, message: msg });
-      toast.success(`Diary sent to ${phones.length} parents via SMS!`);
+      // The server's count of what went, not the number of phones tried.
+      const r = await api.post('/notifications/sms', { phones: [...new Set(phones)], message: msg });
+      const sent = r.data?.data?.sent ?? 0;
+      if (sent > 0) toast.success(`Diary sent to ${sent} of ${r.data.data.total} parents by SMS.`);
+      else toast.error(r.data?.data?.results?.[0]?.error || r.data?.message || 'No SMS was sent.', { duration: 6000 });
     } catch (err) {
       toast.error(err.response?.data?.message || 'SMS send failed');
     } finally { setSendingSMS(false); }

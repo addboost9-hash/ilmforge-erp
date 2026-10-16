@@ -1524,77 +1524,8 @@ router.post('/:id/unpublish', wrap(async (req, res) => {
   res.json({ success: true, data: updated, message: 'Exam unpublished.' });
 }));
 
-// GET /exams/:id/results/sms-blast — send SMS to parents with result summary via Twilio (legacy)
-router.get('/:id/results/sms-blast', wrap(async (req, res) => {
-  if (!canManageExams(req.user?.role)) {
-    return res.status(403).json({ success: false, message: 'Access denied.' });
-  }
-  const examId = parseInt(req.params.id);
-  // Ownership check is enforced inside buildGazette via findFirst({where:{id,schoolId}})
-  const result = await buildGazette(examId, req.schoolId);
-  if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
-
-  // Twilio credentials must be set in env
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_FROM_NUMBER;
-
-  if (!accountSid || !authToken || !fromNumber) {
-    return res.status(503).json({
-      success: false,
-      message: 'Twilio credentials not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER in environment.',
-    });
-  }
-
-  // Load Twilio lazily so the rest of the routes work even without twilio installed
-  let twilioClient;
-  try {
-    const twilio = require('twilio');
-    twilioClient = twilio(accountSid, authToken);
-  } catch (err) {
-    return res.status(503).json({ success: false, message: 'Twilio npm package not installed on server.', detail: err.message });
-  }
-
-  // Load students with parent phone numbers
-  const studentIds = result.rows.map((r) => r.studentId);
-  const students = await prisma.student.findMany({
-    where: { id: { in: studentIds } },
-    select: { id: true, name: true, emergencyPhone: true, motherPhone: true },
-  });
-  const studentPhoneMap = {};
-  students.forEach((s) => {
-    studentPhoneMap[s.id] = s.emergencyPhone || s.motherPhone || null;
-  });
-
-  const sent = [];
-  const failed = [];
-
-  for (const row of result.rows) {
-    const phone = studentPhoneMap[row.studentId];
-    if (!phone) { failed.push({ studentId: row.studentId, name: row.name, reason: 'No phone number' }); continue; }
-
-    const message =
-      `IlmForge Result: ${row.name} | Exam: ${result.exam.title} | ` +
-      `Total: ${row.totalObtained}/${row.totalMarks} | ` +
-      `%: ${row.percentage}% | Grade: ${row.grade} | ` +
-      `Position: ${row.position} | ${row.passed ? 'PASS' : 'FAIL'}`;
-
-    try {
-      await twilioClient.messages.create({ body: message, from: fromNumber, to: phone });
-      sent.push({ studentId: row.studentId, name: row.name, phone });
-    } catch (err) {
-      failed.push({ studentId: row.studentId, name: row.name, phone, reason: err.message });
-    }
-  }
-
-  res.json({
-    success: true,
-    message: `SMS blast complete. Sent: ${sent.length}, Failed: ${failed.length}.`,
-    sent,
-    failed,
-    data: { sent: sent.length, failed: failed.length },
-  });
-}));
+// (A GET /exams/:id/results/sms-blast sent SMS to every parent when the
+// address was merely opened or pre-loaded; the POST below is the one used.)
 
 // ---------------------------------------------------------------------------
 // POST /exams/:id/results/sms-blast — parent-friendly notification SMS on result publish
@@ -1606,25 +1537,36 @@ router.post('/:id/results/sms-blast', wrap(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Access denied.' });
   }
   const examId = parseInt(req.params.id);
-  const portalLink = req.body?.portalLink || process.env.PARENT_PORTAL_URL || 'https://portal.ilmforge.com';
+  const school = await prisma.school.findUnique({ where: { id: req.schoolId }, select: { name: true, slug: true, settingsJson: true } });
+  // The parents' own sign-in page (a made-up portal.ilmforge.com was sent).
+  const asked = String(req.body?.portalLink || '').trim();
+  const portalLink = (/^https?:\/\/\S+$/i.test(asked) && asked.length <= 200 ? asked : '')
+    || process.env.PARENT_PORTAL_URL
+    || `${(process.env.FRONTEND_URL || '').replace(/\/$/, '')}/login?slug=${school.slug}&role=parent`;
 
   // Load exam and result rows (one class or section when chosen)
   const result = await buildGazette(examId, req.schoolId, studentScope(req.body || {}));
   if (!result) return res.status(404).json({ success: false, message: 'Exam not found.' });
 
-  const { exam, rows } = result;
+  const { exam } = result;
+  // Only the students asked for: one row's SMS button sends its student,
+  // the Failed Students page the failed ones. Both used to text every
+  // parent in the exam.
+  const onlyIds = Array.isArray(req.body?.studentIds) ? new Set(req.body.studentIds.map((n) => parseInt(n, 10))) : null;
+  const rows = result.rows.filter((r) => (!onlyIds || onlyIds.has(r.studentId)) && (!req.body?.onlyFailed || !r.passed));
 
   // Load students with parent phone numbers
   const studentIds = rows.map((r) => r.studentId);
   const students = await prisma.student.findMany({
-    where: { id: { in: studentIds } },
-    select: { id: true, name: true, emergencyPhone: true, motherPhone: true },
+    where: { id: { in: studentIds }, schoolId: req.schoolId },
+    select: { id: true, name: true, fatherName: true, emergencyPhone: true, motherPhone: true },
   });
 
   const studentMap = {};
   students.forEach((s) => {
     studentMap[s.id] = {
       name: s.name,
+      fatherName: s.fatherName,
       phone: s.emergencyPhone || s.motherPhone || null,
     };
   });
@@ -1637,19 +1579,12 @@ router.post('/:id/results/sms-blast', wrap(async (req, res) => {
     sendBulkSMS = null;
   }
 
-  // Load channel config for this school
+  // The school's SMS provider settings (Settings → Channels), kept with the
+  // school; they were read from a local file that the settings never reach.
   let channelCfg = {};
-  try {
-    const path = require('path');
-    const fs = require('fs');
-    const settingsPath = path.join(__dirname, '../../data/school-settings.json');
-    if (fs.existsSync(settingsPath)) {
-      const raw = fs.readFileSync(settingsPath, 'utf8');
-      const all = JSON.parse(raw || '{}');
-      channelCfg = all[String(req.schoolId)]?.channels || {};
-    }
-  } catch (_) {}
+  try { channelCfg = JSON.parse(school?.settingsJson || '{}').channels || {}; } catch (_) { channelCfg = {}; }
 
+  const { messageFor } = require('../services/messageTemplate');
   const sent = [];
   const failed = [];
 
@@ -1660,14 +1595,23 @@ router.post('/:id/results/sms-blast', wrap(async (req, res) => {
       continue;
     }
 
-    // Parent-friendly message as specified
-    const message =
-      `Dear Parent, ${row.name} result for ${exam.title} has been published. ` +
-      `Login to parent portal to view: ${portalLink}`;
+    // The school's own wording (SMS Templates → Exam result) or the
+    // built-in one; nothing is sent when the school switched it off.
+    const message = await messageFor(req.schoolId, 'exam_result', {
+      parent_name: info.fatherName || 'Parent', student_name: row.name, exam_name: exam.title,
+      marks: `${row.totalObtained}/${row.totalMarks}`, percentage: row.percentage, grade: row.grade,
+      portal_link: portalLink, school_name: school?.name || '',
+    }, 'Dear Parent, {student_name}\'s result for {exam_name} has been published. See it in the parent portal: {portal_link} - {school_name}');
+    if (!message) {
+      return res.json({ success: true, message: 'Result messages are switched off in Settings → SMS Templates, so none were sent.', data: { sent: 0, failed: 0 }, sent: [], failed: [] });
+    }
 
     try {
       if (sendBulkSMS) {
-        await sendBulkSMS([info.phone], message, channelCfg);
+        // sendBulkSMS reports failures instead of throwing: without this
+        // check a school with no SMS set up was told every parent got it.
+        const r = await sendBulkSMS([info.phone], message, channelCfg);
+        if (!r.sent) throw new Error(r.results?.[0]?.error || 'Not sent');
       } else {
         // Fallback: Twilio direct
         const accountSid = process.env.TWILIO_ACCOUNT_SID || channelCfg.smsAccountSid;
@@ -1698,9 +1642,13 @@ router.post('/:id/results/sms-blast', wrap(async (req, res) => {
     });
   } catch (_) { /* non-critical */ }
 
+  // What happened, not "Results published!" whatever went out.
+  const notSet = !sent.length && failed.length && failed.every((f) => /not configured/i.test(f.reason || ''));
   res.json({
     success: true,
-    message: `Results published! SMS sent to ${sent.length} parent${sent.length !== 1 ? 's' : ''}.`,
+    message: notSet
+      ? 'SMS is not set up for this school (Settings → Channels), so no message was sent.'
+      : `SMS sent to ${sent.length} of ${rows.length} parent${rows.length !== 1 ? 's' : ''}.${failed.length ? ` Not sent: ${failed.slice(0, 5).map((f) => `${f.name} (${f.reason})`).join(', ')}${failed.length > 5 ? '…' : ''}.` : ''}`,
     data: { sent: sent.length, failed: failed.length },
     sent,
     failed,

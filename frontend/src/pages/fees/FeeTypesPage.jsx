@@ -1,81 +1,60 @@
 /**
  * IlmForge — Fee Types Management
  * Tabs: Fee Type List | Add A Fee Type
- * localStorage key: ilmforge_fee_types
+ * Kept with the school on the server (GET/PUT /fees/types): the Generate Fee
+ * page offers these names. It used to be one browser's localStorage list,
+ * with three campuses the school did not have.
  */
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
-import api from '../../api/client';
 import { Tag, Plus, Trash2, Edit2, Save, X, Search, Printer } from 'lucide-react';
 import { buildWatermarkCss, buildWatermarkMarkup } from '../../utils/watermarkPrint';
+import useFeeTypes from '../../hooks/useFeeTypes';
+import useAuthStore from '../../store/auth.store';
 
-/* ── Seed data ───────────────────────────────────────────── */
-const SEED = [
-  { id: 1, name: 'Monthly Tuition Fee', campus: 'Main Campus' },
-  { id: 2, name: 'Admission Fee',        campus: 'Main Campus' },
-  { id: 3, name: 'Exam Fee',             campus: 'Main Campus' },
-  { id: 4, name: 'Transport Fee',        campus: 'Main Campus' },
-  { id: 5, name: 'Lab Fee',              campus: 'Main Campus' },
-  { id: 6, name: 'Sports Fee',           campus: 'Main Campus' },
-  { id: 7, name: 'Computer Fee',         campus: 'Main Campus' },
-  { id: 8, name: 'Books Fee',            campus: 'Main Campus' },
-];
-
-const LS_KEY = 'ilmforge_fee_types';
-const CAMPUSES = ['Main Campus', 'Branch 1', 'Branch 2'];
 const PAGE_SIZE = 10;
 
-/* ── Local-storage helpers ───────────────────────────────── */
-function loadTypes() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (_) { /* ignore */ }
-  localStorage.setItem(LS_KEY, JSON.stringify(SEED));
-  return SEED;
-}
-
-function saveTypes(list) {
-  localStorage.setItem(LS_KEY, JSON.stringify(list));
-}
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const csvCell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+const schoolNameNow = () => {
+  const s = useAuthStore.getState();
+  return s.school?.name || s.branding?.schoolName || 'School';
+};
 
 /* ── Export helpers ──────────────────────────────────────── */
-function exportCSV(rows) {
-  const header = 'Type ID,Fee Name,Campus\n';
-  const body = rows.map(r => `${r.id},${r.name},${r.campus}`).join('\n');
-  const blob = new Blob([header + body], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
+function download(text, type, name) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'fee_types.csv';
+  a.download = name;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportCSV(rows) {
+  const header = 'Type ID,Fee Name,Campus\n';
+  const body = rows.map(r => [r.id, r.name, r.campus].map(csvCell).join(',')).join('\n');
+  download(header + body, 'text/csv', 'fee_types.csv');
 }
 
 function exportExcel(rows) {
   // Tab-separated .xls compatible export
   const header = 'Type ID\tFee Name\tCampus\n';
   const body = rows.map(r => `${r.id}\t${r.name}\t${r.campus}`).join('\n');
-  const blob = new Blob([header + body], { type: 'application/vnd.ms-excel' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'fee_types.xls';
-  a.click();
-  URL.revokeObjectURL(url);
+  download(header + body, 'application/vnd.ms-excel', 'fee_types.xls');
 }
 
 function exportPDF(rows) {
-  const schoolName = localStorage.getItem('schoolName') || 'IlmForge School';
-  const schoolLogo = localStorage.getItem('schoolLogoPreview') || '';
+  const schoolName = esc(schoolNameNow());
+  const schoolLogo = useAuthStore.getState().school?.logoUrl || localStorage.getItem('schoolLogoPreview') || '';
   const watermarkCss = buildWatermarkCss({ mode: 'a4', color: '#1E3A5F' });
-  const watermarkHtml = buildWatermarkMarkup({ logo: schoolLogo, text: schoolName });
+  const watermarkHtml = buildWatermarkMarkup({ logo: schoolLogo, text: schoolNameNow() });
   const date = new Date().toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
   const rowsHTML = rows.map((r, i) => `
     <tr style="background:${i % 2 === 0 ? '#fff' : '#F8FAFC'}">
       <td style="padding:7px 10px;border:1px solid #E2E8F0;text-align:center;color:#64748B;">${r.id}</td>
-      <td style="padding:7px 10px;border:1px solid #E2E8F0;font-weight:600;color:#1E3A5F;">${r.name}</td>
-      <td style="padding:7px 10px;border:1px solid #E2E8F0;color:#374151;">${r.campus}</td>
+      <td style="padding:7px 10px;border:1px solid #E2E8F0;font-weight:600;color:#1E3A5F;">${esc(r.name)}</td>
+      <td style="padding:7px 10px;border:1px solid #E2E8F0;color:#374151;">${esc(r.campus)}</td>
     </tr>`).join('');
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
   <title>Fee Types — ${schoolName}</title>
@@ -101,6 +80,7 @@ function exportPDF(rows) {
   <p style="margin-top:16px;font-size:8.5pt;color:#9CA3AF;text-align:center;">Total: ${rows.length} fee type(s) · ${schoolName}</p>
   </body></html>`;
   const w = window.open('', '_blank');
+  if (!w) { toast.error('Allow pop-ups for this site to print.'); return; }
   w.document.write(html);
   w.document.close();
   w.focus();
@@ -115,8 +95,8 @@ function printTable(rows) {
    MAIN COMPONENT
 ════════════════════════════════════════════════════════════ */
 export default function FeeTypesPage() {
+  const { types: savedTypes, campuses, campusName, isLoading, error, save, isSaving } = useFeeTypes();
   const [tab, setTab]         = useState('list');
-  const [types, setTypes]     = useState(loadTypes);
   const [search, setSearch]   = useState('');
   const [page, setPage]       = useState(1);
   const [editId, setEditId]   = useState(null);
@@ -124,65 +104,81 @@ export default function FeeTypesPage() {
   const [editCampus, setEditCampus] = useState('');
 
   // Add form state
-  const [form, setForm] = useState({ campus: 'Main Campus', name: '' });
-  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ campusId: '', name: '' });
+  const saving = isSaving;
+
+  const types = savedTypes.map(t => ({ ...t, campus: campusName(t.campusId) }));
 
   /* ── Derived: filtered + paginated ── */
+  const q = search.trim().toLowerCase();
   const filtered = types.filter(t =>
-    t.name.toLowerCase().includes(search.toLowerCase()) ||
-    t.campus.toLowerCase().includes(search.toLowerCase()) ||
-    String(t.id).includes(search)
+    t.name.toLowerCase().includes(q) ||
+    t.campus.toLowerCase().includes(q) ||
+    String(t.id).includes(q)
   );
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+  const strip = (list) => list.map(({ id, name, campusId }) => ({ id, name, campusId: campusId ?? null }));
+  const store = async (list, done) => {
+    try {
+      await save(strip(list));
+      toast.success(done);
+      return true;
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'It could not be saved. Try again.');
+      return false;
+    }
+  };
+  const taken = (name, exceptId) => types.some(t => t.id !== exceptId && t.name.trim().toLowerCase() === name.trim().toLowerCase());
+
   /* ── Add fee type ── */
-  const handleAdd = () => {
-    if (!form.name.trim()) { toast.error('Fee name is required'); return; }
-    setSaving(true);
-    setTimeout(() => {
-      const newId = types.length ? Math.max(...types.map(t => t.id)) + 1 : 1;
-      const updated = [...types, { id: newId, name: form.name.trim(), campus: form.campus }];
-      saveTypes(updated);
-      setTypes(updated);
-      setForm({ campus: 'Main Campus', name: '' });
-      setSaving(false);
-      toast.success('Fee type added successfully');
+  const handleAdd = async () => {
+    if (saving) return;
+    const name = form.name.trim();
+    if (!name) { toast.error('Fee name is required'); return; }
+    if (taken(name)) { toast.error(`"${name}" is already in the list.`); return; }
+    if (await store([...types, { name, campusId: form.campusId ? Number(form.campusId) : null }], 'Fee type added')) {
+      setForm({ campusId: '', name: '' });
       setTab('list');
-    }, 300);
+    }
   };
 
   /* ── Delete ── */
   const handleDelete = (id) => {
-    if (!window.confirm('Delete this fee type?')) return;
-    const updated = types.filter(t => t.id !== id);
-    saveTypes(updated);
-    setTypes(updated);
-    toast.success('Fee type deleted');
+    if (!window.confirm('Delete this fee type? Bills already made with it are not changed.')) return;
+    store(types.filter(t => t.id !== id), 'Fee type deleted');
   };
 
   /* ── Edit start ── */
   const startEdit = (t) => {
     setEditId(t.id);
     setEditName(t.name);
-    setEditCampus(t.campus);
+    setEditCampus(t.campusId == null ? '' : String(t.campusId));
   };
 
   /* ── Edit save ── */
-  const saveEdit = (id) => {
-    if (!editName.trim()) { toast.error('Fee name cannot be empty'); return; }
-    const updated = types.map(t => t.id === id ? { ...t, name: editName.trim(), campus: editCampus } : t);
-    saveTypes(updated);
-    setTypes(updated);
-    setEditId(null);
-    toast.success('Fee type updated');
+  const saveEdit = async (id) => {
+    if (saving) return;
+    const name = editName.trim();
+    if (!name) { toast.error('Fee name cannot be empty'); return; }
+    if (taken(name, id)) { toast.error(`"${name}" is already in the list.`); return; }
+    const updated = types.map(t => t.id === id ? { ...t, name, campusId: editCampus ? Number(editCampus) : null } : t);
+    if (await store(updated, 'Fee type updated')) setEditId(null);
   };
 
   const cancelEdit = () => setEditId(null);
 
   /* ── Search reset page ── */
   const handleSearch = (v) => { setSearch(v); setPage(1); };
+
+  const campusOptions = (
+    <>
+      <option value="">All campuses</option>
+      {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+    </>
+  );
 
   return (
     <div className="page-content fade-in">
@@ -293,7 +289,15 @@ export default function FeeTypesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pageRows.length === 0 && (
+                  {isLoading && (
+                    <tr><td colSpan={4}><div className="loading-center"><div className="spinner" /></div></td></tr>
+                  )}
+                  {!isLoading && error && (
+                    <tr><td colSpan={4} style={{ color: '#B91C1C', padding: 16 }}>
+                      {error.response?.data?.message || 'The fee types could not be loaded.'}
+                    </td></tr>
+                  )}
+                  {!isLoading && !error && pageRows.length === 0 && (
                     <tr>
                       <td colSpan={4}>
                         <div className="empty-state">
@@ -340,7 +344,7 @@ export default function FeeTypesPage() {
                             value={editCampus}
                             onChange={e => setEditCampus(e.target.value)}
                           >
-                            {CAMPUSES.map(c => <option key={c} value={c}>{c}</option>)}
+                            {campusOptions}
                           </select>
                         ) : (
                           <span className="badge badge-teal">{t.campus}</span>
@@ -355,6 +359,7 @@ export default function FeeTypesPage() {
                               className="btn btn-teal btn-sm"
                               style={{ padding: '3px 10px', fontSize: 12, gap: 4 }}
                               onClick={() => saveEdit(t.id)}
+                              disabled={saving}
                             >
                               <Save size={12} /> Save
                             </button>
@@ -380,6 +385,7 @@ export default function FeeTypesPage() {
                               className="btn btn-outline btn-sm"
                               style={{ padding: '4px 10px', fontSize: 12, gap: 4, color: '#DC2626', borderColor: '#FECACA' }}
                               onClick={() => handleDelete(t.id)}
+                              disabled={saving}
                               title="Delete"
                             >
                               <Trash2 size={13} /> Delete
@@ -450,10 +456,10 @@ export default function FeeTypesPage() {
               <label className="form-label">Campus</label>
               <select aria-label="Campus"
                 className="form-select"
-                value={form.campus}
-                onChange={e => setForm({ ...form, campus: e.target.value })}
+                value={form.campusId}
+                onChange={e => setForm({ ...form, campusId: e.target.value })}
               >
-                {CAMPUSES.map(c => <option key={c} value={c}>{c}</option>)}
+                {campusOptions}
               </select>
             </div>
 
@@ -482,7 +488,7 @@ export default function FeeTypesPage() {
               </button>
               <button
                 className="btn btn-outline"
-                onClick={() => { setForm({ campus: 'Main Campus', name: '' }); setTab('list'); }}
+                onClick={() => { setForm({ campusId: '', name: '' }); setTab('list'); }}
               >
                 Cancel
               </button>

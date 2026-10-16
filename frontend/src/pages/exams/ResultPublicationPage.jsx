@@ -29,7 +29,9 @@ const typeBadge = {
 /* ─── Confirm Modal ──────────────────────────────────── */
 function ConfirmModal({ exam, onConfirm, onCancel, loading, publishStep }) {
   const [sendSms, setSendSms] = useState(true); // default ON
-  const [portalLink, setPortalLink] = useState(window.location.origin + '/portal');
+  // Empty: the school's parent sign-in page, which the server fills in. This
+  // computer's own address (localhost on the desktop edition) reaches no parent.
+  const [portalLink, setPortalLink] = useState('');
 
   /* Step indicator labels */
   const steps = [
@@ -102,7 +104,7 @@ function ConfirmModal({ exam, onConfirm, onCancel, loading, publishStep }) {
               className="form-input"
               value={portalLink}
               onChange={e => setPortalLink(e.target.value)}
-              placeholder="https://your-school-portal.com/portal"
+              placeholder="Leave empty for the school's parent sign-in page"
               style={{ fontSize: 12 }}
             />
           </div>
@@ -227,23 +229,13 @@ export default function ResultPublicationPage() {
         /* Step 2 — Collect parent phones from results, then POST /notifications/sms */
         setPublishStep('sms');
         try {
-          /* Fetch result rows to build parent phone list */
-          const resultsRes = await api.get(`/exams/${exam.id}/results`);
-          const resultRows = resultsRes.data?.data || [];
-
-          /* Collect unique student IDs */
-          const uniqueStudentIds = [...new Set(resultRows.map(r => r.studentId).filter(Boolean))];
-
-          /* Build per-student SMS message using sms-blast endpoint which already
-             loads parent phones server-side; we just fire it and capture sent count */
-          const blastRes = await api.post(`/exams/${exam.id}/results/sms-blast`, {
-            portalLink: portalLink || window.location.origin + '/portal',
-          });
-          const sent = blastRes.data?.sent?.length ?? blastRes.data?.data?.sent ?? uniqueStudentIds.length;
-          toast.success(
-            `Results published! SMS sent to ${sent} parent${sent !== 1 ? 's' : ''}.`,
-            { duration: 5000 }
-          );
+          /* The server finds each parent's phone and says how many went:
+             this counted every student as messaged when none was sent. */
+          const link = /^https?:\/\/\S+$/i.test(portalLink.trim()) ? portalLink.trim() : undefined;
+          const blastRes = await api.post(`/exams/${exam.id}/results/sms-blast`, { portalLink: link });
+          const sent = blastRes.data?.data?.sent ?? 0;
+          toast.success(`"${exam.title}" published.`, { duration: 4000 });
+          (sent > 0 ? toast.success : toast.error)(blastRes.data?.message || `SMS sent to ${sent} parent(s).`, { duration: 7000 });
         } catch (smsErr) {
           /* Publish succeeded but SMS failed — show partial success */
           toast.success(`"${exam.title}" published successfully.`, { duration: 4000 });
@@ -310,8 +302,8 @@ export default function ResultPublicationPage() {
     setActionLoading(p => ({ ...p, [`sms-${exam.id}`]: true }));
     try {
       const res = await api.post(`/exams/${exam.id}/results/sms-blast`);
-      const sent = res.data?.data?.sent ?? '?';
-      toast.success(`SMS sent to ${sent} parent(s) for "${exam.title}".`);
+      const sent = res.data?.data?.sent ?? 0;
+      (sent > 0 ? toast.success : toast.error)(res.data?.message || `SMS sent to ${sent} parent(s).`, { duration: 7000 });
     } catch (err) {
       toast.error(errMsg(err));
     } finally {

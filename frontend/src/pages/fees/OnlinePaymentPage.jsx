@@ -3,10 +3,13 @@
  * JazzCash, EasyPaisa, and Debit/Credit Card fee collection
  * Manual transaction recording + recent payments table
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import toast from 'react-hot-toast';
+import { money, fromPaisa, toPaisa } from '../../utils/currency';
+import { feePeriod } from '../../utils/feeMonth';
 import {
   Globe, CreditCard, Smartphone, ExternalLink, CheckCircle,
   X, Search, Plus, Copy, AlertCircle, ChevronDown, ChevronRight,
@@ -73,133 +76,158 @@ const GATEWAYS = [
   },
 ];
 
-/* ── Record Payment Modal ────────────────────── */
-function RecordPaymentModal({ gateway, onClose, onSaved }) {
+/* ── Record Payment Modal ──────────────────────
+   An online payment pays a fee bill like any other: choose the student,
+   then the bill, and it is recorded with Fee Collection's own payment
+   (receipt, the bill marked paid, the parent told). It used to post to an
+   address that did not exist, so nothing was ever saved. */
+const pkToday = () => new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(0, 10);
+const METHOD = { jazzcash: 'wallet', easypaisa: 'wallet', card: 'card' };
+
+function RecordPaymentModal({ gateway, onClose, onSaved, recent }) {
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [form, setForm] = useState({
-    amount:        '',
-    transactionId: '',
-    date:          new Date().toISOString().slice(0, 10),
-    notes:         '',
-  });
+  const [invoiceId, setInvoiceId] = useState('');
+  const [form, setForm] = useState({ amount: '', transactionId: '', date: pkToday(), notes: '' });
   const [loading, setLoading] = useState(false);
 
   const { data: studentResults = [] } = useQuery({
     queryKey: ['online-pay-student', studentSearch],
-    queryFn: () => studentSearch.length > 1
-      ? api.get('/students', { params: { search: studentSearch, limit: 8 } }).then(r => r.data.data || [])
-      : Promise.resolve([]),
-    enabled: studentSearch.length > 1,
+    queryFn: () => api.get('/students', { params: { search: studentSearch, limit: 8 } }).then(r => r.data.data || []),
+    enabled: studentSearch.length > 1 && !selectedStudent,
   });
+  const { data: fees, isLoading: feesLoading } = useQuery({
+    queryKey: ['student-fee', selectedStudent?.id],
+    queryFn: () => api.get(`/fees/student/${selectedStudent.id}`).then(r => r.data.data),
+    enabled: !!selectedStudent,
+  });
+  // Bills still owing, oldest first: a payment normally clears the oldest.
+  const unpaid = (fees?.invoices || []).filter(i => i.dueAmount > 0).slice().reverse();
+  const invoice = unpaid.find(i => String(i.id) === String(invoiceId));
+
+  const pickStudent = (s) => {
+    setSelectedStudent(s);
+    setStudentSearch(s.name);
+    setInvoiceId('');
+    setForm(f => ({ ...f, amount: '' }));
+  };
+  const pickInvoice = (id) => {
+    setInvoiceId(id);
+    const inv = unpaid.find(i => String(i.id) === String(id));
+    if (inv) setForm(f => ({ ...f, amount: String(fromPaisa(inv.dueAmount)) }));
+  };
+  // Choose the oldest unpaid bill once the student's bills arrive.
+  useEffect(() => {
+    if (selectedStudent && !invoiceId && unpaid.length) pickInvoice(unpaid[0].id);
+  }, [fees, selectedStudent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async () => {
-    if (!selectedStudent) return toast.error('Select a student');
-    if (!form.amount || +form.amount <= 0) return toast.error('Enter a valid amount');
-    if (!form.transactionId.trim()) return toast.error('Enter the transaction / reference ID');
+    if (!selectedStudent) return toast.error('Choose the student.');
+    if (!invoice) return toast.error('Choose the fee bill this payment is for.');
+    const paisa = toPaisa(form.amount);
+    if (!paisa || paisa <= 0) return toast.error('Enter the amount paid.');
+    if (paisa > invoice.dueAmount) return toast.error(`The bill has ${money(invoice.dueAmount)} due. Enter that or less.`);
+    const ref = form.transactionId.trim();
+    if (!ref) return toast.error('Enter the transaction ID from the payment message.');
+    // The same transaction recorded twice would count the money twice.
+    if ((recent || []).some(p => !p.voidedAt && String(p.remarks || '').includes(`Ref ${ref}`))) {
+      return toast.error(`Transaction ${ref} is already recorded.`);
+    }
     setLoading(true);
     try {
-      await api.post('/payments', {
-        studentId:     selectedStudent.id,
-        amount:        Math.round(parseFloat(form.amount) * 100),
-        method:        'online',
-        provider:      gateway.id,
-        providerRef:   form.transactionId,
-        date:          form.date,
-        notes:         form.notes,
-        status:        'completed',
+      const r = await api.post('/fees/payments', {
+        invoiceId: invoice.id,
+        amountPaid: paisa,
+        method: METHOD[gateway.id] || 'online',
+        paymentDate: form.date,
+        remarks: [`${gateway.label} · Ref ${ref}`, form.notes.trim()].filter(Boolean).join(' · '),
       });
-      toast.success('Online payment recorded successfully');
+      toast.success(`Recorded: receipt ${r.data.data?.receiptNo || ''} for ${selectedStudent.name}.`);
       onSaved();
       onClose();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to record payment');
+      toast.error(err.response?.data?.message || 'The payment could not be recorded.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: 440, boxShadow: '0 8px 40px rgba(0,0,0,0.18)', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>
-            {gateway.icon} Record {gateway.label} Payment
+      <div role="dialog" aria-modal="true" aria-labelledby="record-online-title" style={{ background: '#fff', borderRadius: 14, padding: 26, width: '100%', maxWidth: 460, boxShadow: '0 8px 40px rgba(0,0,0,0.18)', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div id="record-online-title" style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>
+            {gateway.icon} Record a {gateway.label} payment
           </div>
-          <button aria-label="Close" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={18}/></button>
+          <button type="button" aria-label="Close" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={18}/></button>
         </div>
 
-        {/* Student */}
         <div className="form-group" style={{ marginBottom: 14 }}>
-          <label className="form-label">Student *</label>
+          <label className="form-label" htmlFor="op-student">Student *</label>
           <div style={{ position: 'relative' }}>
             <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}/>
-            <input className="form-input" style={{ paddingLeft: 32, fontSize: 13 }}
-              placeholder="Search student by name..."
+            <input id="op-student" className="form-input" style={{ paddingLeft: 32, fontSize: 13 }}
+              placeholder="Name, roll number or parent's phone"
               value={studentSearch}
-              onChange={e => { setStudentSearch(e.target.value); setSelectedStudent(null); }}
-            />
+              onChange={e => { setStudentSearch(e.target.value); setSelectedStudent(null); setInvoiceId(''); }} />
           </div>
-          {selectedStudent && (
-            <div style={{ marginTop: 5, fontSize: 12.5, fontWeight: 600, color: '#0F766E' }}>
-              Selected: {selectedStudent.name} ({selectedStudent.class?.name || ''})
-            </div>
-          )}
           {studentSearch.length > 1 && !selectedStudent && studentResults.length > 0 && (
             <div style={{ border: '1px solid #E5E7EB', borderRadius: 8, overflow: 'hidden', marginTop: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.07)' }}>
               {studentResults.map(s => (
-                <div key={s.id}
-                  onClick={() => { setSelectedStudent(s); setStudentSearch(s.name); }}
-                  style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#F0FDFA'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#fff'}
-                >
-                  <span style={{ fontWeight: 600 }}>{s.name}</span>
+                <button type="button" key={s.id} onClick={() => pickStudent(s)}
+                  style={{ width: '100%', textAlign: 'left', padding: '8px 12px', cursor: 'pointer', fontSize: 13, border: 0, borderBottom: '1px solid #F3F4F6', background: '#fff', display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 600 }}>{s.name} <span style={{ color: '#6B7280', fontWeight: 400 }}>· {s.rollNo}</span></span>
                   <span style={{ color: '#6B7280', fontSize: 12 }}>{s.class?.name || ''}</span>
-                </div>
+                </button>
               ))}
             </div>
           )}
         </div>
 
+        {selectedStudent && (
+          <div className="form-group" style={{ marginBottom: 14 }}>
+            <label className="form-label" htmlFor="op-bill">Fee bill *</label>
+            {feesLoading ? <div style={{ fontSize: 12.5, color: '#6B7280' }}>Loading bills…</div>
+              : unpaid.length ? (
+                <select id="op-bill" className="form-input" value={invoiceId} onChange={e => pickInvoice(e.target.value)}>
+                  {unpaid.map(i => <option key={i.id} value={i.id}>{feePeriod(i) || i.feeTitle} — {money(i.dueAmount)} due</option>)}
+                </select>
+              ) : <div style={{ fontSize: 12.5, color: '#15803D', fontWeight: 600 }}>{selectedStudent.name} has no unpaid bills.</div>}
+          </div>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
           <div className="form-group">
-            <label className="form-label">Amount Paid (Rs.) *</label>
-            <input className="form-input" type="number" value={form.amount}
-              onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-              placeholder="e.g. 5000"/>
+            <label className="form-label" htmlFor="op-amount">Amount paid (Rs.) *</label>
+            <input id="op-amount" className="form-input" type="number" min="1" value={form.amount}
+              onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="e.g. 2500" />
           </div>
           <div className="form-group">
-            <label className="form-label">Payment Date</label>
-            <input aria-label="Payment Date" className="form-input" type="date" value={form.date}
-              onChange={e => setForm(f => ({ ...f, date: e.target.value }))}/>
+            <label className="form-label" htmlFor="op-date">Paid on</label>
+            <input id="op-date" className="form-input" type="date" value={form.date} max={pkToday()}
+              onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           </div>
         </div>
 
         <div className="form-group" style={{ marginBottom: 14 }}>
-          <label className="form-label">Transaction / Reference ID *</label>
-          <input className="form-input" value={form.transactionId}
+          <label className="form-label" htmlFor="op-ref">Transaction ID *</label>
+          <input id="op-ref" className="form-input" value={form.transactionId}
             onChange={e => setForm(f => ({ ...f, transactionId: e.target.value }))}
-            placeholder={gateway.id === 'jazzcash' ? 'e.g. JC2024123456' : gateway.id === 'easypaisa' ? 'e.g. EP20241234' : 'e.g. TXN123456'}/>
+            placeholder={gateway.id === 'jazzcash' ? 'e.g. 012345678901' : gateway.id === 'easypaisa' ? 'e.g. 23456789012' : 'e.g. TXN123456'} />
         </div>
 
         <div className="form-group" style={{ marginBottom: 18 }}>
-          <label className="form-label">Notes (optional)</label>
-          <input className="form-input" value={form.notes}
-            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-            placeholder="Any additional notes..."/>
+          <label className="form-label" htmlFor="op-notes">Note (optional)</label>
+          <input id="op-notes" className="form-input" value={form.notes}
+            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. paid by the father" />
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
-          <button
-            className="btn btn-sm"
-            style={{ flex: 1, background: gateway.color, color: '#fff', border: 'none' }}
-            onClick={save}
-            disabled={loading}
-          >
-            {loading ? 'Saving...' : 'Record Payment'}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
+          <button type="button" className="btn btn-sm" style={{ flex: 1, background: gateway.color, color: '#fff', border: 'none' }}
+            onClick={save} disabled={loading || !invoice}>
+            {loading ? 'Recording…' : 'Record payment'}
           </button>
         </div>
       </div>
@@ -290,11 +318,11 @@ function GatewayCard({ gw, settings, onRecord }) {
               <Plus size={13}/> Record Payment
             </button>
           ) : (
-            <a href="/settings/payments"
+            <Link to="/settings/payments"
               className="btn btn-outline btn-sm"
               style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <ExternalLink size={12}/> Configure in Settings
-            </a>
+            </Link>
           )}
           {active && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#15803D', fontWeight: 600 }}>
@@ -317,11 +345,11 @@ export default function OnlinePaymentPage() {
     queryFn: () => api.get('/settings/payment').then(r => r.data.data || {}).catch(() => ({})),
   });
 
+  // The payments recorded from this page are fee payments made by wallet
+  // (JazzCash, EasyPaisa) or card.
   const { data: txns = [] } = useQuery({
     queryKey: ['recent-payments-online'],
-    // /payments has no collection handler; /payments/transactions is the
-    // canonical listing and already supports the method/limit filters.
-    queryFn: () => api.get('/payments/transactions', { params: { method: 'online', limit: 20 } })
+    queryFn: () => api.get('/fees/payments', { params: { method: 'wallet,card,online', limit: 200 } })
       .then(r => r.data.data || []).catch(() => []),
   });
 
@@ -343,7 +371,8 @@ export default function OnlinePaymentPage() {
         <RecordPaymentModal
           gateway={recordGateway}
           onClose={() => setRecordGateway(null)}
-          onSaved={() => qc.invalidateQueries({ queryKey: ['recent-payments-online'] })}
+          onSaved={() => { qc.invalidateQueries({ queryKey: ['recent-payments-online'] }); qc.invalidateQueries({ queryKey: ['student-fee'] }); }}
+          recent={txns}
         />
       )}
 
@@ -363,8 +392,8 @@ export default function OnlinePaymentPage() {
         <AlertCircle size={16} color="#D97706" style={{ flexShrink: 0, marginTop: 1 }}/>
         <div style={{ fontSize: 13, color: '#92400E', lineHeight: 1.6 }}>
           <strong>Setup required:</strong> Configure your JazzCash account number, EasyPaisa number, and payment portal URL in{' '}
-          <a href="/settings/payments" style={{ color: '#D97706', fontWeight: 700 }}>Settings &rarr; Payments</a>{' '}
-          to show them on vouchers and receipts. You can still record online payments manually below.
+          <Link to="/settings/payments" style={{ color: '#D97706', fontWeight: 700 }}>Settings &rarr; Payments</Link>{' '}
+          to show them on vouchers and receipts. A payment a parent made online is recorded against their fee bill here.
         </div>
       </div>
 
@@ -379,13 +408,13 @@ export default function OnlinePaymentPage() {
       <div className="card" style={{ padding: 0 }}>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827' }}>Recent Online Payments</h3>
-          <span style={{ fontSize: 12, color: '#9CA3AF' }}>Last 20 transactions</span>
+          <span style={{ fontSize: 12, color: '#9CA3AF' }}>Latest {Math.min(txns.length, 20)}</span>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table className="table-modern">
             <thead>
               <tr>
-                {['Date', 'Student', 'Amount', 'Provider', 'Transaction ID', 'Status'].map(h => (
+                {['Paid on', 'Student', 'Fee', 'Amount', 'Paid by', 'Receipt / reference', 'Status'].map(h => (
                   <th key={h}>{h}</th>
                 ))}
               </tr>
@@ -393,35 +422,23 @@ export default function OnlinePaymentPage() {
             <tbody>
               {txns.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 36, color: '#94a3b8', fontSize: 13 }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 36, color: '#94a3b8', fontSize: 13 }}>
                     No online payments recorded yet
                   </td>
                 </tr>
-              ) : txns.map(t => {
-                const sc = statusColor(t.status);
-                const pc = providerColor(t.provider || t.method);
+              ) : txns.slice(0, 20).map(t => {
+                const voided = !!t.voidedAt;
+                const how = /jazzcash/i.test(t.remarks || '') ? 'JazzCash' : /easypaisa/i.test(t.remarks || '') ? 'EasyPaisa' : t.method === 'card' ? 'Card' : t.method;
+                const pc = providerColor(/jazzcash/i.test(how) ? 'jazzcash' : /easypaisa/i.test(how) ? 'easypaisa' : 'card');
                 return (
-                  <tr key={t.id}>
-                    <td style={{ fontSize: 12, color: '#6B7280' }}>
-                      {t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-PK') : '—'}
-                    </td>
-                    <td style={{ fontWeight: 600 }}>{t.student?.name || '—'}</td>
-                    <td style={{ fontWeight: 700, color: '#0073b7' }}>
-                      Rs. {Number(t.amount || 0).toLocaleString('en-PK')}
-                    </td>
-                    <td>
-                      <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: pc + '18', color: pc }}>
-                        {t.provider || t.method || '—'}
-                      </span>
-                    </td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 11.5, color: '#374151' }}>
-                      {t.providerRef || t.transactionNo || '—'}
-                    </td>
-                    <td>
-                      <span style={{ fontSize: 11.5, fontWeight: 700, padding: '2px 9px', borderRadius: 99, background: sc.bg, color: sc.color }}>
-                        {t.status || 'unknown'}
-                      </span>
-                    </td>
+                  <tr key={t.id} style={{ opacity: voided ? 0.55 : 1 }}>
+                    <td style={{ fontSize: 12, color: '#6B7280' }}>{t.paymentDate ? new Date(t.paymentDate).toLocaleDateString('en-PK') : '—'}</td>
+                    <td style={{ fontWeight: 600 }}>{t.invoice?.student?.name || '—'}<div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>{t.invoice?.student?.class?.name || ''}</div></td>
+                    <td style={{ fontSize: 12.5 }}>{feePeriod(t.invoice || {}) || t.invoice?.feeTitle || '—'}</td>
+                    <td style={{ fontWeight: 700, color: '#0073b7', textDecoration: voided ? 'line-through' : 'none' }}>{money(t.amountPaid)}</td>
+                    <td><span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: pc + '18', color: pc }}>{how}</span></td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 11.5, color: '#374151' }}>{t.receiptNo || '—'}<div style={{ color: '#94a3b8' }}>{(String(t.remarks || '').match(/Ref ([^·]+)/) || [])[1] || ''}</div></td>
+                    <td><span style={{ fontSize: 11.5, fontWeight: 700, padding: '2px 9px', borderRadius: 99, background: voided ? '#FEE2E2' : '#DCFCE7', color: voided ? '#DC2626' : '#15803D' }}>{voided ? 'cancelled' : 'received'}</span></td>
                   </tr>
                 );
               })}

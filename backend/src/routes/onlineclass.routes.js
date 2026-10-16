@@ -15,7 +15,14 @@ router.get('/', wrap(async (req, res) => {
 router.post('/', wrap(async (req, res) => {
   if (!['admin','super_admin','teacher'].includes(req.user.role)) return res.status(403).json({ success: false, message: 'Teachers/admins only.' });
   const { classId, sectionId, subjectId, title, meetingLink, scheduledAt, durationMinutes } = req.body;
-  if (!title) return res.status(400).json({ success: false, message: 'Title required.' });
+  if (!String(title || '').trim()) return res.status(400).json({ success: false, message: 'Title required.' });
+  // A meeting link must open: "meet.google.com/abc" gets https://, anything
+  // that is not a web address is refused.
+  let link = String(meetingLink || '').trim();
+  if (link && !/^https?:\/\//i.test(link)) link = `https://${link}`;
+  if (link && !/^https?:\/\/[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(link)) {
+    return res.status(400).json({ success: false, message: 'The meeting link must be a web address, e.g. https://meet.google.com/abc-defg-hij' });
+  }
   const oc = await prisma.onlineClass.create({
     data: {
       schoolId: req.schoolId,
@@ -23,7 +30,7 @@ router.post('/', wrap(async (req, res) => {
       sectionId: sectionId ? parseInt(sectionId) : null,
       subjectId: subjectId ? parseInt(subjectId) : null,
       teacherId: req.user.role === 'teacher' ? req.user.id : null,
-      title, meetingLink,
+      title: String(title).trim(), meetingLink: link || null,
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       durationMinutes: parseInt(durationMinutes) || 60,
     }
@@ -49,6 +56,22 @@ router.put('/:id/status', wrap(async (req, res) => {
   }
   const oc = await prisma.onlineClass.update({ where: { id: existing.id }, data: { status: req.body.status || 'completed' } });
   res.json({ success: true, data: oc });
+}));
+
+// DELETE /online-classes/:id — the Academics page's delete button had no
+// route behind it. Same rule as a status change: admins, or the teacher
+// who added it.
+router.delete('/:id', wrap(async (req, res) => {
+  if (!['admin', 'super_admin', 'principal', 'teacher'].includes(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Teachers/admins only.' });
+  }
+  const existing = await prisma.onlineClass.findFirst({ where: { id: parseInt(req.params.id, 10), schoolId: req.schoolId } });
+  if (!existing) return res.status(404).json({ success: false, message: 'Online class not found.' });
+  if (req.user.role === 'teacher' && existing.teacherId !== req.user.id) {
+    return res.status(403).json({ success: false, message: 'You can only remove an online class you added.' });
+  }
+  await prisma.onlineClass.delete({ where: { id: existing.id } });
+  res.json({ success: true, message: 'Online class removed.' });
 }));
 
 module.exports = router;

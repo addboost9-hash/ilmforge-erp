@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 
 /* ── Helpers ── */
+// The device's sync key is a secret: cryptographic randomness, not Math.random.
 const genToken = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  return Array.from({length:32}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
 };
 
 /* derive base host from current API base */
@@ -125,7 +127,9 @@ export default function BiometricSettingsPage() {
   const testConnection = async () => {
     setConnStatus('testing');
     try {
-      const res = await api.get('/health').catch(() => api.get('/auth/me'));
+      // /health is served at the server's root, not under /api/v1.
+      const r = await fetch(`${getHostUrl()}/health`);
+      if (!r.ok) throw new Error(`health ${r.status}`);
       setConnStatus('ok');
       toast.success('Backend connection successful! ✅');
     } catch {

@@ -129,7 +129,8 @@ export default function WhatsAppPage() {
       type:    msgType === 'text' ? 'text' : 'text', // WA API type
     }),
     onSuccess: r => {
-      toast.success(r.data.message || 'WhatsApp messages sent!');
+      // "WhatsApp sent to 0/40 numbers" is not a success.
+      (r.data.data?.sent > 0 ? toast.success : toast.error)(r.data.message || 'WhatsApp messages sent!', { duration: 6000 });
       setResults(r.data.data?.results || null);
     },
     onError: err => toast.error(err.response?.data?.message || 'Send failed'),

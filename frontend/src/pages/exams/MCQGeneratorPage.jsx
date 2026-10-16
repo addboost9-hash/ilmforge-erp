@@ -3,7 +3,7 @@
  * AI-powered MCQ generation with print and save capabilities
  */
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Brain, Sparkles, Printer, Plus, Trash2, Save, Key } from 'lucide-react';
 import api from '../../api/client';
@@ -225,28 +225,42 @@ export default function MCQGeneratorPage() {
     w.document.close();
   };
 
+  // Saved to Examination → Question Papers (the paper builder's own store),
+  // where it can be edited and printed. It used to go into the class-test
+  // table, where it showed up as a test with its questions as its "type" and
+  // was never listed as a question paper.
+  const { data: classes = [] } = useQuery({
+    queryKey: ['classes'],
+    queryFn: () => api.get('/classes').then(r => r.data.data || []),
+  });
+  const [savingPaper, setSavingPaper] = useState(false);
   const savePaper = async () => {
     if (mcqs.length === 0) { toast.error('No MCQs to save'); return; }
+    if (savingPaper) return;
+    const LETTERS = ['A', 'B', 'C', 'D'];
+    const questions = mcqs.map((q, i) => {
+      const options = LETTERS.map(l => (q.options?.[l] || '').trim());
+      if (!q.question?.trim() || options.some(o => !o)) throw new Error(`Question ${i + 1}: fill in the question and all four options before saving.`);
+      return { type: 'mcq', text: q.question.trim(), marks: 1, options, answer: Math.max(0, LETTERS.indexOf(String(q.answer || 'A').toUpperCase())) };
+    });
+    const cls = classes.find(c => c.name.trim().toLowerCase() === form.className.trim().toLowerCase());
+    setSavingPaper(true);
     try {
-      await api.post('/question-papers', {
-        title: `${form.subject} — ${form.topic} MCQ (${form.numQuestions}Q)`,
-        subject: form.subject,
-        className: form.className,
-        totalMarks: mcqs.length,
-        questions: mcqs.map((q, i) => ({
-          questionText: q.question,
-          type: 'mcq',
-          marks: 1,
-          options: [q.options.A, q.options.B, q.options.C, q.options.D].filter(Boolean),
-          correctAnswer: q.answer,
-          order: i + 1,
-        })),
+      await api.post('/papers', {
+        title: [form.subject, form.topic, 'MCQs'].filter(Boolean).join(' — '),
+        subjectName: form.subject || undefined,
+        classId: cls?.id,
+        sections: [{ title: 'Multiple Choice Questions', questions }],
+        status: 'draft',
       });
-      toast.success('Saved as Question Paper!');
-    } catch {
-      toast.error('Could not save. Check question paper route.');
+      toast.success('Saved as a draft under Examination → Question Papers.');
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Could not save the paper.');
+    } finally {
+      setSavingPaper(false);
     }
   };
+  const trySavePaper = () => savePaper().catch(err => toast.error(err.message));
 
   return (
     <div className="page-content fade-up">
@@ -388,7 +402,7 @@ export default function MCQGeneratorPage() {
             <button className="btn btn-sm" style={{ background: '#059669', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }} onClick={printAnswerKey}>
               <Key size={13} /> Print Answer Key
             </button>
-            <button className="btn btn-sm" style={{ background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }} onClick={savePaper}>
+            <button className="btn btn-sm" style={{ background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }} onClick={trySavePaper} disabled={savingPaper}>
               <Save size={13} /> Save as Paper
             </button>
             <span style={{ marginLeft: 'auto', fontSize: 12, color: '#9CA3AF' }}>{mcqs.length} question(s)</span>

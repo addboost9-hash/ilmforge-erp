@@ -465,7 +465,9 @@ function MarksEntryTab({ classes }) {
         const marksArr = r.data.data || [];
         const map = {};
         marksArr.forEach(m => {
-          map[m.studentId] = { obtained: m.obtained ?? '', absent: !!m.absent };
+          // The server's names (obtainedMarks / isAbsent): reading obtained /
+          // absent showed every saved test as blank.
+          map[m.studentId] = { obtained: m.isAbsent ? '' : (m.obtainedMarks ?? ''), absent: !!m.isAbsent };
         });
         setLocalMarks(map);
       })
@@ -498,13 +500,18 @@ function MarksEntryTab({ classes }) {
     if (!selectedTest) return;
     setSaving(true);
     try {
-      const marksPayload = students.map(s => ({
-        studentId: s.id,
-        obtained:  localMarks[s.id]?.absent ? null : (parseFloat(localMarks[s.id]?.obtained) ?? null),
-        absent:    !!(localMarks[s.id]?.absent),
-      }));
-      await api.post(`/tests/${selectedTest.id}/marks`, { marks: marksPayload });
-      toast.success('Marks saved successfully.');
+      // Sent as obtainedMarks / isAbsent, the names the server reads: sent as
+      // obtained / absent, every mark was saved as 0 and no one as absent.
+      const marksPayload = students
+        .filter(s => localMarks[s.id]?.absent || String(localMarks[s.id]?.obtained ?? '').trim() !== '')
+        .map(s => ({
+          studentId: s.id,
+          obtainedMarks: localMarks[s.id]?.absent ? null : Number(localMarks[s.id]?.obtained),
+          isAbsent: !!(localMarks[s.id]?.absent),
+        }));
+      if (!marksPayload.length) { toast.error('Enter some marks first.'); return; }
+      const r = await api.post(`/tests/${selectedTest.id}/marks`, { marks: marksPayload });
+      toast.success(r.data?.message || 'Marks saved successfully.');
     } catch (err) {
       toast.error(errMsg(err));
     } finally {

@@ -5,10 +5,15 @@ const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 router.get('/', wrap(async (req, res) => {
   const { classId, subjectId } = req.query;
+  // A student sees their own class's materials and the school-wide ones.
+  const me = req.user?.role === 'student'
+    ? await prisma.student.findFirst({ where: { schoolId: req.schoolId, userId: req.user.id, deletedAt: null }, select: { classId: true } })
+    : null;
+  if (req.user?.role === 'student' && !me) return res.json({ success: true, data: [] });
   const data = await prisma.studyMaterial.findMany({
     where: {
       schoolId: req.schoolId, isActive: true,
-      ...(classId && { classId: parseInt(classId) }),
+      ...(me ? { OR: [{ classId: me.classId }, { classId: null }] } : classId && { classId: parseInt(classId) }),
       ...(subjectId && { subjectId: parseInt(subjectId) }),
     },
     orderBy: { createdAt: 'desc' }, take: 100,

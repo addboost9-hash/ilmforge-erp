@@ -13,9 +13,21 @@ const { sendEmail } = require('./email.service');
 const { monthLabel, byPeriodDesc } = require('../utils/feeMonth');
 
 /* ─── Template tag resolver ───────────────────────────────────────── */
-function resolveTemplate(body, vars = {}) {
-  return body.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+const { fill, savedTemplate } = require('./messageTemplate');
+// {name} and {{name}} both, so the SMS Templates page's wording works here.
+const resolveTemplate = (body, vars = {}) => fill(body, vars);
+
+/* The text for an automation rule: the template the rule names, else the
+   school's own wording from Settings → SMS Templates (null when switched
+   off there), else the built-in text. */
+async function ruleBody(rule, tpl, smsTemplateId, builtIn) {
+  if (tpl?.body) return tpl.body;
+  const saved = await savedTemplate(rule.schoolId, smsTemplateId);
+  if (saved && saved.enabled === false) return null;
+  if (saved && String(saved.message || '').trim()) return saved.message;
+  return builtIn;
 }
+const schoolNameOf = async (schoolId) => (await prisma.school.findUnique({ where: { id: schoolId }, select: { name: true } }))?.name || 'School';
 
 /* ─── Fee dues, one entry per student ─────────────────────────────
    Reminders went out once per unpaid invoice, so a parent three months
@@ -110,9 +122,11 @@ async function runFeeReminders() {
         : null;
 
       const defaultBody =
-        'Dear {{parent_name}},\nYour child {{student_name}} (Class {{class}}) has a pending fee of Rs. {{amount}} for {{month}}.\nPlease pay at your earliest convenience to avoid a late fee.\n\nThank you — IlmForge';
+        'Dear {{parent_name}},\nYour child {{student_name}} (Class {{class}}) has a pending fee of Rs. {{amount}} for {{month}}.\nPlease pay at your earliest convenience to avoid a late fee.\n\nThank you — {{school_name}}';
 
-      const bodyTemplate = tpl?.body || defaultBody;
+      const bodyTemplate = await ruleBody(rule, tpl, 'fee_reminder', defaultBody);
+      if (!bodyTemplate) continue;
+      const schoolName = await schoolNameOf(rule.schoolId);
 
       // Find unpaid invoices. A whole school's unpaid book is loaded (it
       // used to stop at 500 invoices), so no student's total is cut short.
@@ -148,12 +162,16 @@ async function runFeeReminders() {
           parent_name:  parentUser?.name || 'Parent',
           student_name: due.student?.name || 'Student',
           class:        due.student?.class?.name || '',
+          class_name:   due.student?.class?.name || '',
           amount:       rupees(due.totalDue),
+          fee_due:      rupees(due.totalDue),
           month:        months,
+          fee_title:    months,
           months,
+          school_name:  schoolName,
         });
 
-        await dispatch({ channel: rule.channel, phone, email, subject: 'Fee Reminder — IlmForge', message: msg });
+        await dispatch({ channel: rule.channel, phone, email, subject: `Fee Reminder — ${schoolName}`, message: msg });
         sent++;
       }
 
@@ -189,9 +207,11 @@ async function runAbsentAlerts() {
         : null;
 
       const defaultBody =
-        'Dear {{parent_name}},\n{{student_name}} was marked ABSENT today ({{date}}).\nPlease ensure regular attendance.\n\n— IlmForge';
+        'Dear {{parent_name}},\n{{student_name}} was marked ABSENT today ({{date}}).\nPlease ensure regular attendance.\n\n— {{school_name}}';
 
-      const bodyTemplate = tpl?.body || defaultBody;
+      const bodyTemplate = await ruleBody(rule, tpl, 'absent_alert', defaultBody);
+      if (!bodyTemplate) continue;
+      const schoolName = await schoolNameOf(rule.schoolId);
 
       const absentRecords = await prisma.attendance.findMany({
         where: {
@@ -223,9 +243,10 @@ async function runAbsentAlerts() {
           parent_name:  parentUser?.name || 'Parent',
           student_name: rec.student?.name || 'Student',
           date:         dateStr,
+          school_name:  schoolName,
         });
 
-        await dispatch({ channel: rule.channel, phone, email, subject: 'Absent Alert — IlmForge', message: msg });
+        await dispatch({ channel: rule.channel, phone, email, subject: `Absent Alert — ${schoolName}`, message: msg });
         sent++;
       }
 
@@ -258,9 +279,11 @@ async function runBirthdayWishes() {
         : null;
 
       const defaultBody =
-        'Happy Birthday {{name}}! 🎂\nWishing you a wonderful birthday from the entire IlmForge family.\nMay you achieve great success!\n\n— IlmForge';
+        'Happy Birthday {{name}}! 🎂\nWishing you a wonderful birthday from all of us at {{school_name}}.\nMay you achieve great success!';
 
-      const bodyTemplate = tpl?.body || defaultBody;
+      const bodyTemplate = await ruleBody(rule, tpl, 'student_birthday', defaultBody);
+      if (!bodyTemplate) continue;
+      const schoolName = await schoolNameOf(rule.schoolId);
 
       // Find students born today
       const students = await prisma.student.findMany({
@@ -287,7 +310,7 @@ async function runBirthdayWishes() {
         const phone = parentUser?.phone || s.emergencyPhone;
         const email = parentUser?.email;
         if (!phone && !email) continue;
-        const msg = resolveTemplate(bodyTemplate, { name: s.name });
+        const msg = resolveTemplate(bodyTemplate, { name: s.name, student_name: s.name, school_name: schoolName });
         await dispatch({ channel: rule.channel, phone, email, subject: `Happy Birthday ${s.name}! 🎂`, message: msg });
         sent++;
       }

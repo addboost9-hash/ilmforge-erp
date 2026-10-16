@@ -1,5 +1,6 @@
 /** Fees & Accounts Hub — collect, generate, defaulters, vouchers */
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DollarSign, Wallet, AlertCircle, Receipt, FileText, Settings, Tag, Percent, TrendingUp, BookOpen, ScanLine, CreditCard, Globe, Heart } from 'lucide-react';
 
 const FeeDashboard   = lazy(() => import('../fees/FeeDashboardPage'));
@@ -61,8 +62,12 @@ const TABS = [
 ];
 
 export default function FeesHub() {
-  const [activeId, setActiveId] = useState('dashboard');
-  const active = TABS.find(t => t.id === activeId) || TABS[0];
+  // The tab is in the address (?tab=types), as on the other hubs: a refresh
+  // or a shared link opened the dashboard again.
+  const [params, setParams] = useSearchParams();
+  const active = TABS.find(t => t.id === params.get('tab')) || TABS[0];
+  const activeId = active.id;
+  const setActiveId = (id) => setParams({ tab: id });
 
   return (
     <div className="hub-shell">

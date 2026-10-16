@@ -21,77 +21,77 @@ const DEFAULT_TEMPLATES = [
     name:     'Fee Reminder — Gentle',
     type:     'sms',
     category: 'fee_reminder',
-    body:     'Dear {{parent_name}},\nYour child {{student_name}} (Class {{class}}) has a pending fee of Rs. {{amount}} for {{month}}.\nPlease pay at your earliest convenience.\nThank you — IlmForge',
+    body:     'Dear {{parent_name}},\nYour child {{student_name}} (Class {{class}}) has a pending fee of Rs. {{amount}} for {{month}}.\nPlease pay at your earliest convenience.\nThank you — {{school_name}}',
     isDefault: true,
   },
   {
     name:     'Fee Reminder — Urgent',
     type:     'sms',
     category: 'fee_reminder',
-    body:     'URGENT: Dear {{parent_name}}, Rs. {{amount}} fee for {{student_name}} is OVERDUE for {{month}}. Late fee will apply after {{due_date}}. Please pay immediately.\n— IlmForge',
+    body:     'URGENT: Dear {{parent_name}}, Rs. {{amount}} fee for {{student_name}} is OVERDUE for {{month}}. Late fee will apply after {{due_date}}. Please pay immediately.\n— {{school_name}}',
     isDefault: true,
   },
   {
     name:     'Fee Reminder — Final Notice',
     type:     'sms',
     category: 'fee_reminder',
-    body:     'FINAL NOTICE: Dear {{parent_name}}, Rs. {{amount}} fee for {{student_name}} is CRITICALLY overdue. Failure to pay may result in removal from class list.\nContact school immediately.\n— IlmForge',
+    body:     'FINAL NOTICE: Dear {{parent_name}}, Rs. {{amount}} fee for {{student_name}} is CRITICALLY overdue. Failure to pay may result in removal from class list.\nContact school immediately.\n— {{school_name}}',
     isDefault: true,
   },
   {
     name:     'Absent Alert',
     type:     'sms',
     category: 'absent_alert',
-    body:     'Dear {{parent_name}},\n{{student_name}} was ABSENT today ({{date}}).\nPlease ensure regular attendance.\n— IlmForge',
+    body:     'Dear {{parent_name}},\n{{student_name}} was ABSENT today ({{date}}).\nPlease ensure regular attendance.\n— {{school_name}}',
     isDefault: true,
   },
   {
     name:     'Late Arrival Alert',
     type:     'sms',
     category: 'absent_alert',
-    body:     'Dear {{parent_name}},\n{{student_name}} arrived LATE today ({{date}}) at {{time}}.\nPlease ensure punctuality.\n— IlmForge',
+    body:     'Dear {{parent_name}},\n{{student_name}} arrived LATE today ({{date}}) at {{time}}.\nPlease ensure punctuality.\n— {{school_name}}',
     isDefault: true,
   },
   {
     name:     'Result Published',
     type:     'sms',
     category: 'result_published',
-    body:     'Congratulations {{parent_name}}!\n{{student_name}} result for {{exam_name}} is now available.\nCheck the parent portal: {{portal_url}}\n— IlmForge',
+    body:     'Congratulations {{parent_name}}!\n{{student_name}} result for {{exam_name}} is now available.\nCheck the parent portal: {{portal_url}}\n— {{school_name}}',
     isDefault: true,
   },
   {
     name:     'Birthday Wish — Student',
     type:     'sms',
     category: 'birthday',
-    body:     'Happy Birthday {{name}}! 🎂\nWishing you a wonderful day and a bright future.\nWith love from the IlmForge family!\n— {{school_name}}',
+    body:     'Happy Birthday {{name}}! 🎂\nWishing you a wonderful day and a bright future.\nWith love from all of us at {{school_name}}!',
     isDefault: true,
   },
   {
     name:     'Gate Pass Issued',
     type:     'sms',
     category: 'gate_pass',
-    body:     'Dear {{parent_name}},\nA gate pass has been issued for {{student_name}} at {{time}} today.\nReason: {{reason}}\n— IlmForge',
+    body:     'Dear {{parent_name}},\nA gate pass has been issued for {{student_name}} at {{time}} today.\nReason: {{reason}}\n— {{school_name}}',
     isDefault: true,
   },
   {
     name:     'Holiday Announcement',
     type:     'sms',
     category: 'holiday',
-    body:     'Dear Parents,\n{{school_name}} will remain CLOSED on {{date}} due to {{reason}}.\nClasses will resume on {{resume_date}}.\n— IlmForge',
+    body:     'Dear Parents,\n{{school_name}} will remain CLOSED on {{date}} due to {{reason}}.\nClasses will resume on {{resume_date}}.\n— {{school_name}}',
     isDefault: true,
   },
   {
     name:     'Exam Schedule',
     type:     'sms',
     category: 'custom',
-    body:     'Dear {{parent_name}},\n{{student_name}}\'s {{exam_name}} exams begin on {{start_date}}.\nSyllabus: {{syllabus}}\nBest of luck!\n— IlmForge',
+    body:     'Dear {{parent_name}},\n{{student_name}}\'s {{exam_name}} exams begin on {{start_date}}.\nSyllabus: {{syllabus}}\nBest of luck!\n— {{school_name}}',
     isDefault: true,
   },
   {
     name:     'Fee Receipt Confirmation',
     type:     'sms',
     category: 'fee_reminder',
-    body:     'Payment Received! ✅\nDear {{parent_name}}, Rs. {{amount}} fee for {{student_name}} has been received.\nReceipt No: {{receipt_no}}\nThank you!\n— IlmForge',
+    body:     'Payment Received! ✅\nDear {{parent_name}}, Rs. {{amount}} fee for {{student_name}} has been received.\nReceipt No: {{receipt_no}}\nThank you!\n— {{school_name}}',
     isDefault: true,
   },
   {
@@ -107,9 +107,10 @@ const DEFAULT_TEMPLATES = [
 async function seedDefaultTemplates(schoolId) {
   const existing = await prisma.notificationTemplate.count({ where: { schoolId, isDefault: true } });
   if (existing > 0) return;
+  // No skipDuplicates: SQLite (the desktop app) does not support it, and
+  // the count above already means none of these exist yet.
   await prisma.notificationTemplate.createMany({
     data: DEFAULT_TEMPLATES.map(t => ({ ...t, schoolId })),
-    skipDuplicates: true,
   });
 }
 
@@ -298,9 +299,11 @@ router.post('/send', wrap(async (req, res) => {
   });
   if (!tpl) return res.status(404).json({ success: false, message: 'Template not found.' });
 
+  // Every message signs with the school's name ({{school_name}}).
+  const school = await prisma.school.findUnique({ where: { id: req.schoolId }, select: { name: true } });
   let sent = 0;
   for (const t of targets) {
-    const vars = { ...overrideVars, ...t.vars };
+    const vars = { school_name: school?.name || '', ...overrideVars, ...t.vars };
     const msg  = resolveTemplate(tpl.body, vars);
     const subj = tpl.subject ? resolveTemplate(tpl.subject, vars) : undefined;
     await dispatch({ channel: tpl.type, phone: t.phone, email: t.email, subject: subj, message: msg });

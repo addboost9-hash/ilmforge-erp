@@ -153,18 +153,36 @@ router.post('/:id/marks', wrap(async (req, res) => {
   const test = await prisma.test.findFirst({ where: { id: testId, schoolId: req.schoolId } });
   if (!test) return res.status(404).json({ success: false, message: 'Test not found.' });
 
+  // The students must be this school's; marks are 0 to the test's total.
+  const ids = [...new Set(marks.map((m) => parseInt(m.studentId)).filter((x) => x > 0))];
+  const owned = await prisma.student.count({ where: { id: { in: ids }, schoolId: req.schoolId, deletedAt: null } });
+  if (!ids.length || owned !== ids.length) {
+    return res.status(400).json({ success: false, message: 'Some students are not in this school.' });
+  }
+  for (const m of marks) {
+    const absent = m.isAbsent === true || m.isAbsent === 'true';
+    const v = Number(m.obtainedMarks);
+    if (!absent && m.obtainedMarks !== null && m.obtainedMarks !== '' && m.obtainedMarks !== undefined && !(Number.isInteger(v) && v >= 0 && v <= test.totalMarks)) {
+      return res.status(400).json({ success: false, message: `Marks must be a whole number from 0 to ${test.totalMarks}.` });
+    }
+  }
+
   const thresholds = await loadThresholds(req.schoolId);
   const results = [];
 
   for (const m of marks) {
     const studentId = parseInt(m.studentId);
     const isAbsent = m.isAbsent === true || m.isAbsent === 'true';
+    // Left blank: nothing to save (a blank used to be saved as 0).
+    if (!isAbsent && (m.obtainedMarks === null || m.obtainedMarks === '' || m.obtainedMarks === undefined)) continue;
     const obtainedMarks = isAbsent ? 0 : (parseFloat(m.obtainedMarks) || 0);
     const totalMarks = test.totalMarks;
     const grade = isAbsent ? 'F' : calcGradeFromThresholds(obtainedMarks, totalMarks, thresholds);
 
     const existing = await prisma.testMark.findFirst({ where: { testId, studentId } });
-    const payload = { obtainedMarks, totalMarks, grade, isAbsent };
+    // A test mark has no total of its own (it is the test's): writing one
+    // made every save fail with a server error.
+    const payload = { obtainedMarks: Math.round(obtainedMarks), grade, isAbsent };
 
     let record;
     if (existing) {

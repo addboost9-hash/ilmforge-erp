@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { readSettings, mergeSettings } = require('../utils/schoolSettings');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 router.get('/', wrap(async (req, res) => {
@@ -77,6 +78,42 @@ router.post('/:classId/sections', wrap(async (req, res) => {
 
   const section = await prisma.section.create({ data: { schoolId: req.schoolId, classId, name } });
   res.status(201).json({ success: true, data: section });
+}));
+
+/* A class's textbooks (subject, title, publisher, edition), kept with the
+   school in settingsJson.textbooks[classId]. They used to be in one
+   browser's localStorage: the other computers and the teachers never saw
+   them. */
+const ownClass = (req) => prisma.class.findFirst({ where: { id: parseInt(req.params.classId), schoolId: req.schoolId }, select: { id: true, name: true } });
+
+router.get('/:classId/textbooks', wrap(async (req, res) => {
+  const cls = await ownClass(req);
+  if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
+  const all = (await readSettings(req.schoolId)).textbooks || {};
+  res.json({ success: true, data: Array.isArray(all[cls.id]) ? all[cls.id] : [] });
+}));
+
+// PUT { books: [{ id?, subject, title, publisher, edition }] } — the whole list.
+router.put('/:classId/textbooks', wrap(async (req, res) => {
+  const cls = await ownClass(req);
+  if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
+  const list = req.body?.books;
+  if (!Array.isArray(list) || list.length > 100) {
+    return res.status(400).json({ success: false, message: 'Send the list of textbooks (at most 100 for a class).' });
+  }
+  const text = (v, n) => String(v ?? '').trim().replace(/\s+/g, ' ').slice(0, n);
+  const books = [];
+  let next = Math.max(0, ...list.map((b) => parseInt(b?.id) || 0)) + 1;
+  for (const b of list) {
+    const title = text(b?.title, 150);
+    if (!title) return res.status(400).json({ success: false, message: 'Every textbook needs a title.' });
+    let id = parseInt(b.id);
+    if (!(id > 0) || books.some((x) => x.id === id)) id = next++;
+    books.push({ id, subject: text(b.subject, 80), title, publisher: text(b.publisher, 100), edition: text(b.edition, 40) });
+  }
+  const all = (await readSettings(req.schoolId)).textbooks || {};
+  await mergeSettings(req.schoolId, { textbooks: { ...all, [cls.id]: books } });
+  res.json({ success: true, data: books });
 }));
 
 router.get('/subjects', wrap(async (req, res) => {

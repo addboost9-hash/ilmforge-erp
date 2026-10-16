@@ -34,6 +34,11 @@ const MODULES = [
   'payments',
   'library',
   'push',
+  // Class tests and quizzes were checked by the server but missing here, so
+  // nobody but an admin could use them: teachers could not set a quiz and
+  // students could not take one.
+  'tests',
+  'quizzes',
 ];
 
 const full = { canView: true, canCreate: true, canUpdate: true, canDelete: true, canExport: true };
@@ -75,6 +80,8 @@ const ROLE_DEFAULTS = {
     tutorials: viewOnly,
     appraisals: viewOnly,
     library: viewOnly,
+    tests: { ...full, canExport: true },
+    quizzes: full,
   },
   parent: {
     dashboard: viewOnly,
@@ -89,6 +96,8 @@ const ROLE_DEFAULTS = {
     exams: viewOnly,
     announcements: viewOnly,
     complaints: { ...viewOnly, canCreate: true },
+    tests: viewOnly,
+    quizzes: viewOnly,
   },
   student: {
     dashboard: viewOnly,
@@ -109,6 +118,9 @@ const ROLE_DEFAULTS = {
     announcements: viewOnly,
     study_materials: viewOnly,
     online_classes: viewOnly,
+    tests: viewOnly,
+    // Taking a quiz posts the attempt.
+    quizzes: { ...viewOnly, canCreate: true },
   },
   gatekeeper: {
     dashboard: viewOnly,

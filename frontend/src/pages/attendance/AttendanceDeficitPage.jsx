@@ -107,11 +107,12 @@ export default function AttendanceDeficitPage() {
       setSmsRowId(studentIds[0]);
     }
     try {
-      await api.post('/notifications/attendance-reminder', { studentIds, month: filters.month, year: filters.year });
-      alert(`SMS reminder sent to ${studentIds.length} student(s).`);
-      if (isBulk) setSelected(new Set());
-    } catch {
-      alert('Failed to send SMS. Please try again.');
+      const r = await api.post('/notifications/attendance-reminder', { studentIds, month: filters.month, year: filters.year });
+      // The server's own count: this announced every chosen student as sent.
+      alert(r.data?.message || 'Done.');
+      if (isBulk && r.data?.sent) setSelected(new Set());
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to send SMS. Please try again.');
     } finally {
       setSmsSending(false);
       setSmsRowId(null);

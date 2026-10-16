@@ -255,13 +255,53 @@ router.post('/issues', wrap(async (req, res) => {
   res.status(201).json({ success: true, data: issue });
 }));
 
-// GET /api/v1/library/issues
+const DAY_MS = 24 * 60 * 60 * 1000;
+const daysLate = (due, now = new Date()) => (due && now > due ? Math.ceil((now.getTime() - new Date(due).getTime()) / DAY_MS) : 0);
+
+/* Each issue with its book and borrower: the screens showed "Book #12" and
+   "Student #4". A book still out also carries the fine so far, at that
+   book's own rate (the screen used a fixed Rs 5 a day, the return used the
+   book's rate). */
+async function withDetails(schoolId, rows) {
+  const ids = (k) => [...new Set(rows.map((r) => r[k]).filter(Boolean))];
+  const [books, students, staff] = await Promise.all([
+    prisma.libraryBook.findMany({ where: { schoolId, id: { in: ids('bookId') } }, select: { id: true, title: true, author: true, accessionNo: true, finePerDay: true } }),
+    prisma.student.findMany({
+      where: { schoolId, id: { in: ids('studentId') } },
+      select: { id: true, name: true, rollNo: true, fatherName: true, emergencyPhone: true, motherPhone: true, class: { select: { name: true } } },
+    }),
+    prisma.staff.findMany({ where: { schoolId, id: { in: ids('staffId') } }, select: { id: true, name: true, designation: true, user: { select: { phone: true } } } }),
+  ]);
+  const B = new Map(books.map((b) => [b.id, b]));
+  const S = new Map(students.map((s) => [s.id, s]));
+  const T = new Map(staff.map((s) => [s.id, s]));
+  const now = new Date();
+  return rows.map((r) => {
+    const book = B.get(r.bookId);
+    const st = r.studentId ? S.get(r.studentId) : null;
+    const sf = r.staffId ? T.get(r.staffId) : null;
+    const late = r.status === 'issued' ? daysLate(r.dueDate, now) : 0;
+    return {
+      ...r,
+      book: book ? { id: book.id, title: book.title, author: book.author, accessionNo: book.accessionNo, finePerDay: book.finePerDay } : null,
+      borrower: st
+        ? { type: 'student', name: st.name, detail: [st.class?.name, st.rollNo && `Roll ${st.rollNo}`].filter(Boolean).join(' · '), guardian: st.fatherName, phone: st.emergencyPhone || st.motherPhone || null }
+        : sf ? { type: 'staff', name: sf.name, detail: sf.designation || 'Staff', phone: sf.user?.phone || null } : null,
+      daysLate: late,
+      fineSoFar: late * (book?.finePerDay || 0),
+    };
+  });
+}
+
+// GET /api/v1/library/issues   ?overdue=1 (still out past the due date)  ?unpaidFine=1
 router.get('/issues', wrap(async (req, res) => {
   const {
     status,
     bookId,
     studentId,
     staffId,
+    overdue,
+    unpaidFine,
     page = '1',
     limit = '25',
   } = req.query;
@@ -275,19 +315,89 @@ router.get('/issues', wrap(async (req, res) => {
     ...(bookId ? { bookId: toInt(bookId, 0) } : {}),
     ...(studentId ? { studentId: toInt(studentId, 0) } : {}),
     ...(staffId ? { staffId: toInt(staffId, 0) } : {}),
+    ...(overdue === '1' || overdue === 'true' ? { status: 'issued', dueDate: { lt: new Date() } } : {}),
+    ...(unpaidFine === '1' || unpaidFine === 'true' ? { fineAmount: { gt: 0 } } : {}),
   };
 
-  const [rows, total] = await Promise.all([
+  let [rows, total] = await Promise.all([
     prisma.bookIssue.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
-      skip: (pg - 1) * perPage,
-      take: perPage,
+      orderBy: overdue ? { dueDate: 'asc' } : { createdAt: 'desc' },
+      ...(unpaidFine ? {} : { skip: (pg - 1) * perPage, take: perPage }),
     }),
     prisma.bookIssue.count({ where }),
   ]);
+  // "fine paid < fine" compares two columns, which a Prisma filter cannot.
+  if (unpaidFine) {
+    rows = rows.filter((r) => r.finePaid < r.fineAmount);
+    total = rows.length;
+    rows = rows.slice((pg - 1) * perPage, pg * perPage);
+  }
 
-  res.json({ success: true, data: rows, total, page: pg, pages: Math.ceil(total / perPage) });
+  res.json({ success: true, data: await withDetails(req.schoolId, rows), total, page: pg, pages: Math.ceil(total / perPage) });
+}));
+
+// POST /api/v1/library/issues/remind  { ids?: [issueId] } — an SMS to each
+// borrower (a student's parent, or the staff member) about overdue books;
+// all overdue books when no ids are given. The buttons said "SMS reminder
+// sent" without sending anything.
+router.post('/issues/remind', wrap(async (req, res) => {
+  if (!canManage(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Library management access required.' });
+  }
+  const only = Array.isArray(req.body?.ids) ? req.body.ids.map((x) => toInt(x, 0)).filter(Boolean) : null;
+  const rows = await prisma.bookIssue.findMany({
+    where: { schoolId: req.schoolId, status: 'issued', dueDate: { lt: new Date() }, ...(only ? { id: { in: only } } : {}) },
+    orderBy: { dueDate: 'asc' },
+  });
+  if (!rows.length) return res.json({ success: true, data: { sent: 0, failed: [] }, message: 'No overdue books to remind about.' });
+
+  const school = await prisma.school.findUnique({ where: { id: req.schoolId }, select: { name: true, settingsJson: true } });
+  let channelCfg = {};
+  try { channelCfg = JSON.parse(school?.settingsJson || '{}').channels || {}; } catch (_) { channelCfg = {}; }
+  const { sendSMS } = require('../services/sms.service');
+  const { messageFor, pkDate } = require('../services/messageTemplate');
+
+  // One message per borrower, naming every book they have overdue.
+  const groups = new Map();
+  for (const r of await withDetails(req.schoolId, rows)) {
+    const key = r.studentId ? `s${r.studentId}` : `t${r.staffId}`;
+    if (!groups.has(key)) groups.set(key, { borrower: r.borrower, items: [] });
+    groups.get(key).items.push(r);
+  }
+
+  let sent = 0;
+  const failed = [];
+  for (const { borrower, items } of groups.values()) {
+    const name = borrower?.name || 'Borrower';
+    if (!borrower?.phone) { failed.push({ name, reason: 'No phone number' }); continue; }
+    const fine = items.reduce((a, r) => a + r.fineSoFar, 0);
+    const message = await messageFor(req.schoolId, 'library_overdue', {
+      parent_name: borrower.guardian || (borrower.type === 'staff' ? name : 'Parent'),
+      student_name: name, teacher_name: name,
+      book_title: items.map((r) => r.book?.title || `Book ${r.bookId}`).join(', '),
+      due_date: pkDate(items[0].dueDate), days_late: Math.max(...items.map((r) => r.daysLate)),
+      fine_amount: fine, school_name: school?.name || '',
+    }, borrower.type === 'staff'
+      ? 'Dear {teacher_name}, the library book(s) {book_title} were due back on {due_date}. Please return them. Fine so far: Rs. {fine_amount}. - {school_name}'
+      : 'Dear {parent_name}, {student_name} has not returned the library book(s) {book_title}, due on {due_date}. Fine so far: Rs. {fine_amount}. Please return them. - {school_name}');
+    if (!message) {
+      return res.json({ success: true, data: { sent: 0, failed: [] }, message: 'Library reminders are switched off in Settings → SMS Templates, so none were sent.' });
+    }
+    const r = await sendSMS(borrower.phone, message, channelCfg);
+    if (r.success) sent++;
+    else failed.push({ name, reason: r.error || 'Not sent' });
+  }
+
+  await logAudit(req, 'LIBRARY_OVERDUE_REMINDER', 'book_issue', null);
+  const notSet = failed.length && failed.every((f) => /not configured/i.test(f.reason));
+  res.json({
+    success: true,
+    data: { sent, failed },
+    message: notSet
+      ? 'SMS is not set up for this school (Settings → Channels), so no reminder was sent.'
+      : `Reminder sent to ${sent} of ${groups.size} borrower${groups.size === 1 ? '' : 's'}.${failed.length ? ` Not sent: ${failed.map((f) => `${f.name} (${f.reason})`).join(', ')}.` : ''}`,
+  });
 }));
 
 // POST /api/v1/library/issues/:id/return
@@ -351,6 +461,14 @@ router.post('/issues/:id/fine/collect', wrap(async (req, res) => {
 
   const issue = await prisma.bookIssue.findFirst({ where: { id: issueId, schoolId: req.schoolId } });
   if (!issue) return res.status(404).json({ success: false, message: 'Issue record not found.' });
+  // The fine is worked out when the book comes back. Collecting on a book
+  // still out recorded nothing, while the screen said "Fine marked as paid".
+  if (issue.fineAmount <= issue.finePaid) {
+    return res.status(400).json({
+      success: false,
+      message: issue.status === 'issued' ? 'Return the book first: its fine is worked out on return.' : 'There is no fine left to collect on this book.',
+    });
+  }
 
   const nextFinePaid = Math.min(issue.fineAmount, issue.finePaid + amount);
   const updated = await prisma.bookIssue.update({

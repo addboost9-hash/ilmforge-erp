@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const https = require('https');
 const prisma = require('../config/prisma');
+const { readSettings, mergeSettings } = require('../utils/schoolSettings');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // POST /generate-ai — MUST be before /:id routes
@@ -12,56 +13,12 @@ router.post('/generate-ai', wrap(async (req, res) => {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
+  // Without an AI key this used to hand back made-up text ("Sample MCQ
+  // question 1 about …", a generic plan) as if it had been written for the
+  // topic. Say plainly that AI help is off instead.
   if (!apiKey) {
-    // Fallback for worksheet generation (when type === 'worksheet')
-    if (type === 'worksheet') {
-      const n = parseInt(numQuestions) || 10;
-      const lines = [];
-      if (includeTypes && includeTypes.includes('mcq')) {
-        lines.push(`**Multiple Choice Questions**`);
-        for (let i = 1; i <= Math.ceil(n / 3); i++) {
-          lines.push(`${i}. Sample MCQ question ${i} about ${topic}?`);
-          lines.push(`A) Option A   B) Option B   C) Option C   D) Option D`);
-          lines.push(`Answer: A`);
-          lines.push('');
-        }
-      }
-      if (includeTypes && includeTypes.includes('fillBlanks')) {
-        lines.push(`**Fill in the Blanks**`);
-        for (let i = 1; i <= Math.ceil(n / 3); i++) {
-          lines.push(`${i}. The main concept of ${topic} is _________.`);
-        }
-        lines.push('');
-      }
-      if (includeTypes && includeTypes.includes('shortAnswers')) {
-        lines.push(`**Short Answer Questions**`);
-        for (let i = 1; i <= Math.ceil(n / 3); i++) {
-          lines.push(`${i}. Explain the concept of ${topic} in 2-3 sentences.`);
-        }
-        lines.push('');
-      }
-      lines.push(`**Answer Key**`);
-      lines.push(`(Answers would appear here after AI generation)`);
-
-      return res.json({ success: true, data: lines.join('\n') });
-    }
-
-    return res.json({
-      success: true,
-      data: {
-        topic,
-        duration:     duration || '45 minutes',
-        objectives:   objectives || `Students will understand the key concepts of ${topic}`,
-        warmUp:       `Begin with a 5-minute review of previous lesson related to ${topic}`,
-        mainActivity: `Teacher explains ${topic} with examples and visual aids for ${subject}`,
-        practice:     `Students complete exercises related to ${topic} individually`,
-        assessment:   `Short quiz or verbal questioning on ${topic}`,
-        homework:     `Complete textbook exercises on ${topic} from chapter covered`,
-        resources:    `Textbook, whiteboard, markers, printed worksheets`,
-      },
-    });
+    return res.status(503).json({ success: false, message: 'AI help is not switched on for this school. Write the plan yourself, or ask the administrator to set it up.' });
   }
-
   // Determine the prompt to use
   let finalPrompt = customPrompt;
   if (!finalPrompt) {
@@ -209,6 +166,46 @@ router.post('/', wrap(async (req, res) => {
 }));
 
 // GET /:id - single
+/* The school year's two terms for lesson planning (Academics → Session &
+   Term Setting and Term Breakup). Kept with the school: they used to be in
+   one browser's localStorage, so each computer showed its own dates. Until
+   the school sets them, its academic session is offered, split in two. */
+const TERM_KEYS = ['sessionName', 'sessionStart', 'sessionEnd', 'term1Start', 'term1End', 'term2Start', 'term2End'];
+const isDay = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
+const pkDay = (d) => new Date(d.getTime() + 5 * 3600e3).toISOString().slice(0, 10);
+
+router.get('/terms', wrap(async (req, res) => {
+  const saved = (await readSettings(req.schoolId)).sessionTerms;
+  if (saved) return res.json({ success: true, data: { ...saved, saved: true } });
+  const s = await prisma.academicSession.findFirst({ where: { schoolId: req.schoolId }, orderBy: [{ isActive: 'desc' }, { startDate: 'desc' }] });
+  if (!s) return res.json({ success: true, data: { saved: false } });
+  const mid = new Date((s.startDate.getTime() + s.endDate.getTime()) / 2);
+  res.json({
+    success: true,
+    data: {
+      saved: false, sessionName: s.name, sessionStart: pkDay(s.startDate), sessionEnd: pkDay(s.endDate),
+      term1Start: pkDay(s.startDate), term1End: pkDay(mid), term2Start: pkDay(new Date(mid.getTime() + 864e5)), term2End: pkDay(s.endDate),
+    },
+  });
+}));
+
+router.put('/terms', wrap(async (req, res) => {
+  if (!['admin', 'super_admin'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Only the administrator can change the terms.' });
+  }
+  const b = req.body || {};
+  const sessionName = String(b.sessionName || '').trim().slice(0, 40);
+  const bad = (message) => res.status(400).json({ success: false, message });
+  if (!sessionName) return bad('Give the session a name, such as 2026-2027.');
+  if (TERM_KEYS.slice(1).some((k) => !isDay(b[k]))) return bad('Fill in every date.');
+  if (b.sessionStart > b.sessionEnd || b.term1Start > b.term1End || b.term2Start > b.term2End) return bad('Each end date must be on or after its start date.');
+  if (b.term1End >= b.term2Start) return bad('The 2nd term must start after the 1st term ends.');
+  if (b.term1Start < b.sessionStart || b.term2End > b.sessionEnd) return bad('Both terms must fall inside the session dates.');
+  const terms = Object.fromEntries(TERM_KEYS.map((k) => [k, k === 'sessionName' ? sessionName : b[k]]));
+  await mergeSettings(req.schoolId, { sessionTerms: terms });
+  res.json({ success: true, data: { ...terms, saved: true } });
+}));
+
 router.get('/:id', wrap(async (req, res) => {
   const { schoolId } = req;
   const plan = await prisma.studyMaterial.findFirst({

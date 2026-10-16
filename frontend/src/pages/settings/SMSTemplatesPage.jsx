@@ -35,6 +35,9 @@ const TAGS = [
   { tag: '{by_user}',         desc: "Action performed by" },
   { tag: '{exam_name}',       desc: "Exam name" },
   { tag: '{section_name}',    desc: "Section name" },
+  { tag: '{book_title}',      desc: "Library book title(s)" },
+  { tag: '{due_date}',        desc: "Due date" },
+  { tag: '{fine_amount}',     desc: "Library fine so far (Rs.)" },
   { tag: '{campus_name}',     desc: "Campus name" },
 ];
 
@@ -59,6 +62,13 @@ const DEFAULT_TEMPLATES = [
     category: 'Attendance',
     enabled: true,
     message: 'Dear {parent_name}, your child {student_name} was marked ABSENT from school today. Please ensure regular attendance to avoid academic loss. - {school_name}',
+  },
+  {
+    id: 'library_overdue',
+    event: 'Library Book Overdue',
+    category: 'Academics',
+    enabled: true,
+    message: 'Dear {parent_name}, {student_name} has not returned the library book(s) {book_title}, due on {due_date}. Fine so far: Rs. {fine_amount}. Please return them. - {school_name}',
   },
   {
     id: 'exam_result',
@@ -191,7 +201,9 @@ export default function SMSTemplatesPage() {
   const [editingId, setEditingId] = useState(null);
 
   const { data: settings } = useQuery({
-    queryKey: ['school-settings'],
+    // Its own key: ['school-settings'] holds the school profile (/settings/school)
+    // on ten other pages, and sharing it showed one in place of the other.
+    queryKey: ['settings-bag'],
     queryFn: () => api.get('/settings').then(r => r.data.data || {}),
   });
 
@@ -220,7 +232,7 @@ export default function SMSTemplatesPage() {
   const save = useMutation({
     mutationFn: (data) => api.put('/settings', { smsTemplates: data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['school-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['settings-bag'] });
       toast.success('SMS templates saved!');
       setEditingId(null);
     },

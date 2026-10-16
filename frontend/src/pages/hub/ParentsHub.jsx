@@ -4,7 +4,6 @@ import HubShell from './HubShell';
 import { KeyRound, Users } from 'lucide-react';
 
 const ParentsPage      = lazy(() => import('../students/ParentsPage'));
-const ParentAccounts   = lazy(() => import('../students/ParentAccountsPage'));
 const PortalManagement = lazy(() => import('../portal/PortalManagementPage'));
 const ComplaintsPage   = lazy(() => import('../complaints/ComplaintsPage'));
 const GatePassPage     = lazy(() => import('../gatepass/GatePassPage'));
@@ -24,7 +23,6 @@ export default function ParentsHub() {
       tabs={[
         { id: 'list',       label: 'All Parents',       hint: 'Directory + children',   render: L(ParentsPage) },
         { id: 'portals',    label: 'Portal Management', hint: 'Credentials + resets',   render: L(PortalManagement) },
-        { id: 'accounts',   label: 'Accounts & Wallet', hint: 'Credit + gate passes',   render: L(ParentAccounts) },
         { id: 'complaints', label: 'Complaints',        hint: 'Respond + resolve',      render: L(ComplaintsPage) },
         { id: 'gatepass',   label: 'Gate Passes 🎫',    hint: 'QR issue + verify',      render: L(GatePassPage) },
       ]}

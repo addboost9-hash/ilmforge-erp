@@ -57,9 +57,11 @@ export default function FailedStudentsPage() {
     if (!window.confirm(`Send SMS to parents of all ${students.length} failed student(s)? This cannot be undone.`)) return;
     setSmsBlasting(true);
     try {
-      const res = await api.post(`/exams/${examId}/results/sms-blast`, { classId: classId || undefined, sectionId: sectionId || undefined });
-      const sent = res.data?.data?.sent ?? res.data?.sent ?? students.length;
-      toast.success(`SMS sent to ${sent} parent(s) successfully.`);
+      // The failed students on this list, for the class and section chosen:
+      // the server took no class, so every failed student in the exam was sent.
+      const res = await api.post(`/exams/${examId}/results/sms-blast`, { studentIds: students.map(s => s.studentId || s.id), onlyFailed: true });
+      const sent = res.data?.data?.sent ?? 0;
+      (sent > 0 ? toast.success : toast.error)(res.data?.message || `SMS sent to ${sent} parent(s).`, { duration: 7000 });
     } catch (err) {
       toast.error(errMsg(err));
     } finally {
@@ -71,10 +73,11 @@ export default function FailedStudentsPage() {
   const handleRowSms = async (student) => {
     setSmsRowIds(prev => ({ ...prev, [student.studentId || student.id]: true }));
     try {
-      await api.post(`/exams/${examId}/results/sms-blast`, {
+      const res = await api.post(`/exams/${examId}/results/sms-blast`, {
         studentIds: [student.studentId || student.id],
       });
-      toast.success(`SMS sent to parent of ${student.name}.`);
+      if (res.data?.data?.sent > 0) toast.success(`SMS sent to parent of ${student.name}.`);
+      else toast.error(res.data?.message || 'The SMS was not sent.', { duration: 6000 });
     } catch (err) {
       toast.error(errMsg(err));
     } finally {

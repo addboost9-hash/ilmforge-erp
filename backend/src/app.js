@@ -102,9 +102,15 @@ const sessionKey = (req) => {
   return 'ip:' + (req.ip || 'unknown');
 };
 
+// 3000 per signed-in user per 15 minutes (about 3 a second). 1200 was used
+// up by one user opening every screen in turn, since each screen makes
+// several requests.
+// The desktop app serves one school on its own computer and network, so it
+// has nothing to protect against and is not limited.
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1200,
+  max: 3000,
+  skip: () => process.env.ILMFORGE_DESKTOP === '1',
   keyGenerator: sessionKey,
   standardHeaders: true,
   legacyHeaders: false,

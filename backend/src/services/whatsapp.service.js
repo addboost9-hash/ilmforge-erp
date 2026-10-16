@@ -96,20 +96,41 @@ const testWhatsAppCredentials = async (apiUrl, apiKey, provider, testTo, instanc
   return result;
 };
 
-/* ─── Pre-built notification helpers ──────────────────────────── */
-const sendFeePaidNotification = ({ parentPhone, studentName, amount, month, receiptNo, schoolName }, cfg) => {
-  const msg = `💰 *Fee Payment Confirmed!*\n\nDear Parent,\nFee of *Rs. ${Number(amount).toLocaleString('en-PK')}* for *${studentName}* (${month}) received.\nReceipt: *${receiptNo}*\n\nThank you! — ${schoolName}`;
-  return sendWhatsApp(parentPhone, msg, cfg);
+/* ─── Pre-built notification helpers ──────────────────────────────
+   Each uses the school's own wording from Settings → SMS Templates when it
+   has set one (messageFor), and sends nothing when the school switched
+   that message off. */
+const { messageFor } = require('./messageTemplate');
+const { readSettings } = require('../utils/schoolSettings');
+const rs = (n) => Number(n || 0).toLocaleString('en-PK');
+// The school's own WhatsApp account from Settings → Channels. No caller
+// passed it, so these went out only when the server itself had a key.
+const schoolCfg = async (schoolId, cfg) => cfg || (schoolId ? (await readSettings(schoolId)).channels || {} : {});
+
+const sendFeePaidNotification = async ({ schoolId, parentPhone, parentName, studentName, className, feeTitle, amount, month, receiptNo, schoolName }, cfg) => {
+  const msg = await messageFor(schoolId, 'fee_payment_received', {
+    parent_name: parentName || 'Parent', student_name: studentName, class_name: className || '', fee_title: feeTitle || month,
+    amount_paid: rs(amount), receipt_no: receiptNo, month, school_name: schoolName,
+  }, '💰 *Fee Payment Confirmed!*\n\nDear Parent,\nFee of *Rs. {amount_paid}* for *{student_name}* ({month}) received.\nReceipt: *{receipt_no}*\n\nThank you! — {school_name}');
+  if (!msg) return { success: false, skipped: true };
+  return sendWhatsApp(parentPhone, msg, await schoolCfg(schoolId, cfg));
 };
 
-const sendAbsentNotification = ({ parentPhone, studentName, className, date, schoolName }, cfg) => {
-  const msg = `⚠️ *Attendance Alert*\n\nDear Parent,\nYour child *${studentName}* (${className}) was *ABSENT* on ${date}.\n\nPlease ensure regular attendance.\n— ${schoolName}`;
-  return sendWhatsApp(parentPhone, msg, cfg);
+const sendAbsentNotification = async ({ schoolId, parentPhone, parentName, studentName, className, date, schoolName }, cfg) => {
+  const msg = await messageFor(schoolId, 'absent_alert', {
+    parent_name: parentName || 'Parent', student_name: studentName, class_name: className || '', date, school_name: schoolName,
+  }, '⚠️ *Attendance Alert*\n\nDear Parent,\nYour child *{student_name}* ({class_name}) was *ABSENT* on {date}.\n\nPlease ensure regular attendance.\n— {school_name}');
+  if (!msg) return { success: false, skipped: true };
+  return sendWhatsApp(parentPhone, msg, await schoolCfg(schoolId, cfg));
 };
 
-const sendFeeReminderNotification = ({ parentPhone, studentName, dueAmount, month, dueDate, schoolName }, cfg) => {
-  const msg = `🔔 *Fee Reminder*\n\nDear Parent,\n*Rs. ${Number(dueAmount).toLocaleString('en-PK')}* is pending for *${studentName}* (${month}).\nPlease pay by *${dueDate}* to avoid late charges.\n— ${schoolName}`;
-  return sendWhatsApp(parentPhone, msg, cfg);
+const sendFeeReminderNotification = async ({ schoolId, parentPhone, parentName, studentName, dueAmount, month, dueDate, schoolName }, cfg) => {
+  const msg = await messageFor(schoolId, 'fee_reminder', {
+    parent_name: parentName || 'Parent', student_name: studentName, fee_due: rs(dueAmount), fee_title: month, month,
+    due_date: dueDate, school_name: schoolName,
+  }, '🔔 *Fee Reminder*\n\nDear Parent,\n*Rs. {fee_due}* is pending for *{student_name}* ({month}).\nPlease pay by *{due_date}* to avoid late charges.\n— {school_name}');
+  if (!msg) return { success: false, skipped: true };
+  return sendWhatsApp(parentPhone, msg, await schoolCfg(schoolId, cfg));
 };
 
 module.exports = {

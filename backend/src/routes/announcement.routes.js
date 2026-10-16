@@ -18,15 +18,21 @@ router.post('/', wrap(async (req, res) => {
   // teachers canCreate on the announcements module — previously this hardcoded check
   // silently 403'd every teacher post despite the matrix allowing it.
   if (!['admin','super_admin','teacher'].includes(req.user.role)) return res.status(403).json({ success: false, message: 'Admins/teachers only.' });
-  const { title, message, targetRole, channel } = req.body;
+  const { title, message, channel, targetRoles } = req.body;
   if (!title || !message) return res.status(400).json({ success: false, message: 'Title and message required.' });
+  // One audience: targetRole, or a one-role targetRoles list; several roles
+  // or none means everyone. The count used to be taken before this default,
+  // so a notice to everyone was recorded as sent to 0.
+  const roles = Array.isArray(targetRoles) ? [...new Set(targetRoles)] : [];
+  const targetRole = req.body.targetRole || (roles.length === 1 ? roles[0] : 'all');
+  if (!['all', 'parent', 'teacher', 'student'].includes(targetRole)) return res.status(400).json({ success: false, message: 'Choose who the announcement is for: all, parents, teachers or students.' });
   // Estimate recipient count
   let sentCount = 0;
   if (targetRole === 'all' || targetRole === 'parent') sentCount += await prisma.user.count({ where: { schoolId: req.schoolId, role: 'parent', isActive: true } });
   if (targetRole === 'all' || targetRole === 'teacher') sentCount += await prisma.user.count({ where: { schoolId: req.schoolId, role: 'teacher', isActive: true } });
   if (targetRole === 'all' || targetRole === 'student') sentCount += await prisma.user.count({ where: { schoolId: req.schoolId, role: 'student', isActive: true } });
   const ann = await prisma.announcement.create({
-    data: { schoolId: req.schoolId, title, message, targetRole: targetRole || 'all', channel: channel || 'app', sentCount, createdBy: req.user.id }
+    data: { schoolId: req.schoolId, title, message, targetRole, channel: channel || 'app', sentCount, createdBy: req.user.id }
   });
   res.status(201).json({ success: true, data: ann, sentCount });
 }));

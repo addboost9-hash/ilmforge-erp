@@ -140,10 +140,11 @@ export default function PortalManagementPage() {
     const ph = person.phone || person.emergencyPhone;
     if (!ph) return toast.error('No phone number');
     try {
-      await api.post('/notifications/sms', {
+      const r = await api.post('/notifications/sms', {
         phones: [ph],
         message: `${school?.name||'School'} Portal Login:\nEmail: ${person.email||'—'}\nPassword: ${defaultPw[role]||'teacher'}\nLogin: ${window.location.origin}/login`,
       });
+      if (!r.data?.data?.sent) { toast.error(r.data?.data?.results?.[0]?.error || 'The SMS was not sent. Check Settings → Channels.'); return; }
       toast.success(`SMS sent to ${ph}! 📱`);
     } catch { toast.error('SMS failed — check SMS settings'); }
   };
@@ -152,7 +153,9 @@ export default function PortalManagementPage() {
   const resetPw = useMutation({
     mutationFn: ({ userId, password }) => api.post('/auth/reset-staff-password', { userId, newPassword: password }),
     onSuccess: () => { toast.success('Password reset successfully!'); setResetModal(null); setNewPassword(''); },
-    onError: () => { toast.error('Reset via admin panel: Settings → Admin Accounts'); setResetModal(null); },
+    // The server's reason (such as a password under 8 characters), not a
+    // pointer elsewhere; the dialog stays open to try again.
+    onError: (err) => toast.error(err.response?.data?.message || 'The password could not be reset.'),
   });
 
   /* ── Row component ── */
@@ -708,8 +711,15 @@ export default function PortalManagementPage() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={()=>setResetModal(null)}>Cancel</button>
-              <button className="btn btn-teal" disabled={newPassword.length<4 || resetPw.isPending}
-                onClick={()=>resetPw.mutate({ userId: resetModal.person.userId||resetModal.person.id, password: newPassword })}>
+              {/* Only the person's own sign-in account. With no account this
+                  fell back to the student or staff record's number, which is
+                  some other user's account number. The server asks for 8+
+                  characters; this allowed 4. */}
+              {!(resetModal.person.userId || resetModal.person.user?.id) && (
+                <span style={{ fontSize:12, color:'#B91C1C', alignSelf:'center' }}>No sign-in account yet: create one first.</span>
+              )}
+              <button className="btn btn-teal" disabled={newPassword.length<8 || resetPw.isPending || !(resetModal.person.userId || resetModal.person.user?.id)}
+                onClick={()=>resetPw.mutate({ userId: resetModal.person.userId || resetModal.person.user?.id, password: newPassword })}>
                 <Key size={14}/> {resetPw.isPending?'Resetting…':'Reset Password'}
               </button>
             </div>

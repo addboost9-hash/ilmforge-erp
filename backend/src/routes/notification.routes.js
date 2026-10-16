@@ -148,28 +148,47 @@ router.post('/attendance-reminder', wrap(async (req, res) => {
       id: { in: studentIds.map(id => parseInt(id)).filter(id => !Number.isNaN(id)) },
       deletedAt: null,
     },
-    select: { id: true, name: true, emergencyPhone: true },
+    select: { id: true, name: true, fatherName: true, emergencyPhone: true, motherPhone: true },
   });
 
+  // The school's SMS account and name; counted only when a message went
+  // (every parent with a phone was counted, sent or not).
+  const [cfg, school] = await Promise.all([
+    getChannelCfg(req.schoolId),
+    prisma.school.findUnique({ where: { id: req.schoolId }, select: { name: true } }),
+  ]);
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const period = [MONTHS[parseInt(month, 10) - 1] || month, year].filter(Boolean).join(' ');
   let sent = 0;
+  const failed = [];
   for (const s of students) {
-    if (!s.emergencyPhone) continue;
-    const msg = `Attendance reminder: ${s.name} has low attendance for ${month || ''}/${year || ''}. Please ensure regular attendance.`.trim();
-    await sendSMS(s.emergencyPhone, msg);
-    sent++;
+    const phone = s.emergencyPhone || s.motherPhone;
+    if (!phone) { failed.push({ name: s.name, reason: 'No phone number' }); continue; }
+    const msg = `Dear ${s.fatherName || 'Parent'}, ${s.name}'s attendance${period ? ` for ${period}` : ''} is low. Please make sure ${s.name} comes to school regularly. - ${school?.name || 'School'}`;
+    const r = await sendSMS(phone, msg, cfg);
+    if (r.success) sent++;
+    else failed.push({ name: s.name, reason: r.error || 'Not sent' });
   }
 
   await prisma.notificationLog.create({
     data: {
       schoolId: req.schoolId,
       type: 'sms',
-      body: `Attendance reminders sent to ${sent} parent(s).`,
-      status: 'sent',
+      body: `Attendance reminders sent to ${sent} of ${students.length} parent(s).`,
+      status: sent ? 'sent' : 'failed',
       sentAt: new Date(),
     },
   });
 
-  res.json({ success: true, message: `Attendance reminders sent to ${sent} parent(s).`, sent });
+  const notSet = !sent && failed.length && failed.every((f) => /not configured/i.test(f.reason));
+  res.json({
+    success: true,
+    sent,
+    failed,
+    message: notSet
+      ? 'SMS is not set up for this school (Settings → Channels), so no reminder was sent.'
+      : `Attendance reminder sent to ${sent} of ${students.length} parent(s).${failed.length ? ` Not sent: ${failed.map((f) => `${f.name} (${f.reason})`).join(', ')}.` : ''}`,
+  });
 }));
 
 /* Send credentials email — used by Portal Management page */

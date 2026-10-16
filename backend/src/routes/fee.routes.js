@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { readSettings, mergeSettings } = require('../utils/schoolSettings');
 const { pastDate } = require('../utils/pastDate');
 const { contains: ciContains, equals: ciEquals } = require('../utils/search');
 const { monthNumber, monthKeys, monthLabel, byPeriodDesc, feeKind } = require('../utils/feeMonth');
 const { sendSMS } = require('../services/sms.service');
-const { sendFeePaidNotification, sendFeeReminderNotification } = require('../services/whatsapp.service');
+const { sendFeePaidNotification } = require('../services/whatsapp.service');
 const { duesByStudent } = require('../services/scheduler.service');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
@@ -140,10 +141,18 @@ router.post('/generate', requireFinanceRole, wrap(async (req, res) => {
   // Use campusId from body (user selection) or fall back to middleware campus
   const filterCampusId = bodyCampusId ? parseInt(bodyCampusId) : req.campusId;
 
-  // Get fee structure for this class
-  const feeStructure = await prisma.feeStructure.findFirst({
+  // The class's fee: the one with this bill's title when there is one, else
+  // its monthly fee, else the fee set most recently. Saving a class's fee
+  // again used to add a second row, and the first (old) amount kept being
+  // billed.
+  const classStructures = await prisma.feeStructure.findMany({
     where: { schoolId, classId: parseInt(classId) },
+    orderBy: { updatedAt: 'desc' },
   });
+  const sameTitle = (s, t) => s.feeTitle.trim().toLowerCase() === String(t || '').trim().toLowerCase();
+  const feeStructure = (feeTitle && classStructures.find((s) => sameTitle(s, feeTitle)))
+    || classStructures.find((s) => /monthly|tuition/i.test(s.feeTitle))
+    || classStructures[0];
 
   // Amount priority: customAmount > feeStructure.amount > class tuitionFee > 0
   const cls = await prisma.class.findFirst({ where: { id: parseInt(classId), schoolId } });
@@ -379,9 +388,9 @@ router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
     // WhatsApp/SMS — fire and forget. The messages print "Rs." before the
     // figure, so they get rupees: the stored paisa read as Rs 350,000.
     sendFeePaidNotification({
-      parentPhone: invoice.student.emergencyPhone || '',
-      studentName: invoice.student.name, amount: paidNum / 100,
-      month: monthStr, receiptNo, schoolName: school?.name || 'School'
+      schoolId, parentPhone: invoice.student.emergencyPhone || '', parentName: invoice.student.fatherName,
+      studentName: invoice.student.name, className: invoice.student.class?.name, feeTitle: invoice.feeTitle,
+      amount: paidNum / 100, month: monthStr, receiptNo, schoolName: school?.name || 'School'
     }).catch(() => {});
 
     // Email receipt — fire and forget
@@ -589,7 +598,7 @@ router.get('/defaulters', requireFinanceRole, wrap(async (req, res) => {
     ...(ofYear && { year: Number(ofYear), month: { in: monthKeys(Number(ofMonth)) } }),
   };
 
-  const [invoices, total] = await Promise.all([
+  const [invoices, total, sum, students] = await Promise.all([
     prisma.feeInvoice.findMany({
       where,
       include: { student: { include: { class: true, section: true } } },
@@ -598,34 +607,73 @@ router.get('/defaulters', requireFinanceRole, wrap(async (req, res) => {
       skip: offset,
     }),
     prisma.feeInvoice.count({ where }),
+    prisma.feeInvoice.aggregate({ where, _sum: { dueAmount: true } }),
+    prisma.feeInvoice.groupBy({ by: ['studentId'], where }),
   ]);
 
-  res.json({ success: true, data: invoices, total, limit: pageSize, offset });
+  // Totals for every defaulter, not only the page shown: the screen added
+  // up the first 50 bills and called it the total due.
+  res.json({ success: true, data: invoices, total, limit: pageSize, offset, summary: { totalDue: sum._sum.dueAmount || 0, students: students.length } });
 }));
 
-// POST /api/v1/fees/defaulters/sms - Send reminder to all defaulters
+// POST /api/v1/fees/defaulters/sms  { classId?, studentIds?, channel: 'sms'|'whatsapp' }
+// A reminder to each defaulter's parent: everyone, one class, or the
+// students named. In the school's own words (SMS Templates → Fee Payment
+// Reminder) through its own SMS or WhatsApp account (Settings → Channels).
 router.post('/defaulters/sms', requireFinanceRole, wrap(async (req, res) => {
   const { schoolId } = req;
-  const { classId } = req.body;
+  const { classId, studentIds } = req.body || {};
+  const channel = req.body?.channel === 'whatsapp' ? 'whatsapp' : 'sms';
+  const onlyIds = Array.isArray(studentIds) ? studentIds.map((x) => parseInt(x)).filter((x) => x > 0) : null;
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
   const invoices = await prisma.feeInvoice.findMany({
-    where: { schoolId, status: { in: ['unpaid', 'partial'] }, dueAmount: { gt: 0 }, ...(classId && { classId: parseInt(classId) }) },
+    where: {
+      schoolId, status: { in: ['unpaid', 'partial'] }, dueAmount: { gt: 0 },
+      ...(classId && { classId: parseInt(classId) }),
+      ...(onlyIds && { studentId: { in: onlyIds } }),
+    },
     include: { student: true }
   });
+  const { messageFor } = require('../services/messageTemplate');
+  const { sendWhatsApp } = require('../services/whatsapp.service');
+  const channels = (await readSettings(schoolId)).channels || {};
   // One message per student, not one per unpaid invoice: the total still
   // due, in rupees (the message prints "Rs." before it; the stored paisa
-  // read as a hundred times the fee), and every month it covers.
+  // read as a hundred times the fee), and every month it covers. Counted
+  // only when it went: every parent with a phone was counted as reminded,
+  // even with nothing set up to send it.
   let sent = 0;
-  for (const due of duesByStudent(invoices)) {
-    if (!due.student?.emergencyPhone) continue;
-    await sendFeeReminderNotification({
-      parentPhone: due.student.emergencyPhone, studentName: due.student.name,
-      dueAmount: due.totalDue / 100, month: due.months.join(', '), dueDate: payBy(due.invoices),
-      schoolName: school?.name || 'School',
-    });
-    sent++;
+  let noPhone = 0;
+  const failed = [];
+  const dues = duesByStudent(invoices);
+  for (const due of dues) {
+    const phone = due.student?.emergencyPhone || due.student?.motherPhone;
+    if (!phone) { noPhone++; continue; }
+    const message = await messageFor(schoolId, 'fee_reminder', {
+      parent_name: due.student.fatherName || 'Parent', student_name: due.student.name,
+      fee_due: (due.totalDue / 100).toLocaleString('en-PK'), fee_title: due.months.join(', '), month: due.months.join(', '),
+      due_date: payBy(due.invoices), roll_id: due.student.rollNo || '', school_name: school?.name || 'School',
+    }, 'Dear {parent_name}, Rs. {fee_due} fee is due for {student_name} ({month}). Please pay by {due_date}. - {school_name}');
+    if (!message) {
+      return res.json({ success: true, data: { sent: 0 }, message: 'Fee reminders are switched off in Settings → SMS Templates, so none were sent.' });
+    }
+    const r = channel === 'whatsapp' ? await sendWhatsApp(phone, message, channels) : await sendSMS(phone, message, channels);
+    if (r?.success) sent++;
+    else failed.push({ name: due.student.name, reason: r?.error || 'Not sent' });
   }
-  res.json({ success: true, data: { sent }, message: `Reminder sent to ${sent} parent${sent === 1 ? '' : 's'}.` });
+  const label = channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
+  const notSet = failed.length && !sent && failed.every((f) => /not configured/i.test(f.reason));
+  const message = !dues.length
+    ? 'No unpaid fees to remind about.'
+    : notSet
+      ? `${label} is not set up for this school (Settings → Channels), so no reminder was sent.`
+      : `${label} reminder sent to ${sent} of ${dues.length} parent${dues.length === 1 ? '' : 's'}.${failed.length ? ` ${failed.length} not sent (${failed[0].reason}).` : ''}${noPhone ? ` ${noPhone} without a phone number.` : ''}`;
+  try {
+    await prisma.notificationLog.create({
+      data: { schoolId, type: channel, title: 'Fee reminder', body: message.slice(0, 200), status: sent ? 'sent' : 'failed', sentAt: new Date() },
+    });
+  } catch (_) { /* the log is not the message */ }
+  res.json({ success: true, data: { sent, total: dues.length, failed, noPhone }, message });
 }));
 
 // "Please pay by ..." in a reminder: the nearest due date still ahead, or
@@ -647,13 +695,109 @@ router.get('/structures', requireFinanceRole, wrap(async (req, res) => {
   res.json({ success: true, data: structures });
 }));
 
-// POST /api/v1/fees/structures
+// What a class pays for one fee (amounts in paisa). Checked here: a missing
+// class or amount used to reach the database and come back as a server error.
+function structureInput(body) {
+  const feeTitle = String(body.feeTitle ?? 'Monthly Fee').trim().replace(/\s+/g, ' ').slice(0, 80);
+  const num = (v, d) => (v === undefined || v === null || v === '' ? d : Number(v));
+  const amount = num(body.amount, NaN);
+  const dueDayOfMonth = num(body.dueDayOfMonth, 10);
+  const lateFeePerDay = num(body.lateFeePerDay, 0);
+  if (!feeTitle) return { error: 'Give the fee a title, such as Monthly Fee.' };
+  if (!Number.isInteger(amount) || amount <= 0) return { error: 'The amount must be more than 0.' };
+  if (!Number.isInteger(dueDayOfMonth) || dueDayOfMonth < 1 || dueDayOfMonth > 31) return { error: 'The due day must be 1 to 31.' };
+  if (!Number.isInteger(lateFeePerDay) || lateFeePerDay < 0) return { error: 'The late fee cannot be less than 0.' };
+  return { feeTitle, amount, dueDayOfMonth, lateFeePerDay };
+}
+const sameFeeTitle = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+
+// POST /api/v1/fees/structures — saving the same class and fee again
+// changes it; it used to add a second row that billing never read.
 router.post('/structures', requireFinanceRole, wrap(async (req, res) => {
-  const { classId, feeTitle, amount, dueDayOfMonth = 10, lateFeePerDay = 0 } = req.body;
-  const structure = await prisma.feeStructure.create({
-    data: { schoolId: req.schoolId, classId: parseInt(classId), feeTitle, amount: parseInt(amount), dueDayOfMonth: parseInt(dueDayOfMonth), lateFeePerDay: parseInt(lateFeePerDay) }
-  });
-  res.status(201).json({ success: true, data: structure });
+  const input = structureInput(req.body || {});
+  if (input.error) return res.status(400).json({ success: false, message: input.error });
+  const cls = await prisma.class.findFirst({ where: { id: parseInt(req.body.classId) || 0, schoolId: req.schoolId }, select: { id: true } });
+  if (!cls) return res.status(400).json({ success: false, message: 'Choose a class of this school.' });
+  const same = (await prisma.feeStructure.findMany({ where: { schoolId: req.schoolId, classId: cls.id } }))
+    .find((s) => sameFeeTitle(s.feeTitle, input.feeTitle));
+  const structure = same
+    ? await prisma.feeStructure.update({ where: { id: same.id }, data: input, include: { class: true } })
+    : await prisma.feeStructure.create({ data: { schoolId: req.schoolId, classId: cls.id, ...input }, include: { class: true } });
+  res.status(same ? 200 : 201).json({ success: true, data: structure, updated: !!same });
+}));
+
+// PUT /api/v1/fees/structures/:id
+router.put('/structures/:id', requireFinanceRole, wrap(async (req, res) => {
+  const row = await prisma.feeStructure.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
+  if (!row) return res.status(404).json({ success: false, message: 'This fee was not found.' });
+  const input = structureInput({ ...row, ...(req.body || {}) });
+  if (input.error) return res.status(400).json({ success: false, message: input.error });
+  const clash = await prisma.feeStructure.findMany({ where: { schoolId: req.schoolId, classId: row.classId, id: { not: row.id } } });
+  if (clash.some((s) => sameFeeTitle(s.feeTitle, input.feeTitle))) {
+    return res.status(409).json({ success: false, message: `This class already has a fee called "${input.feeTitle}".` });
+  }
+  const structure = await prisma.feeStructure.update({ where: { id: row.id }, data: input, include: { class: true } });
+  res.json({ success: true, data: structure });
+}));
+
+// DELETE /api/v1/fees/structures/:id — bills already made are kept.
+router.delete('/structures/:id', requireFinanceRole, wrap(async (req, res) => {
+  const row = await prisma.feeStructure.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
+  if (!row) return res.status(404).json({ success: false, message: 'This fee was not found.' });
+  await prisma.feeStructure.delete({ where: { id: row.id } });
+  res.json({ success: true, message: 'Fee removed. Bills already made are not changed.' });
+}));
+
+/* Fee types: the school's list of fee names (Admission Fee, Exam Fee…)
+   offered when billing, each for every campus or for one. Kept with the
+   school (settingsJson.feeTypes): it used to live in one browser's
+   localStorage, so the other office computers never saw it, and the list
+   offered three campuses the school did not have. */
+const DEFAULT_FEE_TYPES = ['Monthly Tuition Fee', 'Admission Fee', 'Exam Fee', 'Transport Fee', 'Lab Fee',
+  'Sports Fee', 'Computer Fee', 'Books Fee', 'Library Fee'].map((name, i) => ({ id: i + 1, name, campusId: null }));
+
+const schoolCampuses = (schoolId) => prisma.campus.findMany({
+  where: { schoolId }, select: { id: true, name: true, isMain: true }, orderBy: [{ isMain: 'desc' }, { name: 'asc' }],
+});
+
+// GET /api/v1/fees/types — the list (the usual ones until the school saves
+// its own) and the school's campuses to choose from.
+router.get('/types', requireFinanceRole, wrap(async (req, res) => {
+  const [settings, campuses] = await Promise.all([readSettings(req.schoolId), schoolCampuses(req.schoolId)]);
+  const saved = Array.isArray(settings.feeTypes);
+  // A campus since removed: the fee is then for every campus.
+  const ids = new Set(campuses.map((c) => c.id));
+  const types = (saved ? settings.feeTypes : DEFAULT_FEE_TYPES).map((t) => (t.campusId == null || ids.has(t.campusId) ? t : { ...t, campusId: null }));
+  res.json({ success: true, data: { types, saved, campuses } });
+}));
+
+// PUT /api/v1/fees/types  { types: [{ id?, name, campusId? }] } — the whole list.
+router.put('/types', requireFinanceRole, wrap(async (req, res) => {
+  const list = req.body?.types;
+  if (!Array.isArray(list) || list.length > 200) {
+    return res.status(400).json({ success: false, message: 'Send the list of fee types (at most 200).' });
+  }
+  const campuses = await schoolCampuses(req.schoolId);
+  const campusIds = new Set(campuses.map((c) => c.id));
+  const seen = new Set();
+  const types = [];
+  let next = Math.max(0, ...list.map((t) => parseInt(t?.id) || 0)) + 1;
+  for (const t of list) {
+    const name = String(t?.name || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+    if (!name) return res.status(400).json({ success: false, message: 'Every fee type needs a name.' });
+    const key = name.toLowerCase();
+    if (seen.has(key)) return res.status(400).json({ success: false, message: `"${name}" is in the list twice.` });
+    seen.add(key);
+    const campusId = t.campusId === undefined || t.campusId === null || t.campusId === '' ? null : parseInt(t.campusId);
+    if (campusId !== null && !campusIds.has(campusId)) {
+      return res.status(400).json({ success: false, message: `Choose one of this school's campuses for "${name}", or all campuses.` });
+    }
+    let id = parseInt(t.id);
+    if (!(id > 0) || types.some((x) => x.id === id)) id = next++;
+    types.push({ id, name, campusId });
+  }
+  await mergeSettings(req.schoolId, { feeTypes: types });
+  res.json({ success: true, data: { types, saved: true, campuses } });
 }));
 
 
@@ -804,8 +948,10 @@ router.get('/student-by-barcode', requireFinanceRole, wrap(async (req, res) => {
 // GET /api/v1/fees/payments — Filter fee payments by accountant, date range, and limit
 // Query: ?accountant=<userId>&from=YYYY-MM-DD&to=YYYY-MM-DD&limit=50
 router.get('/payments', requireFinanceRole, wrap(async (req, res) => {
-  const { accountant, from, to, limit = 50, page = 1 } = req.query;
+  const { accountant, from, to, limit = 50, page = 1, method } = req.query;
   const take = Math.min(parseInt(limit) || 50, 500); // hard cap at 500
+  // ?method=wallet,card: only payments made that way (the Online Payment page).
+  const methods = method ? String(method).split(',').map((m) => m.trim()).filter(Boolean) : null;
   const skip = (Math.max(parseInt(page) || 1, 1) - 1) * take;
   // from/to are Pakistan days, matched on the day the money was received.
   const dates = pktRange(from, to);
@@ -815,6 +961,7 @@ router.get('/payments', requireFinanceRole, wrap(async (req, res) => {
     schoolId: req.schoolId,
     ...(accountant && { receivedBy: parseInt(accountant) }),
     ...(dates.range && { paymentDate: dates.range }),
+    ...(methods && { method: { in: methods } }),
   };
 
   const [payments, total] = await Promise.all([

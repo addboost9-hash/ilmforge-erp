@@ -350,22 +350,13 @@ export default function GatekeeperPortalPage() {
   const loadEntries = useCallback(async () => {
     setEntriesLoading(true);
     try {
-      const res = await api.get('/attendance', {
+      // The gate log: each scan in or out, with its time (exits are kept now).
+      const res = await api.get('/attendance/gate-log', {
         params: { date: todayISO() },
       });
-      const raw = res.data?.data || res.data?.attendance || [];
-      const list = raw
-        .filter(s => s.attendance && s.attendance.method === 'barcode')
-        .map(s => ({
-          id: s.attendance.id,
-          studentId: s.id,
-          student: { name: s.name, rollNo: s.rollNo, class: s.class, section: s.section },
-          status: s.attendance.status,
-          direction: 'IN', // backend does not persist scan direction (no such field on Attendance)
-          createdAt: s.attendance.createdAt,
-        }));
+      const list = res.data?.data || [];
       setEntries(list);
-      setPresentCount(list.length);
+      setPresentCount(res.data?.presentToday ?? new Set(list.filter(e => e.direction === 'IN').map(e => e.studentId)).size);
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to load today\'s entries';
       showToast(msg, 'error');
@@ -418,7 +409,7 @@ export default function GatekeeperPortalPage() {
       const res = await api.post('/attendance/barcode-scan', {
         barcode: val,
         date: todayISO(),
-        direction,
+        direction: direction === 'OUT' ? 'out' : 'in',
       });
 
       const data = res.data?.data || res.data || {};

@@ -608,8 +608,10 @@ function MarksTab({ classes, exams }) {
       marks: Object.entries(marks).map(([sid, d]) => ({
         studentId: parseInt(sid),
         subjectId: parseInt(selectedSubject),
+        // The server reads isAbsent: sent as "absent" with no marks, an
+        // absent student's entry was taken as "clear this mark" and deleted.
         obtainedMarks: d.absent ? null : parseInt(d.obtained) || 0,
-        absent: d.absent,
+        isAbsent: !!d.absent,
       })),
     }),
     onSuccess: () => { toast.success('Marks saved successfully!'); qc.invalidateQueries(['exams']); },

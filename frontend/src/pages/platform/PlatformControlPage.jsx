@@ -215,12 +215,18 @@ export default function PlatformControlPage() {
           {/* Activate ALL suspended schools at once */}
           <button onClick={async () => {
             if (!window.confirm(`Activate ALL ${schools.filter(s=>s.status!=='active').length} suspended schools?`)) return;
+            // Count what really happened instead of always saying "all".
+            let done = 0;
+            const failed = [];
             for (const s of schools.filter(s => s.status !== 'active')) {
-              await platformApi.post(`/platform/schools/${s.id}/activate`, { plan: s.plan || 'free' }).catch(() => {});
+              await platformApi.post(`/platform/schools/${s.id}/activate`, { plan: s.plan || 'free' })
+                .then(() => { done += 1; })
+                .catch(() => failed.push(s.name));
             }
             qc.invalidateQueries(['platform-schools']);
             qc.invalidateQueries(['platform-stats']);
-            toast.success('All schools activated!');
+            if (failed.length) toast.error(`${done} activated; could not activate ${failed.join(', ')}.`, { duration: 8000 });
+            else toast.success(`${done} school${done === 1 ? '' : 's'} activated.`);
           }}
             style={{ padding:'9px 16px', background:'#dcfce7', border:'1px solid #86efac', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:700, color:'#15803d' }}>
             ✅ Activate All
