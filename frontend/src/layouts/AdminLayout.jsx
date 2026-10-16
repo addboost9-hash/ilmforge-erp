@@ -754,15 +754,18 @@ export default function AdminLayout() {
 
   const pathSegments = location.pathname.split('/').filter(Boolean);
   const lastSegment  = pathSegments[pathSegments.length - 1] || 'dashboard';
-  const pageLabel = ROUTE_LABELS[lastSegment]
+  // A record's number in the address (/students/42) reads as what it is.
+  const segLabel = (seg) => (/^\d+$/.test(seg)
+    ? (pathSegments[0] === 'students' ? 'Student record' : 'Details')
+    : ROUTE_LABELS[seg] || seg.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+  const pageLabel = (/^\d+$/.test(lastSegment) && segLabel(lastSegment))
+    || ROUTE_LABELS[lastSegment]
     || pageMap[location.pathname]
-    || lastSegment.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    || segLabel(lastSegment)
     || 'Dashboard';
 
   /* ── Full breadcrumb segments (max 3 levels) ── */
-  const breadcrumbSegments = pathSegments.slice(0, 3).map(seg =>
-    ROUTE_LABELS[seg] || seg.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-  );
+  const breadcrumbSegments = pathSegments.slice(0, 3).map(segLabel);
 
   /* ── Breadcrumb group resolution ── */
   const breadcrumbGroup = useMemo(() => {

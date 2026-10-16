@@ -1708,3 +1708,5 @@ router.post('/:id/results/sms-blast', wrap(async (req, res) => {
 }));
 
 module.exports = router;
+// A student's results on their profile use the same figures as the Gazette.
+module.exports.buildGazette = buildGazette;

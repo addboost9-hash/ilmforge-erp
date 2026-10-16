@@ -42,10 +42,41 @@ async function syncParentLoginPhone({ schoolId, studentId, oldPhone, newPhone })
 }
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
+/* One search word against a student record. Besides the name, roll number
+   and father's name, an office looks students up by the parent's mobile,
+   the B-Form or the family number: "0300 1234567", "1234567" or
+   "35202-1234567-1" all find the record, however the number was stored. */
+function wordFilter(word) {
+  const or = [
+    { name: ciContains(word) }, { rollNo: ciContains(word) }, { fatherName: ciContains(word) },
+    { familyNo: ciContains(word) }, { bFormNo: ciContains(word) },
+  ];
+  const digits = word.replace(/\D/g, '');
+  if (digits.length >= 4 && /^[\d+\-\s()]+$/.test(word)) {
+    const forms = new Set([word, digits]);
+    if (digits.length >= 10) {
+      const core = digits.slice(-10);
+      forms.add(core); forms.add(`0${core}`); forms.add(`+92${core}`); forms.add(`0${core.slice(0, 3)}-${core.slice(3)}`);
+    } else if (digits.startsWith('0') && digits.length > 4) {
+      forms.add(`${digits.slice(0, 4)}-${digits.slice(4)}`);
+    }
+    if (digits.length === 13) forms.add(`${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`);
+    for (const v of forms) {
+      or.push({ emergencyPhone: ciContains(v) }, { motherPhone: ciContains(v) }, { bFormNo: ciContains(v) });
+    }
+  }
+  return { OR: or };
+}
+
+/* Class lists read in roll-number order; a search, by name. */
+const studentOrder = (sort) => (sort === 'roll'
+  ? [{ rollNo: 'asc' }, { name: 'asc' }]
+  : sort === 'admission' ? [{ admissionDate: 'desc' }, { name: 'asc' }] : [{ name: 'asc' }]);
+
 // GET /api/v1/students
 router.get('/', wrap(async (req, res) => {
   const { schoolId, campusId } = req;
-  const { classId, sectionId, status = 'active', search, page = 1, limit = 25, ids } = req.query;
+  const { classId, sectionId, status = 'active', search, page = 1, limit = 25, ids, sort } = req.query;
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   // ── ROLE-BASED ACCESS CONTROL ─────────────────────────────────────────
@@ -145,20 +176,19 @@ router.get('/', wrap(async (req, res) => {
     schoolId, deletedAt: null,
     ...(campusId && !parentStudentIds && { campusId }),
     ...(status && !idList && { status: statusFilter(status) }),
-    ...(classId && { classId: parseInt(classId) }),
-    ...(sectionId && { sectionId: parseInt(sectionId) }),
+    ...(classId && classId !== 'none' && { classId: parseInt(classId) }),
+    // ?sectionId=none: the students of a class not yet put in a section.
+    ...(sectionId && { sectionId: sectionId === 'none' ? null : parseInt(sectionId) }),
+    // ?classId=none: students with no class at all.
+    ...(classId === 'none' && { classId: null }),
     ...(scopedIds && { id: { in: scopedIds } }),
     ...(search && (() => {
-      // Every word must appear in the name, roll number or father's name:
+      // Every word must appear somewhere in the record (wordFilter):
       // "Ayesha Khan" finds Ayesha Khan (or Ayesha, daughter of Imran Khan).
       // Matching ANY word listed every Khan and every Ayesha, and in name
       // order the student actually typed fell off the first page.
       const words = search.trim().split(/\s+/).filter(Boolean).slice(0, 6);
-      return {
-        AND: words.map((word) => ({
-          OR: [{ name: ciContains(word) }, { rollNo: ciContains(word) }, { fatherName: ciContains(word) }],
-        })),
-      };
+      return { AND: words.map(wordFilter) };
     })()),
   };
   const takeNum = Math.min(parseInt(limit) || 25, 300); // cap at 300 for safety
@@ -168,14 +198,14 @@ router.get('/', wrap(async (req, res) => {
       select: {
         id: true, name: true, rollNo: true, gender: true, status: true,
         photoUrl: true, dob: true, fatherName: true, emergencyPhone: true,
-        admissionDate: true, bFormNo: true,
+        admissionDate: true, bFormNo: true, familyNo: true,
         classId: true, sectionId: true, campusId: true, userId: true,
         class:   { select: { id: true, name: true, classTeacherId: true } },
         section: { select: { id: true, name: true } },
         campus:  { select: { id: true, name: true } },
         user:    { select: { id: true, email: true } },
       },
-      orderBy: { name: 'asc' },
+      orderBy: studentOrder(sort),
     }),
     prisma.student.count({ where }),
   ]);
@@ -226,6 +256,75 @@ router.get('/preview-roll', wrap(async (req, res) => {
 // GET /api/v1/students/class-sections
 // Returns [{classId, className, sectionId, sectionName, studentCount, maleCount, femaleCount, newThisMonth}]
 // for all active students grouped by class+section — used by Students page
+/* GET /api/v1/students/directory?status=active|inactive
+   Every class in the school's order (School Settings → Classes), with its
+   sections and how many students each has: boys, girls, new this month.
+   A class with no students yet is listed too, so a new class can be filled
+   from here; students with no class are counted separately. */
+router.get('/directory', wrap(async (req, res) => {
+  const { schoolId, campusId } = req;
+  const status = req.query.status === 'inactive' ? 'inactive' : 'active';
+  const [classes, students] = await Promise.all([
+    prisma.class.findMany({
+      where: { schoolId },
+      select: { id: true, name: true, orderNo: true, isActive: true, sections: { select: { id: true, name: true }, orderBy: { name: 'asc' } } },
+      orderBy: [{ orderNo: 'asc' }, { name: 'asc' }],
+    }),
+    prisma.student.findMany({
+      where: { schoolId, deletedAt: null, status: statusFilter(status), ...(campusId && { campusId }) },
+      select: { classId: true, sectionId: true, gender: true, admissionDate: true, createdAt: true },
+    }),
+  ]);
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const blank = () => ({ total: 0, boys: 0, girls: 0, newThisMonth: 0 });
+  const add = (c, s) => {
+    c.total += 1;
+    const g = String(s.gender || '').trim().toLowerCase();
+    if (g === 'male' || g === 'm' || g === 'boy') c.boys += 1;
+    else if (g === 'female' || g === 'f' || g === 'girl') c.girls += 1;
+    if (new Date(s.admissionDate || s.createdAt) >= monthStart) c.newThisMonth += 1;
+  };
+  const byClass = new Map(classes.map((c) => [c.id, { ...blank(), sections: new Map(c.sections.map((x) => [x.id, blank()])), noSection: blank() }]));
+  const noClass = blank();
+  const totals = blank();
+  for (const s of students) {
+    add(totals, s);
+    const c = s.classId && byClass.get(s.classId);
+    if (!c) { add(noClass, s); continue; }
+    add(c, s);
+    const sec = s.sectionId && c.sections.get(s.sectionId);
+    add(sec || c.noSection, s);
+  }
+  const data = classes
+    .filter((c) => c.isActive || byClass.get(c.id).total > 0)
+    .map((c) => {
+      const counts = byClass.get(c.id);
+      return {
+        classId: c.id, name: c.name, orderNo: c.orderNo,
+        total: counts.total, boys: counts.boys, girls: counts.girls, newThisMonth: counts.newThisMonth,
+        sections: c.sections.map((x) => ({ sectionId: x.id, name: x.name, ...counts.sections.get(x.id) })),
+        noSection: counts.noSection.total ? counts.noSection : null,
+      };
+    });
+  // A roll number used by more than one student (two admissions saved at
+  // the same moment, or an import): listed so the office can correct one.
+  const dupGroups = await prisma.student.groupBy({
+    by: ['rollNo'],
+    where: { schoolId, deletedAt: null, AND: [{ rollNo: { not: null } }, { rollNo: { not: '' } }] },
+    _count: { rollNo: true },
+    having: { rollNo: { _count: { gt: 1 } } },
+  });
+  const duplicates = dupGroups.length
+    ? await prisma.student.findMany({
+      where: { schoolId, deletedAt: null, rollNo: { in: dupGroups.map((g) => g.rollNo).slice(0, 50) } },
+      select: { id: true, name: true, rollNo: true, status: true, class: { select: { name: true } } },
+      orderBy: [{ rollNo: 'asc' }, { id: 'asc' }],
+    })
+    : [];
+  res.setHeader('Cache-Control', 'private, no-cache');
+  res.json({ success: true, data: { classes: data, noClass: noClass.total ? noClass : null, totals, duplicates } });
+}));
+
 router.get('/class-sections', wrap(async (req, res) => {
   const { schoolId } = req;
   // ?status=inactive lists classes for the Inactive tab; a class whose
@@ -652,7 +751,31 @@ router.get('/:id/exam-results', wrap(async (req, res) => {
     date:          m.exam?.dateStart,
   }));
 
-  res.json({ success: true, data });
+  /* Each exam as its result card shows it: every subject, the total,
+     percentage, grade and division on the school's own grading, pass or
+     fail, and the position in class (the same figures as the Gazette).
+     Results not yet published are shown to staff only. */
+  const staff = !['parent', 'student'].includes(req.user?.role);
+  const examIds = [...new Set(marks.map((m) => m.examId))].slice(0, 12);
+  const { buildGazette } = require('./exam.routes');
+  const exams = [];
+  for (const examId of examIds) {
+    const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId }, select: { id: true, title: true, type: true, dateStart: true, dateEnd: true, isPublished: true } });
+    if (!exam || (!staff && !exam.isPublished)) continue;
+    const me = await prisma.student.findFirst({ where: { id: studentId }, select: { classId: true } });
+    const g = await buildGazette(examId, schoolId, me?.classId ? { classId: me.classId } : {});
+    const row = g?.rows.find((r) => r.studentId === studentId);
+    if (!row) continue;
+    exams.push({
+      examId, title: exam.title, type: exam.type, dateStart: exam.dateStart, dateEnd: exam.dateEnd, published: !!exam.isPublished,
+      subjects: row.subjects.map((x) => ({ name: x.subjectName, obtained: x.obtained, total: x.total, grade: x.grade, absent: !!x.isAbsent })),
+      totalObtained: row.totalObtained, totalMarks: row.totalMarks, percentage: row.percentage,
+      grade: row.grade, division: row.division, passed: row.passed, position: row.position,
+      classSize: g.rows.filter((r) => r.classId === row.classId).length,
+    });
+  }
+
+  res.json({ success: true, data, exams });
 }));
 
 // GET /api/v1/students/stats

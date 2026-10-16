@@ -42,7 +42,7 @@ function L(C) {
 }
 
 const TABS = [
-  { id:'list',       label:'All Students',    icon:Users,         color:'#1B2F6E', render:L(StudentsPage),        desc:'Full roster with search & filters' },
+  { id:'list',       label:'Students by Class', icon:Users,       color:'#1B2F6E', render:L(StudentsPage),        desc:'Every class and its students; search any record' },
   { id:'admit',      label:'Admit Student',   icon:UserPlus,      color:'#15803d', render:L(AdmissionWizardPage), desc:'5-step linked admission wizard' },
   { id:'inquiries',  label:'Inquiries',       icon:Search,        color:'#7c3aed', render:L(AdmissionInquiries),  desc:'Admission inquiry requests' },
   { id:'crm',        label:'Admissions CRM',  icon:Briefcase,     color:'#d97706', render:L(AdmissionCRMPage),    desc:'Lead pipeline management' },

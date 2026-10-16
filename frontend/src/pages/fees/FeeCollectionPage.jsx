@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
@@ -33,6 +34,19 @@ export default function FeeCollectionPage() {
   const [fixing, setFixing] = useState(null);
   const [fixForm, setFixForm] = useState({ amountPaid: '', reason: '' });
   const [paidAmount, setPaidAmount] = useState(0);
+
+  // ?student=<id>: opened from a student's record, with that student chosen.
+  const [params] = useSearchParams();
+  const preselect = params.get('student');
+  const { data: preselected } = useQuery({
+    queryKey: ['fee-preselect', preselect],
+    queryFn: () => api.get('/students/' + preselect).then((r) => r.data.data),
+    enabled: !!preselect,
+    staleTime: 60_000,
+  });
+  useEffect(() => {
+    if (preselected && !selected) { setSelected(preselected); setSearchInput(preselected.name); }
+  }, [preselected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: searchResults, isFetching: sLoading } = useQuery({
     queryKey: ['fee-search', search],

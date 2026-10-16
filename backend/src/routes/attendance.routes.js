@@ -881,7 +881,7 @@ router.get('/deficit', staffOnly, wrap(async (req, res) => {
 // GET /api/v1/attendance/student/:studentId/history — full year attendance for one student
 // Query: sessionId(optional)
 // Access: student (own data only), parent (children only), admin/teacher (all)
-router.get('/student/:studentId/history', requireRole('student', 'parent', 'teacher', 'admin', 'super_admin', 'principal'), wrap(async (req, res) => {
+router.get('/student/:studentId/history', requireRole('student', 'parent', 'teacher', 'admin', 'super_admin', 'principal', 'accountant'), wrap(async (req, res) => {
   const { schoolId } = req;
   const { studentId } = req.params;
   const { sessionId } = req.query;
@@ -919,9 +919,19 @@ router.get('/student/:studentId/history', requireRole('student', 'parent', 'teac
     }
   }
 
-  // Determine date range: current academic year (July-June) or session-based
-  let startDate, endDate;
-  if (sessionId) {
+  // Determine date range: the session asked for, else the school's current
+  // session, else the academic year July–June.
+  let startDate, endDate, sessionName = null;
+  const current = !sessionId
+    ? await prisma.academicSession.findFirst({ where: { schoolId: req.schoolId, isActive: true }, orderBy: { startDate: 'desc' } })
+    : null;
+  if (current) {
+    // A school that has not started the new session yet still sees this
+    // year's days: the current session runs on until it is replaced.
+    startDate = current.startDate;
+    endDate = new Date(Math.max(new Date(current.endDate).getTime(), Date.now()));
+    sessionName = current.name;
+  } else if (sessionId) {
     // findFirst + schoolId, not findUnique by id: the id arrives from the
     // client, so an unscoped lookup would resolve another school's session.
     const session = await prisma.academicSession.findFirst({
@@ -930,6 +940,7 @@ router.get('/student/:studentId/history', requireRole('student', 'parent', 'teac
     if (!session) return res.status(404).json({ success: false, message: 'Session not found.' });
     startDate = session.startDate;
     endDate = session.endDate;
+    sessionName = session.name;
   } else {
     const now = new Date();
     const yearStart = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
@@ -956,11 +967,20 @@ router.get('/student/:studentId/history', requireRole('student', 'parent', 'teac
   const leave   = records.filter(r => r.status === 'leave').length;
   const late    = records.filter(r => r.status === 'late').length;
   const total   = records.length;
+  // A student who came late was at school: late counts as attended.
+  const attended = present + late;
+  const sessions = await prisma.academicSession.findMany({
+    where: { schoolId: req.schoolId },
+    select: { id: true, name: true, isActive: true },
+    orderBy: { startDate: 'desc' },
+  });
 
   res.json({
     success: true,
     student,
-    summary: { present, absent, leave, late, total, percentage: total > 0 ? Math.round((present / total) * 100) : 0 },
+    summary: { present, absent, leave, late, total, attended, percentage: total > 0 ? Math.round((attended / total) * 100) : 0 },
+    range: { from: startDate, to: endDate, sessionName },
+    sessions,
     records,
   });
 }));
