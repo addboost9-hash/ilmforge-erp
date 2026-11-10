@@ -42,7 +42,8 @@ if (DIST && fs.existsSync(path.join(DIST, 'index.html'))) {
   // long caching (their names change every build), and index.html for
   // every page address so reloading any page works.
   root.use(express.static(DIST, { index: false, maxAge: '30d', setHeaders: (res, file) => { if (file.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache'); } }));
-  root.get(/^(?!\/api\/|\/health).*/, (req, res) => {
+  // (Not the API, the health check or the fingerprint machines' /iclock.)
+  root.get(/^(?!\/api\/|\/health|\/iclock).*/, (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(DIST, 'index.html'));
   });

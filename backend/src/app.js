@@ -134,6 +134,12 @@ const publicFeeLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { su
 // must run after express.json() — mounted below.
 app.use('/api/', limiter);
 
+// Fingerprint machines in Cloud server (ADMS) mode: plain text, no sign-in
+// (a machine cannot sign in; it is known by its serial number). Before the
+// JSON and form parsers, which would take the machine's text apart.
+const deviceLimiter = rateLimit({ windowMs: 60 * 1000, max: 600, skip: () => process.env.ILMFORGE_DESKTOP === '1', standardHeaders: true, legacyHeaders: false });
+app.use('/iclock', deviceLimiter, express.text({ type: () => true, limit: '5mb' }), require('./routes/iclock.routes'));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

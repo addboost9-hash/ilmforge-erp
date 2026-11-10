@@ -120,11 +120,17 @@ const personSVG = (color='#0F766E') => `
    Turns a person into the context every template design consumes, then asks
    the chosen template for the requested face. Designs live in
    cardTemplates.js so adding one does not mean touching this page. */
+/* The code on a card's barcode and QR: the roll number or employee code, or
+   ID-<n> (student) / STF-<n> (staff) when there is none. A staff card used
+   to print ID-<n> too, which the scanner reads as the student with that
+   number. */
+const cardCode = (p, type) => p.rollNo || p.empCode || (type === 'staff' ? `STF-${p.id}` : `ID-${p.id}`);
+
 const buildCard = (p, opts, side = 'front') => {
   const { primary, secondary, schoolName, address, phone, email, type, template,
           photoMap, logoSrc, qrMap, validity, rules } = opts;
   const tpl = templateById(template);
-  const id  = p.rollNo || p.empCode || `ID-${p.id}`;
+  const id  = cardCode(p, type);
   const classInfo = p.class?.name ? `${p.class.name}${p.section?.name ? ' - ' + p.section.name : ''}` : '—';
   const photo = photoMap?.[p.id] || p.photoUrl || null;
   const dob   = p.dob ? new Date(p.dob).toLocaleDateString('en-PK') : '—';
@@ -187,14 +193,12 @@ const buildCard = (p, opts, side = 'front') => {
    dependency). Encodes the roll/employee number, which is exactly what this
    app's own barcode attendance kiosk looks a person up by, so a scanned card
    resolves to the right person instead of decoding to nothing. */
-const idValueFor = (p) => p.rollNo || p.empCode || `ID-${p.id}`;
-
-const qrDataUrlsFor = async (people) => {
+const qrDataUrlsFor = async (people, type) => {
   const map = {};
   try {
     const QR = (await import('qrcode')).default;
     await Promise.all(people.map(async (p) => {
-      const val = idValueFor(p);
+      const val = cardCode(p, type);
       try {
         map[val] = await QR.toDataURL(val, { margin: 0, width: 160, errorCorrectionLevel: 'M' });
       } catch { /* skip this one; the card renders without a QR */ }
@@ -450,7 +454,7 @@ export default function IDCardsPage() {
     if (!win) return toast.error('Popup blocked — allow popups for this site to print ID cards.');
     win.document.write('<!DOCTYPE html><html><head><title>Preparing ID cards…</title></head><body style="font-family:Arial,sans-serif;padding:40px;color:#475569;">Generating ID cards…</body></html>');
 
-    const qrMap = await qrDataUrlsFor(subset);
+    const qrMap = await qrDataUrlsFor(subset, type);
     win.document.open();
     win.document.write(buildPrintHTML(subset, { ...opts, qrMap }));
     win.document.close();
@@ -821,7 +825,7 @@ export default function IDCardsPage() {
                               {saving ? 'Saving photo…' : hasPhoto ? '✓ Photo · Change' : '⚠ No photo · Add photo'}
                             </button>
                           </td>
-                          <td><span style={{ fontFamily:'monospace',fontWeight:700,color:primary,fontSize:12 }}>{p.rollNo||p.empCode||`ID-${p.id}`}</span></td>
+                          <td><span style={{ fontFamily:'monospace',fontWeight:700,color:primary,fontSize:12 }}>{cardCode(p, type)}</span></td>
                           <td>
                             {type==='student'
                               ? <span className="badge badge-blue">{p.class?.name||'—'}{p.section?.name?' - '+p.section.name:''}</span>

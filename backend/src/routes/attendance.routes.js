@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { findPerson, markPass, personView, pkClock, STUDENT_SELECT, STAFF_SELECT } = require('../services/attendanceDevice.service');
+const { dayStart } = require('../services/attendanceMark.service');
 const ExcelJS = require('exceljs');
 const { sendAbsentNotification } = require('../services/whatsapp.service');
 const { pkDate } = require('../services/messageTemplate');
 const { sendSMS } = require('../services/sms.service');
 const { requireRole } = require('../middleware/auth.middleware');
 const { teacherCanAccessClass } = require('../utils/teacherScope');
-const { equals: ciEquals } = require('../utils/search');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // The mount in app.js is being broadened to let student/parent reach this
@@ -407,24 +408,19 @@ const scannedCode = (raw) => String(raw ?? '')
   .trim()
   .slice(0, 80);
 
-/* Minutes past midnight in Pakistan now (the server clock may be UTC). */
-const pkMinutesNow = () => {
-  const d = new Date(Date.now() + 5 * 3600 * 1000);
-  return d.getUTCHours() * 60 + d.getUTCMinutes();
-};
-
 // GET /api/v1/attendance/summary-today?date= — how many students are in
 // today, for the scanning screen's counter.
 router.get('/summary-today', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const targetDate = req.query.date ? new Date(req.query.date) : new Date(); targetDate.setHours(0, 0, 0, 0);
   if (Number.isNaN(targetDate.getTime())) return res.status(400).json({ success: false, message: 'Invalid date.' });
-  const [present, late, students] = await Promise.all([
+  const [present, late, students, staffIn] = await Promise.all([
     prisma.attendance.count({ where: { schoolId, date: targetDate, status: 'present' } }),
     prisma.attendance.count({ where: { schoolId, date: targetDate, status: 'late' } }),
     prisma.student.count({ where: { schoolId, status: 'active', deletedAt: null } }),
+    prisma.staffAttendance.count({ where: { schoolId, date: targetDate, checkIn: { not: null } } }),
   ]);
-  res.json({ success: true, data: { present: present + late, late, students } });
+  res.json({ success: true, data: { present: present + late, late, students, staffIn } });
 }));
 
 // POST /api/v1/attendance/barcode-scan — one scan at the gate or classroom.
@@ -441,12 +437,12 @@ router.get('/gate-log', staffOnly, wrap(async (req, res) => {
   if (Number.isNaN(day.getTime())) return res.status(400).json({ success: false, message: 'Invalid date.' });
   const next = new Date(day.getTime() + 24 * 3600e3);
   const [punches, scanned] = await Promise.all([
-    prisma.biometricPunch.findMany({ where: { schoolId, personType: 'student', method: 'barcode', punchTime: { gte: day, lt: next } }, orderBy: { punchTime: 'desc' }, take: 2000 }),
-    prisma.attendance.findMany({ where: { schoolId, date: day, method: 'barcode' }, select: { id: true, studentId: true, createdAt: true } }),
+    prisma.biometricPunch.findMany({ where: { schoolId, personType: 'student', direction: { in: ['in', 'out'] }, punchTime: { gte: day, lt: next } }, orderBy: { punchTime: 'desc' }, take: 2000 }),
+    prisma.attendance.findMany({ where: { schoolId, date: day, method: { in: ['barcode', 'qr', 'biometric'] } }, select: { id: true, studentId: true, createdAt: true } }),
   ]);
   const cameIn = new Set(punches.filter((p) => p.direction === 'in').map((p) => p.personId));
   const rows = [
-    ...punches.map((p) => ({ id: `p${p.id}`, studentId: p.personId, direction: p.direction === 'out' ? 'OUT' : 'IN', createdAt: p.punchTime })),
+    ...punches.map((p) => ({ id: `p${p.id}`, studentId: p.personId, direction: p.direction === 'out' ? 'OUT' : 'IN', method: p.method, createdAt: p.punchTime })),
     ...scanned.filter((a) => !cameIn.has(a.studentId)).map((a) => ({ id: `a${a.id}`, studentId: a.studentId, direction: 'IN', createdAt: a.createdAt })),
   ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const ids = [...new Set(rows.map((r) => r.studentId))];
@@ -471,126 +467,79 @@ router.get('/gate-log', staffOnly, wrap(async (req, res) => {
 }));
 
 router.post('/barcode-scan', staffOnly, wrap(async (req, res) => {
-  const { schoolId, campusId } = req;
+  const { schoolId } = req;
   const code = scannedCode(req.body.barcode);
   if (!code) return res.status(400).json({ success: false, message: 'Nothing was scanned.' });
-  const lateAfter = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(req.body.lateAfter || '')) ? req.body.lateAfter : null;
-
-  const targetDate = req.body.date ? new Date(req.body.date) : new Date(); targetDate.setHours(0, 0, 0, 0);
-  if (Number.isNaN(targetDate.getTime())) return res.status(400).json({ success: false, message: 'Invalid date.' });
-
-  // Roll numbers are matched without regard to capitals: the barcode reads
-  // in capitals and the roll number used to have to match exactly.
-  const idMatch = /^ID-(\d+)$/i.exec(code);
-  const student = await prisma.student.findFirst({
-    where: {
-      schoolId, deletedAt: null,
-      OR: [{ rollNo: code }, { rollNo: code.toUpperCase() }, { rollNo: ciEquals(code) }, ...(idMatch ? [{ id: parseInt(idMatch[1]) }] : [])],
-    },
-    select: {
-      id: true, name: true, rollNo: true, fatherName: true, status: true, classId: true, sectionId: true, photoUrl: true,
-      class: { select: { name: true } }, section: { select: { name: true } },
-    },
-  });
-
-  if (student) {
-    if (student.status !== 'active') {
-      return res.status(409).json({ success: false, code: 'inactive', message: `${student.name} has left the school (status: ${student.status}).` });
-    }
-    const late = lateAfter && pkMinutesNow() > (parseInt(lateAfter.slice(0, 2)) * 60 + parseInt(lateAfter.slice(3)));
-    const existing = await prisma.attendance.findUnique({
-      where: { studentId_date: { studentId: student.id, date: targetDate } },
-      select: { id: true, status: true, createdAt: true },
-    });
-    let status = late ? 'late' : 'present';
-    let already = false;
-    let markedAt = new Date();
-    if (existing && ['present', 'late'].includes(existing.status)) {
-      // Already in: keep the first time (a second tap must not turn
-      // "present at 7:50" into "late at 8:30").
-      already = true;
-      status = existing.status;
-      markedAt = existing.createdAt;
-    } else if (existing) {
-      // Marked absent or on leave earlier, but here now.
-      await prisma.attendance.update({ where: { id: existing.id }, data: { status, method: 'barcode', markedBy: req.user.id } });
-    } else {
-      await prisma.attendance.create({
-        data: {
-          schoolId, campusId: campusId || null, studentId: student.id,
-          classId: student.classId || null, sectionId: student.sectionId || null, date: targetDate,
-          status, method: 'barcode', markedBy: req.user.id,
-        },
-      });
-    }
-    // Every pass through the gate is kept, in or out, for the gate log. An
-    // "Exit" scan used to read as a second arrival ("already marked
-    // present") and no one could see who had left or when.
-    const leaving = String(req.body.direction || '').toLowerCase() === 'out';
-    const now = new Date();
-    await prisma.biometricPunch.create({
-      data: { schoolId, personType: 'student', personId: student.id, method: 'barcode', direction: leaving ? 'out' : 'in', punchTime: now },
-    });
-    const presentToday = await prisma.attendance.count({ where: { schoolId, date: targetDate, status: { in: ['present', 'late'] } } });
-    const clock = new Date(now.getTime() + 5 * 3600e3).toISOString().slice(11, 16);
-    return res.json({
-      success: true,
-      data: {
-        kind: 'student', status, already: leaving ? false : already, markedAt, presentToday, direction: leaving ? 'out' : 'in',
-        person: {
-          id: student.id, name: student.name, rollNo: student.rollNo, fatherName: student.fatherName,
-          className: student.class?.name || '', sectionName: student.section?.name || '', photoUrl: student.photoUrl || null,
-        },
-        // the same, under the name the gate portal reads
-        student: { id: student.id, name: student.name, rollNo: student.rollNo, className: student.class?.name || '', class: student.class?.name || '' },
-      },
-      message: leaving
-        ? `${student.name} left at ${clock}.`
-        : already ? `${student.name} was already marked ${status}.` : `${student.name} marked ${status}.`,
-    });
+  // The scan's own time when it was kept offline and sent later; the same
+  // marking as a fingerprint machine (services/attendanceDevice.service).
+  const found = await findPerson(schoolId, code);
+  if (found.error) {
+    return res.status(found.status).json({ success: false, code: found.status === 404 ? 'unknown' : 'conflict', message: found.error });
   }
-
-  // A staff card: check in, or check out on a later scan.
-  const staff = await prisma.staff.findFirst({
-    where: { schoolId, deletedAt: null, isActive: true, OR: [{ empCode: code }, { empCode: code.toUpperCase() }, { empCode: ciEquals(code) }] },
-    select: { id: true, name: true, empCode: true, designation: true, photoUrl: true, department: { select: { name: true } } },
+  const dir = String(req.body.direction || '').toLowerCase();
+  const r = await markPass({
+    schoolId, kind: found.kind, person: found.person, at: req.body.scannedAt,
+    method: req.body.method === 'qr' ? 'qr' : 'barcode', markedBy: req.user.id,
+    direction: dir === 'out' ? 'out' : dir === 'in' ? 'in' : undefined,
+    lateAfter: req.body.lateAfter,
   });
-  if (staff) {
-    const now = new Date();
-    const existing = await prisma.staffAttendance.findUnique({ where: { staffId_date: { staffId: staff.id, date: targetDate } } });
-    let action;
-    if (!existing) {
-      await prisma.staffAttendance.create({
-        data: { schoolId, staffId: staff.id, date: targetDate, status: 'present', checkIn: now, method: 'barcode', markedBy: req.user.id },
-      });
-      action = 'in';
-    } else if (!existing.checkIn) {
-      await prisma.staffAttendance.update({ where: { id: existing.id }, data: { status: 'present', checkIn: now, method: 'barcode' } });
-      action = 'in';
-    } else if (now - existing.checkIn < 30 * 60 * 1000) {
-      // Scanned twice on arrival: not a check-out.
-      action = 'already';
-    } else {
-      await prisma.staffAttendance.update({ where: { id: existing.id }, data: { checkOut: now } });
-      action = 'out';
-    }
-    const record = await prisma.staffAttendance.findUnique({ where: { staffId_date: { staffId: staff.id, date: targetDate } } });
-    return res.json({
-      success: true,
-      data: {
-        kind: 'staff', status: action === 'out' ? 'checked out' : 'present', action, already: action === 'already',
-        markedAt: action === 'out' ? record.checkOut : record.checkIn,
-        checkIn: record.checkIn, checkOut: record.checkOut,
-        person: {
-          id: staff.id, name: staff.name, rollNo: staff.empCode, className: staff.designation || 'Staff',
-          sectionName: staff.department?.name || '', photoUrl: staff.photoUrl || null,
-        },
-      },
-      message: action === 'out' ? `${staff.name} checked out.` : action === 'already' ? `${staff.name} is already checked in.` : `${staff.name} checked in.`,
-    });
-  }
+  if (r.error) return res.status(r.status || 409).json({ success: false, code: 'inactive', message: r.error, data: { person: r.person } });
+  const day = dayStart(r.markedAt && r.action !== 'again' ? r.markedAt : new Date());
+  const presentToday = await prisma.attendance.count({ where: { schoolId, date: day, status: { in: ['present', 'late'] } } });
+  const p = r.person;
+  return res.json({
+    success: true,
+    data: {
+      kind: r.kind, status: r.status, already: r.already, action: r.action, markedAt: r.markedAt,
+      direction: r.action === 'out' ? 'out' : 'in', checkIn: r.checkIn, checkOut: r.checkOut, presentToday,
+      person: p,
+      // the same, under the name the gate portal reads
+      student: r.kind === 'student' ? { id: p.id, name: p.name, rollNo: p.rollNo, className: p.className, class: p.className } : undefined,
+    },
+    message: r.message,
+  });
+}));
 
-  return res.status(404).json({ success: false, code: 'unknown', message: `No student or staff card with code "${code}".` });
+// GET /attendance/kiosk/feed?after=<id> — passes from fingerprint machines
+// (and other kiosks) since the last one this screen saw, for its pop-up.
+// Without "after" it only says where to start.
+router.get('/kiosk/feed', staffOnly, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const after = parseInt(req.query.after, 10);
+  const latest = await prisma.biometricPunch.findFirst({ where: { schoolId }, orderBy: { id: 'desc' }, select: { id: true } });
+  if (!(after >= 0)) return res.json({ success: true, data: [], latestId: latest?.id || 0 });
+  const methods = String(req.query.methods || 'fingerprint,face,card,password').split(',').filter(Boolean);
+  const rows = await prisma.biometricPunch.findMany({
+    where: { schoolId, id: { gt: after }, method: { in: methods } },
+    orderBy: { id: 'asc' }, take: 30,
+  });
+  const ids = (k) => [...new Set(rows.filter((r) => r.personType === k).map((r) => r.personId))];
+  const [students, staff] = await Promise.all([
+    prisma.student.findMany({ where: { schoolId, id: { in: ids('student') } }, select: STUDENT_SELECT }),
+    prisma.staff.findMany({ where: { schoolId, id: { in: ids('staff') } }, select: STAFF_SELECT }),
+  ]);
+  const S = new Map(students.map((s) => [s.id, s]));
+  const T = new Map(staff.map((s) => [s.id, s]));
+  const days = [...new Set(rows.filter((r) => r.personType === 'student').map((r) => dayStart(r.punchTime).getTime()))];
+  const marks = days.length ? await prisma.attendance.findMany({
+    where: { schoolId, studentId: { in: ids('student') }, date: { in: days.map((d) => new Date(d)) } },
+    select: { studentId: true, date: true, status: true },
+  }) : [];
+  const M = new Map(marks.map((m) => [`${m.studentId}:${new Date(m.date).getTime()}`, m.status]));
+  const data = rows.map((r) => {
+    const raw = r.personType === 'staff' ? T.get(r.personId) : S.get(r.personId);
+    const person = raw ? personView(r.personType, raw) : { id: r.personId, kind: r.personType, name: `Unknown (${r.personType} ${r.personId})` };
+    const action = r.direction === 'out' ? 'out' : r.direction === 'again' ? 'again' : 'in';
+    const status = r.personType === 'staff'
+      ? (action === 'out' ? 'checked out' : 'present')
+      : M.get(`${r.personId}:${dayStart(r.punchTime).getTime()}`) || 'present';
+    return {
+      id: r.id, kind: r.personType, method: r.method, action, already: action === 'again', status, markedAt: r.punchTime, person,
+      message: action === 'out' ? `${person.name} ${r.personType === 'staff' ? 'checked out' : 'left'} at ${pkClock(r.punchTime)}.`
+        : action === 'again' ? `${person.name} is already marked.` : `${person.name} marked ${status} at ${pkClock(r.punchTime)}.`,
+    };
+  });
+  res.json({ success: true, data, latestId: rows.length ? rows[rows.length - 1].id : Math.max(after, 0) });
 }));
 
 // GET /api/v1/attendance/report

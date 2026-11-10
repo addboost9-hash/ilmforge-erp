@@ -475,7 +475,8 @@ export default function AdminLayout() {
     // cannot perform. Re-add these entries when the pages are built.
     // Attendance
     { label: 'Mark Attendance', desc: 'Daily class attendance', path: '/attendance', icon: '✅', group: 'Attendance' },
-    { label: 'Barcode Attendance', desc: 'Scan ID cards', path: '/attendance/barcode', icon: '📷', group: 'Attendance' },
+    { label: 'Attendance Kiosk', desc: 'Scan ID cards, QR codes and fingerprints', path: '/attendance/barcode', icon: '📷', group: 'Attendance' },
+    { label: 'Fingerprint Machines', desc: 'Set up and test fingerprint machines and scanners', path: '/settings/biometric', icon: '🖐', group: 'Attendance' },
     { label: 'Attendance Report', desc: 'View reports', path: '/attendance/report', icon: '📊', group: 'Attendance' },
     { label: 'Annual Attendance Calendar', desc: 'P/A/H full year', path: '/reports/attendance-calendar', icon: '🗓️', group: 'Attendance' },
     // Exams
@@ -699,6 +700,8 @@ export default function AdminLayout() {
   'import-export': 'Import & Export',
   'bulk-import':   'Import & Export',
   'past-records':  'Past Records',
+  'barcode':       'Attendance Kiosk',
+  'biometric':     'Fingerprint Machines',
     'dashboard':       'Smart Dashboard',
     'academics':       'Curriculum Planner',
     'academics-hub':   'Curriculum Planner',

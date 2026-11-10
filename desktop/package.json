@@ -1,7 +1,7 @@
 {
   "name": "ilmforge-desktop",
   "productName": "IlmForge",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "description": "IlmForge School Management System, desktop edition: works on this computer without internet",
   "main": "main.js",
   "author": "IlmForge",

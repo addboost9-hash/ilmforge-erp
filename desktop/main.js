@@ -91,7 +91,9 @@ if (!app.requestSingleInstanceLock()) {
     mainWin = new BrowserWindow({
       width: w.width || 1360, height: w.height || 860, minWidth: 1000, minHeight: 640, show: false, icon: ICON, title: 'IlmForge',
       backgroundColor: '#F1F5F9',
-      webPreferences: { preload: path.join(__dirname, 'preload.js'), sandbox: true, contextIsolation: true, spellcheck: false },
+      // autoplayPolicy: the attendance kiosk says "Thank you, attendance
+      // marked" for a fingerprint punch with nobody clicking the screen first.
+      webPreferences: { preload: path.join(__dirname, 'preload.js'), sandbox: true, contextIsolation: true, spellcheck: false, autoplayPolicy: 'no-user-gesture-required' },
     });
     const origin = server.url();
     mainWin.loadURL(`${origin}/`);
