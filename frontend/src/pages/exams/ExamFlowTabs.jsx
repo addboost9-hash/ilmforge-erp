@@ -11,7 +11,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
-import { PencilLine, Trophy, FileSpreadsheet, ListOrdered, AlertTriangle, Send, EyeOff } from 'lucide-react';
+import { PencilLine, Trophy, FileSpreadsheet, ListOrdered, AlertTriangle, Send, EyeOff, BarChart3, Layers } from 'lucide-react';
 
 const NAVY = '#1B2F6E';
 const sel = { padding: '8px 10px', borderRadius: 8, border: '1px solid #D1D5DB', fontSize: 13, minWidth: 0 };
@@ -212,6 +212,8 @@ export function ResultsOverviewTab({ initialExamId } = {}) {
               <Link className="btn btn-outline" to={`/exams/gazette?${q}`}><FileSpreadsheet size={14} /> Gazette (award list)</Link>
               <Link className="btn btn-outline" to={`/exams/merit-list?${q}`}><ListOrdered size={14} /> Merit list</Link>
               <Link className="btn btn-outline" to={`/exams/failed?${q}`}><AlertTriangle size={14} /> Failed students</Link>
+              <Link className="btn btn-outline" to={`/exams/subject-analysis?${q}`}><BarChart3 size={14} /> Subject analysis</Link>
+              <Link className="btn btn-outline" to={`/exams/annual-report?classId=${classId}${sectionId ? `&sectionId=${sectionId}` : ''}`}><Layers size={14} /> Whole-year result (all terms)</Link>
             </div>
           </div>
         </>

@@ -226,8 +226,8 @@ function IndividualReportCard({ student, examColumns, schoolInfo, showAttendance
 
 export default function AnnualReportCardPage() {
   const [sessionId, setSessionId] = useState('');
-  const [classId, setClassId] = useState('');
-  const [sectionId, setSectionId] = useState('');
+  const [classId, setClassId] = useState(() => new URLSearchParams(window.location.search).get('classId') || '');
+  const [sectionId, setSectionId] = useState(() => new URLSearchParams(window.location.search).get('sectionId') || '');
   const [search, setSearch] = useState('');
   const [view, setView] = useState('class'); // 'class' | 'individual'
   const [selectedStudent, setSelectedStudent] = useState(null);

@@ -283,6 +283,7 @@ router.get('/:examId/datesheet', wrap(async (req, res) => {
       date: e.date ? e.date.toISOString().slice(0, 10) : '',
       timeFrom: e.startTime || '',
       timeTo: e.endTime || '',
+      room: e.room || '',
     });
   }
 
@@ -324,7 +325,7 @@ router.post('/:examId/datesheet', wrap(async (req, res) => {
   const examId = parseInt(req.params.examId);
   if (isNaN(examId)) return res.status(400).json({ success: false, message: 'Invalid examId.' });
 
-  const { classId, sectionId, subject, date, timeFrom, timeTo } = req.body;
+  const { classId, sectionId, subject, date, timeFrom, timeTo, room } = req.body;
   if (!subject) return res.status(400).json({ success: false, message: 'subject is required.' });
 
   // Verify exam belongs to this school
@@ -342,6 +343,7 @@ router.post('/:examId/datesheet', wrap(async (req, res) => {
         date: date ? new Date(date) : null,
         startTime: timeFrom || null,
         endTime: timeTo || null,
+        room: room ? String(room).slice(0, 40) : null,
       },
     });
     res.status(201).json({
@@ -352,6 +354,7 @@ router.post('/:examId/datesheet', wrap(async (req, res) => {
         date: entry.date ? entry.date.toISOString().slice(0, 10) : '',
         timeFrom: entry.startTime || '',
         timeTo: entry.endTime || '',
+        room: entry.room || '',
       },
     });
   } catch (err) {
@@ -370,7 +373,7 @@ router.put('/datesheet/:entryId', wrap(async (req, res) => {
   const existing = await prisma.examTimetable.findFirst({ where: { id: entryId, schoolId: req.schoolId } });
   if (!existing) return res.status(404).json({ success: false, message: 'Entry not found.' });
 
-  const { subject, date, timeFrom, timeTo } = req.body;
+  const { subject, date, timeFrom, timeTo, room } = req.body;
   try {
     const entry = await prisma.examTimetable.update({
       where: { id: entryId },
@@ -379,6 +382,7 @@ router.put('/datesheet/:entryId', wrap(async (req, res) => {
         ...(date !== undefined && { date: date ? new Date(date) : null }),
         ...(timeFrom !== undefined && { startTime: timeFrom || null }),
         ...(timeTo !== undefined && { endTime: timeTo || null }),
+        ...(room !== undefined && { room: room ? String(room).slice(0, 40) : null }),
       },
     });
     res.json({
@@ -389,6 +393,7 @@ router.put('/datesheet/:entryId', wrap(async (req, res) => {
         date: entry.date ? entry.date.toISOString().slice(0, 10) : '',
         timeFrom: entry.startTime || '',
         timeTo: entry.endTime || '',
+        room: entry.room || '',
       },
     });
   } catch (err) {
@@ -444,9 +449,11 @@ router.post('/:examId/datesheet/copy-to-all', wrap(async (req, res) => {
     return res.status(400).json({ success: false, message: 'No date sheet entries found for the source class/section.' });
   }
 
-  // Get all classes with sections
+  // The exam's own classes (it copied to every class of the school, even
+  // those that do not sit this exam).
+  const forClasses = examClassIds(exam);
   const classes = await prisma.class.findMany({
-    where: { schoolId: req.schoolId, isActive: true },
+    where: { schoolId: req.schoolId, isActive: true, ...(forClasses.length && { id: { in: forClasses } }) },
     include: { sections: true },
     orderBy: { orderNo: 'asc' },
   });
@@ -617,6 +624,14 @@ router.put('/result-config', wrap(async (req, res) => {
   if (grades !== undefined && !Array.isArray(grades)) {
     return res.status(400).json({ success: false, message: 'grades must be an array.' });
   }
+  if (signatures !== undefined) {
+    if (!Array.isArray(signatures) || signatures.length > 6) return res.status(400).json({ success: false, message: 'Up to 6 signatures.' });
+    const badPicture = signatures.some((s) => s?.signatureUrl && (!/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(String(s.signatureUrl)) || String(s.signatureUrl).length > 400 * 1024));
+    if (badPicture) return res.status(400).json({ success: false, message: 'A signature must be a PNG or JPG picture under 300 KB.' });
+  }
+  if (finalRemarks !== undefined && (!Array.isArray(finalRemarks) || finalRemarks.length > 12)) {
+    return res.status(400).json({ success: false, message: 'Up to 12 final remarks.' });
+  }
 
   const existing = await getResultConfig(req.schoolId);
   const updated = {
@@ -629,6 +644,141 @@ router.put('/result-config', wrap(async (req, res) => {
 
   const saved = await setResultConfig(req.schoolId, updated);
   res.json({ success: true, data: saved, message: 'Result config saved.' });
+}));
+
+// ---------------------------------------------------------------------------
+// Roll number slips, and the Exam Vault's overview of every exam
+// ---------------------------------------------------------------------------
+const slips = require('../services/rollSlips.service');
+const canDesignSlips = (role) => canManageExams(role) || role === 'principal';
+
+/* Of these classes, the ones this user may plan or print for: a teacher
+   only their own, once the school assigns teachers to classes. */
+const allowedClassIds = async (req, ids) => {
+  if (req.user?.role !== 'teacher') return ids;
+  const out = [];
+  for (const id of ids) if (await teacherCanAccessClass(req, id)) out.push(id);
+  return out;
+};
+
+// GET /exams/slip-design — how the school's roll number slips look
+router.get('/slip-design', wrap(async (req, res) => {
+  if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
+  res.json({ success: true, data: await slips.readDesign(req.schoolId) });
+}));
+
+// PUT /exams/slip-design — save it (any field left out keeps its value)
+router.put('/slip-design', wrap(async (req, res) => {
+  if (!canDesignSlips(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const { design, error } = await slips.saveDesign(req.schoolId, req.body || {});
+  if (error) return res.status(400).json({ success: false, message: error });
+  res.json({ success: true, data: design, message: 'Slip design saved.' });
+}));
+
+// GET /exams/overview — every exam, how far it has got: date sheets planned,
+// marks entered, published.
+router.get('/overview', wrap(async (req, res) => {
+  if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const schoolId = req.schoolId;
+  const [exams, classes, sheets, marks, students, subjects] = await Promise.all([
+    prisma.exam.findMany({ where: { schoolId }, select: { id: true, classId: true, classIds: true, isPublished: true } }),
+    prisma.class.findMany({ where: { schoolId, isActive: true }, select: { id: true, sections: { select: { id: true } } } }),
+    prisma.examTimetable.groupBy({ by: ['examId', 'classId', 'sectionId'], where: { schoolId }, _count: { _all: true } }),
+    prisma.examMark.groupBy({ by: ['examId'], where: { exam: { schoolId } }, _count: { _all: true } }),
+    prisma.student.groupBy({ by: ['classId'], where: { schoolId, status: 'active', deletedAt: null }, _count: { _all: true } }),
+    prisma.subject.groupBy({ by: ['classId'], where: { schoolId }, _count: { _all: true } }),
+  ]);
+  const count = (list, key, id) => list.find((x) => x[key] === id)?._count._all || 0;
+  const data = exams.map((e) => {
+    const wanted = slips.examClassIds(e);
+    const cls = wanted.length ? classes.filter((c) => wanted.includes(c.id)) : classes;
+    let sheetsTotal = 0;
+    let sheetsPlanned = 0;
+    let studentsCount = 0;
+    let expected = 0;
+    for (const c of cls) {
+      const has = (secId) => sheets.some((s) => s.examId === e.id && s.classId === c.id && (s.sectionId || null) === secId);
+      const secs = c.sections.length ? c.sections.map((s) => s.id) : [null];
+      sheetsTotal += secs.length;
+      sheetsPlanned += secs.filter((id) => has(id) || has(null)).length;
+      const n = count(students, 'classId', c.id);
+      studentsCount += n;
+      expected += n * Math.max(count(subjects, 'classId', c.id), 1);
+    }
+    const entered = count(marks, 'examId', e.id);
+    return {
+      examId: e.id,
+      classes: cls.length,
+      students: studentsCount,
+      sheetsPlanned,
+      sheetsTotal,
+      marksEntered: entered,
+      marksExpected: expected,
+      marksPercent: expected ? Math.min(100, Math.round((entered / expected) * 100)) : 0,
+      isPublished: e.isPublished,
+    };
+  });
+  res.json({ success: true, data });
+}));
+
+// GET /exams/:id/slips?classId=&sectionId= — everything printed on the
+// exam's roll number slips, one group per class-section.
+router.get('/:id/slips', wrap(async (req, res) => {
+  if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const examId = parseInt(req.params.id);
+  const exam = Number.isInteger(examId) ? await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } }) : null;
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  const classId = req.query.classId ? parseInt(req.query.classId) : null;
+  const sectionId = req.query.sectionId ? parseInt(req.query.sectionId) : null;
+  if ((req.query.classId && !Number.isInteger(classId)) || (req.query.sectionId && !Number.isInteger(sectionId))) {
+    return res.status(400).json({ success: false, message: 'Invalid class or section.' });
+  }
+  let only = classId ? [classId] : null;
+  if (req.user?.role === 'teacher') {
+    let ids = only || slips.examClassIds(exam);
+    if (!ids.length) ids = (await prisma.class.findMany({ where: { schoolId: req.schoolId, isActive: true }, select: { id: true } })).map((c) => c.id);
+    only = await allowedClassIds(req, ids);
+    if (!only.length) return res.status(403).json({ success: false, message: 'You can print the slips of your own classes only.' });
+  }
+  const photos = req.query.photos !== '0';
+  res.json({ success: true, data: await slips.slipData(req.schoolId, exam, { classIds: only, sectionId, photos }) });
+}));
+
+// PUT /exams/:examId/datesheet/class/:classId — a class's papers for this
+// exam, saved in one go: every section of the class, or { sectionId } only.
+router.put('/:examId/datesheet/class/:classId', wrap(async (req, res) => {
+  if (!canManageExams(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const examId = parseInt(req.params.examId);
+  const classId = parseInt(req.params.classId);
+  if (!Number.isInteger(examId) || !Number.isInteger(classId)) return res.status(400).json({ success: false, message: 'Invalid exam or class.' });
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  const cls = await prisma.class.findFirst({ where: { id: classId, schoolId: req.schoolId }, include: { sections: { select: { id: true } } } });
+  if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
+  const forClasses = slips.examClassIds(exam);
+  if (forClasses.length && !forClasses.includes(classId)) return res.status(400).json({ success: false, message: 'This class does not sit this exam. Add it to the exam in Exam Setup first.' });
+  if (!(await teacherCanAccessClass(req, classId))) return res.status(403).json({ success: false, message: 'You can plan the papers of your own classes only.' });
+
+  const { rows, error } = slips.checkSchedule(req.body?.entries);
+  if (error) return res.status(400).json({ success: false, message: error });
+  let targets;
+  if (req.body?.sectionId) {
+    const sid = parseInt(req.body.sectionId);
+    if (!cls.sections.some((s) => s.id === sid)) return res.status(400).json({ success: false, message: 'That section is not in this class.' });
+    targets = [sid];
+  } else {
+    targets = cls.sections.length ? cls.sections.map((s) => s.id) : [null];
+  }
+  const where = (sectionId) => ({ examId, schoolId: req.schoolId, classId, sectionId });
+  await prisma.$transaction([
+    ...targets.map((t) => prisma.examTimetable.deleteMany({ where: where(t) })),
+    ...(rows.length ? targets.map((t) => prisma.examTimetable.createMany({ data: rows.map((r) => ({ ...r, ...where(t) })) })) : []),
+  ]);
+  res.json({
+    success: true,
+    message: rows.length ? `${rows.length} paper(s) saved for ${targets.length > 1 ? `all ${targets.length} sections` : 'this class'}.` : 'The papers were removed.',
+    data: { papers: rows.length, sections: targets.length },
+  });
 }));
 
 // ---------------------------------------------------------------------------

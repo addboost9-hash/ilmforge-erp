@@ -486,6 +486,8 @@ export default function AdminLayout() {
     { label: 'BISE Result Card', desc: 'Pakistani board format', path: '/exams/bise-result-card', icon: '🎓', group: 'Exams' },
     { label: 'Result Settings', desc: 'Grade config, signatures, card options', path: '/exams/result-config', icon: '⚙️', group: 'Exams' },
     { label: 'Exam Timetable', desc: 'Date sheet', path: '/exams/timetable', icon: '📅', group: 'Exams' },
+    { label: 'Roll Number Slips', desc: 'Subjects, slip design, print every class', path: '/examination?tab=roll-slips', icon: '🎫', group: 'Exams' },
+    { label: 'Exam Vault', desc: 'Exam, date sheet, slips, papers, marks, results', path: '/examination', icon: '🗄️', group: 'Exams' },
     // Staff
     { label: 'All Staff', desc: 'Teaching & non-teaching', path: '/staff', icon: '👨‍🏫', group: 'Staff' },
     { label: 'Add New Staff', desc: 'Register staff member', path: '/staff/new', icon: '➕', group: 'Staff' },
@@ -701,6 +703,7 @@ export default function AdminLayout() {
   'bulk-import':   'Import & Export',
   'past-records':  'Past Records',
   'barcode':       'Attendance Kiosk',
+  'exam-slip':     'Roll Number Slips',
   'biometric':     'Fingerprint Machines',
     'dashboard':       'Smart Dashboard',
     'academics':       'Curriculum Planner',

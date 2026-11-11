@@ -68,8 +68,9 @@ function ProgressBar({ value, color }) {
 
 export default function SubjectAnalysisPage() {
   const [sessionId, setSessionId] = useState('');
-  const [classId, setClassId] = useState('');
-  const [examId, setExamId] = useState('');
+  // Opened from the Exam Vault's results: that exam and class.
+  const [classId, setClassId] = useState(() => new URLSearchParams(window.location.search).get('classId') || '');
+  const [examId, setExamId] = useState(() => new URLSearchParams(window.location.search).get('examId') || '');
   const [displayMode, setDisplayMode] = useState('cards'); // 'cards' | 'table'
 
   const { data: sessions = [] } = useQuery({

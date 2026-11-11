@@ -285,7 +285,7 @@ const SECTIONS = [
     icon: '📝',
     color: '#7C3AED',
     title: 'Exam Management',
-    desc: 'Exam Vault step by step: exam, date sheet, syllabus, question papers, marks, results',
+    desc: 'Exam Vault step by step: exam, date sheet, syllabus, roll number slips, question papers, marks, results',
     chapters: [
       {
         title: 'Before the first exam',
@@ -298,13 +298,24 @@ const SECTIONS = [
         title: 'Steps 1–3: Exam, date sheet, syllabus',
         steps: [
           { n:1, text:'Exam Vault → 1. Exam Setup → Add Exam: pick every class it is for, name, dates' },
-          { n:2, text:'The exam row lists its next steps: Date sheet, Papers, Roll no. slips, Enter marks, Results' },
-          { n:3, text:'2. Date Sheet: only the exam\'s classes; Edit adds subjects with dates; Print one class or all' },
+          { n:2, text:'The exam row shows its progress (date sheets planned, marks entered, published) and its steps: Date sheet, Roll no. slips, Papers, Marks, Results' },
+          { n:3, text:'2. Date Sheet: only the exam\'s classes. Edit → "Add every subject", "Quick fill dates" (one paper a day, Sundays skipped), room; save for all sections or one. Print one class or all' },
           { n:4, text:'3. Syllabus: which subjects are written and which are missing; Write / edit; Print' },
         ],
       },
       {
-        title: 'Step 4: Question papers with real questions',
+        title: 'Step 4: Roll number slips',
+        steps: [
+          { n:1, text:'Exam Vault → 4. Roll No. Slips (or Roll no. slips on the exam\'s row). Choose the term and the exam' },
+          { n:2, text:'Subjects and date sheet: class by class, the papers printed on the slip (the same as the date sheet). "Same papers for every class" copies one class to all' },
+          { n:3, text:'Design the slip: title, colour, two slips or one on an A4 page, the student\'s roll number or exam roll numbers (prefix and first number), what is shown (photo, father\'s name, day, time, room, marks, invigilator column, instructions)' },
+          { n:4, text:'Signatures at the bottom: the student\'s, the principal\'s (name, title and a picture of the signature; the paper\'s white is removed) and, if wanted, the class teacher\'s. The preview is exactly what prints' },
+          { n:5, text:'Print and download: "Download all classes (PDF)" prints every class, each from a new page; or one class, one section, or one student (search by name or roll number). Choose Save as PDF as the printer to download' },
+          { n:6, text:'The Check column shows a class with no date sheet, students without a roll number and students without a photo' },
+        ],
+      },
+      {
+        title: 'Step 5: Question papers with real questions',
         steps: [
           { n:1, text:'Choose exam and class: each subject shows its paper or "No paper yet" → Make' },
           { n:2, text:'Add multiple choice (tick the answer), true/false, fill in the blank, short and long questions with marks; "Attempt any N" per part' },
@@ -314,7 +325,7 @@ const SECTIONS = [
         ],
       },
       {
-        title: 'Step 5: Marks entry',
+        title: 'Step 6: Marks entry',
         steps: [
           { n:1, text:'Each class shows how many marks are in → Enter marks' },
           { n:2, text:'Each subject column says what it is out of. A = absent. Enter moves to the next student' },
@@ -323,7 +334,7 @@ const SECTIONS = [
         ],
       },
       {
-        title: 'Step 6: Results and publishing',
+        title: 'Step 7: Results and publishing',
         steps: [
           { n:1, text:'Choose exam, class, section: passed, failed, average, top positions' },
           { n:2, text:'Result sheet and report cards: positions within the class, print sheet or A4 cards' },
@@ -521,12 +532,20 @@ const SECTIONS = [
     icon: '✨',
     color: '#0F3D33',
     title: 'Latest Additions',
-    desc: 'Exam Vault in six steps, ID card scanning, paper forms read in, admissions corrected, departments',
+    desc: 'Roll number slips, Exam Vault in seven steps, ID card scanning, paper forms read in, admissions corrected, departments',
     chapters: [
       {
-        title: 'New: the Exam Vault in six steps',
+        title: 'New: roll number slips for every class',
         steps: [
-          { n:1, text:'Exam Setup → Date Sheet → Syllabus → Question Papers → Marks Entry → Results, numbered in order' },
+          { n:1, text:'Exam Vault → Roll No. Slips: subjects of each class, the slip\'s design with a live preview, then print or save as PDF' },
+          { n:2, text:'Each slip: photo, roll number, class, the papers with date, day and time, instructions, and the student\'s and principal\'s signatures' },
+          { n:3, text:'Download all classes at once, class by class (each class from a new page), two slips on an A4 page or one' },
+        ],
+      },
+      {
+        title: 'New: the Exam Vault in seven steps',
+        steps: [
+          { n:1, text:'Exam Setup → Date Sheet → Syllabus → Roll No. Slips → Question Papers → Marks Entry → Results, numbered in order' },
           { n:2, text:'Question papers now hold real questions and print with an answer key' },
           { n:3, text:'Marks: each subject out of its own maximum, A for absent, whole numbers, totals as you type' },
           { n:4, text:'Results per class and section with positions; report cards with names and subjects; publish to parents' },

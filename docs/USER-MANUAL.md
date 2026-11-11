@@ -666,9 +666,9 @@ those receipts stay correct.
 <a name="part-6"></a>
 ## Part 6 — Exams and results
 
-**Sidebar → Exam Vault** (`/examination`) takes an exam from start to finish in six
+**Sidebar → Exam Vault** (`/examination`) takes an exam from start to finish in seven
 numbered steps, in the order a school works: **1 Exam Setup → 2 Date Sheet → 3 Syllabus →
-4 Question Papers → 5 Marks Entry → 6 Results**.
+4 Roll No. Slips → 5 Question Papers → 6 Marks Entry → 7 Results**.
 
 ### Before the first exam (once)
 
@@ -686,23 +686,69 @@ entry, question papers and result cards all use it.
 1. Choose the term (*1st Term*, *2nd Term*…) and click **Add Exam**.
 2. Pick **all the classes** the exam is for (one *First Term* exam can cover the whole
    school), name it, and set the dates. **Submit**.
-3. Each exam row shows its classes and dates, and its next steps: **Date sheet**,
-   **Papers**, **Roll no. slips**, **Enter marks**, **Results**. **PDF** and **Word** at the
-   top give the term's exam list.
+3. Each exam row shows its classes and dates, its **progress** (how many class-sections
+   have a date sheet, how much of the marks are in, and whether the result is
+   published) and its steps: **Date sheet**, **Roll no. slips**, **Papers**, **Marks**,
+   **Results**, each opening on that exam. **PDF** and **Word** at the top give the term's
+   exam list.
 
 ### Step 2 — Date Sheet
 
 Choose the exam. Only that exam's classes are listed, with how many papers are planned
-for each. **Edit** adds a subject with its date and time (one class can be copied to all).
+for each. **Edit** opens the class's papers:
+
+- **Add every subject** lists the class's subjects; **Add a paper** adds one by hand.
+- **Quick fill dates** gives the papers one day after another from the first date
+  (Sundays skipped), all at the same time. Move papers up or down first to set the order.
+- Each paper has a subject, date, start and end time, and a room if wanted.
+- **These papers are for**: all sections of the class (the usual) or one section only.
+- Two papers on one day, or a paper outside the exam's dates, is pointed out; the same
+  subject twice, or a paper that ends before it starts, cannot be saved.
+- **Save papers** saves the whole list at once.
+
 **Print** prints a class's date sheet; **Print all date sheets** prints every class, one
-per page. The bin clears a class's date sheet.
+per page. The bin clears a class's date sheet. The same papers are printed on the roll
+number slips.
 
 ### Step 3 — Syllabus
 
 Each class shows how many of its subjects have a syllabus, and which are missing.
 **Write / edit** opens the syllabus page; **Print** prints the class's whole syllabus.
 
-### Step 4 — Question Papers
+### Step 4 — Roll No. Slips
+
+Choose the term and the exam (or click **Roll no. slips** on the exam's row). Three steps:
+
+1. **Subjects and date sheet** — each class of the exam, with how many papers it has.
+   Choose a class and set its papers exactly as in the Date Sheet step (it is the same
+   list). **Same papers for every class** copies the open class to every class of the
+   exam.
+2. **Design the slip** — the preview on the right is exactly what prints.
+   - **Title** (for example *Roll Number Slip* or *Admit Card*) and **colour**.
+   - **Two slips on an A4 page** (saves paper; cut along the dashed line) or **one, larger**.
+   - **Roll number**: the student's own, or **exam roll numbers** numbered for the exam
+     class by class (with a prefix, such as *T1-*, and the first number, such as 1001). A
+     student has the same exam roll number whichever class is printed.
+   - **On the slip**: photo, father's name, day and time of each paper, room, marks of each
+     paper, an invigilator's signature column, instructions, and the signatures at the
+     bottom: the **student's**, the **principal's** and, if wanted, the class teacher's.
+   - **Principal**: name, title and a **picture of the signature** (sign on white paper and
+     take a clear photo; the white is removed). Without a picture, the principal signs each
+     slip by hand. If the result card settings have the principal's signature, the slip
+     uses it until another is chosen.
+   - **Instructions** (one per line; the same as Exam Settings) and a **footer line**.
+   - **Save design**.
+3. **Print and download**
+   - **Download all classes (PDF)** prints every student's slip, class by class, each
+     class starting on a new page. In the print window choose **Save as PDF** to download.
+   - Or one class (**Print**), one section, or **one student** (search by name or roll
+     number).
+   - The **Check** column shows a class with no date sheet, students without a roll number
+     and students without a photo, so they can be fixed first.
+
+The slips are also at `/exams/exam-slip`.
+
+### Step 5 — Question Papers
 
 1. **Paper setup (defaults)** (once per class): the instructions and part headings every
    new paper starts with.
@@ -723,12 +769,7 @@ Each class shows how many of its subjects have a syllabus, and which are missing
 7. In the list, **Copy** makes the same paper for another section, class or exam (then
    change what differs).
 
-### Roll number slips
-
-From the exam row, **Roll no. slips** (`/exams/exam-slip`) prints each student's slip
-with the date sheet.
-
-### Step 5 — Marks Entry
+### Step 6 — Marks Entry
 
 The tab shows each class of the exam with how many marks are in (*Not started*, *In
 progress*, *Complete*). Click **Enter marks** for a class to open its sheet:
@@ -741,7 +782,7 @@ progress*, *Complete*). Click **Enter marks** for a class to open its sheet:
 - **Save N changes** saves only what changed. Empty a box and save to take a mark out.
 - Teachers can enter marks only for the classes they teach.
 
-### Step 6 — Results
+### Step 7 — Results
 
 Choose the exam, class and section: the screen shows students, passed, failed, average
 and the top positions.
@@ -750,12 +791,15 @@ and the top positions.
   percentage, grade, **position in the class** and pass/fail; **Print result sheet**
   (landscape) and **Print report cards (A4)**, one per student with photo, father's name,
   subjects, totals, position, division and signatures.
-- **Gazette**, **Merit list** and **Failed students** open for the class (and section)
-  chosen.
+- **Gazette**, **Merit list**, **Failed students** and **Subject analysis** open for the
+  class (and section) chosen; **Whole-year result (all terms)** opens the class's annual
+  result card.
 - **Publish result** shows the result to parents and students in their portal; **Hide
   again** takes it back. A result cannot be published before any marks are entered.
 - **Result card settings** (the second sub-tab) only changes how result cards look; it
-  does not publish anything.
+  does not publish anything. There: the grades, the **signatories** (each can have a
+  picture of the signature; **Add picture**), the **final remarks** for each percentage
+  range (From %, To %, Remark; add or remove), and what the card shows.
 
 A student passes when the overall grade is not F and no subject is F. Absent from a paper
 counts as failing that paper. Positions are within the student's own class.

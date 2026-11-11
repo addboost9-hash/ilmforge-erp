@@ -1,9 +1,11 @@
 ﻿/**
- * IlmForge — Unified Examination Page
- * 5 tabs: Exam Setup | Date Sheet | Syllabus | Question Bank | Results
- * URL: /examination
+ * IlmForge — the Exam Vault: an exam from start to finish.
+ * Exam Setup | Date Sheet | Syllabus | Roll No. Slips | Question Papers |
+ * Marks Entry | Results
+ * URL: /examination?tab=
  */
 import { useState, useRef, useCallback } from 'react';
+import { signatureFromFile } from '../../utils/signatureImage';
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
@@ -12,11 +14,12 @@ import api from '../../api/client';
 import { printHTML } from '../../utils/print';
 import { buildTerms, examMatchesTerm } from '../../utils/terms';
 import QuestionPapersTab from './QuestionPapersTab';
+import RollNoSlipsTab from './RollNoSlipsTab';
+import ClassPapersEditor from './ClassPapersEditor';
 import { MarksEntryTab, ResultsOverviewTab } from './ExamFlowTabs';
 import {
   Plus, Pencil, Trash2, ChevronDown, ChevronUp, X,
-  Save, Check, Edit3, Award, FileText, User, Settings,
-  ToggleLeft, ToggleRight,
+  Save, Check, Edit3, Award, FileText, User, Upload,
 } from 'lucide-react';
 
 const NAVY = '#1B2F6E';
@@ -249,66 +252,49 @@ function exportExamsWord(exams, termLabel, schoolName) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function exportExamsPDF(exams, activeTerm, schoolName, logoUrl) {
-  const school = schoolName || localStorage.getItem('registeredSchoolName') || 'School Name';
-  const logo = logoUrl || localStorage.getItem('schoolLogoPreview') || '';
-  const now = new Date();
-  const dateStr = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
-  const timeStr = now.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
-
-  const logoHtml = logo
-    ? `<img src="${logo}" style="width:70px;height:70px;object-fit:contain"/>`
-    : `<div style="width:70px;height:70px;border:2px solid #aaa;display:flex;align-items:center;justify-content:center;font-size:9px;color:#666">LOGO</div>`;
-
+/* The term's exams as a page to print or save as PDF. */
+function exportExamsPDF(exams, termLabel, school) {
+  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const name = school?.name || localStorage.getItem('schoolName') || 'School';
+  const logo = school?.logoUrl || localStorage.getItem('schoolLogoPreview') || '';
+  const day = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
   const rows = exams.map((e, i) => {
-    const classes = (() => { try { return JSON.parse(e.classIds || '[]'); } catch { return []; } })();
-    return classes.length > 0
-      ? classes.map((c, ci) => `<tr><td>${ci === 0 ? i+1 : ''}</td><td>${ci === 0 ? (e.name || e.title || 'Exam') : ''}</td><td>${c.className || c}</td><td>${c.sectionName || 'All'}</td><td>${e.startDate ? new Date(e.startDate).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}).replace(/ /g,'-') : (e.dateStart ? new Date(e.dateStart).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}).replace(/ /g,'-') : '—')}</td><td>${e.endDate ? new Date(e.endDate).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}).replace(/ /g,'-') : (e.dateEnd ? new Date(e.dateEnd).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}).replace(/ /g,'-') : '—')}</td></tr>`).join('')
-      : `<tr><td>${i+1}</td><td>${e.name || e.title || 'Exam'}</td><td>—</td><td>—</td><td>${(e.startDate||e.dateStart) ? new Date(e.startDate||e.dateStart).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}) : '—'}</td><td>${(e.endDate||e.dateEnd) ? new Date(e.endDate||e.dateEnd).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}) : '—'}</td></tr>`;
+    let cls = [];
+    try { cls = JSON.parse(e.classIds || '[]'); } catch { cls = []; }
+    return `<tr><td>${i + 1}</td><td><b>${esc(e.title)}</b></td><td>${esc(cls.map((c) => c.className || c).join(', ') || 'All classes')}</td><td>${day(e.dateStart)}</td><td>${day(e.dateEnd)}</td><td>${e.isPublished ? 'Published' : '—'}</td></tr>`;
   }).join('');
+  if (!rows) { toast.error(`No exams in the ${termLabel} yet.`); return; }
+  printHTML(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(termLabel)} — Exams</title><style>
+    body{font-family:Arial,sans-serif;margin:0;padding:12mm;color:#000;font-size:12px}
+    .head{display:flex;gap:12px;align-items:center;border-bottom:2px solid #000;padding-bottom:8px}.head img{width:56px;height:56px;object-fit:contain}
+    .sch{font-size:19px;font-weight:800}.sub{font-size:13px;margin-top:2px;color:#333}
+    h2{font-size:15px;margin:14px 0 8px}
+    table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:6px 8px;text-align:left}th{background:#eee}
+    .foot{display:flex;justify-content:space-between;margin-top:14px;font-size:10.5px;color:#555}
+  </style></head><body>
+  <div class="head">${logo ? `<img src="${esc(logo)}" alt=""/>` : ''}<div><div class="sch">${esc(name)}</div><div class="sub">${esc([school?.address, school?.phone && `Phone ${school.phone}`].filter(Boolean).join(' · '))}</div></div></div>
+  <h2>Examinations — ${esc(termLabel)}</h2>
+  <table><thead><tr><th>#</th><th>Exam</th><th>Classes</th><th>From</th><th>To</th><th>Result</th></tr></thead><tbody>${rows}</tbody></table>
+  <div class="foot"><span>Printed ${day(new Date())}</span><span>${esc(name)}</span></div>
+  </body></html>`, { title: `${termLabel} — Exams` });
+}
 
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:Arial,sans-serif;font-size:11px;padding:20px}
-  .top-header{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:4px}
-  .school-name-big{font-size:20px;font-weight:bold;text-align:center;flex:1}
-  .gen-info{display:flex;justify-content:space-between;font-size:10px;color:#333;margin:6px 0 14px}
-  h2{text-align:center;font-size:16px;font-weight:bold;margin-bottom:14px}
-  .term-label{font-size:12px;font-weight:bold;margin-bottom:6px}
-  table{width:100%;border-collapse:collapse;margin-bottom:16px}
-  th{background:#e5e7eb;font-weight:bold;padding:7px 8px;border:1px solid #000;text-align:left}
-  td{padding:6px 8px;border:1px solid #000}
-  .footer{display:flex;justify-content:space-between;margin-top:16px;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:8px}
-  @media print{@page{margin:.8cm}}
-</style>
-</head><body>
-<div class="top-header">
-  <div>${logoHtml}</div>
-  <div class="school-name-big">${school}</div>
-  <div style="width:70px"></div>
-</div>
-<div class="gen-info">
-  <span>Generated Date: ${dateStr}</span>
-  <span>Generated Time: ${timeStr}</span>
-  <span>Generated By: ${school}</span>
-</div>
-<h2>Examination Schedule</h2>
-<div class="term-label">Term : ${activeTerm === '1st' ? '1st Term' : '2nd Term'}</div>
-<table>
-  <thead><tr><th>Sr. No</th><th>Exam Name</th><th>Class</th><th>Section</th><th>Date From</th><th>Date To</th></tr></thead>
-  <tbody>${rows}</tbody>
-</table>
-<div class="footer">
-  <span>Contact : 0346-5146609</span>
-  <span>Powered By : IlmForge</span>
-  <span>Page 1 of 1</span>
-</div>
-<script>window.onload=()=>{window.print()}<\/script>
-</body></html>`;
-
-  const w = window.open('','_blank','width=1000,height=700');
-  if(w){w.document.write(html);w.document.close();}
+/* How far an exam has got: date sheets, marks, published. */
+function ExamProgress({ p }) {
+  if (!p) return <span style={{ color: '#CBD5E1' }}>…</span>;
+  const bar = (pct, color) => (
+    <span style={{ display: 'inline-block', width: 60, height: 6, borderRadius: 4, background: '#E2E8F0', overflow: 'hidden', verticalAlign: 'middle', marginRight: 6 }}>
+      <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: color }} />
+    </span>
+  );
+  const sheetPct = p.sheetsTotal ? Math.round((p.sheetsPlanned / p.sheetsTotal) * 100) : 0;
+  return (
+    <div style={{ display: 'grid', gap: 3, fontSize: 11.5, color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
+      <span title="Class-sections with a date sheet">{bar(sheetPct, sheetPct === 100 ? '#16A34A' : '#F59E0B')}Date sheet {p.sheetsPlanned}/{p.sheetsTotal}</span>
+      <span title="Marks entered of all expected">{bar(p.marksPercent, p.marksPercent === 100 ? '#16A34A' : '#0073b7')}Marks {p.marksPercent}%</span>
+      <span style={{ fontWeight: 700, color: p.isPublished ? '#15803D' : '#94A3B8' }}>{p.isPublished ? 'Result published' : 'Not published'}</span>
+    </div>
+  );
 }
 
 /* How many exam terms this school runs. Two by default, up to six, set in
@@ -335,25 +321,31 @@ function ExamSetupTab({ onGo }) {
 
   const terms = useTerms();
   const filteredExams = allExams.filter(e => examMatchesTerm(e, activeTerm));
+  const { data: overview = [] } = useQuery({
+    queryKey: ['exams-overview'],
+    queryFn: () => api.get('/exams/overview').then(r => r.data.data || []).catch(() => []),
+  });
+  const progressOf = (id) => overview.find(o => o.examId === id);
 
   const exams = filteredExams;
 
+  const refresh = () => { qc.invalidateQueries({ queryKey: ['exams'] }); qc.invalidateQueries({ queryKey: ['exams-overview'] }); };
   const add = useMutation({
     mutationFn: d => api.post('/exams', d),
-    onSuccess: () => { toast.success('Exam created!'); qc.invalidateQueries(['exams']); setShowAddModal(false); },
-    onError: err => toast.error(err.response?.data?.message || 'Failed'),
+    onSuccess: () => { toast.success('Exam added. Next: its date sheet.'); refresh(); setShowAddModal(false); },
+    onError: err => toast.error(err.response?.data?.message || 'Could not add the exam.'),
   });
 
   const editMut = useMutation({
     mutationFn: ({ id, ...d }) => api.put(`/exams/${id}`, d),
-    onSuccess: () => { toast.success('Exam updated!'); qc.invalidateQueries(['exams']); setEditExam(null); },
-    onError: err => toast.error(err.response?.data?.message || 'Failed'),
+    onSuccess: () => { toast.success('Exam saved.'); refresh(); setEditExam(null); },
+    onError: err => toast.error(err.response?.data?.message || 'Could not save the exam.'),
   });
 
   const del = useMutation({
     mutationFn: id => api.delete(`/exams/${id}`),
-    onSuccess: () => { toast.success('Deleted!'); qc.invalidateQueries(['exams']); },
-    onError: err => toast.error(err.response?.data?.message || 'Failed'),
+    onSuccess: () => { toast.success('Exam deleted.'); refresh(); },
+    onError: err => toast.error(err.response?.data?.message || 'Could not delete the exam.'),
   });
 
   const getClasses = (exam) => {
@@ -376,7 +368,7 @@ function ExamSetupTab({ onGo }) {
           ))}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => exportExamsPDF(filteredExams, activeTerm, school?.name, school?.logoUrl)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>PDF</button>
+          <button onClick={() => exportExamsPDF(filteredExams, (terms.find(t => t.key === activeTerm) || {}).label || activeTerm, school)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>PDF</button>
           <button onClick={() => exportExamsWord(filteredExams, (terms.find(t => t.key === activeTerm) || {}).label || activeTerm, school?.name)} style={{ background: '#059669', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Word</button>
         </div>
       </div>
@@ -401,7 +393,8 @@ function ExamSetupTab({ onGo }) {
                   <th style={{ width: 40 }}>S.No.</th>
                   <th>Exam Name</th>
                   <th>Classes · dates</th>
-                  <th>Next steps</th>
+                  <th style={{ minWidth: 190 }}>Progress</th>
+                  <th>Steps</th>
                   <th style={{ width: 70 }}>Edit</th>
                   <th style={{ width: 60 }}>Delete</th>
                   <th style={{ width: 70 }}>Detail</th>
@@ -420,13 +413,14 @@ function ExamSetupTab({ onGo }) {
                           {examClasses.length ? examClasses.map(sc => sc.className).join(', ') : 'All classes'}
                           <div style={{ color: '#94A3B8' }}>{fmtDate(e.dateStart)} – {fmtDate(e.dateEnd)}</div>
                         </td>
+                        <td><ExamProgress p={progressOf(e.id)} /></td>
                         <td>
                           {/* Each step of this exam, in order. */}
                           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                            <button className="btn btn-outline btn-sm" style={{ fontSize: 11.5 }} onClick={() => onGo?.('date-sheet')}>Date sheet</button>
+                            <button className="btn btn-outline btn-sm" style={{ fontSize: 11.5 }} onClick={() => onGo?.('date-sheet', e.id)}>Date sheet</button>
+                            <button className="btn btn-outline btn-sm" style={{ fontSize: 11.5 }} onClick={() => onGo?.('roll-slips', e.id)}>Roll no. slips</button>
                             <button className="btn btn-outline btn-sm" style={{ fontSize: 11.5 }} onClick={() => onGo?.('question-papers', e.id)}>Papers</button>
-                            <Link className="btn btn-outline btn-sm" style={{ fontSize: 11.5 }} to={`/exams/exam-slip?examId=${e.id}`}>Roll no. slips</Link>
-                            <Link className="btn btn-teal btn-sm" style={{ fontSize: 11.5 }} to={`/exams/${e.id}/marks`}>Enter marks</Link>
+                            <button className="btn btn-teal btn-sm" style={{ fontSize: 11.5 }} onClick={() => onGo?.('marks', e.id)}>Marks</button>
                             <button className="btn btn-outline btn-sm" style={{ fontSize: 11.5 }} onClick={() => onGo?.('results', e.id)}>Results</button>
                           </div>
                         </td>
@@ -458,7 +452,7 @@ function ExamSetupTab({ onGo }) {
                       </tr>
                       {isExpanded && (
                         <tr style={{ background: '#eff6ff' }}>
-                          <td colSpan={7} style={{ padding: '14px 20px' }}>
+                          <td colSpan={8} style={{ padding: '14px 20px' }}>
                             <div style={{ border: '1px solid #dbeafe', borderRadius: 8, padding: '14px 18px', background: '#fff' }}>
                               <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', color: '#374151', fontSize: 13, alignItems: 'center' }}>
                                 <span><strong>Exam Name:</strong> {e.title}</span>
@@ -488,7 +482,7 @@ function ExamSetupTab({ onGo }) {
                   );
                 })}
                 {exams.length === 0 && (
-                  <tr><td colSpan={7}>
+                  <tr><td colSpan={8}>
                     <div className="empty-state">
                       <div className="empty-state-icon">📝</div>
                       <div className="empty-state-text">No exams for the {(terms.find(t => t.key === activeTerm) || {}).label || activeTerm}</div>
@@ -530,8 +524,8 @@ function printDateSheets(rows, examTitle, school) {
     <div class="sheet">
       <div class="head">${school?.logoUrl ? `<img src="${esc(school.logoUrl)}" alt=""/>` : ''}<div><div class="sch">${esc(school?.name || localStorage.getItem('schoolName') || 'School')}</div><div class="sub">${esc(examTitle)} — Date Sheet</div></div></div>
       <div class="cls">Class: <b>${esc(r.className)}${r.sectionName ? ` — ${esc(r.sectionName)}` : ''}</b></div>
-      <table><tr><th>#</th><th>Date</th><th>Subject</th><th>Time</th></tr>
-      ${[...r.entries].sort((a, b) => String(a.date).localeCompare(String(b.date))).map((e, i) => `<tr><td>${i + 1}</td><td>${day(e.date)}</td><td dir="auto">${esc(e.subject)}</td><td>${esc([fmt12(e.timeFrom), fmt12(e.timeTo)].filter(Boolean).join(' – ') || '—')}</td></tr>`).join('')}
+      <table><tr><th>#</th><th>Date</th><th>Subject</th><th>Time</th>${r.entries.some((e) => e.room) ? '<th>Room</th>' : ''}</tr>
+      ${[...r.entries].sort((a, b) => String(a.date).localeCompare(String(b.date))).map((e, i) => `<tr><td>${i + 1}</td><td>${day(e.date)}</td><td dir="auto">${esc(e.subject)}</td><td>${esc([fmt12(e.timeFrom), fmt12(e.timeTo)].filter(Boolean).join(' – ') || '—')}</td>${r.entries.some((x) => x.room) ? `<td>${esc(e.room || '—')}</td>` : ''}</tr>`).join('')}
       </table>
     </div>`).join('');
   if (!sheets) return toast.error('No papers are scheduled yet. Use Edit to add the subjects and dates.');
@@ -545,17 +539,23 @@ function printDateSheets(rows, examTitle, school) {
   </style></head><body>${sheets}</body></html>`, { title: `${examTitle} — Date Sheet` });
 }
 
-function DateSheetTab() {
+function DateSheetTab({ initialExamId = '' }) {
   const queryClient = useQueryClient();
-  const [activeTerm, setActiveTerm] = useState('1st');
-  const [examId, setExamId] = useState('');
+  const [activeTerm, setActiveTerm] = useState('');
+  const [examId, setExamId] = useState(initialExamId ? String(initialExamId) : '');
   const [editRow, setEditRow] = useState(null);
 
   const { data: allExams = [] } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams').then(r => r.data.data || []) });
   const { data: school } = useQuery({ queryKey: ['school-profile'], queryFn: () => api.get('/settings/school').then(r => r.data.data).catch(() => ({})) });
 
   const terms = useTerms();
-  const exams = allExams.filter(e => examMatchesTerm(e, activeTerm));
+  // Open on the term of the exam it was opened for (or of the newest exam).
+  React.useEffect(() => {
+    if (activeTerm || !allExams.length) return;
+    const start = allExams.find(e => String(e.id) === examId) || allExams[0];
+    setActiveTerm((terms.find(t => examMatchesTerm(start, t.key)) || terms[0]).key);
+  }, [allExams, activeTerm, examId, terms]);
+  const exams = allExams.filter(e => examMatchesTerm(e, activeTerm || '1st'));
   // The newest exam of the term is the one being planned.
   React.useEffect(() => { if (!examId && exams.length) setExamId(String(exams[0].id)); }, [exams, examId]);
 
@@ -675,180 +675,44 @@ function DateSheetTab() {
       {editRow && (
         <DateSheetEditModal
           examId={examId}
-          examTitle={selectedExam?.title || ''}
+          exam={selectedExam}
+          datesheet={datesheet}
           row={editRow}
           onClose={() => setEditRow(null)}
-          queryClient={queryClient}
-          classId={editRow?.classId}
+          onSaved={() => { queryClient.invalidateQueries({ queryKey: ['datesheet', examId] }); queryClient.invalidateQueries({ queryKey: ['exam-slips', examId] }); queryClient.invalidateQueries({ queryKey: ['exams-overview'] }); }}
         />
       )}
     </div>
   );
 }
 
-function DateSheetEditModal({ examId, examTitle, row, onClose, queryClient, classId }) {
-  const [rows, setRows] = useState(row.entries?.length > 0 ? row.entries.map(e => ({ ...e, _key: e.id })) : []);
-  const [saving, setSaving] = useState({});
-  const [deleting, setDeleting] = useState({});
-  const [copyConfirm, setCopyConfirm] = useState(false);
-  const [copying, setCopying] = useState(false);
-  const keyRef = useRef(-1);
-
-  const { data: subjectsList = [] } = useQuery({
-    queryKey: ['datesheet-subjects', classId],
-    queryFn: () => api.get('/classes/subjects', { params: { classId } }).then(r => r.data.data || []),
-    enabled: !!classId,
+/* A class's papers, edited in a window over the date sheet list. */
+function DateSheetEditModal({ examId, exam, datesheet, row, onClose, onSaved }) {
+  const [dirty, setDirty] = useState(false);
+  const rows = datesheet.filter(r => r.classId === row.classId);
+  const cls = { id: row.classId, name: row.className, sections: rows.filter(r => r.sectionId).map(r => ({ id: r.sectionId, name: r.sectionName })) };
+  const entriesOf = useCallback((sid) => rows.find(r => (r.sectionId || null) === (sid || null))?.entries || [], [rows]);
+  const close = () => { if (!dirty || window.confirm('Your changes to these papers are not saved. Close anyway?')) onClose(); };
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   });
-
-  const invalidate = () => queryClient.invalidateQueries(['datesheet', examId]);
-
-  function addRow() {
-    const tmpKey = --keyRef.current;
-    setRows(r => [...r, { _key: tmpKey, id: null, subject: '', date: '', timeFrom: '', timeTo: '' }]);
-  }
-
-  function updateRow(key, field, val) {
-    setRows(r => r.map(x => x._key === key ? { ...x, [field]: val } : x));
-  }
-
-  async function saveRow(rowItem) {
-    setSaving(s => ({ ...s, [rowItem._key]: true }));
-    try {
-      if (rowItem.id) {
-        const res = await api.put(`/exams/datesheet/${rowItem.id}`, { subject: rowItem.subject, date: rowItem.date, timeFrom: rowItem.timeFrom, timeTo: rowItem.timeTo });
-        setRows(r => r.map(x => x._key === rowItem._key ? { ...x, ...res.data.data, _key: rowItem._key } : x));
-      } else {
-        const res = await api.post(`/exams/${examId}/datesheet`, { classId: row.classId, sectionId: row.sectionId, subject: rowItem.subject, date: rowItem.date, timeFrom: rowItem.timeFrom, timeTo: rowItem.timeTo });
-        setRows(r => r.map(x => x._key === rowItem._key ? { ...x, ...res.data.data, _key: rowItem._key } : x));
-      }
-      toast.success('Entry saved.');
-      invalidate();
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Save failed.');
-    } finally {
-      setSaving(s => ({ ...s, [rowItem._key]: false }));
-    }
-  }
-
-  async function deleteRow(rowItem) {
-    if (!rowItem.id) { setRows(r => r.filter(x => x._key !== rowItem._key)); return; }
-    setDeleting(d => ({ ...d, [rowItem._key]: true }));
-    try {
-      await api.delete(`/exams/datesheet/${rowItem.id}`);
-      setRows(r => r.filter(x => x._key !== rowItem._key));
-      toast.success('Entry deleted.');
-      invalidate();
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Delete failed.');
-    } finally {
-      setDeleting(d => ({ ...d, [rowItem._key]: false }));
-    }
-  }
-
-  async function copyToAll() {
-    setCopying(true);
-    try {
-      await api.post(`/exams/${examId}/datesheet/copy-to-all`, { fromClassId: row.classId, fromSectionId: row.sectionId });
-      toast.success('Date sheet copied to all classes!');
-      invalidate();
-      setCopyConfirm(false);
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Copy failed.');
-    } finally {
-      setCopying(false);
-    }
-  }
-
-  const inp = { border: '1px solid #D1D5DB', borderRadius: 5, padding: '5px 8px', fontSize: 12, width: '100%', outline: 'none', background: '#fff' };
-
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', width: '90%', maxWidth: 780, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* Header */}
-        <div style={{ background: TEAL, color: '#fff', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+    <div role="dialog" aria-modal="true" aria-label={`Date sheet of ${row.className}`} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
+      <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', width: '100%', maxWidth: 920, maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ background: NAVY, color: '#fff', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Upload date sheet</div>
-            <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{row.className} — Section {row.sectionName}</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Date sheet — {row.className}</div>
+            <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{exam?.title || ''} · these papers are also printed on the roll number slips</div>
           </div>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: 6, width: 30, height: 30, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          <button type="button" aria-label="Close" onClick={close} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: 6, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
         </div>
-
-        {/* Body */}
         <div style={{ overflowY: 'auto', padding: '16px 20px', flex: 1 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: '#F1F5F9' }}>
-                {['Subject', 'Date', 'Time From', 'Time To', '✓', '✕'].map((h, i) => (
-                  <th key={i} style={{ padding: '8px 10px', textAlign: i >= 4 ? 'center' : 'left', fontWeight: 600, color: '#374151', borderBottom: '1px solid #E2E8F0', minWidth: i < 4 ? 100 : 60 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 28, color: '#94A3B8', fontSize: 13 }}>No entries yet. Click "+ Add New".</td></tr>
-              )}
-              {rows.map(r => (
-                <tr key={r._key} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                  <td style={{ padding: '6px 8px' }}>
-                    {subjectsList.length > 0 ? (
-                      <select value={r.subject || ''} onChange={e => updateRow(r._key, 'subject', e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #dbeafe', borderRadius: 6, fontSize: 13, background: 'white' }}>
-                        <option value="">Select Subject</option>
-                        {subjectsList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                      </select>
-                    ) : (
-                      <input type="text" placeholder="Subject" value={r.subject || ''}
-                        onChange={e => updateRow(r._key, 'subject', e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #dbeafe', borderRadius: 6, fontSize: 13 }} />
-                    )}
-                  </td>
-                  <td style={{ padding: '6px 8px' }}><input type="date" style={inp} value={r.date} onChange={e => updateRow(r._key, 'date', e.target.value)} /></td>
-                  <td style={{ padding: '6px 8px' }}><input type="time" style={inp} value={r.timeFrom} onChange={e => updateRow(r._key, 'timeFrom', e.target.value)} /></td>
-                  <td style={{ padding: '6px 8px' }}><input type="time" style={inp} value={r.timeTo} onChange={e => updateRow(r._key, 'timeTo', e.target.value)} /></td>
-                  <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                    <button onClick={() => saveRow(r)} disabled={saving[r._key]} style={{ background: saving[r._key] ? '#9CA3AF' : '#16A34A', color: '#fff', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 14 }}>
-                      {saving[r._key] ? '…' : '✓'}
-                    </button>
-                  </td>
-                  <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                    <button onClick={() => deleteRow(r)} disabled={deleting[r._key]} style={{ background: deleting[r._key] ? '#9CA3AF' : '#DC2626', color: '#fff', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 14 }}>
-                      {deleting[r._key] ? '…' : '✕'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-            <button onClick={addRow} style={{ background: TEAL, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
-              + Add New
-            </button>
-            <button onClick={() => setCopyConfirm(true)} style={{ border: `1.5px solid ${TEAL}`, background: 'transparent', color: TEAL, borderRadius: 6, padding: '7px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
-              Copy to All Classes
-            </button>
-          </div>
-        </div>
-
-        <div style={{ padding: '12px 20px', borderTop: '1px solid #E2E8F0', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ background: '#F1F5F9', color: '#374151', border: '1px solid #D1D5DB', borderRadius: 6, padding: '7px 18px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Close</button>
+          <ClassPapersEditor examId={examId} exam={exam} cls={cls} entriesOf={entriesOf} startSection={row.sectionId} onSaved={onSaved} onDirtyChange={setDirty} />
         </div>
       </div>
-
-      {copyConfirm && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', borderRadius: 10, padding: 28, maxWidth: 380, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.25)' }}>
-            <div style={{ fontWeight: 700, color: NAVY, fontSize: 16, marginBottom: 10 }}>Copy to All Classes?</div>
-            <div style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>This will replace the date sheet of all other classes with entries from <strong>{row.className} – {row.sectionName}</strong>.</div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => setCopyConfirm(false)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Cancel</button>
-              <button onClick={copyToAll} disabled={copying} style={{ background: TEAL, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 18px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
-                {copying ? 'Copying…' : 'Yes, copy to all classes'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -982,8 +846,17 @@ function Toggle({ checked, onChange }) {
 
 function ResultsTab() {
   const qc = useQueryClient();
-  const [topTab, setTopTab] = useState('setup');    // setup | single | combined | history
   const [setupTab, setSetupTab] = useState('setup'); // setup | options
+  const sigInput = useRef(null);
+  const [sigFor, setSigFor] = useState(null);
+  const pickSignature = (idx) => { setSigFor(idx); sigInput.current?.click(); };
+  const onSignatureFile = async (file) => {
+    if (!file || sigFor === null) return;
+    try {
+      const url = await signatureFromFile(file);
+      handleChange({ signatures: config.signatures.map((s, i) => (i === sigFor ? { ...s, signatureUrl: url } : s)) });
+    } catch (e) { toast.error(e.message); }
+  };
 
   const { data: serverConfig, isLoading } = useQuery({
     queryKey: ['result-config'],
@@ -1028,19 +901,8 @@ function ResultsTab() {
 
   return (
     <div>
-      {/* Top tabs row */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        {[
-          { id: 'setup', label: 'Result Setup' },
-          { id: 'single', label: 'Single Assessment Result' },
-          { id: 'combined', label: 'Combined Assessment Result' },
-          { id: 'history', label: 'Result History' },
-        ].map(t => (
-          <button key={t.id} style={tabBtnStyle(topTab === t.id)} onClick={() => setTopTab(t.id)}>{t.label}</button>
-        ))}
-      </div>
-
-      {topTab === 'setup' && (
+      <input ref={sigInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { onSignatureFile(e.target.files?.[0]); e.target.value = ''; }} />
+      {(
         <div>
           {/* Setup sub-tabs */}
           <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #E2E8F0', marginBottom: 20 }}>
@@ -1143,7 +1005,7 @@ function ResultsTab() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: '#F1F5F9' }}>
-                      {['Sr.no', 'Name', 'Designation', 'Signature'].map(h => (
+                      {['Sr.no', 'Name', 'Designation', 'Signature', ''].map(h => (
                         <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569', fontSize: 12 }}>{h}</th>
                       ))}
                     </tr>
@@ -1159,7 +1021,18 @@ function ResultsTab() {
                           <input value={sig.designation} onChange={e => handleChange({ signatures: config.signatures.map((s, i) => i === idx ? { ...s, designation: e.target.value } : s) })} className="form-input" style={{ width: '100%', padding: '4px 8px', fontSize: 13 }} />
                         </td>
                         <td style={{ padding: '8px 12px', color: '#94A3B8', fontSize: 12 }}>
-                          {sig.signatureUrl ? <img src={sig.signatureUrl} alt="sig" style={{ height: 40 }} /> : <em>No image</em>}
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            {sig.signatureUrl ? <img src={sig.signatureUrl} alt={`Signature of ${sig.name || 'signatory'}`} style={{ height: 40, maxWidth: 140, objectFit: 'contain' }} /> : <em>Signed by hand</em>}
+                            <button type="button" className="btn btn-outline btn-sm" onClick={() => pickSignature(idx)}><Upload size={12} /> {sig.signatureUrl ? 'Change' : 'Add picture'}</button>
+                            {sig.signatureUrl && <button type="button" className="btn btn-outline btn-sm" aria-label="Remove the signature picture" onClick={() => handleChange({ signatures: config.signatures.map((s, i) => (i === idx ? { ...s, signatureUrl: '' } : s)) })}><X size={12} /></button>}
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px 12px' }}>
+                          <button type="button" aria-label={`Remove ${sig.name || 'signatory'}`} disabled={config.signatures.length <= 1}
+                            onClick={() => handleChange({ signatures: config.signatures.filter((_, i) => i !== idx) })}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, border: '1.5px solid #EF4444', background: 'transparent', cursor: 'pointer', color: '#EF4444', opacity: config.signatures.length <= 1 ? 0.4 : 1 }}>
+                            <Trash2 size={12} />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -1177,27 +1050,42 @@ function ResultsTab() {
                   <FileText size={16} color={TEAL} />
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: NAVY }}>Final Remarks</h3>
                 </div>
+                <p style={{ fontSize: 12.5, color: '#64748B', margin: '0 0 10px' }}>The remark printed on the result card for a percentage in each range.</p>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: '#F1F5F9' }}>
-                      {['Sr.no', 'Total Marks', 'Percentage', 'Remarks'].map(h => (
+                      {['Sr.no', 'From %', 'To %', 'Remark', ''].map(h => (
                         <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569', fontSize: 12 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {config.finalRemarks.map((r, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', background: idx % 2 === 0 ? '#fff' : '#FAFBFF' }}>
-                        <td style={{ padding: '8px 12px', color: '#94A3B8' }}>{idx + 1}</td>
-                        <td style={{ padding: '8px 12px', color: '#374151', fontWeight: 600 }}>Total Marks</td>
-                        <td style={{ padding: '8px 12px', color: '#374151' }}>
-                          {r.minPercent === 0 ? `< ${r.maxPercent + 1}` : `≥ ${r.minPercent}`}
-                        </td>
-                        <td style={{ padding: '8px 12px', color: '#64748B' }}>{r.remark}</td>
-                      </tr>
-                    ))}
+                    {config.finalRemarks.map((r, idx) => {
+                      const setR = (patch) => handleChange({ finalRemarks: config.finalRemarks.map((x, i) => (i === idx ? { ...x, ...patch } : x)) });
+                      return (
+                        <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', background: idx % 2 === 0 ? '#fff' : '#FAFBFF' }}>
+                          <td style={{ padding: '8px 12px', color: '#94A3B8' }}>{idx + 1}</td>
+                          <td style={{ padding: '6px 8px' }}><input aria-label={`Remark ${idx + 1} from percent`} type="number" min="0" max="100" className="form-input" style={{ width: 72, padding: '4px 8px', fontSize: 13 }} value={r.minPercent} onChange={e => setR({ minPercent: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} /></td>
+                          <td style={{ padding: '6px 8px' }}><input aria-label={`Remark ${idx + 1} to percent`} type="number" min="0" max="100" className="form-input" style={{ width: 72, padding: '4px 8px', fontSize: 13 }} value={r.maxPercent} onChange={e => setR({ maxPercent: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} /></td>
+                          <td style={{ padding: '6px 8px' }}><input aria-label={`Remark ${idx + 1}`} className="form-input" style={{ width: '100%', minWidth: 200, padding: '4px 8px', fontSize: 13 }} value={r.remark} maxLength={160} onChange={e => setR({ remark: e.target.value })} /></td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <button type="button" aria-label={`Remove remark ${idx + 1}`} onClick={() => handleChange({ finalRemarks: config.finalRemarks.filter((_, i) => i !== idx) })}
+                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, border: '1.5px solid #EF4444', background: 'transparent', cursor: 'pointer', color: '#EF4444' }}>
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+                {config.finalRemarks.some(r => Number(r.maxPercent) < Number(r.minPercent)) && (
+                  <div style={{ fontSize: 12.5, color: '#B91C1C', marginTop: 8 }}>A range ends before it starts: check "From %" and "To %".</div>
+                )}
+                <button type="button" onClick={() => handleChange({ finalRemarks: [...config.finalRemarks, { minPercent: 0, maxPercent: 0, remark: '' }] })}
+                  style={{ marginTop: 12, border: `1.5px solid ${TEAL}`, background: 'transparent', color: TEAL, borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 700, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Plus size={13} /> Add a remark
+                </button>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1255,35 +1143,6 @@ function ResultsTab() {
         </div>
       )}
 
-      {topTab === 'single' && (
-        <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon">📊</div>
-            <div className="empty-state-text">Single Assessment Result</div>
-            <div className="empty-state-sub"><Link to="/exams" style={{ color: TEAL }}>Go to Exams</Link> to generate results</div>
-          </div>
-        </div>
-      )}
-
-      {topTab === 'combined' && (
-        <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon">📈</div>
-            <div className="empty-state-text">Combined Assessment Result</div>
-            <div className="empty-state-sub">Select multiple exams to combine results</div>
-          </div>
-        </div>
-      )}
-
-      {topTab === 'history' && (
-        <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon">🕐</div>
-            <div className="empty-state-text">Result History</div>
-            <div className="empty-state-sub">Past result publications will appear here</div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1362,6 +1221,7 @@ const EXAM_STEPS = [
   { id: 'exam-setup',      label: 'Exam Setup',      icon: '📋' },
   { id: 'date-sheet',      label: 'Date Sheet',      icon: '📅' },
   { id: 'syllabus',        label: 'Syllabus',        icon: '📖' },
+  { id: 'roll-slips',      label: 'Roll No. Slips',  icon: '🎫' },
   { id: 'question-papers', label: 'Question Papers', icon: '📝' },
   { id: 'marks',           label: 'Marks Entry',     icon: '✏️' },
   { id: 'results',         label: 'Results',         icon: '🏆' },
@@ -1481,7 +1341,7 @@ export default function ExaminationPage() {
       <div className="ilm-page-header">
         <div>
           <h1 className="ilm-page-title">🗄️ Exam Vault</h1>
-          <p className="ilm-page-subtitle">Exam · Date sheet · Question papers · Marks · Results and report cards</p>
+          <p className="ilm-page-subtitle">Exam · Date sheet · Syllabus · Roll number slips · Question papers · Marks · Results and report cards</p>
         </div>
       </div>
 
@@ -1508,8 +1368,9 @@ export default function ExaminationPage() {
         transition: 'opacity 0.2s ease, transform 0.2s ease',
       }}>
         {activeTab === 'exam-setup'    && <ExamSetupTab onGo={switchTab} />}
-        {activeTab === 'date-sheet'    && <DateSheetTab />}
+        {activeTab === 'date-sheet'    && <DateSheetTab key={tabExamId} initialExamId={tabExamId} />}
         {activeTab === 'syllabus'      && <SyllabusTab />}
+        {activeTab === 'roll-slips'    && <RollNoSlipsTab key={tabExamId} initialExamId={tabExamId} />}
         {activeTab === 'question-papers' && <QuestionPapersTab key={tabExamId} initialExamId={tabExamId} />}
         {activeTab === 'marks'         && <MarksEntryTab key={tabExamId} initialExamId={tabExamId} />}
         {activeTab === 'results'       && <ResultsHub key={tabExamId} initialExamId={tabExamId} />}
