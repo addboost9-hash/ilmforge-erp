@@ -46,6 +46,7 @@ import FeeDashboardPage from './pages/fees/FeeDashboardPage';
 import FeeCollectionPage from './pages/fees/FeeCollectionPage';
 import FeeGeneratePage from './pages/fees/FeeGeneratePage';
 import FeeDefaultersPage from './pages/fees/FeeDefaultersPage';
+import FeeRegisterPage from './pages/fees/FeeRegisterPage';
 import FeeStructurePage from './pages/fees/FeeStructurePage';
 import AttendancePage from './pages/attendance/AttendancePage';
 const AttendanceHubPage = React.lazy(() => import('./pages/attendance/AttendanceHubPage'));
@@ -437,6 +438,7 @@ export default function App() {
             <Route path="/fees/collect"               element={<FeeCollectionPage />} />
             <Route path="/fees/generate"              element={<FeeGeneratePage />} />
             <Route path="/fees/defaulters"            element={<FeeDefaultersPage />} />
+            <Route path="/fees/register"              element={<FeeRegisterPage />} />
             <Route path="/fees/structure"             element={<FeeStructurePage />} />
 
             {/* Attendance */}

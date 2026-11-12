@@ -576,6 +576,59 @@ parent is also notified automatically if messaging is configured.
 > The system will not let you collect more than the amount outstanding on an invoice.
 > If you try, it tells you the actual amount due.
 
+### A student's fee year: the fee calendar
+
+When a student is chosen on **Collect Fee**, a **Fee calendar** shows the whole session (or
+year) month by month, above the list of invoices:
+
+- **Paid** (green): the fee, the amount paid, the **day it was collected** and the receipt number.
+- **Part paid** (yellow) and **Unpaid** (red): the balance still owed, with a **Collect**
+  button that opens the payment for that month.
+- **Due** (blue): this month's fee, not late yet.
+- **Not billed** (grey): no fee was generated for that month. **Upcoming**: a month still to come.
+
+The line above the months says how many months are pending and which ones (for example
+*3 months pending — Rs. 7,500 (Sep, Oct, Nov)*), any **earlier dues** from before the
+session, and the last day a fee was collected.
+
+- Choose another session or calendar year from the list at the top right. It opens on the
+  session today falls in, or this calendar year if no session covers today.
+- **Fee card** prints the student's year on one page: each month's fee, discount, paid,
+  balance, the day collected and receipt number, with the pending months, the total balance
+  and signature lines for the accountant and the principal. Choose **Save as PDF** in the
+  print dialog to keep it as a file.
+- **Class register** opens the Fee Register on the student's class.
+
+### The fee register: a whole class month by month
+
+**Invoicing Hub → Fee Register** (`/hub/fees?tab=register`). In the accountant portal it is
+the **Fee Register** tab.
+
+Like the school's fee register book: a row for each student, a column for each month.
+
+| In a month's box | Means |
+|---|---|
+| ✓ 05/09 (green) | Paid, collected on 5 September |
+| P 1,500 (yellow) | Part paid; Rs. 1,500 still owed |
+| 2,500 (red) | Unpaid |
+| 2,500 (blue) | Due this month, not late yet |
+| — | Not billed |
+
+1. Choose the **Class** (or **All classes**), the **Section**, and the **Session or year**.
+2. **Show** picks out students: *With pending fees*, *2 or more months pending*,
+   *3 or more months pending*, or *Nothing pending*. The boxes at the top (Students with fees
+   pending, 3 or more months pending) do the same when clicked.
+3. The last columns give each student's **months pending**, **earlier dues** (from before the
+   session) and **balance**. The bottom rows give each month's total collected, the balance
+   still owed, and how many students have paid.
+4. Click a month to see its bills and every payment with date, method and receipt number.
+   Click a student's name to collect their fee.
+5. **Print / Save as PDF** prints the register on A4 landscape, each class (and section) from
+   a new page, with signature lines for the accountant and the principal. **Excel** downloads
+   the same register as a spreadsheet.
+
+> A voided payment is not counted: the month shows as owing again, as it is on the invoice.
+
 ### Correcting a wrong amount — important
 
 If the wrong amount was entered, **do not delete anything**. Scroll to the
@@ -604,6 +657,7 @@ still due and the months it covers.
 | Discounted students | `/fees/discounted` |
 | Annual fee increase | `/fees/increment` |
 | Collection report (payments received in a month, with the day each was entered) | `/fees/collection-report` |
+| Fee register (each student month by month, with the day each fee was collected) | `/hub/fees?tab=register` |
 
 <a name="past-records"></a>
 ### Past records: fees, salaries and expenses from before IlmForge

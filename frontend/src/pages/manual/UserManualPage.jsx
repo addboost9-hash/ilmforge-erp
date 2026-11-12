@@ -216,7 +216,7 @@ const SECTIONS = [
     icon: '💰',
     color: '#D97706',
     title: 'Fee Management',
-    desc: 'Structure, generate, collect, voucher, EMI, wallet, defaulters',
+    desc: 'Structure, generate, collect, fee calendar and register, voucher, EMI, wallet, defaulters',
     chapters: [
       {
         title: 'Fee Structure',
@@ -262,6 +262,18 @@ const SECTIONS = [
           { n:5, text:'Every online transaction generates a receipt and an SMS confirmation' },
         ],
         tip: 'The Parent Wallet lets fees for multiple children be managed from a single balance — parents really appreciate this feature.',
+      },
+      {
+        title: 'Fee Calendar & Fee Register',
+        steps: [
+          { n:1, text:'Collect Fee → choose a student: the Fee calendar shows every month of the session — Paid (with the day collected and receipt), Part paid, Unpaid, Due, Not billed' },
+          { n:2, text:'The line above says how many months are pending, which ones, and any earlier dues. "Collect" on a month opens its payment' },
+          { n:3, text:'"Fee card" prints the student\'s whole year on one page (Save as PDF to keep it)' },
+          { n:4, text:'Invoicing Hub → Fee Register (accountant portal: Fee Register tab): a row per student, a column per month. ✓ 05/09 = paid on that day, P = part paid, red = unpaid' },
+          { n:5, text:'Show → "3 or more months pending" picks out students who are behind. Click a month for its payments; click a name to collect' },
+          { n:6, text:'Print / Save as PDF: A4 landscape, each class from a new page, with signature lines. Excel downloads the same register' },
+        ],
+        tip: 'The register opens on the session today falls in (or this calendar year). Pick another session or year at the top.',
       },
       {
         title: 'Defaulters',

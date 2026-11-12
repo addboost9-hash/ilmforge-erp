@@ -306,6 +306,119 @@ router.get('/student/:studentId', wrap(async (req, res) => {
   res.json({ success: true, data: { student, invoices } });
 }));
 
+// GET /api/v1/fees/register?from=2026-04&to=2027-03&classId=&sectionId=&studentId=
+// The fee register: the students of a class (classId=all: the whole school;
+// studentId: one student) with their bills, for a screen that lays the year
+// out month by month: paid and on which day, part paid, unpaid, not billed.
+// Bills of the years asked are sent, and any bill still owing from before,
+// which is the student's earlier dues. Voided payments are left out.
+const REGISTER_MAX_STUDENTS = 3000;
+
+// GET /api/v1/fees/register/options — what the register and the fee
+// calendar are chosen and printed with: the classes and their sections, the
+// academic sessions, and the school's name, address and logo. The
+// accountant may not read the class or settings pages, so these come with
+// the fees.
+router.get('/register/options', requireFinanceRole, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const [classes, sessions, school] = await Promise.all([
+    prisma.class.findMany({
+      where: { schoolId, isActive: true },
+      select: { id: true, name: true, sections: { select: { id: true, name: true }, orderBy: { name: 'asc' } } },
+      orderBy: [{ orderNo: 'asc' }, { name: 'asc' }],
+    }),
+    prisma.academicSession.findMany({
+      where: { schoolId },
+      select: { id: true, name: true, startDate: true, endDate: true, isActive: true },
+      orderBy: { startDate: 'desc' },
+    }),
+    prisma.school.findUnique({ where: { id: schoolId }, select: { name: true, address: true, phone: true, logoUrl: true } }),
+  ]);
+  res.json({ success: true, data: { classes, sessions, school: school || {} } });
+}));
+
+router.get('/register', requireFinanceRole, wrap(async (req, res) => {
+  const { schoolId, campusId } = req;
+  const parseYm = (v) => {
+    const m = /^(\d{4})-(\d{2})$/.exec(String(v || ''));
+    return m && Number(m[2]) >= 1 && Number(m[2]) <= 12 ? { y: Number(m[1]), m: Number(m[2]) } : null;
+  };
+  const from = parseYm(req.query.from);
+  const to = parseYm(req.query.to);
+  if (!from || !to) {
+    return res.status(400).json({ success: false, message: 'from and to are months, written YYYY-MM.' });
+  }
+  const span = (to.y - from.y) * 12 + (to.m - from.m) + 1;
+  if (span < 1 || span > 24) {
+    return res.status(400).json({ success: false, message: 'Choose up to 24 months, the first month before the last.' });
+  }
+
+  const allClasses = req.query.classId === 'all';
+  const classId = parseInt(req.query.classId) || null;
+  const sectionId = parseInt(req.query.sectionId) || null;
+  const studentId = parseInt(req.query.studentId) || null;
+  if (!studentId && !classId && !allClasses) {
+    return res.status(400).json({ success: false, message: 'Choose a class.' });
+  }
+
+  const where = { schoolId, deletedAt: null, ...(campusId && { campusId }) };
+  if (studentId) where.id = studentId;
+  else {
+    where.status = 'active';
+    if (classId) where.classId = classId;
+    if (classId && sectionId) where.sectionId = sectionId;
+  }
+  const found = await prisma.student.findMany({
+    where,
+    select: {
+      id: true, name: true, rollNo: true, fatherName: true, emergencyPhone: true, motherPhone: true,
+      admissionDate: true, status: true, classId: true, sectionId: true,
+      class: { select: { name: true, orderNo: true } }, section: { select: { name: true } },
+    },
+    take: REGISTER_MAX_STUDENTS + 1,
+  });
+  if (studentId && !found.length) return res.status(404).json({ success: false, message: 'Student not found.' });
+  const truncated = found.length > REGISTER_MAX_STUDENTS;
+  const byRollNo = (a, b) => String(a || '￿').localeCompare(String(b || '￿'), 'en', { numeric: true, sensitivity: 'base' });
+  const students = found.slice(0, REGISTER_MAX_STUDENTS).sort((a, b) =>
+    ((a.class?.orderNo ?? 999) - (b.class?.orderNo ?? 999))
+    || String(a.class?.name || '').localeCompare(String(b.class?.name || ''), 'en', { numeric: true })
+    || String(a.section?.name || '').localeCompare(String(b.section?.name || ''), 'en', { numeric: true })
+    || byRollNo(a.rollNo, b.rollNo)
+    || a.name.localeCompare(b.name));
+
+  const years = [];
+  for (let y = from.y; y <= to.y; y++) years.push(y);
+  const invoices = students.length ? await prisma.feeInvoice.findMany({
+    where: {
+      schoolId,
+      studentId: { in: students.map((s) => s.id) },
+      // A bill without a year is placed by its due date or the day it was
+      // made, so those come too.
+      OR: [{ year: { in: years } }, { year: null }, { dueAmount: { gt: 0 } }],
+    },
+    select: {
+      id: true, studentId: true, feeTitle: true, month: true, year: true, voucherNo: true,
+      totalAmount: true, discount: true, lateFee: true, paidAmount: true, dueAmount: true, status: true,
+      dueDate: true, createdAt: true,
+      payments: {
+        where: { voidedAt: null },
+        select: { id: true, amountPaid: true, discount: true, paymentDate: true, receiptNo: true, method: true },
+        orderBy: { paymentDate: 'asc' },
+      },
+    },
+  }) : [];
+
+  res.json({
+    success: true,
+    data: {
+      from: req.query.from, to: req.query.to, truncated,
+      students: students.map(({ class: cls, section, ...s }) => ({ ...s, className: cls?.name || '', sectionName: section?.name || '' })),
+      invoices,
+    },
+  });
+}));
+
 // POST /api/v1/fees/payments - Record a fee payment
 router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
   const { schoolId } = req;

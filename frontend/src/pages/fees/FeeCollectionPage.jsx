@@ -6,6 +6,7 @@ import api from '../../api/client';
 import { Search, DollarSign, Printer, X, CheckCircle, Receipt, Pencil, Ban } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
 import EmptyState from '../../components/ui/EmptyState';
+import FeeYearCalendar from '../../components/fees/FeeYearCalendar';
 import { feePeriod } from '../../utils/feeMonth';
 
 const money = v => 'Rs. ' + ((v || 0) / 100).toLocaleString();
@@ -298,6 +299,9 @@ export default function FeeCollectionPage() {
               </button>
             </div>
           </div>
+
+          {/* The year month by month: which months are paid (and when), which are pending. */}
+          <FeeYearCalendar student={feeData.student || selected} invoices={feeData.invoices} onCollect={openPayModal} />
 
           {/* Invoices Table */}
           <div className="table-wrap" style={{ borderRadius: 0, border: 'none' }}>

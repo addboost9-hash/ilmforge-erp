@@ -35,12 +35,15 @@ import {
   TrendingDown,
   Users,
   DollarSign,
+  CalendarDays,
 } from 'lucide-react';
 import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
 import { printFeeVoucher } from '../../components/PortalUtils';
 import { feePeriod, byPeriodDesc } from '../../utils/feeMonth';
 import { toPaisa } from '../../utils/currency';
+import FeeYearCalendar from '../../components/fees/FeeYearCalendar';
+import FeeRegisterPage from '../fees/FeeRegisterPage';
 
 /* ── Enterprise theme tokens ─────────────────────────────── */
 const NAVY = '#1B2F6E';
@@ -197,6 +200,7 @@ const TABS = [
   { id: 'dashboard',    label: 'Dashboard',         icon: LayoutDashboard },
   { id: 'balancesheet', label: 'Daily Balancesheet', icon: BookOpen        },
   { id: 'collection',   label: 'Fee Collection',     icon: Wallet          },
+  { id: 'register',     label: 'Fee Register',       icon: CalendarDays    },
   { id: 'expenses',     label: 'Expense Log',        icon: TrendingDown    },
   { id: 'history',      label: 'Payment History',    icon: History         },
   { id: 'discounts',    label: '🎓 Scholarships',    icon: Receipt         },
@@ -894,9 +898,9 @@ function BalancesheetTab({ user }) {
 /* ═══════════════════════════════════════════════════════════════════════════
    FEE COLLECTION TAB
    ═══════════════════════════════════════════════════════════════════════════ */
-function FeeCollectionTab({ user }) {
-  const [search, setSearch] = useState('');
-  const [selectedStudent, setSelectedStudent] = useState(null);
+function FeeCollectionTab({ user, initialStudent, onOpenRegister }) {
+  const [search, setSearch] = useState(initialStudent?.name || '');
+  const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
   const [payAmount, setPayAmount] = useState('');
   const [payNote, setPayNote] = useState('');
   const [payDate, setPayDate] = useState(todayISO());
@@ -924,6 +928,22 @@ function FeeCollectionTab({ user }) {
     retry: false,
   });
 
+  // Every bill of the student with its payments, for the fee calendar.
+  const { data: feeYearData } = useQuery({
+    queryKey: ['student-fee', selectedStudent?.id],
+    queryFn: () => api.get('/fees/student/' + selectedStudent.id).then((r) => r.data.data),
+    enabled: !!selectedStudent?.id,
+    retry: false,
+  });
+  // "Collect" on a month of the calendar opens that bill's payment below.
+  const collectFromCalendar = (inv) => {
+    setPayingId(inv.id);
+    setPayAmount('');
+    setPayDate(todayISO());
+    payMutation.reset();
+    setTimeout(() => document.getElementById(`acc-inv-${inv.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+  };
+
   const payMutation = useMutation({
     // FIX: POST /fees/invoices/:id/pay does not exist on the backend — the
     // real endpoint is POST /fees/payments with { invoiceId, amountPaid,
@@ -948,6 +968,7 @@ function FeeCollectionTab({ user }) {
     },
     onSuccess: (res, vars) => {
       queryClient.invalidateQueries({ queryKey: ['student-invoices', selectedStudent?.id] });
+      queryClient.invalidateQueries({ queryKey: ['student-fee', selectedStudent?.id] });
       queryClient.invalidateQueries({ queryKey: ['bs-sheet'] });
       queryClient.invalidateQueries({ queryKey: ['last-balancesheet'] });
       queryClient.invalidateQueries({ queryKey: ['payment-history'] });
@@ -1023,7 +1044,7 @@ function FeeCollectionTab({ user }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div>
               <div style={{ fontWeight: 800, fontSize: 15, color: NAVY }}>{selectedStudent.name}</div>
-              <div style={{ fontSize: 12, color: '#64748B' }}>Roll {selectedStudent.rollNo} · {selectedStudent.class?.name}</div>
+              <div style={{ fontSize: 12, color: '#64748B' }}>Roll {selectedStudent.rollNo} · {selectedStudent.class?.name || selectedStudent.className}</div>
             </div>
             <button aria-label="Close"
               onClick={() => { setSelectedStudent(null); setSearch(''); setPayingId(null); }}
@@ -1032,6 +1053,12 @@ function FeeCollectionTab({ user }) {
               <X size={18} />
             </button>
           </div>
+
+          {feeYearData && (
+            <div style={{ margin: '0 -18px 14px', borderTop: '1px solid #E2E8F0' }}>
+              <FeeYearCalendar student={feeYearData.student} invoices={feeYearData.invoices} onCollect={collectFromCalendar} onOpenRegister={onOpenRegister} />
+            </div>
+          )}
 
           {loadingInvoices ? (
             <div style={{ color: '#64748B', fontSize: 13 }}>Loading invoices…</div>
@@ -1042,7 +1069,7 @@ function FeeCollectionTab({ user }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {unpaidInvoices.map((inv) => (
-                <div key={inv.id} style={{ border: '1px solid #E2E8F0', borderRadius: 10, padding: '12px 14px' }}>
+                <div key={inv.id} id={`acc-inv-${inv.id}`} style={{ border: `1px solid ${payingId === inv.id ? NAVY : '#E2E8F0'}`, borderRadius: 10, padding: '12px 14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: payingId === inv.id ? 12 : 0 }}>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>{feeLabel(inv)}</div>
@@ -1512,6 +1539,8 @@ function ScholarshipTab() {
 export default function AccountantPortalPage() {
   const { user, logout } = useAuthStore();
   const [activeTab, setActiveTab] = useState('dashboard');
+  // From the register to a student's fees, or from a student to their class's register.
+  const [jump, setJump] = useState(null);
 
   if (!user || user.role !== 'accountant') {
     return <Navigate to="/login" replace />;
@@ -1586,7 +1615,7 @@ export default function AccountantPortalPage() {
               return (
                 <button
                   key={id}
-                  onClick={() => setActiveTab(id)}
+                  onClick={() => { setJump(null); setActiveTab(id); }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1617,7 +1646,22 @@ export default function AccountantPortalPage() {
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 16px 40px' }}>
         {activeTab === 'dashboard' && <DashboardTab user={user} setActiveTab={setActiveTab} />}
         {activeTab === 'balancesheet' && <BalancesheetTab user={user} />}
-        {activeTab === 'collection' && <FeeCollectionTab user={user} />}
+        {activeTab === 'collection' && (
+          <FeeCollectionTab
+            key={jump?.student?.id || 'search'}
+            user={user}
+            initialStudent={jump?.student}
+            onOpenRegister={(s) => { setJump({ classId: s.classId, sectionId: s.sectionId }); setActiveTab('register'); }}
+          />
+        )}
+        {activeTab === 'register' && (
+          <FeeRegisterPage
+            key={`${jump?.classId || ''}-${jump?.sectionId || ''}`}
+            initialClassId={jump?.classId}
+            initialSectionId={jump?.sectionId}
+            onOpenStudent={(s) => { setJump({ student: { ...s, class: { name: s.className }, section: { name: s.sectionName } } }); setActiveTab('collection'); }}
+          />
+        )}
         {activeTab === 'expenses' && <ExpenseLogTab user={user} />}
         {activeTab === 'history' && <PaymentHistoryTab user={user} />}
         {activeTab === 'discounts' && <ScholarshipTab />}

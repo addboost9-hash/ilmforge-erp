@@ -467,6 +467,7 @@ export default function AdminLayout() {
     { label: 'Collect Fee', desc: 'Receive fee payment', path: '/hub/fees?tab=collect', icon: '💰', group: 'Fees' },
     { label: 'Generate Monthly Fee', desc: 'Create invoices', path: '/hub/fees?tab=generate', icon: '📄', group: 'Fees' },
     { label: 'Fee Defaulters', desc: 'Unpaid fees list', path: '/fees/defaulters', icon: '⚠️', group: 'Fees' },
+    { label: 'Fee Register', desc: 'Each student month by month: paid, pending, collected date', path: '/hub/fees?tab=register', icon: '📅', group: 'Fees' },
     { label: 'Fee Structure', desc: 'Set fee per class', path: '/fees/structure', icon: '🗂️', group: 'Fees' },
     { label: 'Fee Voucher Download', desc: 'Public fee slip', path: '/fee-voucher', icon: '🎫', group: 'Fees' },
     // 'Parent Wallet' (/fees/parent-wallet) and 'EMI Plans' (/fees/emi) are
@@ -704,6 +705,7 @@ export default function AdminLayout() {
   'past-records':  'Past Records',
   'barcode':       'Attendance Kiosk',
   'exam-slip':     'Roll Number Slips',
+  'register':      'Fee Register',
   'biometric':     'Fingerprint Machines',
     'dashboard':       'Smart Dashboard',
     'academics':       'Curriculum Planner',
