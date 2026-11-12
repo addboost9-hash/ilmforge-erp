@@ -516,30 +516,77 @@ function fmt12(t) {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-/* A date sheet as a page to print (one class-section, or every one). */
-function printDateSheets(rows, examTitle, school) {
+/* A date sheet as a page to print (one class-section, or every one): the
+   school's letterhead, the papers, and signature lines for the class
+   teacher and the principal (with the principal's name and signature
+   picture from the roll number slip design). */
+function printDateSheets(rows, exam, school, design) {
   const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const pic = (v) => (/^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,/i.test(String(v || '')) || /^https?:\/\//i.test(String(v || '')) || /^\/(?!\/)/.test(String(v || '')) ? String(v) : '');
   const day = (d) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' }) : '—');
-  const sheets = rows.filter((r) => r.entries.length).map((r) => `
-    <div class="sheet">
-      <div class="head">${school?.logoUrl ? `<img src="${esc(school.logoUrl)}" alt=""/>` : ''}<div><div class="sch">${esc(school?.name || localStorage.getItem('schoolName') || 'School')}</div><div class="sub">${esc(examTitle)} — Date Sheet</div></div></div>
-      <div class="cls">Class: <b>${esc(r.className)}${r.sectionName ? ` — ${esc(r.sectionName)}` : ''}</b></div>
-      <table><tr><th>#</th><th>Date</th><th>Subject</th><th>Time</th>${r.entries.some((e) => e.room) ? '<th>Room</th>' : ''}</tr>
-      ${[...r.entries].sort((a, b) => String(a.date).localeCompare(String(b.date))).map((e, i) => `<tr><td>${i + 1}</td><td>${day(e.date)}</td><td dir="auto">${esc(e.subject)}</td><td>${esc([fmt12(e.timeFrom), fmt12(e.timeTo)].filter(Boolean).join(' – ') || '—')}</td>${r.entries.some((x) => x.room) ? `<td>${esc(e.room || '—')}</td>` : ''}</tr>`).join('')}
+  const short = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
+  const title = exam?.title || 'Exam';
+  const name = school?.name || localStorage.getItem('schoolName') || 'School';
+  const logo = pic(school?.logoUrl || localStorage.getItem('schoolLogoPreview'));
+  const sig = pic(design?.principalSignature);
+  const dates = [short(exam?.dateStart), short(exam?.dateEnd)].filter(Boolean).join(' – ');
+  const issued = short(new Date());
+  const initials = String(name).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const sheets = rows.filter((r) => r.entries.length).map((r) => {
+    const room = r.entries.some((e) => e.room);
+    const list = [...r.entries].sort((a, b) => String(a.date || '9999').localeCompare(String(b.date || '9999')) || String(a.timeFrom).localeCompare(String(b.timeFrom)));
+    return `
+    <section class="sheet">
+      <header class="head">
+        ${logo ? `<img src="${esc(logo)}" alt=""/>` : `<div class="mono">${esc(initials)}</div>`}
+        <div class="who"><div class="sch" dir="auto">${esc(name)}</div>${school?.address || school?.phone ? `<div class="ad" dir="auto">${esc([school?.address, school?.phone && `Phone ${school.phone}`].filter(Boolean).join(' · '))}</div>` : ''}</div>
+      </header>
+      <div class="band"><span>Date Sheet</span><span>${esc(title)}</span></div>
+      <div class="meta"><div>Class: <b dir="auto">${esc(r.className)}${r.sectionName && r.sectionName !== '-' ? ` — ${esc(r.sectionName)}` : ''}</b></div>${dates ? `<div>Exam: <b>${esc(dates)}</b></div>` : ''}</div>
+      <table>
+        <thead><tr><th style="width:6%">#</th><th style="width:27%">Date</th><th>Subject</th><th style="width:22%">Time</th>${room ? '<th style="width:12%">Room</th>' : ''}</tr></thead>
+        <tbody>${list.map((e, i) => `<tr><td class="n">${i + 1}</td><td>${day(e.date)}</td><td class="sub" dir="auto">${esc(e.subject)}</td><td>${esc([fmt12(e.timeFrom), fmt12(e.timeTo)].filter(Boolean).join(' – ') || '—')}</td>${room ? `<td>${esc(e.room || '—')}</td>` : ''}</tr>`).join('')}</tbody>
       </table>
-    </div>`).join('');
+      <p class="note">Students must bring their roll number slip to every paper.</p>
+      <div class="signs">
+        <div class="sg"><div class="img"></div><div class="ln"></div><div class="lb">Class teacher</div></div>
+        <div class="sg"><div class="img">${sig ? `<img src="${esc(sig)}" alt=""/>` : ''}</div><div class="ln"></div><div class="lb">${esc(design?.principalName || design?.principalTitle || 'Principal')}</div>${design?.principalName ? `<div class="tl">${esc(design?.principalTitle || 'Principal')}</div>` : ''}</div>
+      </div>
+      <footer class="ft"><span dir="auto">${esc(name)}</span><span>Issued ${esc(issued)}</span></footer>
+    </section>`;
+  }).join('');
   if (!sheets) return toast.error('No papers are scheduled yet. Use Edit to add the subjects and dates.');
-  printHTML(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(examTitle)} — Date Sheet</title><style>
-    body{font-family:Arial,sans-serif;margin:0;padding:10mm;color:#000}
-    .sheet{page-break-after:always;margin-bottom:10mm}.sheet:last-child{page-break-after:auto}
-    .head{display:flex;gap:12px;align-items:center;border-bottom:2px solid #000;padding-bottom:8px}.head img{width:56px;height:56px;object-fit:contain}
-    .sch{font-size:19px;font-weight:800}.sub{font-size:14px;font-weight:600;margin-top:2px}
-    .cls{margin:10px 0;font-size:14px}
-    table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:7px 9px;font-size:13px;text-align:left}th{background:#eee}
-  </style></head><body>${sheets}</body></html>`, { title: `${examTitle} — Date Sheet` });
+  printHTML(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)} — Date Sheet</title><style>
+    @page{size:A4 portrait;margin:12mm}
+    *{box-sizing:border-box}
+    body{font-family:Arial,'Segoe UI',sans-serif;margin:0;color:#111827;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .sheet{display:flex;flex-direction:column;min-height:270mm;break-after:page;page-break-after:always}
+    .sheet:last-child{break-after:auto;page-break-after:auto}
+    .head{display:flex;gap:14px;align-items:center;padding-bottom:10px;border-bottom:2px solid #111827}
+    .head img{width:60px;height:60px;object-fit:contain}
+    .mono{width:58px;height:58px;border-radius:50%;background:#1B2F6E;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;flex:none}
+    .who{flex:1;text-align:center;padding-right:60px}
+    .sch{font-size:22px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#1B2F6E}
+    .ad{font-size:12px;color:#4B5563;margin-top:3px}
+    .band{display:flex;justify-content:space-between;gap:12px;background:#1B2F6E;color:#fff;border-radius:4px;padding:7px 12px;margin:12px 0 10px;font-weight:800}
+    .band span:first-child{text-transform:uppercase;letter-spacing:1px}
+    .meta{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:14px;margin-bottom:10px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid #9CA3AF;padding:8px 10px;font-size:13px;text-align:left}
+    th{background:#E5E9F5;color:#1B2F6E;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+    td.n{text-align:center}td.sub{font-weight:700}
+    .note{font-size:12px;color:#4B5563;margin:10px 0 0}
+    .signs{display:flex;justify-content:space-between;gap:40px;margin-top:auto;padding-top:30px}
+    .sg{flex:0 1 210px;text-align:center;font-size:13px}
+    .sg .img{height:46px;display:flex;align-items:flex-end;justify-content:center}
+    .sg .img img{max-height:100%;max-width:100%;object-fit:contain}
+    .ln{border-top:1.2px solid #111827;margin-top:2px}
+    .lb{font-weight:700;margin-top:4px}.tl{font-size:11px;color:#6B7280}
+    .ft{display:flex;justify-content:space-between;font-size:11px;color:#9CA3AF;margin-top:14px;border-top:1px solid #E5E7EB;padding-top:6px}
+  </style></head><body>${sheets}</body></html>`, { title: `${title} — Date Sheet` });
 }
 
-function DateSheetTab({ initialExamId = '' }) {
+function DateSheetTab({ initialExamId = '', onGo }) {
   const queryClient = useQueryClient();
   const [activeTerm, setActiveTerm] = useState('');
   const [examId, setExamId] = useState(initialExamId ? String(initialExamId) : '');
@@ -547,6 +594,7 @@ function DateSheetTab({ initialExamId = '' }) {
 
   const { data: allExams = [] } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams').then(r => r.data.data || []) });
   const { data: school } = useQuery({ queryKey: ['school-profile'], queryFn: () => api.get('/settings/school').then(r => r.data.data).catch(() => ({})) });
+  const { data: slipDesign } = useQuery({ queryKey: ['slip-design'], queryFn: () => api.get('/exams/slip-design').then(r => r.data.data).catch(() => null) });
 
   const terms = useTerms();
   // Open on the term of the exam it was opened for (or of the newest exam).
@@ -596,7 +644,7 @@ function DateSheetTab({ initialExamId = '' }) {
           ))}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button disabled={!examId} onClick={() => printDateSheets(datesheet, selectedExam?.title || 'Exam', school)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Print all date sheets</button>
+          <button disabled={!examId} onClick={() => printDateSheets(datesheet, selectedExam, school, slipDesign)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Print all date sheets</button>
         </div>
       </div>
 
@@ -618,6 +666,13 @@ function DateSheetTab({ initialExamId = '' }) {
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
           <div style={{ fontWeight: 700, color: NAVY, fontSize: 16, marginBottom: 6 }}>Select an Exam</div>
           <div style={{ color: '#94A3B8', fontSize: 13 }}>{exams.length ? 'Choose an exam to plan its date sheet.' : 'No exam for this term yet: add it in Exam Setup.'}</div>
+        </div>
+      )}
+
+      {examId && (
+        <div role="note" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', fontSize: 13, color: '#1E3A8A', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '9px 12px', marginBottom: 12 }}>
+          <span>The date sheet is one page per class. Each student's <strong>roll number slip</strong>, with photo, roll number and the student's and principal's signatures, is printed in step 4.</span>
+          {onGo && <button type="button" className="btn btn-outline btn-sm" onClick={() => onGo('roll-slips', examId)}>Open Roll No. Slips</button>}
         </div>
       )}
 
@@ -659,7 +714,7 @@ function DateSheetTab({ initialExamId = '' }) {
                       <button onClick={() => setEditRow(row)} aria-label={`Edit date sheet of ${row.className} ${row.sectionName || ''}`} style={{ border: `1px solid ${TEAL}`, background: 'transparent', color: TEAL, borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <Pencil size={11} /> Edit
                       </button>
-                      <button onClick={() => printDateSheets([row], selectedExam?.title || 'Exam', school)} disabled={!row.entries.length} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer', opacity: row.entries.length ? 1 : 0.5 }}>Print</button>
+                      <button onClick={() => printDateSheets([row], selectedExam, school, slipDesign)} disabled={!row.entries.length} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer', opacity: row.entries.length ? 1 : 0.5 }}>Print</button>
                       <button aria-label={`Clear date sheet of ${row.className} ${row.sectionName || ''}`} onClick={() => clearRow(row)} disabled={!row.entries.length} style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer', opacity: row.entries.length ? 1 : 0.5 }}>
                         <Trash2 size={11} />
                       </button>
@@ -1368,7 +1423,7 @@ export default function ExaminationPage() {
         transition: 'opacity 0.2s ease, transform 0.2s ease',
       }}>
         {activeTab === 'exam-setup'    && <ExamSetupTab onGo={switchTab} />}
-        {activeTab === 'date-sheet'    && <DateSheetTab key={tabExamId} initialExamId={tabExamId} />}
+        {activeTab === 'date-sheet'    && <DateSheetTab key={tabExamId} initialExamId={tabExamId} onGo={switchTab} />}
         {activeTab === 'syllabus'      && <SyllabusTab />}
         {activeTab === 'roll-slips'    && <RollNoSlipsTab key={tabExamId} initialExamId={tabExamId} />}
         {activeTab === 'question-papers' && <QuestionPapersTab key={tabExamId} initialExamId={tabExamId} />}
