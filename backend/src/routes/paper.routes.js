@@ -9,7 +9,12 @@
  *   POST   /papers/:id/copy                      copy to another class/section/exam
  *   DELETE /papers/:id
  *   POST   /papers/suggest                       AI-suggested questions to add
+ *   GET    /papers/bank?subjectId=&exclude=       earlier papers of the subject, with
+ *                                                 their questions, to reuse questions
  *
+ * A draft may hold questions not written yet (the paper laid out first from
+ * a pattern, then filled in); a paper marked ready must have every question
+ * and option written.
  * Questions are checked here (types, marks, MCQ options and answer) and the
  * paper's total is worked out from them, so a printed total always matches
  * the questions on the paper.
@@ -34,14 +39,16 @@ const TYPES = {
 const MAX_SECTIONS = 10;
 const MAX_QUESTIONS = 200;
 
-/* Check and tidy the sections; returns { sections, totalMarks, questions } or { error }. */
-function cleanSections(raw) {
+/* Check and tidy the sections; returns { sections, totalMarks, questions, blanks } or { error }.
+   allowBlank: a draft may keep questions (and MCQ options) not written yet. */
+function cleanSections(raw, { allowBlank = false } = {}) {
   let list = raw;
   if (typeof raw === 'string') { try { list = JSON.parse(raw); } catch { return { error: 'The questions could not be read.' }; } }
   if (!Array.isArray(list)) return { error: 'The questions could not be read.' };
   if (list.length > MAX_SECTIONS) return { error: `A paper can have at most ${MAX_SECTIONS} parts.` };
   let count = 0;
   let totalMarks = 0;
+  let blanks = 0;
   const sections = [];
   for (let si = 0; si < list.length; si++) {
     const sec = list[si] || {};
@@ -54,14 +61,18 @@ function cleanSections(raw) {
       const type = TYPES[q.type] ? q.type : null;
       if (!type) return { error: `${where}: choose the question type.` };
       const qText = text(q.text, 4000);
-      if (!qText) return { error: `${where}: write the question.` };
+      if (!qText && !allowBlank) return { error: `${where}: write the question.` };
+      let blank = !qText;
       const marks = Number(q.marks);
       if (!Number.isInteger(marks) || marks < 0 || marks > 100) return { error: `${where}: marks must be a whole number from 0 to 100.` };
       const out = { type, text: qText, marks };
       if (type === 'mcq') {
         const options = (Array.isArray(q.options) ? q.options : []).map((o) => text(o, 500));
         if (options.length < 2 || options.length > 6) return { error: `${where}: a multiple-choice question needs 2 to 6 options.` };
-        if (options.some((o) => !o)) return { error: `${where}: fill in every option, or remove the empty one.` };
+        if (options.some((o) => !o)) {
+          if (!allowBlank) return { error: `${where}: fill in every option, or remove the empty one.` };
+          blank = true;
+        }
         out.options = options;
         const a = q.answer === '' || q.answer === null || q.answer === undefined ? null : Number(q.answer);
         if (a !== null && !(Number.isInteger(a) && a >= 0 && a < options.length)) return { error: `${where}: the correct option is not one of the options.` };
@@ -71,6 +82,7 @@ function cleanSections(raw) {
       } else {
         out.answer = text(q.answer, 2000) || null;
       }
+      if (blank) blanks += 1;
       questions.push(out);
     }
     count += questions.length;
@@ -84,7 +96,7 @@ function cleanSections(raw) {
     totalMarks += sectionMarks;
     sections.push({ title, note: text(sec.note, 500) || null, attempt, marks: sectionMarks, questions });
   }
-  return { sections, totalMarks, questions: count };
+  return { sections, totalMarks, questions: count, blanks };
 }
 
 /* exam, class, section and subject must be this school's; returns ids or { error }. */
@@ -113,11 +125,17 @@ async function checkLinks(req, b) {
 
 const summary = (p, names) => {
   let questions = 0;
-  try { questions = JSON.parse(p.sections || '[]').reduce((n, s) => n + (s.questions?.length || 0), 0); } catch { questions = 0; }
+  let blanks = 0;
+  try {
+    for (const s of JSON.parse(p.sections || '[]')) {
+      questions += s.questions?.length || 0;
+      blanks += (s.questions || []).filter((q) => !q.text || (q.options || []).some((o) => !o)).length;
+    }
+  } catch { questions = 0; }
   return {
     id: p.id, title: p.title, examId: p.examId, classId: p.classId, sectionId: p.sectionId,
     subjectId: p.subjectId, subjectName: p.subjectName, totalMarks: p.totalMarks, durationMin: p.durationMin,
-    status: p.status, questions, createdAt: p.createdAt, updatedAt: p.updatedAt,
+    status: p.status, questions, blanks, createdAt: p.createdAt, updatedAt: p.updatedAt,
     examTitle: names.exams.get(p.examId) || null,
     className: names.classes.get(p.classId) || null,
     sectionName: names.sections.get(p.sectionId) || null,
@@ -211,6 +229,25 @@ router.post('/suggest', wrap(async (req, res) => {
   }
 }));
 
+/* Earlier papers of the same subject (this class's subject, or the
+   same-named subject of any class), newest first, with their questions. */
+router.get('/bank', wrap(async (req, res) => {
+  const { schoolId } = req;
+  const subjectId = parseInt(req.query.subjectId) || null;
+  const exclude = parseInt(req.query.exclude) || null;
+  let name = text(req.query.subjectName, 80).toLowerCase();
+  if (subjectId) {
+    const s = await prisma.subject.findFirst({ where: { id: subjectId, schoolId }, select: { name: true } });
+    if (s) name = s.name.trim().toLowerCase();
+  }
+  if (!subjectId && !name) return bad(res, 'Choose the subject of the paper first.');
+  const all = await prisma.questionPaper.findMany({ where: { schoolId }, orderBy: { updatedAt: 'desc' }, take: 1000 });
+  const same = all.filter((p) => p.id !== exclude
+    && ((subjectId && p.subjectId === subjectId) || (name && String(p.subjectName || '').trim().toLowerCase() === name))).slice(0, 40);
+  const names = await nameMaps(schoolId);
+  res.json({ success: true, data: same.map((p) => full(p, names)) });
+}));
+
 router.get('/:id', wrap(async (req, res) => {
   const p = await prisma.questionPaper.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
   if (!p) return bad(res, 'Question paper not found.', 404);
@@ -221,7 +258,7 @@ router.post('/', wrap(async (req, res) => {
   const b = req.body || {};
   const links = await checkLinks(req, b);
   if (links.error) return bad(res, links.error, links.status || 400);
-  const cleaned = cleanSections(b.sections ?? []);
+  const cleaned = cleanSections(b.sections ?? [], { allowBlank: b.status !== 'ready' });
   if (cleaned.error) return bad(res, cleaned.error);
   const subjectName = links.sub?.name || text(b.subjectName, 80) || null;
   const title = text(b.title, 200) || [links.exam?.title, subjectName, links.cls?.name].filter(Boolean).join(' — ') || 'Question paper';
@@ -262,9 +299,12 @@ router.put('/:id', wrap(async (req, res) => {
     data.durationMin = d;
   }
   if (b.status !== undefined) data.status = b.status === 'ready' ? 'ready' : 'draft';
+  const ready = (data.status || existing.status) === 'ready';
+  // Ready means every question written: the saved questions are checked too
+  // when only the status changes.
+  const cleaned = cleanSections(b.sections !== undefined ? b.sections : existing.sections, { allowBlank: !ready });
+  if (cleaned.error) return bad(res, cleaned.error);
   if (b.sections !== undefined) {
-    const cleaned = cleanSections(b.sections);
-    if (cleaned.error) return bad(res, cleaned.error);
     data.sections = JSON.stringify(cleaned.sections);
     data.totalMarks = cleaned.totalMarks;
   }

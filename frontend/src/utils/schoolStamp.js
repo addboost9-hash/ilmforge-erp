@@ -17,6 +17,7 @@ export const STAMP_PLACES = [
   { key: 'rollSlips', label: 'Roll number slips' },
   { key: 'resultCards', label: 'Result cards' },
   { key: 'dateSheets', label: 'Date sheets' },
+  { key: 'syllabus', label: 'Syllabus' },
   { key: 'feeRecords', label: 'Fee cards and fee register' },
   { key: 'attendanceRegister', label: 'Attendance register' },
 ];

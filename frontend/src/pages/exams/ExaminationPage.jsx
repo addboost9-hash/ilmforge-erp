@@ -16,6 +16,7 @@ import api from '../../api/client';
 import { printHTML } from '../../utils/print';
 import { buildTerms, examMatchesTerm } from '../../utils/terms';
 import QuestionPapersTab from './QuestionPapersTab';
+import SyllabusTab from './SyllabusTab';
 import RollNoSlipsTab from './RollNoSlipsTab';
 import ClassPapersEditor from './ClassPapersEditor';
 import { MarksEntryTab, ResultsOverviewTab } from './ExamFlowTabs';
@@ -777,98 +778,7 @@ function DateSheetEditModal({ examId, exam, datesheet, row, onClose, onSaved }) 
   );
 }
 
-/* ═══════════════════════════════════════════════════
-   TAB 3: SYLLABUS
-══════════════════════════════════════════════════ */
-/* A class's syllabus, every subject, as a page to print. Editor HTML is
-   cleaned of scripts and event attributes first. */
-function printSyllabus(cls, subjects, syllabi, school) {
-  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const clean = (html) => String(html || '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '').replace(/javascript:/gi, '');
-  const parts = subjects.map((s) => {
-    const doc = syllabi.find((x) => String(x.subjectId) === String(s.id));
-    const html = (doc?.units || []).map((u) => clean(u.content || '')).join('');
-    return html ? `<div class="sub"><h3 dir="auto">${esc(s.name)}</h3><div dir="auto">${html}</div></div>` : '';
-  }).join('');
-  if (!parts) return toast.error('No syllabus has been written for this class yet.');
-  printHTML(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(cls.name)} — Syllabus</title><style>
-    body{font-family:Arial,sans-serif;margin:0;padding:10mm;color:#000}
-    .head{border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px}.sch{font-size:19px;font-weight:800}
-    .sub{margin:12px 0;page-break-inside:avoid}h3{background:#eee;border:1px solid #000;padding:5px 9px;font-size:14px}
-  </style></head><body><div class="head"><div class="sch">${esc(school?.name || localStorage.getItem('schoolName') || 'School')}</div><div>Syllabus — ${esc(cls.name)}</div></div>${parts}</body></html>`, { title: `${cls.name} — Syllabus` });
-}
-
-function SyllabusTab() {
-  const navigate = useNavigate();
-  const { data: classes = [] } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes').then(r => r.data.data || []) });
-  const { data: allSubjects = [] } = useQuery({ queryKey: ['subjects-all'], queryFn: () => api.get('/classes/subjects').then(r => r.data.data || []).catch(() => []) });
-  const { data: syllabi = [] } = useQuery({ queryKey: ['syllabi-all'], queryFn: () => api.get('/syllabus').then(r => r.data.data || []).catch(() => []) });
-  const { data: school } = useQuery({ queryKey: ['school-profile'], queryFn: () => api.get('/settings/school').then(r => r.data.data).catch(() => ({})) });
-
-  const written = (classId) => {
-    const subs = allSubjects.filter(s => s.classId === classId);
-    const done = subs.filter(s => syllabi.some(x => String(x.classId) === String(classId) && String(x.subjectId) === String(s.id) && (x.units || []).some(u => String(u.content || '').replace(/<[^>]*>/g, '').trim())));
-    return { subs, done };
-  };
-
-  return (
-    <div>
-      <div style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>
-        The syllabus is written once for each class, subject by subject, and printed for parents and students before the exam.
-      </div>
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th style={{ width: 50 }}>S.No.</th>
-              <th>Class</th>
-              <th>Subjects with a syllabus</th>
-              <th style={{ width: 220, textAlign: 'center' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {classes.length === 0 && (
-              <tr><td colSpan={4}>
-                <div className="empty-state">
-                  <div className="empty-state-icon">📚</div>
-                  <div className="empty-state-text">No classes configured</div>
-                  <div className="empty-state-sub">Add classes and sections in Settings first</div>
-                </div>
-              </td></tr>
-            )}
-            {classes.map((cls, idx) => {
-              const { subs, done } = written(cls.id);
-              return (
-                <tr key={cls.id}>
-                  <td style={{ color: '#94a3b8', fontSize: 12 }}>{idx + 1}</td>
-                  <td style={{ fontWeight: 700, color: NAVY }}>{cls.name}</td>
-                  <td style={{ fontSize: 12.5 }}>
-                    {subs.length
-                      ? <><strong>{done.length}</strong> of {subs.length}{done.length < subs.length && <span style={{ color: '#B45309' }}> · missing: {subs.filter(s => !done.includes(s)).map(s => s.name).join(', ')}</span>}</>
-                      : <span style={{ color: '#B45309' }}>No subjects — add them in Settings → Subjects</span>}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                      <button
-                        aria-label={`Edit syllabus of ${cls.name}`}
-                        style={{ border: `1px solid ${TEAL}`, background: 'transparent', color: TEAL, borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => navigate(`/academics/subject-syllabus/${cls.id}/${cls.sections?.[0]?.id || 0}`)}
-                      >
-                        <Pencil size={11} /> Write / edit
-                      </button>
-                      <button disabled={!done.length} onClick={() => printSyllabus(cls, subs, syllabi.filter(x => String(x.classId) === String(cls.id)), school)}
-                        style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer', opacity: done.length ? 1 : 0.5 }}>Print</button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+/* TAB 3: SYLLABUS — SyllabusTab.jsx (per exam, chapter by chapter). */
 
 /* ═══════════════════════════════════════════════════
    TAB 5: RESULTS
@@ -1105,7 +1015,7 @@ function ResultsTab() {
               </div>
 
               {/* The school stamp, printed beside the principal's signature */}
-              <SchoolStampCard only={['resultCards', 'rollSlips', 'dateSheets']} />
+              <SchoolStampCard only={['resultCards', 'rollSlips', 'dateSheets', 'syllabus']} />
 
               {/* Final Remarks */}
               <div className="card">
@@ -1310,7 +1220,8 @@ export default function ExaminationPage() {
     return EXAM_STEPS.some(s => s.id === t) ? t : 'exam-setup';
   });
   const [tabVisible, setTabVisible] = useState(true);
-  const [tabExamId, setTabExamId] = useState('');
+  // ?exam=<id> opens the step on that exam (a link from another step or page).
+  const [tabExamId, setTabExamId] = useState(() => (/^\d+$/.test(new URLSearchParams(window.location.search).get('exam') || '') ? new URLSearchParams(window.location.search).get('exam') : ''));
   const [showOnboarding, setShowOnboarding] = useState(
     !localStorage.getItem('examination_visited')
   );
@@ -1432,7 +1343,7 @@ export default function ExaminationPage() {
       }}>
         {activeTab === 'exam-setup'    && <ExamSetupTab onGo={switchTab} />}
         {activeTab === 'date-sheet'    && <DateSheetTab key={tabExamId} initialExamId={tabExamId} onGo={switchTab} />}
-        {activeTab === 'syllabus'      && <SyllabusTab />}
+        {activeTab === 'syllabus'      && <SyllabusTab key={tabExamId} initialExamId={tabExamId} />}
         {activeTab === 'roll-slips'    && <RollNoSlipsTab key={tabExamId} initialExamId={tabExamId} />}
         {activeTab === 'question-papers' && <QuestionPapersTab key={tabExamId} initialExamId={tabExamId} />}
         {activeTab === 'marks'         && <MarksEntryTab key={tabExamId} initialExamId={tabExamId} />}

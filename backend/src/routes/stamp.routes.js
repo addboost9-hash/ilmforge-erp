@@ -20,7 +20,7 @@ const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 const READERS = ['super_admin', 'admin', 'principal', 'teacher', 'accountant'];
 const WRITERS = ['super_admin', 'admin', 'principal'];
-const PLACES = ['rollSlips', 'resultCards', 'dateSheets', 'feeRecords', 'attendanceRegister'];
+const PLACES = ['rollSlips', 'resultCards', 'dateSheets', 'syllabus', 'feeRecords', 'attendanceRegister'];
 const DEFAULT_PLACES = Object.fromEntries(PLACES.map((p) => [p, true]));
 const PICTURE = /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/;
 const MAX_BYTES = 400 * 1024;

@@ -220,7 +220,9 @@ export default function SubjectSyllabusPage() {
      array of `units`; a single-unit array holds this page's one HTML blob. */
   const { data: schemesData = [] } = useQuery({
     queryKey: ['syllabus-for-class', classId],
-    queryFn: () => api.get('/syllabus', { params: { classId } }).then(r => r.data.data || []).catch(() => []),
+    // general=1: the class syllabus only. Those written for one exam (Exam
+    // Vault > Syllabus) have the same class and subject and would replace it.
+    queryFn: () => api.get('/syllabus', { params: { classId, general: '1' } }).then(r => r.data.data || []).catch(() => []),
     enabled: !!classId,
     // (An onSuccess callback used to live here. TanStack Query v5 removed it
     // from useQuery, so it never ran — the effect below does this work.)

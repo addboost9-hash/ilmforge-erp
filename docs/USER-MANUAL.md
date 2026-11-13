@@ -828,8 +828,27 @@ number slips.
 
 ### Step 3 — Syllabus
 
-Each class shows how many of its subjects have a syllabus, and which are missing.
-**Write / edit** opens the syllabus page; **Print** prints the class's whole syllabus.
+The syllabus is written **for each exam**: what each class prepares, subject by subject.
+
+1. Choose the **term** and the **exam**. Each class of the exam shows how many subjects are
+   written (a green bar when all are).
+2. Click **Write** (or **Open**) on a class. Its subjects are on the left (✓ when written); the
+   open subject shows the **date of its paper** from the date sheet.
+3. Write the **chapters**: the chapter or unit, and what to prepare (pages, topics, exercises).
+   Press **Enter** in a chapter to add the next one; move them up or down; add notes for
+   parents and students.
+4. Faster ways:
+   - **Paste a list**: one chapter per line, from Word or WhatsApp. What to prepare can follow a
+     dash or a tab, e.g. `Chapter 1: Numbers - pages 1 to 20`.
+   - **Copy from…**: the same subject in another exam, in another class, or the class syllabus
+     written before; then change what differs.
+5. **Save** (or Ctrl+S). Going to another subject, or back to all classes, saves on its own;
+   **Save and next** moves through the subjects one by one.
+6. **Print** one class, or **Print all classes** (each class on its own page): the school's
+   letterhead, each subject with the date of its paper, its chapters and notes, signature lines
+   and the school stamp. Choose *Save as PDF* to send it on WhatsApp.
+
+The question paper editor shows this syllabus, so papers are set from it.
 
 ### Step 4 — Roll No. Slips
 
@@ -868,21 +887,33 @@ The slips are also at `/exams/exam-slip`.
 
 1. **Paper setup (defaults)** (once per class): the instructions and part headings every
    new paper starts with.
-2. Choose the **exam** and **class**: every subject of the class is listed with its paper,
-   or *No paper yet*. Click **Make**.
-3. Write the paper. Choose time in minutes; each part has a heading, a note and, if
-   wanted, **Attempt any N**. Add questions with the buttons: **Multiple choice** (tick the
-   correct option), **True / False**, **Fill in the blank**, **Short question**, **Long
-   question**, each with its marks. Questions can be moved, copied and deleted. Urdu
-   is written right to left automatically.
-4. The total is worked out as you go (with *attempt any* counted), and the screen warns
-   when it differs from the subject's maximum marks.
-5. **Suggest with AI** writes questions on a topic for you to tick and add (it needs an
-   AI key on the server; read every question before using it).
-6. **Save draft**, or **Save · ready to print**. **Print paper** prints it on A4 with your
-   letterhead and boxes for name and roll number; **Answer key** prints it with the
-   answers for the teacher.
-7. In the list, **Copy** makes the same paper for another section, class or exam (then
+2. Choose the **term** and **exam**. Every class of the exam is listed with its subjects:
+   grey = no paper, yellow = draft (with how many questions are still to write), green = ready.
+   Click a subject to make or open its paper.
+3. **Start from a pattern.** A new paper offers three patterns, each adding up to the
+   subject's marks: *Objective and subjective (board style)*, *Junior classes* (fill in the
+   blanks, true or false, MCQs, short questions) and *Short and long questions*. Change any
+   count, "attempt any" or marks, and click **Lay out the paper**: the parts are made with
+   empty questions (shaded yellow) to write in. Or **Start empty**.
+4. **Write the questions**, in any of these ways, in each part:
+   - type them (Multiple choice with the correct option ticked, True / False, Fill in the blank,
+     Short, Long, each with its marks);
+   - **Paste questions** typed in Word or WhatsApp: numbered `1.` `2.`…; options `a)` `b)`… on
+     their own lines or one line make a multiple-choice question (`*` after the right one);
+     `______` makes a fill in the blank; `(True/False)` at the end a true or false question;
+   - **From earlier papers**: questions of earlier papers of the same subject (any class),
+     to tick and add;
+   - **Suggest with AI** on a chapter: the exam's syllabus is shown above the questions;
+     click a chapter to have questions suggested on it (needs an AI key; read every question).
+5. The total is worked out as you go (with *attempt any* counted) and checked against the
+   subject's marks. **Preview as printed** shows the page exactly as it prints.
+6. **Save draft** (Ctrl+S) keeps unwritten questions; **Save · ready to print** needs every
+   question written.
+7. **Print paper**: choose **lines to write the answers on** (for classes that answer on the
+   paper) and **larger text** (junior classes); the choice is remembered. **Answer key**
+   prints the answers for the teacher. **Print all** on a class prints all its papers (ready
+   ones, when there are) each from a new page; **Keys** their answer keys.
+8. In the list, **Copy** makes the same paper for another section, class or exam (then
    change what differs).
 
 ### Step 6 — Marks Entry

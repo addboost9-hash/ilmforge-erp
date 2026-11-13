@@ -296,7 +296,7 @@ function DesignStep({ examId, summary, draft, setDraft, saved, onSaved }) {
           </div>
         </section>
 
-        <SchoolStampCard compact only={['rollSlips', 'resultCards', 'dateSheets']} />
+        <SchoolStampCard compact only={['rollSlips', 'resultCards', 'dateSheets', 'syllabus']} />
 
         <section style={{ display: 'grid', gap: 10 }}>
           <h3 style={{ margin: 0, fontSize: 14, color: NAVY }}>Instructions and footer</h3>

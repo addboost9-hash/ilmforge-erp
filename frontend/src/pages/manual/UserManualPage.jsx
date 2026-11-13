@@ -312,7 +312,7 @@ const SECTIONS = [
           { n:1, text:'Exam Vault → 1. Exam Setup → Add Exam: pick every class it is for, name, dates' },
           { n:2, text:'The exam row shows its progress (date sheets planned, marks entered, published) and its steps: Date sheet, Roll no. slips, Papers, Marks, Results' },
           { n:3, text:'2. Date Sheet: only the exam\'s classes. Edit → "Add every subject", "Quick fill dates" (one paper a day, Sundays skipped), room; save for all sections or one. Print one class or all' },
-          { n:4, text:'3. Syllabus: which subjects are written and which are missing; Write / edit; Print' },
+          { n:4, text:'3. Syllabus, for each exam: open a class, write each subject\'s chapters and what to prepare (pages, exercises); the paper\'s date is shown; Paste a list or Copy from another exam or class; print one class or all, with the stamp' },
         ],
       },
       {
@@ -329,11 +329,11 @@ const SECTIONS = [
       {
         title: 'Step 5: Question papers with real questions',
         steps: [
-          { n:1, text:'Choose exam and class: each subject shows its paper or "No paper yet" → Make' },
-          { n:2, text:'Add multiple choice (tick the answer), true/false, fill in the blank, short and long questions with marks; "Attempt any N" per part' },
-          { n:3, text:'The total is worked out and checked against the subject\'s maximum marks' },
-          { n:4, text:'Suggest with AI writes questions on a topic to review and add (needs an AI key)' },
-          { n:5, text:'Print paper (A4, letterhead) and Answer key; Copy to another class, section or exam' },
+          { n:1, text:'Choose term and exam: every class and its subjects — grey no paper, yellow draft, green ready. Click a subject' },
+          { n:2, text:'Start from a pattern (board style, junior classes, short and long) that adds up to the subject\'s marks → Lay out the paper' },
+          { n:3, text:'Write the questions: type, Paste questions from Word/WhatsApp, From earlier papers, or Suggest with AI on a syllabus chapter' },
+          { n:4, text:'Preview as printed; Save draft (Ctrl+S) or Save · ready (every question written)' },
+          { n:5, text:'Print with lines to answer on and larger text; Answer key; Print all papers of a class at once' },
         ],
       },
       {

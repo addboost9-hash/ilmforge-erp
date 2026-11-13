@@ -10,6 +10,8 @@ import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
 import { postOrQueue } from '../../utils/offlineQueue';
 import AttendanceRegisterPage from '../attendance/AttendanceRegisterPage';
+import SyllabusTab from '../exams/SyllabusTab';
+import QuestionPapersTab from '../exams/QuestionPapersTab';
 import {
   LayoutDashboard, Users, UserCheck, GraduationCap, BookMarked,
   FolderOpen, Calendar, Bell, Key, Video, LogOut, ChevronRight,
@@ -40,6 +42,8 @@ const NAV = [
   { id: 'students',     label: 'My Students',         Icon: Users           },
   { id: 'attendance',   label: 'Mark Attendance',     Icon: UserCheck       },
   { id: 'register',     label: 'Attendance Register', Icon: BookMarked      },
+  { id: 'syllabus',     label: 'Exam Syllabus',       Icon: BookMarked      },
+  { id: 'papers',       label: 'Question Papers',     Icon: FileText        },
   { id: 'marks',        label: 'Exam Marks',          Icon: GraduationCap   },
   { id: 'results',      label: 'Publish Results 📢',  Icon: GraduationCap   },
   { id: 'homework',     label: 'Homework',            Icon: BookMarked      },
@@ -188,6 +192,8 @@ export default function TeacherPortalPage() {
       case 'students':     return <StudentsTab      classes={classes} />;
       case 'attendance':   return <AttendanceTab    classes={classes} />;
       case 'register':     return <AttendanceRegisterPage />;
+      case 'syllabus':     return <SyllabusTab />;
+      case 'papers':       return <QuestionPapersTab />;
       case 'marks':        return <MarksTab         classes={classes} exams={exams} />;
       case 'homework':     return <HomeworkTab       classes={classes} homeworkApi={homeworkApi} user={user} />;
       case 'lessonplans':  return <LessonPlansTab    classes={classes} user={user} />;
