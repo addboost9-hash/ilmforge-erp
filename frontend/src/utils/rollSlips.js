@@ -8,6 +8,8 @@
  * one, larger); a slip is never split across two pages.
  */
 
+import { stampImg, STAMP_CSS } from './schoolStamp';
+
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /* Only pictures: embedded images, web addresses or the app's own files. */
@@ -54,7 +56,7 @@ export const slipRollNo = (s, design) => (design?.rollNumber === 'exam' ? s.exam
 
 const initials = (name) => String(name || 'School').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
-function slipHTML({ s, g, data, design, issued }) {
+function slipHTML({ s, g, data, design, issued, stamp }) {
   const show = design.show || {};
   const school = data.school || {};
   const logo = imgSrc(school.logoUrl);
@@ -77,7 +79,7 @@ function slipHTML({ s, g, data, design, issued }) {
   const signs = [
     show.studentSignature && `<div class="sg"><div class="sgimg"></div><div class="ln"></div><div class="sgl">Student's signature</div></div>`,
     show.classTeacherSignature && `<div class="sg"><div class="sgimg"></div><div class="ln"></div><div class="sgl">Class teacher</div></div>`,
-    show.principalSignature && `<div class="sg"><div class="sgimg">${sig ? `<img src="${esc(sig)}" alt="">` : ''}</div><div class="ln"></div><div class="sgl">${esc(design.principalName || design.principalTitle || 'Principal')}</div>${design.principalName ? `<div class="sgt">${esc(design.principalTitle || 'Principal')}</div>` : ''}</div>`,
+    show.principalSignature && `<div class="sg pr">${stampImg(imgSrc(stamp))}<div class="sgimg">${sig ? `<img src="${esc(sig)}" alt="">` : ''}</div><div class="ln"></div><div class="sgl">${esc(design.principalName || design.principalTitle || 'Principal')}</div>${design.principalName ? `<div class="sgt">${esc(design.principalTitle || 'Principal')}</div>` : ''}</div>`,
   ].filter(Boolean).join('');
 
   return `<section class="slip">
@@ -117,12 +119,12 @@ function slipHTML({ s, g, data, design, issued }) {
  *   preview  for the designer: no toolbar, no printing
  *   autoPrint  open the print dialog once pictures have loaded
  */
-export function buildSlipsDocument({ data, design, groups, preview = false, autoPrint = false, title = '' }) {
+export function buildSlipsDocument({ data, design, groups, preview = false, autoPrint = false, title = '', stamp = '' }) {
   const color = HEX_RE.test(design?.color) ? design.color : '#1B2F6E';
   const two = Number(design?.perPage) === 2;
   const issued = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   const count = groups.reduce((n, g) => n + g.students.length, 0);
-  const body = groups.filter((g) => g.students.length).map((g) => `<div class="grp">${g.students.map((s) => slipHTML({ s, g, data, design, issued })).join(two ? '<div class="cut" aria-hidden="true"></div>' : '')}</div>`).join('');
+  const body = groups.filter((g) => g.students.length).map((g) => `<div class="grp">${g.students.map((s) => slipHTML({ s, g, data, design, issued, stamp })).join(two ? '<div class="cut" aria-hidden="true"></div>' : '')}</div>`).join('');
   const docTitle = title || `Roll Number Slips — ${examLabel(data.exam)}`;
 
   return `<!doctype html>
@@ -179,6 +181,9 @@ export function buildSlipsDocument({ data, design, groups, preview = false, auto
   .ln { border-top: .9pt solid #111827; margin-top: .5mm; }
   .sgl { font-weight: 700; margin-top: .8mm; }
   .sgt { font-size: ${two ? '7pt' : '8pt'}; color: #6B7280; }
+  .pr { position: relative; }
+  ${STAMP_CSS}
+  .ilm-stamp { width: ${two ? '21mm' : '28mm'}; max-height: ${two ? '21mm' : '28mm'}; }
   .ft { display: flex; justify-content: space-between; gap: 4mm; margin-top: ${two ? '1.6mm' : '3mm'}; font-size: ${two ? '7pt' : '8pt'}; color: ${color}; font-weight: 700; }
   .ft .iss { color: #9CA3AF; font-weight: 400; white-space: nowrap; }
   @media print {

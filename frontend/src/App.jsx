@@ -47,6 +47,8 @@ import FeeCollectionPage from './pages/fees/FeeCollectionPage';
 import FeeGeneratePage from './pages/fees/FeeGeneratePage';
 import FeeDefaultersPage from './pages/fees/FeeDefaultersPage';
 import FeeRegisterPage from './pages/fees/FeeRegisterPage';
+import RollNumbersPage from './pages/students/RollNumbersPage';
+import AttendanceRegisterPage from './pages/attendance/AttendanceRegisterPage';
 import FeeStructurePage from './pages/fees/FeeStructurePage';
 import AttendancePage from './pages/attendance/AttendancePage';
 const AttendanceHubPage = React.lazy(() => import('./pages/attendance/AttendanceHubPage'));
@@ -410,6 +412,8 @@ export default function App() {
             {/* Students */}
             <Route path="/students"                   element={<StudentsPage />} />
             <Route path="/students/birthdays"         element={<BirthdaysPage />} />
+            <Route path="/students/roll-numbers"      element={<RollNumbersPage />} />
+            <Route path="/attendance/register"        element={<AttendanceRegisterPage />} />
             <Route path="/students/:id"               element={<StudentProfilePage />} />
             {/* Edit an admitted student in the same form as a new admission. */}
             <Route path="/students/:id/edit"          element={<AdmissionWizardPage />} />

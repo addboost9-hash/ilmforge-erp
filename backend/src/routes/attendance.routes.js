@@ -643,6 +643,230 @@ router.get('/summary', wrap(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------------------
+// THE ATTENDANCE REGISTER: a class's month, a row per student and a column
+// per day, as the register book is kept. Read live from the attendance
+// records, so whatever is marked (the daily register, the kiosk, a
+// fingerprint, a correction) shows at once.
+//
+//   GET /attendance/register?classId=&sectionId=&month=YYYY-MM
+//   PUT /attendance/register/mark  { studentId, date: YYYY-MM-DD, status }
+//       status: present | absent | leave | late | clear (not marked)
+//
+// A day is stored as the server's midnight, as /save stores it, so the
+// month is read with the server's own calendar too.
+// ---------------------------------------------------------------------------
+const REGISTER_EDITORS = ['super_admin', 'admin', 'principal', 'teacher'];
+const REGISTER_STATUSES = ['present', 'absent', 'leave', 'late'];
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const pkToday = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+const ymdOf = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+const mayOpenClass = async (req, classId) => (['super_admin', 'admin', 'principal', 'gatekeeper'].includes(req.user?.role)
+  || (req.user?.role === 'teacher' && await teacherCanAccessClass(req, classId)));
+
+/* The school's holidays touching [start, end), as a lookup by YYYY-MM-DD.
+   Holidays are saved from a date picker (midnight UTC): compared as dates. */
+async function holidayLookup(schoolId, start, end) {
+  const day = 864e5;
+  const holidays = await prisma.holidayEvent.findMany({
+    where: {
+      schoolId, eventType: 'holiday', startDate: { lt: new Date(end.getTime() + day) },
+      OR: [{ endDate: { gte: new Date(start.getTime() - day) } }, { endDate: null, startDate: { gte: new Date(start.getTime() - day) } }],
+    },
+    select: { title: true, startDate: true, endDate: true },
+  });
+  return (ymd) => holidays.find((h) => {
+    const from = new Date(h.startDate).toISOString().slice(0, 10);
+    const to = h.endDate ? new Date(h.endDate).toISOString().slice(0, 10) : from;
+    return from <= ymd && ymd <= to;
+  })?.title || null;
+}
+
+/* The days of a month, each with its weekday, Sunday and holiday. */
+function monthDays(y, m, holidayOn) {
+  const count = new Date(y, m, 0).getDate();
+  return Array.from({ length: count }, (_, i) => {
+    const date = ymdOf(y, m, i + 1);
+    const wd = new Date(Date.UTC(y, m - 1, i + 1)).getUTCDay();
+    return { day: i + 1, date, weekday: WEEKDAY[wd], sunday: wd === 0, holiday: holidayOn(date) };
+  });
+}
+
+router.get('/register', staffOnly, wrap(async (req, res) => {
+  const { schoolId, campusId } = req;
+  const classId = parseInt(req.query.classId);
+  const sectionId = parseInt(req.query.sectionId) || null;
+  const mm = /^(\d{4})-(\d{2})$/.exec(String(req.query.month || ''));
+  if (!classId) return res.status(400).json({ success: false, message: 'Choose a class.' });
+  if (!mm || Number(mm[2]) < 1 || Number(mm[2]) > 12) return res.status(400).json({ success: false, message: 'month is written YYYY-MM.' });
+  if (!(await mayOpenClass(req, classId))) return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+  const y = Number(mm[1]);
+  const m = Number(mm[2]);
+  const start = new Date(y, m - 1, 1);
+  const end = new Date(y, m, 1);
+
+  const [cls, students] = await Promise.all([
+    prisma.class.findFirst({ where: { id: classId, schoolId }, select: { id: true, name: true, sections: { select: { id: true, name: true } } } }),
+    prisma.student.findMany({
+      where: { schoolId, classId, status: 'active', deletedAt: null, ...(sectionId && { sectionId }), ...(campusId && { campusId }) },
+      select: { id: true, name: true, rollNo: true, fatherName: true, gender: true, sectionId: true, admissionDate: true, section: { select: { name: true } } },
+    }),
+  ]);
+  if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
+  students.sort((a, b) => String(a.section?.name || '').localeCompare(String(b.section?.name || ''), 'en', { numeric: true })
+    || String(a.rollNo || '￿').localeCompare(String(b.rollNo || '￿'), 'en', { numeric: true, sensitivity: 'base' })
+    || a.name.localeCompare(b.name));
+
+  const [records, holidayOn] = await Promise.all([
+    students.length ? prisma.attendance.findMany({
+      where: { schoolId, studentId: { in: students.map((s) => s.id) }, date: { gte: start, lt: end } },
+      select: { id: true, studentId: true, date: true, status: true, method: true, markedBy: true },
+    }) : [],
+    holidayLookup(schoolId, start, end),
+  ]);
+
+  const marks = {};
+  for (const r of records) {
+    const d = new Date(r.date).getDate();
+    (marks[r.studentId] ||= {})[d] = { id: r.id, status: r.status, method: r.method, markedBy: r.markedBy };
+  }
+  const markerIds = [...new Set(records.map((r) => r.markedBy).filter(Boolean))];
+  const markers = markerIds.length
+    ? Object.fromEntries((await prisma.user.findMany({ where: { id: { in: markerIds } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]))
+    : {};
+
+  const days = monthDays(y, m, holidayOn);
+
+  res.json({
+    success: true,
+    data: {
+      class: { id: cls.id, name: cls.name },
+      section: sectionId ? cls.sections.find((s) => s.id === sectionId) || null : null,
+      month: mm[0], today: pkToday(), days,
+      students: students.map(({ section, ...s }) => ({ ...s, sectionName: section?.name || '' })),
+      marks, markers,
+      canEdit: REGISTER_EDITORS.includes(req.user?.role),
+    },
+  });
+}));
+
+// GET /attendance/register/student/:studentId?from=YYYY-MM&to=YYYY-MM
+// One student's months as calendars (up to 12), read the same way as the
+// register, with the school's sessions to choose from. Without from/to: the
+// session today falls in, or this calendar year.
+router.get('/register/student/:studentId', staffOnly, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const studentId = parseInt(req.params.studentId);
+  const student = await prisma.student.findFirst({
+    where: { id: studentId, schoolId, deletedAt: null },
+    select: { id: true, name: true, rollNo: true, fatherName: true, classId: true, admissionDate: true, class: { select: { name: true } }, section: { select: { name: true } } },
+  });
+  if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+  if (!(await mayOpenClass(req, student.classId))) return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+
+  const sessions = await prisma.academicSession.findMany({ where: { schoolId }, select: { id: true, name: true, startDate: true, endDate: true }, orderBy: { startDate: 'desc' } });
+  const ym = (v) => { const x = /^(\d{4})-(\d{2})$/.exec(String(v || '')); return x && Number(x[2]) >= 1 && Number(x[2]) <= 12 ? { y: Number(x[1]), m: Number(x[2]) } : null; };
+  let from = ym(req.query.from);
+  let to = ym(req.query.to);
+  if (!from || !to) {
+    const today = pkToday();
+    const now = sessions.find((s) => new Date(s.startDate).toISOString().slice(0, 10) <= today && today <= new Date(s.endDate).toISOString().slice(0, 10));
+    const y = Number(today.slice(0, 4));
+    from = now ? ym(new Date(now.startDate).toISOString().slice(0, 7)) : { y, m: 1 };
+    to = now ? ym(new Date(now.endDate).toISOString().slice(0, 7)) : { y, m: 12 };
+  }
+  const span = (to.y - from.y) * 12 + (to.m - from.m) + 1;
+  if (span < 1 || span > 12) return res.status(400).json({ success: false, message: 'Choose up to 12 months, the first before the last.' });
+
+  const start = new Date(from.y, from.m - 1, 1);
+  const end = new Date(to.y, to.m, 1);
+  const [records, holidayOn] = await Promise.all([
+    prisma.attendance.findMany({ where: { schoolId, studentId, date: { gte: start, lt: end } }, select: { date: true, status: true, method: true } }),
+    holidayLookup(schoolId, start, end),
+  ]);
+  const byDay = new Map(records.map((r) => { const d = new Date(r.date); return [ymdOf(d.getFullYear(), d.getMonth() + 1, d.getDate()), r]; }));
+  const months = [];
+  for (let i = 0; i < span; i++) {
+    const y = from.y + Math.floor((from.m - 1 + i) / 12);
+    const m = ((from.m - 1 + i) % 12) + 1;
+    months.push({
+      month: `${y}-${String(m).padStart(2, '0')}`,
+      days: monthDays(y, m, holidayOn).map((d) => ({ ...d, status: byDay.get(d.date)?.status || null, method: byDay.get(d.date)?.method || null })),
+    });
+  }
+  const count = (st) => records.filter((r) => r.status === st).length;
+  res.json({
+    success: true,
+    data: {
+      student: { id: student.id, name: student.name, rollNo: student.rollNo, fatherName: student.fatherName, className: student.class?.name || '', sectionName: student.section?.name || '', admissionDate: student.admissionDate },
+      from: `${from.y}-${String(from.m).padStart(2, '0')}`, to: `${to.y}-${String(to.m).padStart(2, '0')}`, today: pkToday(),
+      sessions, months,
+      totals: { present: count('present'), absent: count('absent'), leave: count('leave'), late: count('late'), marked: records.length },
+    },
+  });
+}));
+
+router.put('/register/mark', staffOnly, wrap(async (req, res) => {
+  const { schoolId } = req;
+  if (!REGISTER_EDITORS.includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Only the class teacher or the admin can change the register.' });
+  }
+  const studentId = parseInt(req.body?.studentId);
+  const date = String(req.body?.date || '');
+  const status = String(req.body?.status || '');
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!studentId || !dm) return res.status(400).json({ success: false, message: 'studentId and date (YYYY-MM-DD) are required.' });
+  if (![...REGISTER_STATUSES, 'clear'].includes(status)) {
+    return res.status(400).json({ success: false, message: `status must be one of: ${REGISTER_STATUSES.join(', ')}, clear.` });
+  }
+  const [y, m, d] = dm.slice(1).map(Number);
+  const target = new Date(y, m - 1, d);
+  if (target.getFullYear() !== y || target.getMonth() !== m - 1 || target.getDate() !== d) {
+    return res.status(400).json({ success: false, message: `${date} is not a date.` });
+  }
+  if (date > pkToday()) return res.status(400).json({ success: false, message: 'Attendance cannot be marked for a day still to come.' });
+
+  const student = await prisma.student.findFirst({ where: { id: studentId, schoolId, deletedAt: null }, select: { id: true, name: true, classId: true, sectionId: true, campusId: true } });
+  if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+  if (req.user.role === 'teacher' && !(await teacherCanAccessClass(req, student.classId))) {
+    return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+  }
+
+  // The day's record whatever time it carries (older punches kept the time).
+  const existing = await prisma.attendance.findFirst({
+    where: { schoolId, studentId, date: { gte: target, lt: new Date(y, m - 1, d + 1) } },
+  });
+  let saved = null;
+  if (status === 'clear') {
+    if (existing) await prisma.attendance.delete({ where: { id: existing.id } });
+  } else if (existing) {
+    saved = await prisma.attendance.update({
+      where: { id: existing.id },
+      data: { status, markedBy: req.user.id, ...(existing.status !== status && { method: 'correction' }) },
+    });
+  } else {
+    saved = await prisma.attendance.create({
+      data: {
+        schoolId, campusId: student.campusId || null, studentId, classId: student.classId, sectionId: student.sectionId,
+        date: target, status, method: 'manual', markedBy: req.user.id,
+      },
+    });
+  }
+  if ((existing?.status || 'clear') !== status) {
+    await prisma.auditLog.create({
+      data: {
+        schoolId, userId: req.user.id, action: 'ATTENDANCE_REGISTER_EDIT', resource: 'Attendance', resourceId: saved?.id || existing?.id || null,
+        details: JSON.stringify({ studentId, date, from: existing?.status || null, to: status === 'clear' ? null : status }), ipAddress: req.ip || null,
+      },
+    }).catch(() => {});
+  }
+  res.json({
+    success: true,
+    data: saved ? { day: d, id: saved.id, status: saved.status, method: saved.method, markedBy: saved.markedBy } : { day: d, status: null },
+    message: status === 'clear' ? `${student.name}: ${date} is now not marked.` : `${student.name}: ${status} on ${date}.`,
+  });
+}));
+
+// ---------------------------------------------------------------------------
 // NEW ENDPOINTS
 // ---------------------------------------------------------------------------
 
@@ -1401,3 +1625,5 @@ router.get('/alerts/multi-day-absent', staffOnly, wrap(async (req, res) => {
 }));
 
 module.exports = router;
+// Pure helpers, exported for tests/attendance/register.test.mjs.
+module.exports.helpers = { monthDays, ymdOf };

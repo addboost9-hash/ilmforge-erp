@@ -261,6 +261,100 @@ router.get('/preview-roll', wrap(async (req, res) => {
    sections and how many students each has: boys, girls, new this month.
    A class with no students yet is listed too, so a new class can be filled
    from here; students with no class are counted separately. */
+/* ── Roll numbers of a class: see them in order, rearrange, renumber ──
+   GET /students/roll-numbers?classId=&sectionId=   the students in roll order
+   PUT /students/roll-numbers  { changes: [{ id, rollNo }] }   saved together
+
+   A roll number is also the student's code: on the ID card's barcode and QR,
+   at the attendance kiosk and the fee scanner, and to sign in. So it stays
+   unique in the school whatever the capitals, only the admin or the
+   principal may change it, and every change is kept in the audit log. */
+const ROLL_EDITORS = ['super_admin', 'admin', 'principal'];
+const ROLL_RE = /^[A-Za-z0-9][A-Za-z0-9/_.-]{0,29}$/;
+const byRollThenName = (a, b) => String(a.rollNo || '￿').localeCompare(String(b.rollNo || '￿'), 'en', { numeric: true, sensitivity: 'base' })
+  || String(a.name).localeCompare(String(b.name));
+
+router.get('/roll-numbers', wrap(async (req, res) => {
+  if (!['super_admin', 'admin', 'principal', 'teacher'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const classId = parseInt(req.query.classId);
+  const sectionId = parseInt(req.query.sectionId) || null;
+  if (!classId) return res.status(400).json({ success: false, message: 'Choose a class.' });
+  const students = await prisma.student.findMany({
+    where: {
+      schoolId: req.schoolId, classId, status: 'active', deletedAt: null,
+      ...(sectionId && { sectionId }), ...(req.campusId && { campusId: req.campusId }),
+    },
+    select: {
+      id: true, name: true, fatherName: true, gender: true, admissionDate: true, rollNo: true, userId: true,
+      sectionId: true, section: { select: { name: true } },
+    },
+  });
+  students.sort((a, b) => String(a.section?.name || '').localeCompare(String(b.section?.name || ''), 'en', { numeric: true }) || byRollThenName(a, b));
+  res.json({
+    success: true,
+    data: students.map(({ section, userId, ...s }) => ({ ...s, sectionName: section?.name || '', hasLogin: !!userId })),
+    canEdit: ROLL_EDITORS.includes(req.user?.role),
+  });
+}));
+
+router.put('/roll-numbers', wrap(async (req, res) => {
+  const { schoolId } = req;
+  if (!ROLL_EDITORS.includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Only the admin or the principal can change roll numbers.' });
+  }
+  const changes = Array.isArray(req.body?.changes) ? req.body.changes : [];
+  if (!changes.length) return res.status(400).json({ success: false, message: 'No roll numbers to change.' });
+  if (changes.length > 1000) return res.status(400).json({ success: false, message: 'Change at most 1,000 roll numbers at a time.' });
+  const ids = changes.map((c) => Number(c?.id));
+  if (ids.some((id) => !Number.isInteger(id) || id <= 0) || new Set(ids).size !== ids.length) {
+    return res.status(400).json({ success: false, message: 'Each student may appear only once.' });
+  }
+  const wanted = changes.map((c) => String(c?.rollNo ?? '').trim());
+  const bad = wanted.findIndex((r) => !ROLL_RE.test(r));
+  if (bad >= 0) {
+    return res.status(400).json({ success: false, message: `"${wanted[bad] || '(empty)'}" cannot be a roll number. Use letters, digits and - / _ . (up to 30, no spaces).` });
+  }
+  const lower = wanted.map((r) => r.toLowerCase());
+  const twice = lower.findIndex((r, i) => lower.indexOf(r) !== i);
+  if (twice >= 0) return res.status(400).json({ success: false, message: `Roll number ${wanted[twice]} is given to two students.` });
+
+  const students = await prisma.student.findMany({ where: { id: { in: ids }, schoolId, deletedAt: null }, select: { id: true, name: true, rollNo: true } });
+  if (students.length !== ids.length) return res.status(404).json({ success: false, message: 'Some of these students are not in this school.' });
+
+  // Every other student's roll number, compared without capitals here so
+  // SQLite (desktop) and PostgreSQL (online) give the same answer.
+  const others = await prisma.student.findMany({
+    where: { schoolId, deletedAt: null, id: { notIn: ids }, rollNo: { not: null } },
+    select: { id: true, name: true, rollNo: true, status: true, class: { select: { name: true } } },
+  });
+  const taken = new Map(others.map((o) => [String(o.rollNo).trim().toLowerCase(), o]));
+  const clash = lower.findIndex((r) => taken.has(r));
+  if (clash >= 0) {
+    const o = taken.get(lower[clash]);
+    const where = [o.class?.name, o.status !== 'active' && o.status].filter(Boolean).join(', ');
+    return res.status(409).json({ success: false, message: `Roll number ${wanted[clash]} already belongs to ${o.name}${where ? ` (${where})` : ''}.` });
+  }
+
+  const before = new Map(students.map((s) => [s.id, s.rollNo || '']));
+  const real = ids.map((id, i) => ({ id, from: before.get(id), to: wanted[i] })).filter((c) => c.from !== c.to);
+  if (real.length) {
+    await prisma.$transaction(real.map((c) => prisma.student.update({ where: { id: c.id }, data: { rollNo: c.to } })));
+    await prisma.auditLog.create({
+      data: {
+        schoolId, userId: req.user.id, action: 'UPDATE_ROLL_NUMBERS', resource: 'Student',
+        details: JSON.stringify(real).slice(0, 8000), ipAddress: req.ip || null,
+      },
+    }).catch(() => {});
+  }
+  res.json({
+    success: true,
+    data: { changed: real.length, changes: real },
+    message: real.length ? `${real.length} roll number${real.length === 1 ? '' : 's'} changed.` : 'No roll number changed.',
+  });
+}));
+
 router.get('/directory', wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const status = req.query.status === 'inactive' ? 'inactive' : 'active';

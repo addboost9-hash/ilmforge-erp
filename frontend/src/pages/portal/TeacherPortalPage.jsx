@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
 import { postOrQueue } from '../../utils/offlineQueue';
+import AttendanceRegisterPage from '../attendance/AttendanceRegisterPage';
 import {
   LayoutDashboard, Users, UserCheck, GraduationCap, BookMarked,
   FolderOpen, Calendar, Bell, Key, Video, LogOut, ChevronRight,
@@ -38,6 +39,7 @@ const NAV = [
   { id: 'dashboard',    label: 'Dashboard',          Icon: LayoutDashboard },
   { id: 'students',     label: 'My Students',         Icon: Users           },
   { id: 'attendance',   label: 'Mark Attendance',     Icon: UserCheck       },
+  { id: 'register',     label: 'Attendance Register', Icon: BookMarked      },
   { id: 'marks',        label: 'Exam Marks',          Icon: GraduationCap   },
   { id: 'results',      label: 'Publish Results 📢',  Icon: GraduationCap   },
   { id: 'homework',     label: 'Homework',            Icon: BookMarked      },
@@ -185,6 +187,7 @@ export default function TeacherPortalPage() {
       case 'dashboard':    return <DashboardTab    classes={classes} exams={exams} homeworkApi={homeworkApi} setActiveTab={setActiveTab} user={user} />;
       case 'students':     return <StudentsTab      classes={classes} />;
       case 'attendance':   return <AttendanceTab    classes={classes} />;
+      case 'register':     return <AttendanceRegisterPage />;
       case 'marks':        return <MarksTab         classes={classes} exams={exams} />;
       case 'homework':     return <HomeworkTab       classes={classes} homeworkApi={homeworkApi} user={user} />;
       case 'lessonplans':  return <LessonPlansTab    classes={classes} user={user} />;

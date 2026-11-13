@@ -6,6 +6,8 @@
  */
 import { useState, useRef, useCallback } from 'react';
 import { signatureFromFile } from '../../utils/signatureImage';
+import { useSchoolStamp, stampFor, stampImg, STAMP_CSS } from '../../utils/schoolStamp';
+import SchoolStampCard from '../../components/settings/SchoolStampCard';
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
@@ -520,7 +522,7 @@ function fmt12(t) {
    school's letterhead, the papers, and signature lines for the class
    teacher and the principal (with the principal's name and signature
    picture from the roll number slip design). */
-function printDateSheets(rows, exam, school, design) {
+function printDateSheets(rows, exam, school, design, stamp = '') {
   const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const pic = (v) => (/^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,/i.test(String(v || '')) || /^https?:\/\//i.test(String(v || '')) || /^\/(?!\/)/.test(String(v || '')) ? String(v) : '');
   const day = (d) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' }) : '—');
@@ -550,7 +552,7 @@ function printDateSheets(rows, exam, school, design) {
       <p class="note">Students must bring their roll number slip to every paper.</p>
       <div class="signs">
         <div class="sg"><div class="img"></div><div class="ln"></div><div class="lb">Class teacher</div></div>
-        <div class="sg"><div class="img">${sig ? `<img src="${esc(sig)}" alt=""/>` : ''}</div><div class="ln"></div><div class="lb">${esc(design?.principalName || design?.principalTitle || 'Principal')}</div>${design?.principalName ? `<div class="tl">${esc(design?.principalTitle || 'Principal')}</div>` : ''}</div>
+        <div class="sg pr">${stampImg(pic(stamp))}<div class="img">${sig ? `<img src="${esc(sig)}" alt=""/>` : ''}</div><div class="ln"></div><div class="lb">${esc(design?.principalName || design?.principalTitle || 'Principal')}</div>${design?.principalName ? `<div class="tl">${esc(design?.principalTitle || 'Principal')}</div>` : ''}</div>
       </div>
       <footer class="ft"><span dir="auto">${esc(name)}</span><span>Issued ${esc(issued)}</span></footer>
     </section>`;
@@ -578,6 +580,8 @@ function printDateSheets(rows, exam, school, design) {
     .note{font-size:12px;color:#4B5563;margin:10px 0 0}
     .signs{display:flex;justify-content:space-between;gap:40px;margin-top:auto;padding-top:30px}
     .sg{flex:0 1 210px;text-align:center;font-size:13px}
+    .pr{position:relative}
+    ${STAMP_CSS}
     .sg .img{height:46px;display:flex;align-items:flex-end;justify-content:center}
     .sg .img img{max-height:100%;max-width:100%;object-fit:contain}
     .ln{border-top:1.2px solid #111827;margin-top:2px}
@@ -595,6 +599,7 @@ function DateSheetTab({ initialExamId = '', onGo }) {
   const { data: allExams = [] } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams').then(r => r.data.data || []) });
   const { data: school } = useQuery({ queryKey: ['school-profile'], queryFn: () => api.get('/settings/school').then(r => r.data.data).catch(() => ({})) });
   const { data: slipDesign } = useQuery({ queryKey: ['slip-design'], queryFn: () => api.get('/exams/slip-design').then(r => r.data.data).catch(() => null) });
+  const stamp = stampFor(useSchoolStamp(), 'dateSheets');
 
   const terms = useTerms();
   // Open on the term of the exam it was opened for (or of the newest exam).
@@ -644,7 +649,7 @@ function DateSheetTab({ initialExamId = '', onGo }) {
           ))}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button disabled={!examId} onClick={() => printDateSheets(datesheet, selectedExam, school, slipDesign)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Print all date sheets</button>
+          <button disabled={!examId} onClick={() => printDateSheets(datesheet, selectedExam, school, slipDesign, stamp)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Print all date sheets</button>
         </div>
       </div>
 
@@ -714,7 +719,7 @@ function DateSheetTab({ initialExamId = '', onGo }) {
                       <button onClick={() => setEditRow(row)} aria-label={`Edit date sheet of ${row.className} ${row.sectionName || ''}`} style={{ border: `1px solid ${TEAL}`, background: 'transparent', color: TEAL, borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <Pencil size={11} /> Edit
                       </button>
-                      <button onClick={() => printDateSheets([row], selectedExam, school, slipDesign)} disabled={!row.entries.length} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer', opacity: row.entries.length ? 1 : 0.5 }}>Print</button>
+                      <button onClick={() => printDateSheets([row], selectedExam, school, slipDesign, stamp)} disabled={!row.entries.length} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 10px', fontSize: 12, cursor: 'pointer', opacity: row.entries.length ? 1 : 0.5 }}>Print</button>
                       <button aria-label={`Clear date sheet of ${row.className} ${row.sectionName || ''}`} onClick={() => clearRow(row)} disabled={!row.entries.length} style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 5, padding: '4px 8px', fontSize: 12, cursor: 'pointer', opacity: row.entries.length ? 1 : 0.5 }}>
                         <Trash2 size={11} />
                       </button>
@@ -1098,6 +1103,9 @@ function ResultsTab() {
                   <Plus size={13} /> Add Signatory
                 </button>
               </div>
+
+              {/* The school stamp, printed beside the principal's signature */}
+              <SchoolStampCard only={['resultCards', 'rollSlips', 'dateSheets']} />
 
               {/* Final Remarks */}
               <div className="card">

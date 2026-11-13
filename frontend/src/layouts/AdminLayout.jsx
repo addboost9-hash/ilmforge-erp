@@ -461,6 +461,7 @@ export default function AdminLayout() {
     { label: 'Past Records', desc: 'Old fees, previous balances, salaries and expenses from Excel', path: '/settings/past-records', icon: '🗂️', group: 'Settings' },
     { label: 'Admissions CRM', desc: 'Lead pipeline', path: '/admissions/crm', icon: '🎯', group: 'Students' },
     { label: 'Student Promotion', desc: 'Promote to next class', path: '/students/promote', icon: '⬆️', group: 'Students' },
+    { label: 'Roll Numbers', desc: 'Rearrange and renumber a class', path: '/students/roll-numbers', icon: '🔢', group: 'Students' },
     { label: 'Student Health Records', desc: 'Medical info', path: '/student-health', icon: '🏥', group: 'Students' },
     { label: 'Gate Passes', desc: 'Student exit management', path: '/gate-passes', icon: '🔲', group: 'Students' },
     // Fees
@@ -480,6 +481,7 @@ export default function AdminLayout() {
     { label: 'Fingerprint Machines', desc: 'Set up and test fingerprint machines and scanners', path: '/settings/biometric', icon: '🖐', group: 'Attendance' },
     { label: 'Attendance Report', desc: 'View reports', path: '/attendance/report', icon: '📊', group: 'Attendance' },
     { label: 'Annual Attendance Calendar', desc: 'P/A/H full year', path: '/reports/attendance-calendar', icon: '🗓️', group: 'Attendance' },
+    { label: 'Attendance Register', desc: 'Class month by day: view, correct, print or save as PDF', path: '/attendance/register', icon: '📒', group: 'Attendance' },
     // Exams
     { label: 'Exams & Tests', desc: 'Create and manage exams', path: '/hub/exams', icon: '📝', group: 'Exams' },
     { label: 'Enter Marks', desc: 'Subject-wise marks', path: '/exams', icon: '✏️', group: 'Exams' },
@@ -705,7 +707,8 @@ export default function AdminLayout() {
   'past-records':  'Past Records',
   'barcode':       'Attendance Kiosk',
   'exam-slip':     'Roll Number Slips',
-  'register':      'Fee Register',
+  'register':      'Register',
+  'roll-numbers':  'Roll Numbers',
   'biometric':     'Fingerprint Machines',
     'dashboard':       'Smart Dashboard',
     'academics':       'Curriculum Planner',

@@ -46,6 +46,13 @@ cause of "the system won't let me" during training.
 > The logo and name you set here appear on ID cards, fee vouchers, admission forms,
 > result cards and the login page your staff and parents see. Set it properly once.
 
+**The school stamp** (same page, right side). Stamp the school's stamp on plain white paper,
+take a clear photo from above, and click **Upload the stamp**: the paper's white is removed.
+Under **Print it on**, choose the papers that carry it: roll number slips, result cards, date
+sheets, fee cards and the fee register, and the attendance register. It prints over the left of
+the principal's signature. Only the admin or the principal can change it; teachers and the
+accountant print with it, parents and students never receive the picture.
+
 ### Step 2: Academic session
 
 **Sidebar → School Settings → Academic Sessions** (`/settings/sessions`)
@@ -344,6 +351,31 @@ everyone gets a new password in the login details sheet.
 To move the whole school, with fees, attendance and results, to IlmForge desktop on the
 school's own computer, see Part 14.
 
+### Roll numbers: rearrange and renumber a class
+
+**Student Registry → Roll Numbers** (`/students/roll-numbers`). Roll numbers are made
+automatically at admission; here a class gets the order and the numbers the school wants.
+
+1. Choose the **class** (and section, to number each section on its own).
+2. **Put them in order**: by name, father's name, admission date, current roll number, or
+   girls or boys first. Move any student by hand with the ↑ ↓ buttons, or drag the row.
+3. **Number them**: a prefix (for example `NUR-` or `2026/`), the first number and how many
+   digits (`1`, `01`, `001`), then **Number in this order**. Or type any student's new roll
+   number yourself.
+4. Two students with the same number, or a number with a space, is marked in red and cannot
+   be saved. A number already used by a student of another class is refused when saving.
+5. **Save roll numbers** shows every change (old → new) first. After saving, **Undo** puts them
+   back.
+
+Roll number slips, result cards, the fee and attendance registers follow the new order.
+
+> **Important:** the roll number is also on each student's **ID card** (barcode and QR) and is
+> used at the attendance kiosk, the fee scanner and to sign in. After renumbering, print new ID
+> cards for those students. They sign in with the new roll number and the same password; marks,
+> fees and attendance stay with the student. Every change is kept in the audit log.
+
+**Print roll list** prints the class with its roll numbers.
+
 ### Finding and fixing student records
 
 **Sidebar → Student Registry** (`/students`)
@@ -533,10 +565,40 @@ number in IlmForge, then on the machine set **Comm → Cloud server (ADMS)** to 
 IlmForge server address. Each person's ID on the machine must be their roll number
 (students) or employee code (staff).
 
+### The attendance register
+
+**Attendance Tracker → Attendance Register** (`/attendance/register`; in the teacher portal,
+the **Attendance Register** tab). A class's month the way the register book is kept: a row
+for each student, a column for each day.
+
+| In a day's box | Means |
+|---|---|
+| **P** (green) | Present |
+| **A** (red) | Absent |
+| **L** (yellow) | Leave |
+| **Lt** (blue) | Late (counts as present) |
+| · | Not marked |
+| grey column | Sunday or a holiday (holidays come from the school calendar) |
+
+- Whatever is marked anywhere (the daily register, the kiosk, a fingerprint machine) shows
+  here at once; this month's register refreshes itself every 30 seconds.
+- The last columns give each student's present, absent, leave, late and **attendance %**; the
+  bottom rows give each day's present and absent counts.
+- **Show** picks out students below 75%, absent 3 or more days, absent today or not marked today.
+- **Correct a day:** the class teacher or the admin clicks the day and chooses Present, Absent,
+  Leave, Late or Not marked. It shows who marked it and how (register, ID card scan,
+  fingerprint). No message goes to parents from here; every change is kept in the audit log.
+- **A student's year:** click the name. The months appear as calendars, with the totals and the
+  attendance %; choose a session or calendar year at the top. **Print / Save as PDF** prints it
+  on one page.
+- **Print / Save as PDF** prints the month on A4 landscape, each section from a new page, with
+  signature lines and the school stamp. **Excel** downloads the same register.
+
 ### Correcting a mistake
 
 **Attendance → Corrections** (`/attendance/corrections`) — for changing a register after
-it has been saved. Corrections are recorded, so there is a trail of who changed what.
+it has been saved. Corrections are recorded, so there is a trail of who changed what. The
+class teacher or the admin can also correct a day straight from the attendance register.
 
 ---
 

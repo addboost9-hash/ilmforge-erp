@@ -8,6 +8,8 @@ const OFFLINE_TOAST = { icon: '📴', duration: 7000 };
 import { X, ChevronDown, ChevronUp, Download } from 'lucide-react';
 
 /* ─── design tokens ─────────────────────────────────────────── */
+import AttendanceRegisterPage from './AttendanceRegisterPage';
+
 const TEAL = '#1B2F6E';
 const TEAL_LIGHT = '#eff6ff';
 
@@ -1149,6 +1151,9 @@ export default function AttendanceHubPage() {
           <button style={mainTabStyle('staff')} onClick={() => setMainTab('staff')}>
             Staff Attendance
           </button>
+          <button style={mainTabStyle('register')} onClick={() => setMainTab('register')}>
+            Attendance Register
+          </button>
           <button style={mainTabStyle('reports')} onClick={() => setMainTab('reports')}>
             Reports
           </button>
@@ -1157,6 +1162,7 @@ export default function AttendanceHubPage() {
         {/* Tab content */}
         {mainTab === 'student'  && <StudentAttendanceTab />}
         {mainTab === 'staff'    && <StaffAttendanceTab />}
+        {mainTab === 'register' && <div style={{ padding: 16 }}><AttendanceRegisterPage /></div>}
         {mainTab === 'reports'  && <ReportsTab />}
       </div>
     </div>

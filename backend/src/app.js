@@ -293,6 +293,8 @@ app.use('/api/v1/settings',        protect, ADMIN_ONLY, PM('settings'), R('./rou
 app.use('/api/v1/notifications',   protect, FINANCE, PM('notifications'), R('./routes/notification.routes'));
 app.use('/api/v1/reports',         protect, FINANCE, PM('reports'), R('./routes/report.routes'));
 app.use('/api/v1/classes',         protect, PM('classes'), R('./routes/class.routes'));
+// The school stamp: read by the staff who print, changed by the admin or principal (roles checked inside).
+app.use('/api/v1/stamp',           protect, R('./routes/stamp.routes'));
 app.use('/api/v1/parents',         protect, ADMIN_ONLY, PM('parents'), R('./routes/parent.routes'));
 app.use('/api/v1/products',        protect, FINANCE, PM('products'), R('./routes/product.routes'));
 app.use('/api/v1/expenses',        protect, FINANCE, PM('expenses'), R('./routes/expense.routes'));

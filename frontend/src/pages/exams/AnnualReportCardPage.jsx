@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
+import { useSchoolStamp, stampFor } from '../../utils/schoolStamp';
 import {
   ArrowLeft, Printer, Search, Users, User, ChevronDown, Award, BookOpen
 } from 'lucide-react';
@@ -31,7 +32,7 @@ const calcDivision = pct => {
   return 'Fail';
 };
 
-function IndividualReportCard({ student, examColumns, schoolInfo, showAttendance }) {
+function IndividualReportCard({ student, examColumns, schoolInfo, showAttendance, stamp }) {
   const totalObtained = student.subjects?.reduce((sum, s) => sum + (s.totalObtained || 0), 0) || 0;
   const totalMarks = student.subjects?.reduce((sum, s) => sum + (s.totalMarks || 0), 0) || 0;
   const annualPct = totalMarks > 0 ? Math.round((totalObtained / totalMarks) * 100) : 0;
@@ -214,7 +215,9 @@ function IndividualReportCard({ student, examColumns, schoolInfo, showAttendance
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Result declared on: {new Date().toLocaleDateString()}</div>
         </div>
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', position: 'relative', paddingTop: stamp ? 40 : 0 }}>
+          {/* The school stamp over the principal's signature */}
+          {stamp && <img src={stamp} alt="" style={{ position: 'absolute', left: '50%', bottom: 4, width: 96, maxHeight: 96, objectFit: 'contain', transform: 'translateX(-95%) rotate(-10deg)', opacity: 0.88, mixBlendMode: 'multiply', pointerEvents: 'none' }} />}
           <div style={{ width: 140, borderTop: '1px solid #374151', paddingTop: 4, fontSize: 12, color: '#374151', fontWeight: 600 }}>
             Principal
           </div>
@@ -225,6 +228,7 @@ function IndividualReportCard({ student, examColumns, schoolInfo, showAttendance
 }
 
 export default function AnnualReportCardPage() {
+  const stamp = stampFor(useSchoolStamp(), 'resultCards');
   const [sessionId, setSessionId] = useState('');
   const [classId, setClassId] = useState(() => new URLSearchParams(window.location.search).get('classId') || '');
   const [sectionId, setSectionId] = useState(() => new URLSearchParams(window.location.search).get('sectionId') || '');
@@ -502,6 +506,7 @@ export default function AnnualReportCardPage() {
           <div className="print-area" ref={printRef}>
             {selectedStudent ? (
               <IndividualReportCard
+                stamp={stamp}
                 student={selectedStudent}
                 examColumns={examColumns}
                 schoolInfo={schoolInfo}
@@ -523,6 +528,7 @@ export default function AnnualReportCardPage() {
         <div className="print-area" style={{ display: 'none' }} ref={printRef}>
           {filtered.map(s => (
             <IndividualReportCard
+                stamp={stamp}
               key={s.id}
               student={s}
               examColumns={examColumns}

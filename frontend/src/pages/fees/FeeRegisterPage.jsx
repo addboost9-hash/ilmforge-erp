@@ -15,6 +15,7 @@ import { feeYear, monthRange, monthTitle, periodOptions, money, rs, dmy, lookOf,
 import { printFeeRegister, cellText } from '../../utils/feeRegisterPrint';
 import { downloadExcel } from '../../utils/export';
 import useFeeOptions from '../../components/fees/useFeeOptions';
+import { useSchoolStamp, stampFor } from '../../utils/schoolStamp';
 
 const SHOW = [
   { id: 'all', label: 'All students' },
@@ -39,6 +40,7 @@ export default function FeeRegisterPage({ initialClassId, initialSectionId, onOp
   const [open, setOpen] = useState(null); // { row, cell }
 
   const { classes, sessions, school } = useFeeOptions();
+  const stamp = stampFor(useSchoolStamp(), 'feeRecords');
   const { options, defaultId } = useMemo(() => periodOptions(sessions), [sessions]);
   const period = options.find((o) => o.id === periodId) || options.find((o) => o.id === defaultId);
   const months = useMemo(() => monthRange(period.from, period.to), [period.from, period.to]);
@@ -90,7 +92,7 @@ export default function FeeRegisterPage({ initialClassId, initialSectionId, onOp
 
   const print = () => {
     const ok = printFeeRegister({
-      school, period, months, groups,
+      school, period, months, groups, stamp,
       note: [show !== 'all' && showLabel, needle && `Search: ${q.trim()}`].filter(Boolean).join(' · '),
     });
     if (!ok) toast.error('No students to print. Change the class or the "Show" choice.');

@@ -4,15 +4,24 @@
  * Resolves to a PNG data URL; rejects with a message to show.
  */
 export function signatureFromFile(file) {
+  return paperPicture(file, { maxW: 600, maxH: 220, what: 'the signature' });
+}
+
+/** The school's stamp, the same way: at most 420 × 420, the paper made clear. */
+export function stampFromFile(file) {
+  return paperPicture(file, { maxW: 420, maxH: 420, what: 'the stamp' });
+}
+
+function paperPicture(file, { maxW, maxH, what }) {
   return new Promise((resolve, reject) => {
-    if (!file || !/^image\/(png|jpe?g|webp)$/.test(file.type)) { reject(new Error('Choose a PNG or JPG picture of the signature.')); return; }
+    if (!file || !/^image\/(png|jpe?g|webp)$/.test(file.type)) { reject(new Error(`Choose a PNG or JPG picture of ${what}.`)); return; }
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('The picture could not be read.'));
     reader.onload = () => {
       const img = new Image();
       img.onerror = () => reject(new Error('The picture could not be read.'));
       img.onload = () => {
-        const k = Math.min(1, 600 / img.width, 220 / img.height);
+        const k = Math.min(1, maxW / img.width, maxH / img.height);
         const c = document.createElement('canvas');
         c.width = Math.max(1, Math.round(img.width * k));
         c.height = Math.max(1, Math.round(img.height * k));
@@ -24,7 +33,7 @@ export function signatureFromFile(file) {
         }
         ctx.putImageData(px, 0, 0);
         const out = c.toDataURL('image/png');
-        if (out.length > 400 * 1024) reject(new Error('The picture is too large: crop it to the signature and try again.'));
+        if (out.length > 400 * 1024) reject(new Error(`The picture is too large: crop it to ${what} and try again.`));
         else resolve(out);
       };
       img.src = reader.result;

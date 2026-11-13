@@ -63,6 +63,7 @@ const QUICK_ACTIONS = [
   { label:'Mark Attendance',     to:'/attendance',        icon:CheckCircle,   color:'#15803d' },
   { label:'Defaulters List',     to:'/fees/defaulters',   icon:AlertTriangle, color:'#dc2626' },
   { label:'Promote Students',    to:'/students/promote',  icon:TrendingUp,    color:'#7c3aed' },
+  { label:'Roll Numbers',        to:'/students/roll-numbers', icon:Printer,   color:'#1B2F6E' },
   { label:'Gate Passes',         to:'/gate-passes',       icon:QrCode,        color:'#0891b2' },
   { label:'Send SMS to Parents', to:'/notifications/sms', icon:MessageSquare, color:'#d97706' },
   { label:'Student Health',      to:'/student-health',    icon:BookOpen,      color:'#db2777' },

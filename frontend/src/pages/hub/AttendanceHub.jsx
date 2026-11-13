@@ -10,6 +10,7 @@ const AttendanceReport = lazy(() => import('../attendance/AttendanceReportPage')
 const AttendanceAwards = lazy(() => import('../attendance/AttendanceAwardsPage'));
 const BiometricPage    = lazy(() => import('../attendance/BiometricAttendancePage'));
 const FacePage         = lazy(() => import('../attendance/FaceAttendancePage'));
+const RegisterPage     = lazy(() => import('../attendance/AttendanceRegisterPage'));
 
 const L = (C) => () => (
   <Suspense fallback={<div className="empty-state"><span className="spinner" /></div>}>
@@ -30,6 +31,7 @@ export default function AttendanceHub() {
       tabs={[
         { id: 'flow',      label: 'Mark Attendance',   hint: '3-step + auto SMS',       render: L(AttendanceFlow) },
         { id: 'classic',   label: 'Register View',     hint: 'Classic grid',            render: L(AttendancePage) },
+        { id: 'register',  label: 'Attendance Register', hint: 'Month by day, PDF',    render: L(RegisterPage) },
         { id: 'barcode',   label: 'Attendance Kiosk',  hint: 'Card, QR & fingerprint',  render: L(BarcodeScan) },
         { id: 'reports',   label: 'Reports',           hint: 'Monthly summaries',       render: L(AttendanceReport) },
         { id: 'awards',    label: 'Awards',            hint: '100% attendance',         render: L(AttendanceAwards) },

@@ -13,13 +13,51 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
 import { printHTML } from '../../utils/print';
+import { useSchoolStamp, stampFor, stampImg, STAMP_CSS } from '../../utils/schoolStamp';
 import { ArrowLeft, Printer, PencilLine } from 'lucide-react';
 
 const NAVY = '#1B2F6E';
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ordinal = (n) => (n ? `${n}${[, 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th'}` : '—');
 
-function reportCardsHTML(rows, { exam, school, settings }) {
+/* Only pictures: embedded images or web addresses. */
+const pic = (v) => (/^data:image\/(png|jpe?g|webp);base64,/i.test(String(v || '')) || /^https?:\/\//i.test(String(v || '')) ? String(v) : '');
+const PRINCIPAL = /principal|head ?(mistress|master|teacher)/i;
+
+/* Who signs a result card: the signatories of the result card settings
+   (Exam Vault > Results > settings), each with the picture of the
+   signature when one was added, those switched off left out; else the
+   plain lines. The stamp goes on the principal's (or the last) signature. */
+function signersHTML({ config, show, stamp }) {
+  const key = (s, i) => (s.name || `sig_${i}`).toLowerCase().replace(/\s+/g, '_');
+  let list = (config?.signatures || [])
+    .map((s, i) => ({ ...s, on: config?.signatureOptions?.[key(s, i)] !== false }))
+    .filter((s) => s.on && (s.name || s.designation));
+  if (!show('showPrincipalSignature')) list = list.filter((s) => !PRINCIPAL.test(`${s.designation} ${s.name}`));
+  if (!show('showTeacherSignature')) list = list.filter((s) => !/teacher/i.test(`${s.designation} ${s.name}`) || PRINCIPAL.test(`${s.designation} ${s.name}`));
+  if (!list.length) {
+    list = [
+      show('showTeacherSignature') && { designation: 'Class Teacher' },
+      show('showPrincipalSignature') && { designation: 'Principal' },
+    ].filter(Boolean);
+  }
+  const principalAt = list.findIndex((s) => PRINCIPAL.test(`${s.designation} ${s.name}`));
+  const stampAt = principalAt >= 0 ? principalAt : list.length - 1;
+  const one = (s, i) => {
+    const title = s.designation || s.name;
+    const withStamp = !!stamp && i === stampAt;
+    return `<div class="sg${withStamp ? ' pr' : ''}">${withStamp ? stampImg(stamp) : ''}<div class="sgimg">${pic(s.signatureUrl) ? `<img src="${esc(pic(s.signatureUrl))}" alt=""/>` : ''}</div><div class="ln"></div><div class="lb">${esc(title)}</div>${s.name && s.designation && s.name !== s.designation ? `<div class="sn">${esc(s.name)}</div>` : ''}</div>`;
+  };
+  const parent = '<div class="sg"><div class="sgimg"></div><div class="ln"></div><div class="lb">Parent / Guardian</div></div>';
+  const cells = list.map(one);
+  cells.splice(Math.min(1, cells.length), 0, parent);
+  return `<div class="signs">${cells.join('')}</div>`;
+}
+
+/* The final remark for a percentage, from the result card settings. */
+const remarkFor = (config, pct) => (config?.finalRemarks || []).find((r) => Number(r.minPercent) <= pct && pct <= Number(r.maxPercent))?.remark || '';
+
+function reportCardsHTML(rows, { exam, school, settings, config, stamp }) {
   const logo = school?.logoUrl || '';
   const show = (k, d = true) => (settings?.[k] ?? d);
   const cards = rows.map((r) => `
@@ -45,11 +83,8 @@ function reportCardsHTML(rows, { exam, school, settings }) {
       <td><b>Division</b><br/>${esc(r.division)}</td>
       <td><b>Result</b><br/><span class="${r.passed ? 'pass' : 'fail'}">${r.passed ? 'PASS' : 'FAIL'}</span></td>
     </tr></table>
-    <div class="signs">
-      ${show('showTeacherSignature') ? '<div>Class Teacher</div>' : ''}
-      <div>Parent / Guardian</div>
-      ${show('showPrincipalSignature') ? '<div>Principal</div>' : ''}
-    </div>
+    ${remarkFor(config, r.percentage) ? `<div class="rmk"><b>Remarks:</b> <span dir="auto">${esc(remarkFor(config, r.percentage))}</span></div>` : ''}
+    ${signersHTML({ config, show, stamp })}
   </div>`).join('');
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(exam?.title || 'Results')} — Report cards</title><style>
     *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;color:#000}
@@ -63,7 +98,14 @@ function reportCardsHTML(rows, { exam, school, settings }) {
     .tot td{font-weight:800;background:#f5f5f5}.sum td{text-align:center}
     .ph{width:28mm;text-align:center}.ph img{width:24mm;height:28mm;object-fit:cover}
     .pass{color:#0a6a2a;font-weight:800}.fail{color:#b00;font-weight:800}
-    .signs{display:flex;justify-content:space-between;margin-top:16mm}.signs div{border-top:1px solid #000;padding-top:3px;width:45mm;text-align:center;font-size:11px}
+    .rmk{margin-top:6px;font-size:12px;border:1px solid #000;padding:5px 7px}
+    .signs{display:flex;justify-content:space-between;gap:6mm;margin-top:8mm}
+    .sg{flex:0 1 45mm;text-align:center;font-size:11px}
+    .sgimg{height:12mm;display:flex;align-items:flex-end;justify-content:center}.sgimg img{max-height:100%;max-width:100%;object-fit:contain}
+    .ln{border-top:1px solid #000;margin-top:1px}.lb{font-weight:700;margin-top:2px}.sn{font-size:10px;color:#444}
+    .pr{position:relative}
+    ${STAMP_CSS}
+    .ilm-stamp{width:26mm;max-height:26mm}
     @page{size:A4;margin:8mm}
   </style></head><body>${cards}</body></html>`;
 }
@@ -100,6 +142,8 @@ export default function ExamResultsPage() {
   const { data: classes = [] } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes').then((r) => r.data.data || []) });
   const { data: school } = useQuery({ queryKey: ['school-profile'], queryFn: () => api.get('/settings/school').then((r) => r.data.data).catch(() => ({})) });
   const { data: settings } = useQuery({ queryKey: ['exam-settings'], queryFn: () => api.get('/settings/exam').then((r) => r.data.data).catch(() => null), staleTime: 300_000 });
+  const { data: resultConfig } = useQuery({ queryKey: ['result-config-print'], queryFn: () => api.get('/exams/result-config').then((r) => r.data.data).catch(() => null), staleTime: 300_000 });
+  const stamp = stampFor(useSchoolStamp(), 'resultCards');
   const exam = exams.find((e) => e.id === parseInt(id));
   const forClasses = useMemo(() => {
     let ids = [];
@@ -137,7 +181,7 @@ export default function ExamResultsPage() {
         </div>
         <Link to={`/exams/${id}/marks?classId=${classId}${sectionId ? `&sectionId=${sectionId}` : ''}`} className="btn btn-outline btn-sm"><PencilLine size={14} /> Edit marks</Link>
         <button type="button" className="btn btn-outline btn-sm" disabled={!rows.length} onClick={() => printHTML(resultSheetHTML(sorted, subjects, { exam, school, label }), { title: 'Result sheet' })}><Printer size={14} /> Print result sheet</button>
-        <button type="button" className="btn btn-teal btn-sm" disabled={!rows.length} onClick={() => printHTML(reportCardsHTML([...rows].sort((a, b) => String(a.rollNo).localeCompare(String(b.rollNo), undefined, { numeric: true })), { exam, school, settings }), { title: 'Report cards' })}><Printer size={14} /> Print report cards (A4)</button>
+        <button type="button" className="btn btn-teal btn-sm" disabled={!rows.length} onClick={() => printHTML(reportCardsHTML([...rows].sort((a, b) => String(a.rollNo).localeCompare(String(b.rollNo), undefined, { numeric: true })), { exam, school, settings, config: resultConfig, stamp }), { title: 'Report cards' })}><Printer size={14} /> Print report cards (A4)</button>
       </div>
 
       <div className="card" style={{ padding: 14, marginBottom: 14, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>

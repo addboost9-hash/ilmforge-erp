@@ -9,6 +9,7 @@ import api from '../../api/client';
 import useAuthStore from '../../store/auth.store';
 import { useBranding } from '../../hooks/useBranding';
 import { compressLogo } from '../../utils/photo';
+import SchoolStampCard from '../../components/settings/SchoolStampCard';
 import { Save, Upload, Camera, Palette, Building2, Globe, Phone, Mail, MapPin, CheckCircle, BookOpen, Clock } from 'lucide-react';
 
 const THEME_PRESETS = [
@@ -290,6 +291,9 @@ export default function SchoolProfilePage() {
 
         {/* ── Right — Live Preview ─────────── */}
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+
+          {/* The school stamp, printed on slips, result cards and registers */}
+          <SchoolStampCard />
 
           {/* Login page preview */}
           <div className="card" style={{ padding:0, overflow:'hidden' }}>

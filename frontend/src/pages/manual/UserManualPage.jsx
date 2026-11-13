@@ -544,8 +544,35 @@ const SECTIONS = [
     icon: '✨',
     color: '#0F3D33',
     title: 'Latest Additions',
-    desc: 'Roll number slips, Exam Vault in seven steps, ID card scanning, paper forms read in, admissions corrected, departments',
+    desc: 'Attendance register, roll numbers, school stamp, roll number slips, Exam Vault in seven steps, ID card scanning, paper forms read in',
     chapters: [
+      {
+        title: 'New: attendance register with calendar',
+        steps: [
+          { n:1, text:'Attendance Tracker → Attendance Register (teachers: Attendance Register tab): a row per student, a column per day — P, A, L, Lt; Sundays and holidays shaded' },
+          { n:2, text:'Updates by itself: attendance marked anywhere (register, kiosk, fingerprint) shows within 30 seconds' },
+          { n:3, text:'Click a day to correct it (class teacher or admin); it shows who marked it and how' },
+          { n:4, text:'Click a name for the student\'s whole year as calendars, with attendance %' },
+          { n:5, text:'Print / Save as PDF (A4 landscape, signatures and stamp) or Excel' },
+        ],
+      },
+      {
+        title: 'New: rearrange and renumber roll numbers',
+        steps: [
+          { n:1, text:'Student Registry → Roll Numbers: choose the class, put them in order (name, admission date, girls/boys first, or by hand)' },
+          { n:2, text:'Number them with your own pattern (prefix, first number, digits) or type any number; mistakes are marked before saving' },
+          { n:3, text:'Every change is shown before saving and can be undone; slips, result cards and registers follow the new order' },
+        ],
+        warning: 'The roll number is also on the ID card and used at the kiosk and to sign in: print new ID cards after renumbering.',
+      },
+      {
+        title: 'New: the school stamp on printed papers',
+        steps: [
+          { n:1, text:'School Settings → School stamp: upload a photo of the stamp on white paper (the white is removed)' },
+          { n:2, text:'Choose where it prints: roll number slips, result cards, date sheets, fee cards and register, attendance register' },
+          { n:3, text:'It prints over the principal\'s signature. Result cards now also print the signature pictures and final remarks from the result settings' },
+        ],
+      },
       {
         title: 'New: roll number slips for every class',
         steps: [

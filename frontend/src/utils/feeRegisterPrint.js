@@ -10,6 +10,7 @@
  */
 import { printHTML } from './print';
 import { monthTitle, money, rs, dmy, dm, lookOf, pkYmd } from './feeYear';
+import { stampImg, STAMP_CSS } from './schoolStamp';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // Only pictures from the school itself (a data URL or its own address).
@@ -49,10 +50,12 @@ const BASE_CSS = `
   .ln{border-top:1.2px solid #111827}
   .lb{font-weight:700;margin-top:4px}
   .ft{display:flex;justify-content:space-between;font-size:10px;color:#9CA3AF;margin-top:10px;border-top:1px solid #E5E7EB;padding-top:5px}
+  .pr{position:relative}
+  ${STAMP_CSS}
 `;
 
 /** One student's fee card for a session or year. */
-export function printFeeCard({ student, school, period, cells, totals }) {
+export function printFeeCard({ student, school, period, cells, totals, stamp = '' }) {
   const lh = letterhead(school);
   const today = pkYmd(Date.now());
   const cls = [student?.class?.name || student?.className, student?.section?.name || student?.sectionName].filter(Boolean).join(' — ');
@@ -88,6 +91,7 @@ export function printFeeCard({ student, school, period, cells, totals }) {
     tfoot td{font-weight:800;background:#F3F4F6}
     .sum{margin-top:10px;font-size:12.5px;line-height:1.6}
     .sum .bad{color:#991B1B;font-weight:700}
+    .signs{padding-top:30mm}
   </style></head><body>
     ${lh.html}
     <div class="band"><span>Student Fee Card</span><span>${esc(period.title)} · ${esc(monthTitle(period.from))} – ${esc(monthTitle(period.to))}</span></div>
@@ -109,7 +113,7 @@ export function printFeeCard({ student, school, period, cells, totals }) {
     </div>
     <div class="signs">
       <div class="sg"><div class="ln"></div><div class="lb">Accountant</div></div>
-      <div class="sg"><div class="ln"></div><div class="lb">Principal</div></div>
+      <div class="sg pr">${stampImg(pic(stamp))}<div class="ln"></div><div class="lb">Principal</div></div>
     </div>
     <footer class="ft"><span dir="auto">${esc(lh.name)}</span><span>Printed ${esc(dmy(today))}</span></footer>
   </body></html>`;
@@ -132,7 +136,7 @@ export function cellText(c) {
  * The class fee register on A4 landscape.
  * groups: [{ title, rows: [{ student, cells, totals }] }]; each group from a new page.
  */
-export function printFeeRegister({ school, period, months, groups, note }) {
+export function printFeeRegister({ school, period, months, groups, note, stamp = '' }) {
   const lh = letterhead(school);
   const today = pkYmd(Date.now());
   const pages = groups.filter((g) => g.rows.length).map((g) => {
@@ -165,8 +169,8 @@ export function printFeeRegister({ school, period, months, groups, note }) {
         </tfoot>
       </table>
       <div class="tail">
-        <div class="legend"><span>✓ 05/09 = paid, with the day it was collected · P 1,500 = part paid, balance shown · red amount = unpaid · blue amount = due, not late yet · — = not billed · Balance includes dues from before ${esc(monthTitle(period.from))}.</span><span class="when">${g.rows.length} student${g.rows.length === 1 ? '' : 's'} · Printed ${esc(dmy(today))}</span></div>
-        <div class="signs"><div class="sg"><div class="ln"></div><div class="lb">Accountant</div></div><div class="sg"><div class="ln"></div><div class="lb">Principal</div></div></div>
+        <div class="legend"><span>✓ 05/09 = paid, with the day it was collected · P 1,500 = part paid, balance shown · red amount = unpaid · blue amount = due, not late yet · — = not billed · Balance includes dues from before ${esc(monthTitle(period.from))}.</span></div>
+        <div class="signs"><div class="sg"><div class="ln"></div><div class="lb">Accountant</div></div><div class="when">${g.rows.length} student${g.rows.length === 1 ? '' : 's'} · Printed ${esc(dmy(today))}</div><div class="sg pr">${stampImg(pic(stamp))}<div class="ln"></div><div class="lb">Principal</div></div></div>
       </div>
     </section>`;
   }).join('');
@@ -195,6 +199,8 @@ export function printFeeRegister({ school, period, months, groups, note }) {
     .legend{display:flex;justify-content:space-between;gap:16px;font-size:9px;color:#4B5563;margin-top:4px}
     .legend .when{white-space:nowrap;color:#9CA3AF}
     .tail{break-inside:avoid;page-break-inside:avoid}.signs{padding-top:18px}.signs .lb{margin-top:2px}
+    .ilm-stamp{width:12mm;max-height:12mm;bottom:0;left:50%;transform:translateX(-50%) rotate(-10deg)}
+    .signs{align-items:flex-end}.signs .when{font-size:9px;color:#9CA3AF;white-space:nowrap;align-self:flex-end}
   </style></head><body>${pages}</body></html>`;
   printHTML(html, { title: `Fee Register — ${period.title}` });
   return true;

@@ -18,6 +18,8 @@ import { printHTML } from '../../utils/print';
 import { buildTerms, examMatchesTerm } from '../../utils/terms';
 import { buildSlipsDocument, openSlipsWindow, examLabel, slipRollNo } from '../../utils/rollSlips';
 import { signatureFromFile } from '../../utils/signatureImage';
+import { useSchoolStamp, stampFor } from '../../utils/schoolStamp';
+import SchoolStampCard from '../../components/settings/SchoolStampCard';
 import ClassPapersEditor from './ClassPapersEditor';
 
 const NAVY = '#1B2F6E';
@@ -163,6 +165,7 @@ function SlipPreview({ html }) {
 
 function DesignStep({ examId, summary, draft, setDraft, saved, onSaved }) {
   const qc = useQueryClient();
+  const stamp = useSchoolStamp();
   const groups = (summary?.groups || []).filter((g) => g.students.length);
   const [previewKey, setPreviewKey] = useState('');
   useEffect(() => { if (!previewKey && groups.length) setPreviewKey(`${groups[0].classId}_${groups[0].sectionId || ''}`); }, [groups, previewKey]);
@@ -200,6 +203,7 @@ function DesignStep({ examId, summary, draft, setDraft, saved, onSaved }) {
     design: { ...draft, instructions: draft.instructions },
     groups: [{ ...(g || { className: 'Class', sectionName: '', schedule: [] }), students }],
     preview: true,
+    stamp: stampFor(stamp, 'rollSlips'),
   }) : '';
 
   return (
@@ -249,6 +253,9 @@ function DesignStep({ examId, summary, draft, setDraft, saved, onSaved }) {
               </label>
             </div>
           )}
+          <div style={{ fontSize: 12.5, color: '#64748B' }}>
+            Both follow each class's roll number order. To rearrange a class or give its students other roll numbers, use <a href="/students/roll-numbers" target="_blank" rel="noreferrer" style={{ color: NAVY, fontWeight: 700 }}>Roll Numbers</a>.
+          </div>
         </section>
 
         <section style={{ display: 'grid', gap: 6 }}>
@@ -289,6 +296,8 @@ function DesignStep({ examId, summary, draft, setDraft, saved, onSaved }) {
           </div>
         </section>
 
+        <SchoolStampCard compact only={['rollSlips', 'resultCards', 'dateSheets']} />
+
         <section style={{ display: 'grid', gap: 10 }}>
           <h3 style={{ margin: 0, fontSize: 14, color: NAVY }}>Instructions and footer</h3>
           <label style={label}>Instructions, one per line
@@ -324,6 +333,7 @@ function DesignStep({ examId, summary, draft, setDraft, saved, onSaved }) {
 
 /* ═══ 3. Print ═══════════════════════════════════════════════════════ */
 function PrintStep({ examId, exam, summary, design, designDirty, onDesign }) {
+  const stamp = useSchoolStamp();
   const [busy, setBusy] = useState('');
   const [find, setFind] = useState('');
   const groups = summary?.groups || [];
@@ -358,7 +368,7 @@ function PrintStep({ examId, exam, summary, design, designDirty, onDesign }) {
       let list = data.data.groups;
       if (studentId) list = list.map((g) => ({ ...g, students: g.students.filter((s) => s.id === studentId) })).filter((g) => g.students.length);
       if (!list.some((g) => g.students.length)) { win.close(); toast.error('There are no students to print.'); return; }
-      win.fill(buildSlipsDocument({ data: data.data, design: { ...design, instructions: design.instructions }, groups: list, autoPrint: true, title }));
+      win.fill(buildSlipsDocument({ data: data.data, design: { ...design, instructions: design.instructions }, groups: list, autoPrint: true, title, stamp: stampFor(stamp, 'rollSlips') }));
     } catch (e) {
       win.close();
       toast.error(e.response?.data?.message || 'Could not prepare the slips.');

@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, DollarSign, Printer, AlertTriangle, CheckCircle2, BookOpen } from 'lucide-react';
 import useFeeOptions from './useFeeOptions';
+import { useSchoolStamp, stampFor } from '../../utils/schoolStamp';
 import { feeYear, monthRange, monthTitle, periodOptions, money, rs, dmy, dm, lookOf, STATE_LOOK } from '../../utils/feeYear';
 import { printFeeCard } from '../../utils/feeRegisterPrint';
 
@@ -16,6 +17,7 @@ const LEGEND = ['paid', 'partial', 'unpaid', 'due', 'none'];
    (the accountant portal passes its own tab instead). */
 export default function FeeYearCalendar({ student, invoices, onCollect, onOpenRegister }) {
   const { sessions, school } = useFeeOptions();
+  const stamp = stampFor(useSchoolStamp(), 'feeRecords');
   const { options, defaultId } = useMemo(() => periodOptions(sessions), [sessions]);
   const [periodId, setPeriodId] = useState('');
   const period = options.find((o) => o.id === periodId) || options.find((o) => o.id === defaultId);
@@ -38,7 +40,7 @@ export default function FeeYearCalendar({ student, invoices, onCollect, onOpenRe
             value={period.id} onChange={(e) => setPeriodId(e.target.value)}>
             {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => printFeeCard({ student, school, period, cells, totals })}>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => printFeeCard({ student, school, period, cells, totals, stamp })}>
             <Printer size={13} /> Fee card
           </button>
           {student?.classId && onOpenRegister && (
