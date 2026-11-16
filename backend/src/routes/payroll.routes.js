@@ -5,6 +5,8 @@ const { pastDate } = require('../utils/pastDate');
 const {
   markSalaryPaid, generateSalaries, generateMessage, salaryPeriod, salaryEdit, pkDayKey,
 } = require('../services/salaryPayment.service');
+const { readSettings } = require('../utils/schoolSettings');
+const { bankFor } = require('../services/feeCollect.service');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // "14/03/2026": the day, in Pakistan, as people there write it.
@@ -126,9 +128,16 @@ router.post('/pay-all', wrap(async (req, res) => {
   const when = pastDate(req.body?.paidOn, { label: 'Paid on' });
   if (when.error) return res.status(400).json({ success: false, message: when.error });
 
+  // ids: only these salaries (those sent through the bank); else every one pending.
+  let only = null;
+  if (req.body?.ids !== undefined) {
+    only = Array.isArray(req.body.ids) ? [...new Set(req.body.ids.map(Number).filter(Number.isInteger))] : [];
+    if (!only.length) return res.status(400).json({ success: false, message: 'Choose the salaries to mark as paid.' });
+  }
+
   // One by one, so each salary is also recorded once under Expenses.
   const pendingRecords = await prisma.salaryRecord.findMany({
-    where: { schoolId, month: period.month, year: period.year, status: 'pending' },
+    where: { schoolId, month: period.month, year: period.year, status: 'pending', ...(only && { id: { in: only } }) },
     select: { id: true },
   });
   let count = 0;
@@ -138,6 +147,41 @@ router.post('/pay-all', wrap(async (req, res) => {
   }
 
   res.json({ success: true, data: { count }, message: `${count} salaries marked as paid and recorded under Expenses › Salaries.` });
+}));
+
+// GET /bank-list?month&year — the month's salaries with each person's bank
+// account, for the transfer letter to the school's bank and the bank's
+// upload sheet. Staff with no account are listed apart (paid in cash).
+router.get('/bank-list', wrap(async (req, res) => {
+  const { schoolId } = req;
+  const period = salaryPeriod(req.query.month, req.query.year);
+  if (period.error) return res.status(400).json({ success: false, message: period.error });
+  const [records, school, campuses, settings] = await Promise.all([
+    prisma.salaryRecord.findMany({
+      where: { schoolId, month: period.month, year: period.year },
+      include: { staff: { select: { id: true, name: true, empCode: true, designation: true, campusId: true, cnic: true, bankName: true, bankAccountTitle: true, bankAccountNo: true } } },
+    }),
+    prisma.school.findUnique({ where: { id: schoolId }, select: { name: true, address: true, phone: true, logoUrl: true } }),
+    prisma.campus.findMany({ where: { schoolId }, select: { id: true, name: true, isMain: true }, orderBy: [{ isMain: 'desc' }, { name: 'asc' }] }),
+    readSettings(schoolId),
+  ]);
+  const payment = settings.payment || {};
+  const rows = records
+    .map((r) => ({
+      recordId: r.id, staffId: r.staffId, name: r.staff?.name || '', empCode: r.staff?.empCode || '', designation: r.staff?.designation || '',
+      cnic: r.staff?.cnic || '', campusId: r.staff?.campusId ?? null, netSalary: r.netSalary, status: r.status,
+      paidOn: r.issueDate ? pkDayKey(r.issueDate) : null,
+      bankName: r.staff?.bankName || '', bankAccountTitle: r.staff?.bankAccountTitle || '', bankAccountNo: r.staff?.bankAccountNo || '',
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  res.json({
+    success: true,
+    data: {
+      month: period.month, year: period.year, school: school || {}, rows,
+      campuses: campuses.map((c) => ({ ...c, bank: bankFor(payment, c.id) })),
+      schoolBank: bankFor(payment, null),
+    },
+  });
 }));
 
 // GET /summary - stats for month/year

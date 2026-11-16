@@ -80,6 +80,7 @@ export default function StaffFormPage() {
     name: '', email: '', phone: '', designation: 'Teacher', role: 'teacher',
     joiningDate: '', basicSalary: '', salaryType: 'monthly',
     gender: 'male', cnic: '', departmentId: '', dob: '',
+    bankName: '', bankAccountTitle: '', bankAccountNo: '',
   });
   const [createAccount, setCreateAccount] = useState(true);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -116,6 +117,9 @@ export default function StaffFormPage() {
       cnic: existingStaff.cnic || '',
       departmentId: existingStaff.departmentId ? String(existingStaff.departmentId) : '',
       dob: existingStaff.dob ? existingStaff.dob.slice(0, 10) : '',
+      bankName: existingStaff.bankName || '',
+      bankAccountTitle: existingStaff.bankAccountTitle || '',
+      bankAccountNo: existingStaff.bankAccountNo || '',
     });
     setPhotoPreview(existingStaff.photoUrl || null);
     setPhotoDirty(false);
@@ -378,6 +382,25 @@ export default function StaffFormPage() {
               <option value="hourly">Hourly</option>
               <option value="lecture">Lecture-wise</option>
             </select>
+          </div>
+        </div>
+        {/* Where the salary is sent when it is paid through the bank (Payroll › Bank transfer). */}
+        <div style={{ marginTop: 6, paddingTop: 12, borderTop: '1px dashed #E2E8F0' }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1E3A5F', marginBottom: 2 }}>Salary bank account (optional)</div>
+          <div style={{ fontSize: 11.5, color: '#64748B', marginBottom: 10 }}>For paying the salary through the bank. Leave empty for staff paid in cash.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Bank</label>
+              <input aria-label="Salary bank" className="form-input" placeholder="e.g. Meezan Bank" maxLength={80} value={form.bankName} onChange={set('bankName')}/>
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Account title</label>
+              <input aria-label="Salary account title" className="form-input" placeholder="Name on the account" maxLength={120} value={form.bankAccountTitle} onChange={set('bankAccountTitle')}/>
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Account number / IBAN</label>
+              <input aria-label="Salary account number" className="form-input" placeholder="PK36MEZN0001234567890123" maxLength={40} value={form.bankAccountNo} onChange={set('bankAccountNo')} style={{ fontFamily: 'monospace' }}/>
+            </div>
           </div>
         </div>
       </SectionCard>

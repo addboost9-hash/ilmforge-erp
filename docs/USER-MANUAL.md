@@ -638,6 +638,80 @@ parent is also notified automatically if messaging is configured.
 > The system will not let you collect more than the amount outstanding on an invoice.
 > If you try, it tells you the actual amount due.
 
+### Collecting for several months at once
+
+When a parent pays for some of the months owing, use the **Collect fee — choose the months**
+panel under the fee calendar (in the accountant portal it is on **Fee Collection**).
+
+1. Only the months still **unpaid** are listed, oldest first, all ticked. Untick the months
+   not being paid now (or click a month's **Collect** on the calendar to tick just that one).
+2. Type the **amount received**. It starts as the total of the ticked months.
+3. Before saving, each month shows what happens: the amount pays the **oldest ticked month
+   first**, each in full before the next. The last month reached may be **part paid**; the
+   rest stay unpaid. The line below says what is left as balance.
+4. Choose the day received, how it was paid and whether to message the parent, then click
+   **Collect**. One receipt lists every month: what it owed, what was paid now and what is
+   still owing. **Print receipt** prints it (A5).
+
+**Print bank challan** (or **Print fee slip** when the school has no bank account) prints
+just the ticked months for the parent to pay; see [Bank challans](#bank-challans).
+
+<a name="bank-challans"></a>
+### Bank challans: parents pay at the bank
+
+**Invoicing Hub → Bank Challans** (accountant portal: **Bank Challans** tab)
+
+The parent deposits the challan at the bank, so the money goes straight into the school's
+account, and the school records the deposit against the challan number.
+
+**Set up once (admin): Settings → Payment Settings → Bank Settings**
+
+- **Bank account details**: the school's account (bank, branch, branch code, account title,
+  account number or IBAN).
+- **Campus accounts**: tick a campus to give it its own account; its students' challans then
+  name that account. Other campuses use the school's.
+- **Bank Challan**: the due day of the month, a fixed **late fee** after the due date (0 for
+  none), and a note printed on the challan.
+- **Voucher Settings → Number of Copies**: 3 prints Bank, School and Parent copies.
+
+With no bank account, the same page prints as a **fee slip** (School and Parent copies),
+paid at the school office.
+
+**Print challans**
+
+1. Choose the class (or all classes), the section if wanted, and the **due date**.
+2. Click **Make and print**. Each student who owes gets one challan on its own A4 page:
+   the copies side by side to cut apart, every unpaid month (more than nine: the oldest
+   are one line of earlier dues), the total payable by the due date and after it, the
+   amount in words, the account, and a box for the bank's stamp.
+3. Printing again with nothing changed gives the same challan numbers. If a student's
+   months changed, a new number is issued and the old challan is marked **Replaced**.
+
+A challan number is 12 digits, for example **261100012301** (year and month issued, the
+student, the challan of the month). Paying online, the parent writes it as the reference.
+
+**Record deposits** (from the bank's stamped copy)
+
+1. Type or scan the challan number and press Enter. The student and the months on the
+   challan show, with what each still owes.
+2. Check the amount deposited and the day, add the bank's reference if there is one, and
+   click **Record deposit**. The months are marked paid, oldest first, as a bank payment.
+
+Deposited after the due date with the late fee: the late fee is added to the newest month
+and paid. A part deposit pays the oldest months first and the challan shows **Part paid**.
+A challan already recorded is refused, so nothing is counted twice.
+
+**Bank statement**
+
+1. Download the account statement from internet banking as Excel (.xlsx) or CSV.
+2. Open it here. The date and credit columns are found on their own; change them if needed.
+3. **Check** compares each credit that has a challan number with the challan: *Matches*,
+   *Amount differs*, *Already recorded* or *No challan*. Matches are ticked.
+4. **Record** the ticked ones. Credits without a challan number are left for you to look at.
+
+**All challans** lists them by status (not paid yet, paid, part paid, replaced, cancelled),
+class or search; print one again, or cancel one printed by mistake.
+
 ### A student's fee year: the fee calendar
 
 When a student is chosen on **Collect Fee**, a **Fee calendar** shows the whole session (or
@@ -720,6 +794,7 @@ still due and the months it covers.
 | Annual fee increase | `/fees/increment` |
 | Collection report (payments received in a month, with the day each was entered) | `/fees/collection-report` |
 | Fee register (each student month by month, with the day each fee was collected) | `/hub/fees?tab=register` |
+| Bank challans (print, record deposits, bank statement) | `/hub/fees?tab=challans` |
 
 <a name="past-records"></a>
 ### Past records: fees, salaries and expenses from before IlmForge
@@ -1060,6 +1135,22 @@ Created automatically when you add the staff member. Details appear on screen on
 
 Each paid salary is also recorded under **Expenses › Salaries** on its paid-on day, so the
 dashboard's spending and the profit and loss include it. A month cannot be paid twice.
+
+### Paying salaries through the bank
+
+1. Give each staff member their account: **Staff → Edit → Salary bank account** (bank,
+   account title, account number or IBAN). Leave it empty for staff paid in cash.
+2. **Payroll Manager** → choose the month → **Pay through bank**.
+3. Staff with an account are listed with their net salary (pending ones ticked); staff
+   without one are listed apart, to be paid in cash.
+4. Choose the account the salaries are paid **from** (the school's or a campus's, from
+   Payment Settings), the date and, if wanted, the cheque number.
+5. **Print letter for the bank**: the letter on your letterhead asking the bank to debit the
+   school's account and credit each person, with the list, the total in figures and words,
+   and lines for the authorised signatories. Or **Download sheet (CSV)** for the bank's
+   bulk upload in internet banking.
+6. Once the bank has paid, **Mark as paid**: those salaries are paid on that date and
+   added to Expenses, as **Pay** does.
 
 ### Recording expenses
 

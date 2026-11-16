@@ -6,6 +6,7 @@ import useAuthStore from '../../store/auth.store';
 import ConfirmModal from '../../components/ConfirmModal';
 import { money, amount, toPaisa, rupeesInput } from '../../utils/currency';
 import { printHTML, printDocumentShell } from '../../utils/print';
+import SalaryBankDialog from '../../components/payroll/SalaryBankDialog';
 
 const NAVY = '#1B2F6E';
 const LIGHT_BG = '#f0f4ff';
@@ -145,6 +146,7 @@ export default function PayrollPage() {
   const [paidOn, setPaidOn] = useState(pkToday);
   const [editing, setEditing] = useState(null); // { record, form: { basic: '25000', ... } }
   const [confirming, setConfirming] = useState(null); // 'generate' | 'payAll', waiting for a yes
+  const [bankOpen, setBankOpen] = useState(false); // the bank transfer list
   const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem('payroll_visited'));
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
@@ -349,6 +351,11 @@ export default function PayrollPage() {
             <button style={btnStyle('#6366f1')} onClick={() => setConfirming('generate')} disabled={generating || generateMutation.isPending}>
               {generating ? 'Generating...' : 'Generate Payroll'}
             </button>
+            {records.length > 0 && (
+              <button style={btnStyle('#0f766e')} onClick={() => setBankOpen(true)} title="The letter for the bank and the sheet for internet banking">
+                🏦 Pay through bank
+              </button>
+            )}
             {pendingCount > 0 && (
               <>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#374151' }}>
@@ -463,6 +470,10 @@ export default function PayrollPage() {
           )}
         </div>
       </div>
+
+      {bankOpen && (
+        <SalaryBankDialog month={selMonth} year={selYear} onClose={() => setBankOpen(false)} onPaid={() => refreshAfterPay(qc)} />
+      )}
 
       <ConfirmModal
         isOpen={!!confirming}

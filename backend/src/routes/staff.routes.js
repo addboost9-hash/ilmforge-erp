@@ -3,7 +3,7 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const { contains: ciContains, equals: ciEquals } = require('../utils/search');
 const bcrypt = require('bcryptjs');
-const { createStaff } = require('../services/staff.service');
+const { createStaff, staffBankData } = require('../services/staff.service');
 const { checkPhoto } = require('../utils/photo');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
@@ -212,6 +212,7 @@ router.put('/:id', wrap(async (req, res) => {
         ...(basicSalary  !== undefined && { basicSalary: basicSalary ? parseInt(basicSalary) : 0 }),
         ...(salaryType   !== undefined && { salaryType }),
         ...(photo                      && { photoUrl: photo.value }),
+        ...staffBankData(req.body),
       },
       include: { department: true },
     });

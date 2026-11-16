@@ -1,13 +1,14 @@
 /** Fees & Accounts Hub — collect, generate, defaulters, vouchers */
 import { lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { DollarSign, Wallet, AlertCircle, Receipt, FileText, Settings, Tag, Percent, TrendingUp, BookOpen, ScanLine, CreditCard, Globe, Heart, CalendarDays } from 'lucide-react';
+import { DollarSign, Wallet, AlertCircle, Receipt, FileText, Settings, Tag, Percent, TrendingUp, BookOpen, ScanLine, CreditCard, Globe, Heart, CalendarDays, Landmark } from 'lucide-react';
 
 const FeeDashboard   = lazy(() => import('../fees/FeeDashboardPage'));
 const FeeCollection  = lazy(() => import('../fees/FeeCollectionPage'));
 const FeeGenerate    = lazy(() => import('../fees/FeeGeneratePage'));
 const FeeDefaulters  = lazy(() => import('../fees/FeeDefaultersPage'));
 const FeeRegister    = lazy(() => import('../fees/FeeRegisterPage'));
+const FeeChallans    = lazy(() => import('../fees/FeeChallansPage'));
 const FeeStructure   = lazy(() => import('../fees/FeeStructurePage'));
 const FamilyVoucher  = lazy(() => import('../fees/FamilyVoucherPage'));
 const FeeTypes       = lazy(() => import('../fees/FeeTypesPage'));
@@ -49,6 +50,7 @@ const TABS = [
   { id: 'manage',          label: 'Manage Invoices',  icon: FileText,    render: L(InvoicesManage) },
   { id: 'collect',         label: 'Collect Fee',      icon: Wallet,      render: L(FeeCollection) },
   { id: 'register',        label: 'Fee Register',     icon: CalendarDays, render: L(FeeRegister) },
+  { id: 'challans',        label: 'Bank Challans',    icon: Landmark,    render: L(FeeChallans) },
   { id: 'generate',        label: 'Generate Fee',     icon: Receipt,     render: L(FeeGenerate) },
   { id: 'defaulters',      label: 'Defaulters',       icon: AlertCircle, render: L(FeeDefaulters) },
   { id: 'structure',       label: 'Fee Structure',    icon: Settings,    render: L(FeeStructure) },

@@ -276,6 +276,29 @@ const SECTIONS = [
         tip: 'The register opens on the session today falls in (or this calendar year). Pick another session or year at the top.',
       },
       {
+        title: 'Collect Several Months at Once',
+        steps: [
+          { n:1, text:'Collect Fee → choose a student → "Collect fee — choose the months": only the unpaid months, oldest first, all ticked' },
+          { n:2, text:'Untick the months not being paid now, and type the amount received' },
+          { n:3, text:'Each month shows what happens before saving: the oldest ticked month is paid first, the last one reached may be part paid, the rest stay as balance' },
+          { n:4, text:'Collect → one receipt with every month, what was paid now and what is still owed. Print receipt' },
+          { n:5, text:'"Print bank challan" (or "Print fee slip" with no bank account) prints just the ticked months' },
+        ],
+        tip: 'Click Collect on a month of the fee calendar to tick just that month.',
+      },
+      {
+        title: 'Bank Challans',
+        steps: [
+          { n:1, text:"Once: Settings → Payment Settings → the school's bank account, a campus's own account, the due day, the late fee and a note" },
+          { n:2, text:'Invoicing Hub → Bank Challans → Print challans: choose the class and due date → Make and print. One page per student, Bank / School / Parent copies, unpaid months only' },
+          { n:3, text:"The parent deposits it at the bank: the money goes straight into the school's account" },
+          { n:4, text:'Record deposits: type or scan the challan number → check the amount → Record deposit. The months are marked paid, oldest first' },
+          { n:5, text:'Bank statement: open the statement (Excel or CSV) from internet banking → Check → Record the matches at once' },
+          { n:6, text:'All challans: not paid yet, paid, part paid; print again or cancel one' },
+        ],
+        tip: 'Paying online, the parent writes the 12-digit challan number as the reference, so the statement finds it.',
+      },
+      {
         title: 'Defaulters',
         steps: [
           { n:1, text:'Fees → Defaulters (or /fees/defaulters)' },
@@ -387,6 +410,7 @@ const SECTIONS = [
           { n:4, text:'Generate and print the payslip; it is also available on the staff portal' },
           { n:5, text:'Bank transfer sheet export (HBL/UBL bulk salary)' },
           { n:6, text:'Payroll → set "Paid on" to the day the salary was really paid, then Pay (one person) or Pay all. The salary is also recorded under Expenses › Salaries on that day' },
+          { n:7, text:'Pay through bank: give staff their account (Staff → Edit → Salary bank account), then Payroll → Pay through bank → print the letter for the bank or download the sheet, and Mark as paid once the bank has paid' },
           { n:7, text:'An unpaid month can be edited (allowances, bonus, deductions); a paid month cannot. Staff who joined after the month are left out of it' },
         ],
         tip: 'Absence deductions can be calculated automatically from the attendance module.',

@@ -7,6 +7,8 @@ import { Search, DollarSign, Printer, X, CheckCircle, Receipt, Pencil, Ban } fro
 import { useDebounce } from '../../hooks/useDebounce';
 import EmptyState from '../../components/ui/EmptyState';
 import FeeYearCalendar from '../../components/fees/FeeYearCalendar';
+import CollectMonths from '../../components/fees/CollectMonths';
+import useFeeOptions from '../../components/fees/useFeeOptions';
 import { feePeriod } from '../../utils/feeMonth';
 
 const money = v => 'Rs. ' + ((v || 0) / 100).toLocaleString();
@@ -35,6 +37,7 @@ export default function FeeCollectionPage() {
   const [fixing, setFixing] = useState(null);
   const [fixForm, setFixForm] = useState({ amountPaid: '', reason: '' });
   const [paidAmount, setPaidAmount] = useState(0);
+  const { school: letterhead } = useFeeOptions();
 
   // ?student=<id>: opened from a student's record, with that student chosen.
   const [params] = useSearchParams();
@@ -302,6 +305,19 @@ export default function FeeCollectionPage() {
 
           {/* The year month by month: which months are paid (and when), which are pending. */}
           <FeeYearCalendar student={feeData.student || selected} invoices={feeData.invoices} onCollect={openPayModal} />
+
+          {/* The months a parent is paying: tick them, type what was received. */}
+          <div style={{ padding: 14, borderTop: '1px solid var(--border-light)' }}>
+            <CollectMonths
+              student={feeData.student || selected}
+              invoices={feeData.invoices || []}
+              school={letterhead}
+              onDone={() => {
+                qc.invalidateQueries({ queryKey: ['student-fee', selected?.id] });
+                qc.invalidateQueries({ queryKey: ['dashboard'] });
+              }}
+            />
+          </div>
 
           {/* Invoices Table */}
           <div className="table-wrap" style={{ borderRadius: 0, border: 'none' }}>

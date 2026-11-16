@@ -75,6 +75,22 @@ const slug12 = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0,
  *                        isActive: false adds someone who has already left
  *                        (for their past salary records) with the login off.
  */
+/**
+ * The bank account a salary is sent to, from a form: only the fields sent,
+ * trimmed; an emptied field clears it.
+ */
+const BANK_FIELDS = { bankName: 80, bankAccountTitle: 120, bankAccountNo: 40 };
+function staffBankData(input = {}) {
+  const out = {};
+  for (const [k, max] of Object.entries(BANK_FIELDS)) {
+    if (input[k] === undefined) continue;
+    const v = String(input[k] ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+    out[k] = v || null;
+  }
+  if (out.bankAccountNo) out.bankAccountNo = out.bankAccountNo.replace(/\s+/g, '').toUpperCase();
+  return out;
+}
+
 async function createStaff(ctx, input) {
   const { schoolId } = ctx;
   const {
@@ -140,6 +156,7 @@ async function createStaff(ctx, input) {
         joiningDate: joiningDate ? new Date(joiningDate) : null,
         basicSalary: basicSalary ? parseInt(basicSalary) : 0,
         salaryType: salaryType || 'monthly',
+        ...staffBankData(input),
         isActive,
       },
     });
@@ -177,4 +194,4 @@ async function createStaff(ctx, input) {
   };
 }
 
-module.exports = { createStaff, generateEmpCode, inferRole, STAFF_ROLES, ROLE_LABEL };
+module.exports = { createStaff, generateEmpCode, inferRole, staffBankData, STAFF_ROLES, ROLE_LABEL };

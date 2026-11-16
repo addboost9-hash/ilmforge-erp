@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
 const { validateSlug } = require('../utils/slug');
+const { cleanBank } = require('../services/feeCollect.service');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // ---------------------------------------------------------------------------
@@ -336,10 +337,33 @@ router.get('/payment', wrap(async (req, res) => {
 
 router.put('/payment', wrap(async (req, res) => {
   const incoming = req.body || {};
+  const before = (await getSchoolSettings(req.schoolId)).payment || {};
   const payment = {
-    bank: { ...DEFAULT_PAYMENT_SETTINGS.bank, ...(incoming.bank || {}) },
-    voucher: { ...DEFAULT_PAYMENT_SETTINGS.voucher, ...(incoming.voucher || {}) },
+    ...before,
+    bank: { ...DEFAULT_PAYMENT_SETTINGS.bank, ...(incoming.bank || before.bank || {}) },
+    voucher: { ...DEFAULT_PAYMENT_SETTINGS.voucher, ...(incoming.voucher || before.voucher || {}) },
   };
+  // A campus's own account, where its fees are deposited (else the school's).
+  if (incoming.campusBanks !== undefined) {
+    const campuses = await prisma.campus.findMany({ where: { schoolId: req.schoolId }, select: { id: true } });
+    const ids = new Set(campuses.map((c) => String(c.id)));
+    const banks = {};
+    for (const [id, b] of Object.entries(incoming.campusBanks || {})) {
+      if (!ids.has(String(id)) || !b) continue;
+      const clean = cleanBank(b);
+      if (clean.accountNumber || clean.bankName) banks[id] = clean;
+    }
+    payment.campusBanks = banks;
+  }
+  // Challans: the due day of the month, the late fee after it (paisa), a note.
+  if (incoming.challan !== undefined) {
+    const c = incoming.challan || {};
+    const day = parseInt(c.dueDay, 10);
+    const late = Math.round(Number(c.lateFee) || 0);
+    if (!(day >= 1 && day <= 28)) return res.status(400).json({ success: false, message: 'The due day must be from 1 to 28.' });
+    if (late < 0 || late > 100000000) return res.status(400).json({ success: false, message: 'The late fee must be 0 or more.' });
+    payment.challan = { dueDay: day, lateFee: late, note: String(c.note || '').trim().slice(0, 300) };
+  }
   const settings = await setSchoolSettings(req.schoolId, { payment });
   res.json({ success: true, data: settings.payment });
 }));

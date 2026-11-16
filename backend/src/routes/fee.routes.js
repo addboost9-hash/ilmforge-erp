@@ -8,6 +8,7 @@ const { monthNumber, monthKeys, monthLabel, byPeriodDesc, feeKind } = require('.
 const { sendSMS } = require('../services/sms.service');
 const { sendFeePaidNotification } = require('../services/whatsapp.service');
 const { duesByStudent } = require('../services/scheduler.service');
+const { oldestFirst, applyPayments, bad } = require('../services/feeCollect.service');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 /* Pakistan keeps one clock all year, UTC+5. A date picked on a screen is a
@@ -528,6 +529,83 @@ router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
     message: backdated ? `Payment recorded on ${dmy(pktDay(payment.paymentDate))}.` : 'Payment recorded successfully.',
   });
 }));
+
+// POST /api/v1/fees/payments/months — fee received for several months at once.
+// Body: { studentId, invoiceIds: [..], amountPaid (paisa), method, notifyVia,
+//         paymentDate, remarks }
+// The amount pays the chosen bills oldest month first, each in full before
+// the next: the last one reached may be part paid, and the rest keep their
+// balance. One receipt number for all of it.
+const COLLECT_METHODS = ['cash', 'bank', 'online', 'card', 'cheque', 'easypaisa', 'jazzcash'];
+router.post('/payments/months', requireFinanceRole, wrap(async (req, res) => {
+  const { schoolId } = req;
+  const { studentId, invoiceIds, amountPaid, method = 'cash', notifyVia = 'whatsapp_sms', paymentDate, remarks } = req.body || {};
+  const sid = parseInt(studentId);
+  const ids = [...new Set((Array.isArray(invoiceIds) ? invoiceIds : []).map(Number).filter(Number.isInteger))];
+  const paid = Number(amountPaid);
+  if (!sid || !ids.length) return res.status(400).json({ success: false, message: 'Choose the student and at least one month.' });
+  if (ids.length > 60) return res.status(400).json({ success: false, message: 'Choose at most 60 bills at a time.' });
+  if (!Number.isInteger(paid) || paid <= 0) return res.status(400).json({ success: false, message: 'Enter the amount received.' });
+  if (!COLLECT_METHODS.includes(method)) return res.status(400).json({ success: false, message: `Payment method must be one of: ${COLLECT_METHODS.join(', ')}.` });
+  const note = remarks ? String(remarks).replace(/\s+/g, ' ').trim().slice(0, 200) || null : null;
+  const enteredAt = new Date();
+  const when = pastDate(paymentDate, { label: 'Payment date', now: enteredAt });
+  if (when.error) return res.status(400).json({ success: false, message: when.error });
+  const backdated = when.date !== enteredAt;
+
+  const student = await prisma.student.findFirst({ where: { id: sid, schoolId, deletedAt: null }, include: { class: true } });
+  if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+
+  const receiptNo = `RCP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  let lines;
+  try {
+    lines = await prisma.$transaction(async (tx) => {
+      const invoices = await tx.feeInvoice.findMany({ where: { schoolId, studentId: sid, id: { in: ids } } });
+      if (invoices.length !== ids.length) throw bad("Some of the chosen bills are not this student's.");
+      const owing = invoices.filter((i) => i.dueAmount > 0).sort(oldestFirst);
+      if (!owing.length) throw bad('The chosen months are already paid.');
+      const total = owing.reduce((s, i) => s + i.dueAmount, 0);
+      if (paid > total) throw bad(`${rs(paid)} is more than the chosen months owe (${rs(total)}). Tick more months, or enter ${rs(total)}.`);
+      const out = await applyPayments(tx, {
+        schoolId, studentId: sid, invoices: owing, amount: paid,
+        payment: { method, receivedBy: req.user.id, notifiedVia: notifyVia, receiptNo, paymentDate: when.date, remarks: note },
+      });
+      if (backdated) {
+        await tx.auditLog.create({
+          data: {
+            schoolId, userId: req.user.id, action: 'PAYMENT_BACKDATED', resource: 'fee_payment', resourceId: sid,
+            details: JSON.stringify({ receiptNo, paymentDate: pktDay(when.date), enteredAt: enteredAt.toISOString() }),
+          },
+        });
+      }
+      return out;
+    });
+  } catch (err) {
+    if (err.status === 400 || err.status === 409) return res.status(err.status).json({ success: false, message: err.message });
+    throw err;
+  }
+
+  const left = await prisma.feeInvoice.aggregate({ where: { schoolId, studentId: sid, dueAmount: { gt: 0 } }, _sum: { dueAmount: true } });
+  const paidLines = lines.filter((l) => l.paid > 0);
+
+  if (notifyVia !== 'none') {
+    const school = await prisma.school.findUnique({ where: { id: schoolId }, select: { name: true } });
+    sendFeePaidNotification({
+      schoolId, parentPhone: student.emergencyPhone || '', parentName: student.fatherName,
+      studentName: student.name, className: student.class?.name, feeTitle: paidLines.length > 1 ? 'Fee' : paidLines[0]?.feeTitle,
+      amount: paid / 100, month: paidLines.map((l) => l.period).join(', '), receiptNo, schoolName: school?.name || 'School',
+    }).catch(() => {});
+  }
+
+  res.json({
+    success: true,
+    data: { receiptNo, paymentDate: when.date, backdated, amountPaid: paid, lines, balance: left._sum.dueAmount || 0 },
+    message: `${rs(paid)} received for ${paidLines.length} bill${paidLines.length === 1 ? '' : 's'}${backdated ? `, filed on ${dmy(pktDay(when.date))}` : ''}.`,
+  });
+}));
+
+// Bank challans: printed, deposited, matched with the bank statement.
+router.use('/challans', requireFinanceRole, require('./feeChallan.routes'));
 
 // GET /api/v1/fees/defaulters
 // FIX: added pagination via limit/offset query params to prevent unbounded result sets.

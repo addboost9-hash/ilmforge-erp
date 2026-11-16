@@ -47,6 +47,7 @@ import FeeCollectionPage from './pages/fees/FeeCollectionPage';
 import FeeGeneratePage from './pages/fees/FeeGeneratePage';
 import FeeDefaultersPage from './pages/fees/FeeDefaultersPage';
 import FeeRegisterPage from './pages/fees/FeeRegisterPage';
+import FeeChallansPage from './pages/fees/FeeChallansPage';
 import RollNumbersPage from './pages/students/RollNumbersPage';
 import AttendanceRegisterPage from './pages/attendance/AttendanceRegisterPage';
 import FeeStructurePage from './pages/fees/FeeStructurePage';
@@ -443,6 +444,7 @@ export default function App() {
             <Route path="/fees/generate"              element={<FeeGeneratePage />} />
             <Route path="/fees/defaulters"            element={<FeeDefaultersPage />} />
             <Route path="/fees/register"              element={<FeeRegisterPage />} />
+            <Route path="/fees/challans"              element={<FeeChallansPage />} />
             <Route path="/fees/structure"             element={<FeeStructurePage />} />
 
             {/* Attendance */}

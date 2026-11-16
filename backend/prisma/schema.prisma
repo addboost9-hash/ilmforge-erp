@@ -285,6 +285,10 @@ model Staff {
   joiningDate        DateTime?
   salaryType         String              @default("monthly") // monthly|hourly|lecture
   basicSalary        Int                 @default(0)
+  // Where the salary is sent when it is paid through the bank.
+  bankName           String?
+  bankAccountTitle   String?
+  bankAccountNo      String? // account number or IBAN
   isActive           Boolean             @default(true)
   notes              String?
   createdAt          DateTime            @default(now())
@@ -378,6 +382,35 @@ model FeePayment {
   @@index([schoolId, studentId])
   @@index([invoiceId])
   @@index([schoolId, importBatch])
+}
+
+// A fee challan: the slip a parent takes to the bank (or the counter). It
+// lists the student's unpaid months as they stood when it was printed; the
+// money goes into the school's own account, and the deposit is recorded
+// against the challan number, which pays those months oldest first.
+model FeeChallan {
+  id         Int       @id @default(autoincrement())
+  schoolId   Int
+  campusId   Int?
+  studentId  Int
+  challanNo  String
+  itemsJson  String // [{ invoiceId, feeTitle, month, year, due }] as printed
+  amount     Int       @default(0) // payable by the due date, paisa
+  lateFee    Int       @default(0) // added when paid after the due date
+  dueDate    DateTime
+  status     String    @default("open") // open|paid|part_paid|replaced|cancelled
+  paidAmount Int       @default(0)
+  paidOn     DateTime?
+  bankRef    String?
+  receiptNo  String?
+  issuedBy   Int?
+  recordedBy Int?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([schoolId, challanNo])
+  @@index([schoolId, studentId])
+  @@index([schoolId, status])
 }
 
 model Expense {

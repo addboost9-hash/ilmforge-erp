@@ -39,11 +39,13 @@ import {
 } from 'lucide-react';
 import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
-import { printFeeVoucher } from '../../components/PortalUtils';
-import { feePeriod, byPeriodDesc } from '../../utils/feeMonth';
+import { feePeriod } from '../../utils/feeMonth';
 import { toPaisa } from '../../utils/currency';
 import FeeYearCalendar from '../../components/fees/FeeYearCalendar';
+import CollectMonths from '../../components/fees/CollectMonths';
+import useFeeOptions from '../../components/fees/useFeeOptions';
 import FeeRegisterPage from '../fees/FeeRegisterPage';
+import FeeChallansPage from '../fees/FeeChallansPage';
 
 /* ── Enterprise theme tokens ─────────────────────────────── */
 const NAVY = '#1B2F6E';
@@ -201,6 +203,7 @@ const TABS = [
   { id: 'balancesheet', label: 'Daily Balancesheet', icon: BookOpen        },
   { id: 'collection',   label: 'Fee Collection',     icon: Wallet          },
   { id: 'register',     label: 'Fee Register',       icon: CalendarDays    },
+  { id: 'challans',     label: 'Bank Challans',      icon: Landmark        },
   { id: 'expenses',     label: 'Expense Log',        icon: TrendingDown    },
   { id: 'history',      label: 'Payment History',    icon: History         },
   { id: 'discounts',    label: '🎓 Scholarships',    icon: Receipt         },
@@ -901,12 +904,10 @@ function BalancesheetTab({ user }) {
 function FeeCollectionTab({ user, initialStudent, onOpenRegister }) {
   const [search, setSearch] = useState(initialStudent?.name || '');
   const [selectedStudent, setSelectedStudent] = useState(initialStudent || null);
-  const [payAmount, setPayAmount] = useState('');
-  const [payNote, setPayNote] = useState('');
-  const [payDate, setPayDate] = useState(todayISO());
-  const [payingId, setPayingId] = useState(null);
+  // "Collect" on a month of the calendar ticks just that month below.
+  const [focusId, setFocusId] = useState(null);
   const queryClient = useQueryClient();
-  const backdated = payDate && payDate !== todayISO();
+  const { school: letterhead } = useFeeOptions();
 
   const { data: students = [], isFetching } = useQuery({
     queryKey: ['student-search', search],
@@ -919,86 +920,25 @@ function FeeCollectionTab({ user, initialStudent, onOpenRegister }) {
     enabled: search.trim().length >= 2,
   });
 
-  const { data: invoices = [], isLoading: loadingInvoices } = useQuery({
-    queryKey: ['student-invoices', selectedStudent?.id],
-    queryFn: () =>
-      api.get('/fees/invoices', { params: { studentId: selectedStudent.id, limit: 50 } }).then((r) => r.data.data || []),
-    enabled: !!selectedStudent?.id,
-    staleTime: 30_000,
-    retry: false,
-  });
-
-  // Every bill of the student with its payments, for the fee calendar.
-  const { data: feeYearData } = useQuery({
+  // Every bill of the student with its payments: the fee calendar and the months to collect.
+  const { data: feeYearData, isLoading: loadingInvoices } = useQuery({
     queryKey: ['student-fee', selectedStudent?.id],
     queryFn: () => api.get('/fees/student/' + selectedStudent.id).then((r) => r.data.data),
     enabled: !!selectedStudent?.id,
     retry: false,
   });
-  // "Collect" on a month of the calendar opens that bill's payment below.
   const collectFromCalendar = (inv) => {
-    setPayingId(inv.id);
-    setPayAmount('');
-    setPayDate(todayISO());
-    payMutation.reset();
-    setTimeout(() => document.getElementById(`acc-inv-${inv.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+    setFocusId(inv.id);
+    setTimeout(() => document.querySelector(`[data-month-row="${inv.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
   };
-
-  const payMutation = useMutation({
-    // FIX: POST /fees/invoices/:id/pay does not exist on the backend — the
-    // real endpoint is POST /fees/payments with { invoiceId, amountPaid,
-    // ... } (see fee.routes.js). Every "Confirm Payment" click here 404'd,
-    // making the Accountant Portal's core "Collect Fee" feature a dead end.
-    mutationFn: ({ invoiceId, amount, note }) => {
-      // `amount` is what the accountant typed, in rupees; `amountPaisa` is the
-      // full due when they left the box empty. The typed figure used to be
-      // sent as paisa, so a Rs 3,500 payment was recorded as Rs 35.
-      const paisa = amount.paisa != null
-        ? amount.paisa
-        : Math.round(Number(amount.rupees) * 100);
-      if (!paisa || paisa <= 0) throw new Error('Enter a valid payment amount');
-      if (paisa > 1000000 * 100) throw new Error('Amount seems too high — please verify');
-      return api.post('/fees/payments', {
-        invoiceId, amountPaid: paisa, method: 'cash', remarks: note || undefined,
-        // Money received on an earlier day is filed on that day; the parent is
-        // not sent a "received today" message for it.
-        paymentDate: payDate,
-        ...(backdated && { notifyVia: 'none' }),
-      });
-    },
-    onSuccess: (res, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['student-invoices', selectedStudent?.id] });
-      queryClient.invalidateQueries({ queryKey: ['student-fee', selectedStudent?.id] });
-      queryClient.invalidateQueries({ queryKey: ['bs-sheet'] });
-      queryClient.invalidateQueries({ queryKey: ['last-balancesheet'] });
-      queryClient.invalidateQueries({ queryKey: ['payment-history'] });
-      // Auto-print receipt
-      const inv = invoices.find(i => i.id === vars.invoiceId);
-      if (inv && selectedStudent) {
-        // The receipt states what is actually left to pay. It used to say
-        // "paid, nothing due" even after a part payment, and named the
-        // school "IlmForge School".
-        const result = res?.data?.data || {};
-        const { school: authSchool } = useAuthStore.getState();
-        printFeeVoucher({
-          student: selectedStudent,
-          invoice: {
-            ...inv,
-            status: result.newStatus || inv.status,
-            dueAmount: result.newDue != null ? result.newDue : inv.dueAmount,
-          },
-          school: { name: authSchool?.name || localStorage.getItem('registeredSchoolName') || 'School' },
-        });
-      }
-      setPayAmount('');
-      setPayNote('');
-      setPayDate(todayISO());
-      setPayingId(null);
-    },
-  });
-
-  // Newest month first: text order put "9" after "12".
-  const unpaidInvoices = invoices.filter((i) => i.status !== 'paid').sort(byPeriodDesc);
+  const afterCollect = () => {
+    queryClient.invalidateQueries({ queryKey: ['student-invoices', selectedStudent?.id] });
+    queryClient.invalidateQueries({ queryKey: ['student-fee', selectedStudent?.id] });
+    queryClient.invalidateQueries({ queryKey: ['bs-sheet'] });
+    queryClient.invalidateQueries({ queryKey: ['last-balancesheet'] });
+    queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+    setFocusId(null);
+  };
 
   return (
     <div>
@@ -1038,7 +978,7 @@ function FeeCollectionTab({ user, initialStudent, onOpenRegister }) {
         )}
       </div>
 
-      {/* Invoices */}
+      {/* The student's year, and the months to collect */}
       {selectedStudent && (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '16px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -1047,7 +987,7 @@ function FeeCollectionTab({ user, initialStudent, onOpenRegister }) {
               <div style={{ fontSize: 12, color: '#64748B' }}>Roll {selectedStudent.rollNo} · {selectedStudent.class?.name || selectedStudent.className}</div>
             </div>
             <button aria-label="Close"
-              onClick={() => { setSelectedStudent(null); setSearch(''); setPayingId(null); }}
+              onClick={() => { setSelectedStudent(null); setSearch(''); setFocusId(null); }}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
             >
               <X size={18} />
@@ -1060,92 +1000,16 @@ function FeeCollectionTab({ user, initialStudent, onOpenRegister }) {
             </div>
           )}
 
-          {loadingInvoices ? (
-            <div style={{ color: '#64748B', fontSize: 13 }}>Loading invoices…</div>
-          ) : unpaidInvoices.length === 0 ? (
-            <div style={{ background: '#DCFCE7', color: '#065F46', borderRadius: 8, padding: '12px 14px', fontSize: 13, fontWeight: 700 }}>
-              All invoices cleared — no dues outstanding.
-            </div>
+          {loadingInvoices || !feeYearData ? (
+            <div style={{ color: '#64748B', fontSize: 13 }}>Loading the bills…</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {unpaidInvoices.map((inv) => (
-                <div key={inv.id} id={`acc-inv-${inv.id}`} style={{ border: `1px solid ${payingId === inv.id ? NAVY : '#E2E8F0'}`, borderRadius: 10, padding: '12px 14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: payingId === inv.id ? 12 : 0 }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: NAVY }}>{feeLabel(inv)}</div>
-                      <div style={{ fontSize: 12, color: '#64748B' }}>
-                        Due: {Rs(inv.dueAmount || 0)} · Status:{' '}
-                        <span style={{ fontWeight: 700, color: inv.status === 'partial' ? '#D97706' : '#B91C1C', textTransform: 'capitalize' }}>
-                          {inv.status}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => { setPayingId(payingId === inv.id ? null : inv.id); setPayDate(todayISO()); payMutation.reset(); }}
-                      style={{ background: NAVY, color: '#fff', border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
-                    >
-                      {payingId === inv.id ? 'Cancel' : 'Pay Now'}
-                    </button>
-                  </div>
-
-                  {payingId === inv.id && (
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                      <div style={{ flex: '1 1 120px' }}>
-                        <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Amount (Rs.)</div>
-                        <input
-                          type="number"
-                          value={payAmount}
-                          onChange={(e) => setPayAmount(e.target.value)}
-                          placeholder={String((inv.dueAmount || 0) / 100)}
-                          style={{ width: '100%', border: '1px solid #CBD5E1', borderRadius: 7, padding: '7px 10px', fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }}
-                        />
-                      </div>
-                      <div style={{ flex: '0 1 150px' }}>
-                        <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Payment date</div>
-                        <input
-                          type="date"
-                          value={payDate}
-                          max={todayISO()}
-                          onChange={(e) => setPayDate(e.target.value || todayISO())}
-                          aria-label="Payment date"
-                          style={{ width: '100%', border: '1px solid #CBD5E1', borderRadius: 7, padding: '6px 8px', fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }}
-                        />
-                      </div>
-                      <div style={{ flex: '2 1 160px' }}>
-                        <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Note (optional)</div>
-                        <input
-                          value={payNote}
-                          onChange={(e) => setPayNote(e.target.value)}
-                          placeholder="Partial, advance, etc."
-                          style={{ width: '100%', border: '1px solid #CBD5E1', borderRadius: 7, padding: '7px 10px', fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }}
-                        />
-                      </div>
-                      <button
-                        onClick={() => payMutation.mutate({
-                          invoiceId: inv.id,
-                          amount: payAmount ? { rupees: payAmount } : { paisa: inv.dueAmount },
-                          note: payNote,
-                        })}
-                        disabled={payMutation.isPending}
-                        style={{ background: payMutation.isPending ? '#94A3B8' : '#059669', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 16px', fontWeight: 700, fontSize: 13, cursor: payMutation.isPending ? 'not-allowed' : 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
-                      >
-                        {payMutation.isPending ? 'Posting…' : 'Confirm Payment'}
-                      </button>
-                      {backdated && (
-                        <div style={{ flexBasis: '100%', fontSize: 12, color: '#92400E' }}>
-                          Filed on {dmy(payDate)}, the day the money was received. The parent is not sent a message for an earlier date.
-                        </div>
-                      )}
-                      {payMutation.isError && (
-                        <div role="alert" style={{ flexBasis: '100%', fontSize: 12, color: '#B91C1C' }}>
-                          {errorText(payMutation.error, 'The payment could not be saved. Try again.')}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+            <CollectMonths
+              student={feeYearData.student || selectedStudent}
+              invoices={feeYearData.invoices || []}
+              school={letterhead}
+              focusInvoiceId={focusId}
+              onDone={afterCollect}
+            />
           )}
         </div>
       )}
@@ -1662,6 +1526,7 @@ export default function AccountantPortalPage() {
             onOpenStudent={(s) => { setJump({ student: { ...s, class: { name: s.className }, section: { name: s.sectionName } } }); setActiveTab('collection'); }}
           />
         )}
+        {activeTab === 'challans' && <FeeChallansPage />}
         {activeTab === 'expenses' && <ExpenseLogTab user={user} />}
         {activeTab === 'history' && <PaymentHistoryTab user={user} />}
         {activeTab === 'discounts' && <ScholarshipTab />}

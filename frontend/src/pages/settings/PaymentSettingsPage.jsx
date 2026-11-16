@@ -4,9 +4,21 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../../api/client';
 import { Save, CreditCard, Building2, FileText, Globe, CheckCircle } from 'lucide-react';
 
+const BANK_FIELDS = [
+  { label:'Bank Name', key:'bankName', placeholder:'e.g. Meezan Bank, HBL, UBL' },
+  { label:'Branch', key:'branch', placeholder:'e.g. Main Branch, Rawalpindi' },
+  { label:'Branch Code (optional)', key:'branchCode', placeholder:'e.g. 0123' },
+  { label:'Account Title', key:'accountTitle', placeholder:'School Account Title' },
+  { label:'Account Number / IBAN', key:'accountNumber', placeholder:'PK12ABCD0000000000000000' },
+];
+const EMPTY_BANK = { bankName:'', branch:'', branchCode:'', accountTitle:'', accountNumber:'' };
+
 export default function PaymentSettingsPage() {
   const [activeTab, setActiveTab] = useState('bank');
-  const [bankForm, setBankForm] = useState({ bankName:'', branch:'', accountTitle:'', accountNumber:'' });
+  const [bankForm, setBankForm] = useState(EMPTY_BANK);
+  // A campus's own account (else the school's): { [campusId]: {...} }
+  const [campusBanks, setCampusBanks] = useState({});
+  const [challan, setChallan] = useState({ dueDay: 10, lateFee: '', note: '' });
   const [voucherForm, setVoucherForm] = useState({
     headerText: 'School Fee Voucher',
     footerText: 'Thank you for timely payment. Keep this voucher as your receipt.',
@@ -22,20 +34,37 @@ export default function PaymentSettingsPage() {
     queryFn: () => api.get('/settings/payment').then(r => r.data.data),
   });
 
+  const { data: campuses = [] } = useQuery({
+    queryKey: ['settings-school-campuses'],
+    queryFn: () => api.get('/settings/school').then(r => r.data.data?.campuses || []),
+  });
+
   useEffect(() => {
     if (!paymentSettings) return;
     if (paymentSettings.bank) setBankForm(prev => ({ ...prev, ...paymentSettings.bank }));
     if (paymentSettings.voucher) setVoucherForm(prev => ({ ...prev, ...paymentSettings.voucher }));
+    if (paymentSettings.campusBanks) setCampusBanks(paymentSettings.campusBanks);
+    if (paymentSettings.challan) {
+      const c = paymentSettings.challan;
+      setChallan({ dueDay: c.dueDay || 10, lateFee: c.lateFee ? String(Math.round(c.lateFee / 100)) : '', note: c.note || '' });
+    }
   }, [paymentSettings]);
 
+  const dueDayOk = Number(challan.dueDay) >= 1 && Number(challan.dueDay) <= 28;
   const save = useMutation({
-    mutationFn: () => api.put('/settings/payment', { bank: bankForm, voucher: voucherForm }),
+    mutationFn: () => {
+      if (!dueDayOk) throw new Error('The challan due day must be from 1 to 28.');
+      return api.put('/settings/payment', {
+        bank: bankForm, voucher: voucherForm, campusBanks,
+        challan: { dueDay: Number(challan.dueDay), lateFee: Math.round((Number(challan.lateFee) || 0) * 100), note: challan.note },
+      });
+    },
     onSuccess: () => {
       setSaved(true);
       toast.success('Payment settings saved!');
       setTimeout(() => setSaved(false), 2000);
     },
-    onError: err => toast.error(err.response?.data?.message || 'Failed to save payment settings'),
+    onError: err => toast.error(err.response?.data?.message || err.message || 'Failed to save payment settings'),
   });
 
   return (
@@ -70,19 +99,47 @@ export default function PaymentSettingsPage() {
               <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:'#1E3A5F' }}>Bank Account Details</h3>
             </div>
             <p style={{ fontSize:12.5, color:'#64748B', marginBottom:16, lineHeight:1.6 }}>
-              These details will be printed on fee vouchers so parents can deposit fees at the bank.
+              Printed on every bank challan, so parents deposit the fee straight into this account. Leave it empty
+              if the school does not take fees through a bank: the challan then prints as a slip paid at the school office.
             </p>
-            {[
-              { label:'Bank Name', key:'bankName', placeholder:'e.g. Meezan Bank, HBL, UBL' },
-              { label:'Branch', key:'branch', placeholder:'e.g. Main Branch, Rawalpindi' },
-              { label:'Account Title', key:'accountTitle', placeholder:'School Account Title' },
-              { label:'Account Number / IBAN', key:'accountNumber', placeholder:'PK12ABCD0000000000000000' },
-            ].map(f => (
+            {BANK_FIELDS.map(f => (
               <div key={f.key} className="form-group">
                 <label className="form-label">{f.label}</label>
-                <input className="form-input" placeholder={f.placeholder} value={bankForm[f.key]} onChange={e=>setBankForm({...bankForm,[f.key]:e.target.value})}/>
+                <input className="form-input" aria-label={`School ${f.label}`} placeholder={f.placeholder} value={bankForm[f.key] || ''} onChange={e=>setBankForm({...bankForm,[f.key]:e.target.value})}/>
               </div>
             ))}
+          </div>
+          <div className="card" style={{ gridColumn:'1 / -1' }} aria-label="Campus accounts">
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+              <Building2 size={15} color="#0D9488"/>
+              <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:'#1E3A5F' }}>Campus Accounts</h3>
+            </div>
+            <p style={{ fontSize:12.5, color:'#64748B', marginBottom:12, lineHeight:1.6 }}>
+              A campus with its own account gets it on its students' challans; the others use the school account above.
+            </p>
+            {campuses.length === 0 && <div style={{ fontSize:12.5, color:'#64748B' }}>No campus yet.</div>}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:12 }}>
+              {campuses.map(c => {
+                const own = campusBanks[c.id];
+                return (
+                  <div key={c.id} style={{ border:'1px solid #E2E8F0', borderRadius:9, padding:12, background: own ? '#F8FAFF' : '#FAFAFA' }}>
+                    <label style={{ display:'flex', alignItems:'center', gap:8, fontWeight:700, fontSize:13, color:'#1E3A5F', cursor:'pointer' }}>
+                      <input type="checkbox" checked={!!own} aria-label={`${c.name} has its own account`}
+                        onChange={e => setCampusBanks(b => { const n = { ...b }; if (e.target.checked) n[c.id] = { ...EMPTY_BANK }; else delete n[c.id]; return n; })}/>
+                      {c.name}{c.isMain ? ' (main)' : ''}: its own account
+                    </label>
+                    {!own && <div style={{ fontSize:12, color:'#64748B', marginTop:6 }}>Uses the school account{bankForm.bankName ? `: ${bankForm.bankName} ${bankForm.accountNumber}` : ''}.</div>}
+                    {own && BANK_FIELDS.map(f => (
+                      <div key={f.key} className="form-group" style={{ marginTop:8, marginBottom:0 }}>
+                        <label className="form-label">{f.label}</label>
+                        <input className="form-input" aria-label={`${c.name} ${f.label}`} placeholder={f.placeholder} value={own[f.key] || ''}
+                          onChange={e => setCampusBanks(b => ({ ...b, [c.id]: { ...b[c.id], [f.key]: e.target.value } }))}/>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
           </div>
           <div className="card">
             <h3 style={{ fontSize:13.5, fontWeight:700, color:'#1E3A5F', marginBottom:12 }}>Preview on Voucher</h3>
@@ -90,13 +147,39 @@ export default function PaymentSettingsPage() {
               <div style={{ textAlign:'center', fontWeight:700, marginBottom:8 }}>BANK DEPOSIT SLIP</div>
               <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
                 <div><span style={{ color:'#64748B' }}>Bank: </span>{bankForm.bankName||'—'}</div>
-                <div><span style={{ color:'#64748B' }}>Branch: </span>{bankForm.branch||'—'}</div>
+                <div><span style={{ color:'#64748B' }}>Branch: </span>{bankForm.branch||'—'}{bankForm.branchCode ? ` (${bankForm.branchCode})` : ''}</div>
                 <div><span style={{ color:'#64748B' }}>A/C Title: </span>{bankForm.accountTitle||'—'}</div>
                 <div><span style={{ color:'#64748B' }}>A/C No: </span>{bankForm.accountNumber||'—'}</div>
               </div>
             </div>
             <div className="alert alert-info" style={{ marginTop:14 }}>
-              <span>ℹ️ Bank details appear at the bottom of every fee voucher automatically.</span>
+              <span>ℹ️ Printed on bank challans: Fees › Bank Challans, and "Print bank challan" on Collect Fee.</span>
+            </div>
+          </div>
+          <div className="card" style={{ gridColumn:'1 / -1' }} aria-label="Challan settings">
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+              <FileText size={15} color="#0D9488"/>
+              <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:'#1E3A5F' }}>Bank Challan</h3>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:12 }}>
+              <div className="form-group">
+                <label className="form-label">Due day of the month</label>
+                <input className="form-input" type="number" min="1" max="28" aria-label="Challan due day" value={challan.dueDay}
+                  onChange={e => setChallan(c => ({ ...c, dueDay: e.target.value }))} style={!dueDayOk ? { borderColor:'#DC2626' } : undefined}/>
+                <div style={{ fontSize:11.5, color:'#64748B', marginTop:4 }}>The due date a new challan starts with (it can be changed when printing).</div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Late fee after the due date (Rs)</label>
+                <input className="form-input" type="number" min="0" aria-label="Late fee" placeholder="0 = no late fee" value={challan.lateFee}
+                  onChange={e => setChallan(c => ({ ...c, lateFee: e.target.value }))}/>
+                <div style={{ fontSize:11.5, color:'#64748B', marginTop:4 }}>One fixed amount, printed as "payable after the due date".</div>
+              </div>
+              <div className="form-group" style={{ gridColumn:'span 2' }}>
+                <label className="form-label">Note on the challan (optional)</label>
+                <textarea className="form-input form-textarea" maxLength={300} aria-label="Challan note" value={challan.note}
+                  placeholder="e.g. Deposit at any Meezan Bank branch. Online: write the challan number as the reference."
+                  onChange={e => setChallan(c => ({ ...c, note: e.target.value }))}/>
+              </div>
             </div>
           </div>
         </div>
@@ -122,7 +205,7 @@ export default function PaymentSettingsPage() {
               <select aria-label="Number of Copies" className="form-select" value={voucherForm.copies} onChange={e=>setVoucherForm({...voucherForm,copies:e.target.value})}>
                 <option value="1">1 Copy</option>
                 <option value="2">2 Copies (Bank + School)</option>
-                <option value="3">3 Copies</option>
+                <option value="3">3 Copies (Bank + School + Parent)</option>
               </select>
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
