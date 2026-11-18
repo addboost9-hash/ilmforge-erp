@@ -33,7 +33,7 @@ const DEMO_SCRIPT = [
   { step: 5,  action: 'Fee Voucher',      detail: 'Fees → Generate → Print 3-copy voucher (Bank / School / Parent) with HBL details', time: '2 min' },
   { step: 6,  action: 'Attendance',       detail: 'Attendance → Mark class attendance → show auto-SMS to parents toggle (03XX numbers)', time: '2 min' },
   { step: 7,  action: 'Exam & Result',    detail: 'Exams Hub → Create exam → Enter marks → View BISE result card + Merit List', time: '3 min' },
-  { step: 8,  action: 'ID Cards',         detail: 'Students → ID Cards → Print with school logo & QR code, batch 30 at a time', time: '1 min' },
+  { step: 8,  action: 'ID Cards',         detail: 'Students → ID Cards → choose one of 11 designs (student, teacher and staff cards) → Print with school logo, photo, barcode & QR code', time: '1 min' },
   { step: 9,  action: 'Parent Portal',    detail: 'Portal Management → Email/SMS credentials → open the parent view (fees + attendance)', time: '2 min' },
   { step: 10, action: 'Reports',          detail: 'Reports → Daily balance sheet → Fee defaulters → Export Excel', time: '2 min' },
   { step: 11, action: 'New Features',     detail: 'Show Parent Wallet top-up, POS quick-sale, and Homework Diary entry', time: '3 min' },

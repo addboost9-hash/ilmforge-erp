@@ -1,8 +1,8 @@
 /**
- * IlmForge — Professional ID Card Printing
- * 5 premium templates matching reference designs
- * Portrait & Landscape orientations
- * School logo, QR code, barcode, photo, wave designs
+ * IlmForge — ID card printing for students, teachers and staff.
+ * 11 designs (cardTemplates.js), portrait and landscape, each with a front
+ * and a back: school logo, photo, a scannable barcode and QR code. The
+ * design, colours and "valid until" chosen are remembered on this computer.
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -12,7 +12,8 @@ import api from '../../api/client';
 import { compressPhoto, compressLogo, pickProblem, PICK_RULES } from '../../utils/photo';
 import useAuthStore from '../../store/auth.store';
 import { schoolLogoOf, logoOnlyInBrowser } from '../../utils/schoolBranding';
-import { TEMPLATES, templateById, DEFAULT_RULES } from './cardTemplates';
+import { TEMPLATES, templateById } from './cardTemplates';
+import { cardCode, buildCard, qrDataUrlsFor, buildPrintHTML } from './cardBuild';
 import {
   CreditCard, Users, Award, Printer, Search, Settings,
   Palette, Camera, X, CheckSquare, Eye, RotateCcw
@@ -30,225 +31,28 @@ const PRESETS = [
   { name:'Dark',   p:'#111827', s:'#F59E0B' },
 ];
 
-/* ─── QR code ────────────────────────────────────
-   Rendered from a pre-generated data-URL map (see qrDataUrlsFor below).
-   The previous version drew a fixed decorative pattern — the same image for
-   every person, encoding nothing — so the "QR code" on a printed card was
-   just art. */
-const qrSVG = (val, size = 40, qrMap = null) => {
-  const src = qrMap?.[val];
-  if (src) {
-    return `<img src="${src}" width="${size}" height="${size}" alt="QR ${val}" style="display:block;background:#fff;border-radius:2px;"/>`;
-  }
-  // No QR available (generation failed) — leave the space blank rather than
-  // printing a fake code that scanners will reject.
-  return `<div style="width:${size}px;height:${size}px;"></div>`;
-};
+/* The design, colours and validity, remembered on this computer. */
+const remembered = (k, d) => { try { return localStorage.getItem(`idcard_${k}`) || d; } catch { return d; } };
+const remember = (k, v) => { try { localStorage.setItem(`idcard_${k}`, v); } catch { /* not kept */ } };
 
-/* ─── Code 39 barcode ─────────────────────────────
-   FIX: the old generator set each bar's width from its *index*
-   (i%3===0?3:i%3===1?2:1), so the pattern never depended on the value —
-   "ST-001" and "ST-999" rendered byte-identical barcodes that encoded
-   nothing and no scanner could read. Cards are meant to work with this same
-   app's barcode attendance kiosk (POST /attendance/barcode-scan looks a
-   student up by rollNo), so the printed code has to be genuinely scannable.
-
-   Code 39 is used because it needs no checksum, covers A-Z/0-9/'-' (roll
-   numbers like ST-001 and NURA-26-001), and every handheld scanner reads it.
-   Each character is 9 elements — 5 bars, 4 spaces, alternating, where 1 = wide. */
-const CODE39 = {
-  '0':'000110100','1':'100100001','2':'001100001','3':'101100000','4':'000110001',
-  '5':'100110000','6':'001110000','7':'000100101','8':'100100100','9':'001100100',
-  'A':'100001001','B':'001001001','C':'101001000','D':'000011001','E':'100011000',
-  'F':'001011000','G':'000001101','H':'100001100','I':'001001100','J':'000011100',
-  'K':'100000011','L':'001000011','M':'101000010','N':'000010011','O':'100010010',
-  'P':'001010010','Q':'000000111','R':'100000110','S':'001000110','T':'000010110',
-  'U':'110000001','V':'011000001','W':'111000000','X':'010010001','Y':'110010000',
-  'Z':'011010000','-':'010000101','.':'110000100',' ':'011000100','$':'010101000',
-  '/':'010100010','+':'010001010','%':'000101010','*':'010010100',
-};
-
-const barcodeSVG = (val, w = 200, h = 30) => {
-  const NARROW = 2, WIDE = 5, GAP = 2;   // element widths in viewBox units
-  // Code 39 is uppercase-only; anything unencodable is dropped so the symbol
-  // stays valid rather than silently producing an unscannable code.
-  const text = String(val || '').toUpperCase();
-  const chars = ('*' + text.split('').filter(c => CODE39[c]).join('') + '*').split('');
-
-  let x = 0;
-  let bars = '';
-  for (const ch of chars) {
-    const pattern = CODE39[ch];
-    for (let i = 0; i < 9; i++) {
-      const width = pattern[i] === '1' ? WIDE : NARROW;
-      if (i % 2 === 0) bars += `<rect x="${x}" y="0" width="${width}" height="${h}" fill="#000"/>`;
-      x += width;
-    }
-    x += GAP;  // inter-character gap
-  }
-
-  const vbWidth = Math.max(x, 1);
-  // Wrapped in a single block: these are often dropped into flex rows, where
-  // two sibling nodes would lay out side by side and put the caption next to
-  // the bars instead of beneath them.
-  return `<div style="display:block;text-align:center;line-height:0;">
-    <svg width="${w}" height="${h}" viewBox="0 0 ${vbWidth} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="${vbWidth}" height="${h}" fill="#fff"/>
-      <g>${bars}</g>
-    </svg>
-    <div style="font-family:monospace;font-size:6pt;color:#333;letter-spacing:1.5px;line-height:1.4;">${text}</div>
-  </div>`;
-};
+/* A design's front, drawn small for the gallery. Cards are 54 × 85.6 mm. */
+function CardThumb({ html, portrait }) {
+  const W = portrait ? 204 : 324; const H = portrait ? 324 : 204;
+  const k = Math.min(124 / W, 118 / H);
+  return (
+    <div style={{ width: W * k, height: H * k, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+      <div style={{ position: 'absolute', left: 0, top: 0, transform: `scale(${k})`, transformOrigin: 'top left', pointerEvents: 'none' }} dangerouslySetInnerHTML={{ __html: html }} />
+    </div>
+  );
+}
+const GALLERY_FILTERS = [
+  ['all', 'All'], ['portrait', 'Portrait'], ['landscape', 'Landscape'], ['students', 'Students'], ['staff', 'Teachers & staff'],
+];
 
 /* How many people one list request asks for. Students: the API allows up
    to 300, and every row carries a photo of about 40 KB. */
 const STUDENT_LIMIT = 200;
 const STAFF_LIMIT = 500;
-
-/* ─── Person silhouette SVG (used as photo placeholder) ── */
-const personSVG = (color='#0F766E') => `
-<svg width="100%" height="100%" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100" height="120" fill="${color}18"/>
-  <circle cx="50" cy="35" r="22" fill="${color}50"/>
-  <ellipse cx="50" cy="95" rx="35" ry="30" fill="${color}40"/>
-</svg>`;
-
-/* ════════════════════════════════════════════════════
-   5 PREMIUM ID CARD TEMPLATES
-════════════════════════════════════════════════════ */
-/* ─── Card assembly ──────────────────────────────
-   Turns a person into the context every template design consumes, then asks
-   the chosen template for the requested face. Designs live in
-   cardTemplates.js so adding one does not mean touching this page. */
-/* The code on a card's barcode and QR: the roll number or employee code, or
-   ID-<n> (student) / STF-<n> (staff) when there is none. A staff card used
-   to print ID-<n> too, which the scanner reads as the student with that
-   number. */
-const cardCode = (p, type) => p.rollNo || p.empCode || (type === 'staff' ? `STF-${p.id}` : `ID-${p.id}`);
-
-const buildCard = (p, opts, side = 'front') => {
-  const { primary, secondary, schoolName, address, phone, email, type, template,
-          photoMap, logoSrc, qrMap, validity, rules } = opts;
-  const tpl = templateById(template);
-  const id  = cardCode(p, type);
-  const classInfo = p.class?.name ? `${p.class.name}${p.section?.name ? ' - ' + p.section.name : ''}` : '—';
-  const photo = photoMap?.[p.id] || p.photoUrl || null;
-  const dob   = p.dob ? new Date(p.dob).toLocaleDateString('en-PK') : '—';
-  const cnic  = p.bFormNo || p.cnic || '';
-  const isStaff = type === 'staff';
-
-  const logoHtml = logoSrc
-    ? `<img src="${String(logoSrc).replace(/"/g, '&quot;')}" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:3px;"/>`
-    : `<span style="font-size:13px;">🎓</span>`;
-
-  /* Photo, or a neutral silhouette when none has been uploaded. */
-  const photoBox = (w, h, round = false) => {
-    const r = round ? '50%' : '4px';
-    return photo
-      ? `<img src="${photo}" style="width:${w};height:${h};object-fit:cover;border-radius:${r};display:block;"/>`
-      : `<div style="width:${w};height:${h};border-radius:${r};overflow:hidden;background:${primary}18;display:flex;align-items:flex-end;justify-content:center;">
-           <div style="width:52%;aspect-ratio:1;border-radius:50%;background:${primary}4d;margin-bottom:6%;flex-shrink:0;"></div>
-         </div>`;
-  };
-
-  /* Field list differs for staff and students — a teacher has no father's
-     name or class, and printing blank rows looks like broken data. */
-  const fields = isStaff
-    ? [
-        ['Employee ID', id],
-        ['Designation', p.designation],
-        ['Department',  p.department?.name],
-        ['Date of Birth', dob],
-        ...(cnic ? [['CNIC', cnic]] : []),
-      ]
-    : [
-        ['Student ID', id],
-        ['Father Name', p.fatherName],
-        ['Class', classInfo],
-        ['Date of Birth', dob],
-        ...(cnic ? [['B-Form', cnic]] : []),
-      ];
-
-  const ctx = {
-    p, id_: id, name: p.name,
-    subtitle: isStaff ? (p.designation || 'Staff') : classInfo,
-    typeLabel: isStaff ? 'STAFF' : 'STUDENT',
-    // Drop rows the record has no value for, so a card never prints a
-    // column of em-dashes. Templates that slice(0, n) then get n real rows.
-    fields: fields.filter(([, v]) => v != null && !['', '-', '—'].includes(String(v).trim())),
-    photoBox, logoHtml,
-    primary, secondary,
-    dark: '#1B2430',
-    schoolName, address, phone, email,
-    validity, rules: rules && rules.length ? rules : DEFAULT_RULES,
-    qr: (size) => qrSVG(id, size, qrMap),
-    barcode: (w, h) => barcodeSVG(id, w, h),
-  };
-
-  return side === 'back' ? tpl.back(ctx) : tpl.front(ctx);
-};
-
-/* ─── Real QR codes ───────────────────────────────
-   Generates a { idValue -> dataURL } map with the `qrcode` package (already a
-   dependency). Encodes the roll/employee number, which is exactly what this
-   app's own barcode attendance kiosk looks a person up by, so a scanned card
-   resolves to the right person instead of decoding to nothing. */
-const qrDataUrlsFor = async (people, type) => {
-  const map = {};
-  try {
-    const QR = (await import('qrcode')).default;
-    await Promise.all(people.map(async (p) => {
-      const val = cardCode(p, type);
-      try {
-        map[val] = await QR.toDataURL(val, { margin: 0, width: 160, errorCorrectionLevel: 'M' });
-      } catch { /* skip this one; the card renders without a QR */ }
-    }));
-  } catch {
-    // qrcode unavailable — cards still print, just without QR codes.
-  }
-  return map;
-};
-
-/* ─── Print HTML ─────────────────────────────────── */
-const buildPrintHTML = (people, opts) => {
-  const isPortrait = templateById(opts.template).orient === 'portrait';
-  // Front and back are emitted as a pair per person and kept together, so a
-  // duplex print lines the two faces of one card up on the same sheet.
-  const cards = people.map((p) => `
-    <div class="pair">
-      <div class="face">${buildCard(p, opts, 'front')}<div class="face-tag">FRONT</div></div>
-      <div class="face">${buildCard(p, opts, 'back')}<div class="face-tag">BACK</div></div>
-    </div>`).join('\n');
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>ID Cards — ${opts.schoolName}</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:#f0f0f0;font-family:Arial,sans-serif;padding:10mm;}
-  .wrap{display:flex;flex-wrap:wrap;gap:6mm;}
-  /* One person = one pair. keeping the pair unbreakable means the two faces
-     of a card never land on different sheets. */
-  .pair{display:flex;gap:3mm;break-inside:avoid;page-break-inside:avoid;}
-  .face{position:relative;}
-  .face-tag{position:absolute;top:-4mm;left:0;font-size:7px;letter-spacing:1px;color:#94a3b8;font-family:Arial,sans-serif;}
-  @media print{
-    body{background:#fff;padding:4mm;}
-    .no-print{display:none!important;}
-    .wrap{gap:4mm;}
-    .pair{gap:2mm;}
-    .face-tag{display:none;}   /* guides for the screen only */
-    @page{margin:6mm;}
-  }
-</style></head><body>
-  <div class="no-print" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-    <div>
-      <h2 style="font-size:15px;font-weight:700;color:#0F4C45;margin:0 0 2px;">${opts.schoolName} — ID Cards</h2>
-      <p style="font-size:12px;color:#9CA3AF;margin:0;">${people.length} card(s) · ${new Date().toLocaleDateString('en-PK')}</p>
-    </div>
-    <button onclick="window.print()" style="background:#0F766E;color:#fff;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">🖨 Print ID Cards</button>
-  </div>
-  <div class="wrap">${cards}</div>
-</body></html>`;
-};
 
 /* ════════════════════════════════════════════════════
    COMPONENT
@@ -264,9 +68,15 @@ export default function IDCardsPage() {
   const [sectionId,setSectionId]= useState('');
   const [search,   setSearch]   = useState('');
   const [onlyMissing, setOnlyMissing] = useState(false);
-  const [primary,  setPrimary]  = useState('#0F766E');
-  const [secondary,setSecondary]= useState('#D97706');
-  const [template, setTemplate] = useState('portrait');
+  const [primary,  setPrimaryRaw]  = useState(() => remembered('primary', '#0F766E'));
+  const [secondary,setSecondaryRaw]= useState(() => remembered('secondary', '#D97706'));
+  const [template, setTemplateRaw] = useState(() => templateById(remembered('template', 'academic')).id);
+  const [validity, setValidityRaw] = useState(() => remembered('validity', ''));
+  const [galleryFilter, setGalleryFilter] = useState('all');
+  const setPrimary = (v) => { setPrimaryRaw(v); remember('primary', v); };
+  const setSecondary = (v) => { setSecondaryRaw(v); remember('secondary', v); };
+  const setTemplate = (v) => { setTemplateRaw(v); remember('template', v); };
+  const setValidity = (v) => { setValidityRaw(v); remember('validity', v); };
   const [selected, setSelected] = useState([]);
   const [photoMap, setPhotoMap] = useState({});
   const [localIds, setLocalIds] = useState([]); // ids whose photo came from this browser only
@@ -427,16 +237,16 @@ export default function IDCardsPage() {
     schoolName: school?.name || localStorage.getItem('registeredSchoolName') || 'School',
     address:    [school?.address, school?.city].filter(Boolean).join(', ') || '',
     phone:      school?.phone || '',
+    email:      school?.email || '',
+    validity:   validity.trim(),
     type, template, photoMap, logoSrc,
   };
 
   /* The live preview generates its QR too, so what's on screen matches what
      comes out of the printer. */
-  const previewPerson = preview || {
-    id: 0, name: 'Student Name', rollNo: 'ST-001', fatherName: 'Father Name',
-    class: { name: 'Class 5' }, section: { name: 'A' },
-    designation: 'Teacher', department: { name: 'Teaching' },
-  };
+  const previewPerson = preview || (type === 'staff'
+    ? { id: 0, name: 'Teacher Name', empCode: 'TCH-001', designation: 'Teacher', department: { name: 'Teaching' }, joiningDate: '2024-04-01' }
+    : { id: 0, name: 'Student Name', rollNo: 'ST-001', fatherName: 'Father Name', class: { name: 'Class 5' }, section: { name: 'A' }, admissionDate: '2024-04-01' });
   const [previewQrMap, setPreviewQrMap] = useState({});
   useEffect(() => {
     let cancelled = false;
@@ -484,7 +294,7 @@ export default function IDCardsPage() {
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:22 }}>
         <div>
           <h1 className="page-title">ID Card Printing</h1>
-          <p className="page-subtitle">Professional ID cards with 5 premium templates · school logo · barcode · QR code</p>
+          <p className="page-subtitle">Student, teacher and staff ID cards · {TEMPLATES.length} designs, front and back · school logo · photo · barcode · QR code</p>
         </div>
         <div style={{ display:'flex', gap:8 }}>
           {selected.length>0 && (
@@ -556,24 +366,31 @@ export default function IDCardsPage() {
             </div>
           </div>
 
-          {/* Template selector */}
+          {/* Designs: each drawn small, front side, with this school's colours */}
           <div className="card">
-            <div style={{ fontSize:12.5, fontWeight:700, color:'#374151', marginBottom:10 }}>Template Style</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
-              {TEMPLATES.map(t=>(
-                <div key={t.id} onClick={()=>setTemplate(t.id)}
-                  style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 11px', borderRadius:8, cursor:'pointer', border:`2px solid ${template===t.id?primary:'#E5E7EB'}`, background:template===t.id?primary+'10':'#FAFAFA', transition:'all .12s' }}>
-                  <div style={{ width:28, height:t.orient.includes('↕')?36:22, borderRadius:3, background:template===t.id?primary:'#CBD5E1', flexShrink:0, border:`1px solid ${template===t.id?primary+'80':'transparent'}` }}/>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:12.5, fontWeight:700, color:template===t.id?primary:'#374151' }}>{t.label}</div>
-                    <div style={{ fontSize:10.5, color:'#9CA3AF' }}>{t.orient} · {t.desc}</div>
-                  </div>
-                  {template===t.id && <div style={{ width:16, height:16, borderRadius:'50%', background:primary, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                    <span style={{ color:'#fff', fontSize:9, fontWeight:900 }}>✓</span>
-                  </div>}
-                </div>
+            <div style={{ fontSize:12.5, fontWeight:700, color:'#374151', marginBottom:8 }}>Card Design <span style={{ fontWeight:500, color:'#9CA3AF' }}>({TEMPLATES.length})</span></div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:9 }} role="tablist" aria-label="Show designs">
+              {GALLERY_FILTERS.map(([k, l]) => (
+                <button key={k} type="button" role="tab" aria-selected={galleryFilter===k} onClick={()=>setGalleryFilter(k)}
+                  style={{ fontSize:10.5, fontWeight:700, padding:'3px 8px', borderRadius:99, cursor:'pointer', border:`1px solid ${galleryFilter===k?primary:'#E5E7EB'}`, background:galleryFilter===k?primary:'#fff', color:galleryFilter===k?'#fff':'#4B5563' }}>{l}</button>
               ))}
             </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7 }} aria-label="Card designs">
+              {TEMPLATES.filter((t) => galleryFilter==='all' || t.orient===galleryFilter || (galleryFilter==='students' && t.for!=='staff') || (galleryFilter==='staff' && t.for!=='students')).map((t) => {
+                const on = template===t.id;
+                return (
+                  <button key={t.id} type="button" onClick={()=>setTemplate(t.id)} aria-pressed={on} title={t.desc} data-template={t.id}
+                    style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, padding:'7px 5px 6px', borderRadius:9, cursor:'pointer', border:`2px solid ${on?primary:'#E5E7EB'}`, background:on?primary+'10':'#FAFAFA', minWidth:0 }}>
+                    <div style={{ height:120, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <CardThumb portrait={t.orient==='portrait'} html={buildCard(previewPerson, { ...opts, template:t.id, qrMap: previewQrMap }, 'front')} />
+                    </div>
+                    <div style={{ fontSize:11.5, fontWeight:700, color:on?primary:'#374151', lineHeight:1.2 }}>{on ? '✓ ' : ''}{t.label}</div>
+                    <div style={{ fontSize:9.5, color:'#9CA3AF', textTransform:'capitalize' }}>{t.orient}{t.for==='students' ? ' · juniors' : t.for==='staff' ? ' · staff' : ''}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize:10.5, color:'#6B7280', marginTop:8, lineHeight:1.45 }}>{templateById(template).desc}. Every design prints for students and for teachers and staff.</div>
           </div>
 
           {/* Filters */}
@@ -634,6 +451,15 @@ export default function IDCardsPage() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Printed on the card */}
+          <div className="card">
+            <div style={{ fontSize:12.5, fontWeight:700, color:'#374151', marginBottom:8 }}>On the Card</div>
+            <label className="form-label" htmlFor="card-validity">Valid until (optional)</label>
+            <input id="card-validity" className="form-input" placeholder="e.g. March 2027" value={validity} maxLength={30}
+              onChange={e=>setValidity(e.target.value)} style={{ height:32, fontSize:12.5 }}/>
+            <div style={{ fontSize:10.5, color:'#9CA3AF', marginTop:5 }}>Printed on the designs that show it (Geometric, Ribbon). Leave empty to leave it off.</div>
           </div>
 
           {/* Live preview */}
