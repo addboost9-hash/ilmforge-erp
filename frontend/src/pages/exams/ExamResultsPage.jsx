@@ -12,120 +12,13 @@ import { useEffect, useMemo } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
-import { printHTML } from '../../utils/print';
-import { useSchoolStamp, stampFor, stampImg, STAMP_CSS } from '../../utils/schoolStamp';
+import { useSchoolStamp, stampFor } from '../../utils/schoolStamp';
+import { printResultCards, printResultSheet, pickSigners, remarkFor } from '../../utils/resultCardPrint';
+import { gradesFromSettings } from '../../utils/printKit';
 import { ArrowLeft, Printer, PencilLine } from 'lucide-react';
 
 const NAVY = '#1B2F6E';
-const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ordinal = (n) => (n ? `${n}${[, 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th'}` : '—');
-
-/* Only pictures: embedded images or web addresses. */
-const pic = (v) => (/^data:image\/(png|jpe?g|webp);base64,/i.test(String(v || '')) || /^https?:\/\//i.test(String(v || '')) ? String(v) : '');
-const PRINCIPAL = /principal|head ?(mistress|master|teacher)/i;
-
-/* Who signs a result card: the signatories of the result card settings
-   (Exam Vault > Results > settings), each with the picture of the
-   signature when one was added, those switched off left out; else the
-   plain lines. The stamp goes on the principal's (or the last) signature. */
-function signersHTML({ config, show, stamp }) {
-  const key = (s, i) => (s.name || `sig_${i}`).toLowerCase().replace(/\s+/g, '_');
-  let list = (config?.signatures || [])
-    .map((s, i) => ({ ...s, on: config?.signatureOptions?.[key(s, i)] !== false }))
-    .filter((s) => s.on && (s.name || s.designation));
-  if (!show('showPrincipalSignature')) list = list.filter((s) => !PRINCIPAL.test(`${s.designation} ${s.name}`));
-  if (!show('showTeacherSignature')) list = list.filter((s) => !/teacher/i.test(`${s.designation} ${s.name}`) || PRINCIPAL.test(`${s.designation} ${s.name}`));
-  if (!list.length) {
-    list = [
-      show('showTeacherSignature') && { designation: 'Class Teacher' },
-      show('showPrincipalSignature') && { designation: 'Principal' },
-    ].filter(Boolean);
-  }
-  const principalAt = list.findIndex((s) => PRINCIPAL.test(`${s.designation} ${s.name}`));
-  const stampAt = principalAt >= 0 ? principalAt : list.length - 1;
-  const one = (s, i) => {
-    const title = s.designation || s.name;
-    const withStamp = !!stamp && i === stampAt;
-    return `<div class="sg${withStamp ? ' pr' : ''}">${withStamp ? stampImg(stamp) : ''}<div class="sgimg">${pic(s.signatureUrl) ? `<img src="${esc(pic(s.signatureUrl))}" alt=""/>` : ''}</div><div class="ln"></div><div class="lb">${esc(title)}</div>${s.name && s.designation && s.name !== s.designation ? `<div class="sn">${esc(s.name)}</div>` : ''}</div>`;
-  };
-  const parent = '<div class="sg"><div class="sgimg"></div><div class="ln"></div><div class="lb">Parent / Guardian</div></div>';
-  const cells = list.map(one);
-  cells.splice(Math.min(1, cells.length), 0, parent);
-  return `<div class="signs">${cells.join('')}</div>`;
-}
-
-/* The final remark for a percentage, from the result card settings. */
-const remarkFor = (config, pct) => (config?.finalRemarks || []).find((r) => Number(r.minPercent) <= pct && pct <= Number(r.maxPercent))?.remark || '';
-
-function reportCardsHTML(rows, { exam, school, settings, config, stamp }) {
-  const logo = school?.logoUrl || '';
-  const show = (k, d = true) => (settings?.[k] ?? d);
-  const cards = rows.map((r) => `
-  <div class="card">
-    <div class="head">
-      ${logo ? `<img class="logo" src="${esc(logo)}" alt=""/>` : ''}
-      <div><div class="sch">${esc(school?.name || 'School')}</div><div class="sub">${esc(school?.address || '')}</div></div>
-      <div class="title">RESULT CARD<br/><span>${esc(exam?.title || '')}</span></div>
-    </div>
-    <table class="info">
-      <tr><td><b>Name:</b> ${esc(r.name)}</td><td><b>Roll No:</b> ${esc(r.rollNo || '—')}</td>${r.photoUrl ? `<td rowspan="2" class="ph"><img src="${esc(r.photoUrl)}" alt=""/></td>` : ''}</tr>
-      <tr><td><b>Father's name:</b> ${esc(r.fatherName || '—')}</td><td><b>Class:</b> ${esc([r.className, r.sectionName].filter(Boolean).join(' — '))}</td></tr>
-    </table>
-    <table class="marks">
-      <tr><th>Subject</th><th>Total</th><th>Obtained</th><th>%</th>${show('showGradeOnMarksheet') ? '<th>Grade</th>' : ''}</tr>
-      ${r.subjects.map((s) => `<tr><td dir="auto">${esc(s.subjectName)}</td><td>${s.total}</td><td>${s.isAbsent ? 'Absent' : s.obtained}</td><td>${s.isAbsent ? '—' : Math.round((s.obtained / s.total) * 100)}</td>${show('showGradeOnMarksheet') ? `<td>${esc(s.grade)}</td>` : ''}</tr>`).join('')}
-      <tr class="tot"><td>Total</td><td>${r.totalMarks}</td><td>${r.totalObtained}</td><td>${r.percentage}</td>${show('showGradeOnMarksheet') ? `<td>${esc(r.grade)}</td>` : ''}</tr>
-    </table>
-    <table class="sum"><tr>
-      ${show('showPercentageOnMarksheet') ? `<td><b>Percentage</b><br/>${r.percentage}%</td>` : ''}
-      ${show('showGradeOnMarksheet') ? `<td><b>Grade</b><br/>${esc(r.grade)}</td>` : ''}
-      ${show('showRankOnMarksheet') ? `<td><b>Position</b><br/>${ordinal(r.position)}</td>` : ''}
-      <td><b>Division</b><br/>${esc(r.division)}</td>
-      <td><b>Result</b><br/><span class="${r.passed ? 'pass' : 'fail'}">${r.passed ? 'PASS' : 'FAIL'}</span></td>
-    </tr></table>
-    ${remarkFor(config, r.percentage) ? `<div class="rmk"><b>Remarks:</b> <span dir="auto">${esc(remarkFor(config, r.percentage))}</span></div>` : ''}
-    ${signersHTML({ config, show, stamp })}
-  </div>`).join('');
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(exam?.title || 'Results')} — Report cards</title><style>
-    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;color:#000}
-    .card{width:190mm;min-height:130mm;margin:0 auto 8mm;padding:8mm;border:2px solid #000;page-break-inside:avoid;page-break-after:always}
-    .card:last-child{page-break-after:auto}
-    .head{display:flex;align-items:center;gap:10px;border-bottom:2px solid #000;padding-bottom:6px}
-    .logo{width:54px;height:54px;object-fit:contain}.sch{font-size:18px;font-weight:800}.sub{font-size:11px}
-    .title{margin-left:auto;text-align:center;font-weight:800;font-size:14px}.title span{font-size:11px;font-weight:600}
-    table{width:100%;border-collapse:collapse;margin-top:8px}td,th{border:1px solid #000;padding:5px 7px;font-size:12px;text-align:left}
-    th{background:#eee}.marks td:not(:first-child),.marks th:not(:first-child){text-align:center}
-    .tot td{font-weight:800;background:#f5f5f5}.sum td{text-align:center}
-    .ph{width:28mm;text-align:center}.ph img{width:24mm;height:28mm;object-fit:cover}
-    .pass{color:#0a6a2a;font-weight:800}.fail{color:#b00;font-weight:800}
-    .rmk{margin-top:6px;font-size:12px;border:1px solid #000;padding:5px 7px}
-    .signs{display:flex;justify-content:space-between;gap:6mm;margin-top:8mm}
-    .sg{flex:0 1 45mm;text-align:center;font-size:11px}
-    .sgimg{height:12mm;display:flex;align-items:flex-end;justify-content:center}.sgimg img{max-height:100%;max-width:100%;object-fit:contain}
-    .ln{border-top:1px solid #000;margin-top:1px}.lb{font-weight:700;margin-top:2px}.sn{font-size:10px;color:#444}
-    .pr{position:relative}
-    ${STAMP_CSS}
-    .ilm-stamp{width:26mm;max-height:26mm}
-    @page{size:A4;margin:8mm}
-  </style></head><body>${cards}</body></html>`;
-}
-
-function resultSheetHTML(rows, subjects, { exam, school, label }) {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(exam?.title)} — ${esc(label)}</title><style>
-    body{font-family:Arial,sans-serif;margin:0;padding:6mm;color:#000}
-    h2{margin:0}h3{margin:2px 0 8px;font-weight:600}
-    table{width:100%;border-collapse:collapse}td,th{border:1px solid #000;padding:4px 5px;font-size:11px;text-align:center}
-    td.l,th.l{text-align:left}th{background:#eee}.fail{color:#b00;font-weight:700}
-    @page{size:A4 landscape;margin:7mm}
-  </style></head><body>
-  <h2>${esc(school?.name || 'School')}</h2><h3>${esc(exam?.title)} — Result sheet — ${esc(label)}</h3>
-  <table><tr><th>Pos.</th><th>Roll</th><th class="l">Name</th>${subjects.map((s) => `<th>${esc(s.name)}<br/>/${s.total}</th>`).join('')}<th>Total</th><th>%</th><th>Grade</th><th>Result</th></tr>
-  ${rows.map((r) => `<tr><td>${r.position}</td><td>${esc(r.rollNo || '')}</td><td class="l">${esc(r.name)}</td>${subjects.map((s) => {
-    const m = r.subjects.find((x) => x.subjectId === s.id);
-    return `<td${m && m.grade === 'F' ? ' class="fail"' : ''}>${m ? (m.isAbsent ? 'A' : m.obtained) : ''}</td>`;
-  }).join('')}<td>${r.totalObtained}/${r.totalMarks}</td><td>${r.percentage}</td><td>${esc(r.grade)}</td><td class="${r.passed ? '' : 'fail'}">${r.passed ? 'Pass' : 'Fail'}</td></tr>`).join('')}
-  </table></body></html>`;
-}
 
 export default function ExamResultsPage() {
   const { id } = useParams();
@@ -171,6 +64,25 @@ export default function ExamResultsPage() {
   const avg = rows.length ? Math.round((rows.reduce((a, r) => a + r.percentage, 0) / rows.length) * 10) / 10 : 0;
   const label = [cls?.name, cls?.sections?.find((s) => String(s.id) === sectionId)?.name].filter(Boolean).join(' — ');
 
+  // Position "of how many", and the highest percentage, within each student's own class.
+  const classStats = useMemo(() => {
+    const m = new Map();
+    for (const r of rows) {
+      const k = r.classId || 0;
+      const x = m.get(k) || { size: 0, highest: 0 };
+      x.size += 1; x.highest = Math.max(x.highest, r.percentage);
+      m.set(k, x);
+    }
+    return m;
+  }, [rows]);
+  const printCards = (list) => printResultCards({
+    cards: list.map((r) => ({ row: r, classSize: classStats.get(r.classId || 0)?.size, classHighest: classStats.get(r.classId || 0)?.highest, remark: remarkFor(resultConfig, r.percentage) })),
+    exam, school, settings,
+    grading: gradesFromSettings(settings),
+    signers: pickSigners({ config: resultConfig, settings, stamp }),
+  });
+  const byRoll = [...rows].sort((a, b) => String(a.rollNo).localeCompare(String(b.rollNo), undefined, { numeric: true }));
+
   return (
     <div className="page-content fade-in">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -180,8 +92,8 @@ export default function ExamResultsPage() {
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>{exam?.title}{label ? ` · ${label}` : ''}{exam ? (exam.isPublished ? ' · published to parents' : ' · not published yet') : ''}</p>
         </div>
         <Link to={`/exams/${id}/marks?classId=${classId}${sectionId ? `&sectionId=${sectionId}` : ''}`} className="btn btn-outline btn-sm"><PencilLine size={14} /> Edit marks</Link>
-        <button type="button" className="btn btn-outline btn-sm" disabled={!rows.length} onClick={() => printHTML(resultSheetHTML(sorted, subjects, { exam, school, label }), { title: 'Result sheet' })}><Printer size={14} /> Print result sheet</button>
-        <button type="button" className="btn btn-teal btn-sm" disabled={!rows.length} onClick={() => printHTML(reportCardsHTML([...rows].sort((a, b) => String(a.rollNo).localeCompare(String(b.rollNo), undefined, { numeric: true })), { exam, school, settings, config: resultConfig, stamp }), { title: 'Report cards' })}><Printer size={14} /> Print report cards (A4)</button>
+        <button type="button" className="btn btn-outline btn-sm" disabled={!rows.length} onClick={() => printResultSheet({ rows: sorted, subjects, exam, school, label, signers: pickSigners({ config: resultConfig, settings, stamp, parent: false }) })}><Printer size={14} /> Print result sheet</button>
+        <button type="button" className="btn btn-teal btn-sm" disabled={!rows.length} onClick={() => printCards(byRoll)}><Printer size={14} /> Print result cards (A4)</button>
       </div>
 
       <div className="card" style={{ padding: 14, marginBottom: 14, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -218,13 +130,13 @@ export default function ExamResultsPage() {
               <tr>
                 <th>Pos.</th><th>Roll</th><th>Name</th>
                 {subjects.map((s) => <th key={s.id} style={{ textAlign: 'center' }}>{s.name}<div style={{ fontWeight: 500, opacity: 0.7 }}>/{s.total}</div></th>)}
-                <th>Total</th><th>%</th><th>Grade</th><th>Result</th>
+                <th>Total</th><th>%</th><th>Grade</th><th>Result</th><th aria-label="Result card" />
               </tr>
             </thead>
             <tbody>
-              {isLoading && <tr><td colSpan={subjects.length + 7} style={{ padding: 20, color: '#94A3B8' }}>Loading…</td></tr>}
+              {isLoading && <tr><td colSpan={subjects.length + 8} style={{ padding: 20, color: '#94A3B8' }}>Loading…</td></tr>}
               {!isLoading && rows.length === 0 && (
-                <tr><td colSpan={subjects.length + 7}>
+                <tr><td colSpan={subjects.length + 8}>
                   <div className="empty-state"><div className="empty-state-icon">📊</div><div className="empty-state-text">No marks for this class yet</div>
                     <div className="empty-state-sub"><Link to={`/exams/${id}/marks?classId=${classId}`}>Enter the marks</Link> first.</div></div>
                 </td></tr>
@@ -242,6 +154,7 @@ export default function ExamResultsPage() {
                   <td style={{ fontVariantNumeric: 'tabular-nums' }}>{r.percentage}</td>
                   <td style={{ fontWeight: 700 }}>{r.grade}</td>
                   <td><span style={{ fontWeight: 700, color: r.passed ? '#15803D' : '#B91C1C' }}>{r.passed ? 'Pass' : 'Fail'}</span></td>
+                  <td><button type="button" className="btn btn-outline btn-sm btn-icon" title={`Print ${r.name}'s result card`} aria-label={`Print ${r.name}'s result card`} onClick={() => printCards([r])}><Printer size={13} /></button></td>
                 </tr>
               ))}
             </tbody>

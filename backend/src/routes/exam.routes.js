@@ -23,6 +23,7 @@ const canManageExams = (role) => ['super_admin', 'admin', 'teacher'].includes(ro
 // every child's marks.
 const canSeeResults = (role) => ['super_admin', 'admin', 'teacher', 'principal', 'accountant'].includes(role);
 const { teacherCanAccessClass } = require('../utils/teacherScope');
+const annual = require('../services/annualResult.service');
 
 /* The classes an exam is for: its classIds list, or the single classId. */
 const examClassIds = (exam) => {
@@ -238,6 +239,100 @@ router.get('/cumulative', wrap(async (req, res) => {
 
   result.sort((a, b) => b.percentage - a.percentage);
   res.json({ success: true, data: result });
+}));
+
+// The grading a printed card explains: the grades with their lowest
+// percentage, and the division bands.
+const gradingInfo = (thresholds, settings) => ({
+  grades: [...thresholds].sort((a, b) => b.minPercent - a.minPercent),
+  divisions: {
+    first: settings?.firstDivision ?? 60,
+    second: settings?.secondDivision ?? 45,
+    third: settings?.thirdDivision ?? 33,
+  },
+});
+const LETTERHEAD = { name: true, address: true, city: true, phone: true, email: true, logoUrl: true };
+
+// GET /exams/annual?classId=&sectionId=&sessionId= — the annual result card:
+// every exam of the class in the session, subject by subject, with the
+// year's totals, grade, division, position in the class and attendance.
+// Exams saved without a session count when they were held within it.
+// (/exams/cumulative is kept as it was; it never had the subjects.)
+router.get('/annual', wrap(async (req, res) => {
+  if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const { schoolId } = req;
+  const classId = parseInt(req.query.classId);
+  if (!Number.isInteger(classId)) return res.status(400).json({ success: false, message: 'Choose a class.' });
+  if (!(await teacherCanAccessClass(req, classId))) return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+  const sectionId = parseInt(req.query.sectionId) || null;
+  const askedSession = parseInt(req.query.sessionId) || null;
+
+  const sessions = await prisma.academicSession.findMany({ where: { schoolId }, orderBy: { startDate: 'desc' } });
+  if (askedSession && !sessions.some((x) => x.id === askedSession)) return res.status(404).json({ success: false, message: 'Session not found.' });
+  const session = (askedSession && sessions.find((x) => x.id === askedSession)) || sessions.find((x) => x.isActive) || sessions[0] || null;
+
+  const [allExams, thresholds, settings, cls, school] = await Promise.all([
+    prisma.exam.findMany({ where: { schoolId }, select: { id: true, title: true, term: true, type: true, classId: true, classIds: true, sessionId: true, dateStart: true, dateEnd: true, createdAt: true, isPublished: true } }),
+    loadThresholds(schoolId),
+    prisma.examSettings.findFirst({ where: { schoolId } }).catch(() => null),
+    prisma.class.findFirst({ where: { id: classId, schoolId }, select: { id: true, name: true, sections: { select: { id: true, name: true }, orderBy: { name: 'asc' } } } }),
+    prisma.school.findUnique({ where: { id: schoolId }, select: LETTERHEAD }),
+  ]);
+  if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
+
+  const exams = annual.sessionExams(allExams, session, classId, sessions);
+  const marks = exams.length ? await prisma.examMark.findMany({
+    where: { examId: { in: exams.map((e) => e.id) }, student: { schoolId, classId, deletedAt: null } },
+    include: {
+      student: { select: { id: true, name: true, rollNo: true, fatherName: true, dob: true, photoUrl: true, classId: true, sectionId: true, class: { select: { name: true } }, section: { select: { name: true } } } },
+      subject: { select: { id: true, name: true } },
+    },
+    orderBy: [{ subjectId: 'asc' }],
+  }) : [];
+  const { rows, subjects } = annual.annualRows({
+    exams, marks,
+    gradeOf: (o, t) => calcGradeFromThresholds(o, t, thresholds),
+    divisionOf: (pct) => calcDivision(pct, settings),
+  });
+
+  // Attendance in the session: days present (late counts as present) of the days marked.
+  const attendance = {};
+  if (session && rows.length) {
+    const end = new Date(new Date(session.endDate).getTime() + 864e5 - 1);
+    const counts = await prisma.attendance.groupBy({
+      by: ['studentId', 'status'],
+      where: { schoolId, studentId: { in: rows.map((r) => r.studentId) }, date: { gte: session.startDate, lte: end } },
+      _count: { _all: true },
+    });
+    for (const c of counts) {
+      const a = attendance[c.studentId] || (attendance[c.studentId] = { present: 0, absent: 0, leave: 0, late: 0, total: 0 });
+      a[c.status] = (a[c.status] || 0) + c._count._all;
+      a.total += c._count._all;
+    }
+  }
+
+  const students = rows
+    .filter((r) => !sectionId || r.sectionId === sectionId)
+    .map((r) => ({ ...r, attendance: attendance[r.studentId] || null }))
+    .sort((a, b) => String(a.rollNo).localeCompare(String(b.rollNo), undefined, { numeric: true }) || a.name.localeCompare(b.name));
+  const used = exams.filter((e) => rows.some((r) => r.exams[e.id]));
+
+  res.json({
+    success: true,
+    data: {
+      session: session && { id: session.id, name: session.name, startDate: session.startDate, endDate: session.endDate },
+      sessions: sessions.map((x) => ({ id: x.id, name: x.name, isActive: x.isActive })),
+      class: cls,
+      exams: used.map((e) => ({ id: e.id, title: e.title, term: e.term, dateStart: e.dateStart, dateEnd: e.dateEnd, isPublished: e.isPublished })),
+      subjects, students,
+      classSize: rows.length,
+      classAverage: rows.length ? Math.round((rows.reduce((t, r) => t + r.percentage, 0) / rows.length) * 10) / 10 : 0,
+      classHighest: rows.reduce((m, r) => Math.max(m, r.percentage), 0),
+      school: school || {},
+      grading: gradingInfo(thresholds, settings),
+      showAttendance: !!settings?.showAttendanceOnMarksheet,
+    },
+  });
 }));
 
 // ---------------------------------------------------------------------------
@@ -1151,6 +1246,33 @@ router.get('/:id/progress', wrap(async (req, res) => {
 // exist on that response, so it always rendered "Marks not entered yet."
 // even for a fully published, graded exam. This route is scoped to the
 // caller's own student record (or their linked child, via ?studentId=).
+/* The student whose results this user may see: a student their own; a
+   parent a child of theirs (the only one, or the one asked for); staff the
+   one asked for. null when none. */
+const ownStudentId = async (req) => {
+  const { schoolId } = req;
+  const role = req.user?.role;
+  if (role === 'student') {
+    const self = await prisma.student.findFirst({ where: { schoolId, userId: req.user.id, deletedAt: null }, select: { id: true } });
+    return self?.id || null;
+  }
+  if (role === 'parent') {
+    const requestedId = req.query.studentId ? parseInt(req.query.studentId) : null;
+    const parent = await prisma.parent.findFirst({ where: { schoolId, userId: req.user.id } });
+    if (parent && requestedId) {
+      const link = await prisma.parentStudent.findFirst({ where: { schoolId, parentId: parent.id, studentId: requestedId } });
+      return link ? requestedId : null;
+    }
+    if (parent) {
+      const links = await prisma.parentStudent.findMany({ where: { schoolId, parentId: parent.id }, select: { studentId: true } });
+      if (links.length === 1) return links[0].studentId;
+    }
+    return null;
+  }
+  if (canManageExams(role) && req.query.studentId) return parseInt(req.query.studentId) || null;
+  return null;
+};
+
 router.get('/:id/my-results', wrap(async (req, res) => {
   const examId = parseInt(req.params.id);
   const { schoolId } = req;
@@ -1159,26 +1281,7 @@ router.get('/:id/my-results', wrap(async (req, res) => {
   if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
   if (!exam.isPublished) return res.status(403).json({ success: false, message: 'Results have not been published yet.' });
 
-  const role = req.user?.role;
-  let studentId = null;
-
-  if (role === 'student') {
-    const self = await prisma.student.findFirst({ where: { schoolId, userId: req.user.id, deletedAt: null }, select: { id: true } });
-    studentId = self?.id || null;
-  } else if (role === 'parent') {
-    const requestedId = req.query.studentId ? parseInt(req.query.studentId) : null;
-    const parent = await prisma.parent.findFirst({ where: { schoolId, userId: req.user.id } });
-    if (parent && requestedId) {
-      const link = await prisma.parentStudent.findFirst({ where: { schoolId, parentId: parent.id, studentId: requestedId } });
-      studentId = link ? requestedId : null;
-    } else if (parent) {
-      const links = await prisma.parentStudent.findMany({ where: { schoolId, parentId: parent.id }, select: { studentId: true } });
-      if (links.length === 1) studentId = links[0].studentId;
-    }
-  } else if (canManageExams(role) && req.query.studentId) {
-    studentId = parseInt(req.query.studentId);
-  }
-
+  const studentId = await ownStudentId(req);
   if (!studentId) return res.status(403).json({ success: false, message: 'Access denied.' });
 
   const marks = await prisma.examMark.findMany({
@@ -1408,6 +1511,47 @@ const buildGazette = async (examId, schoolId, scope = {}, { photos = false } = {
 
   return { exam, rows };
 };
+
+// GET /exams/:id/my-card?studentId= — one student's result card, for the
+// parent's and the student's portal (published results only): the result
+// as on the class result sheet, the position of how many, the class's
+// highest, the school's letterhead and grading, the final remark and who
+// signs. Signature pictures stay with the school's own printed card.
+router.get('/:id/my-card', wrap(async (req, res) => {
+  const examId = parseInt(req.params.id);
+  const { schoolId } = req;
+  const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId } });
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  if (!exam.isPublished && !canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Results have not been published yet.' });
+  const studentId = await ownStudentId(req);
+  if (!studentId) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const student = await prisma.student.findFirst({ where: { id: studentId, schoolId }, select: { classId: true, photoUrl: true } });
+  if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+
+  const result = await buildGazette(examId, schoolId, student.classId ? { classId: student.classId } : {});
+  const row = result?.rows.find((r) => r.studentId === studentId);
+  if (!row) return res.status(404).json({ success: false, message: 'No marks for this exam yet.' });
+  const classRows = result.rows.filter((r) => r.classId === row.classId);
+  const [school, thresholds, settings, config] = await Promise.all([
+    prisma.school.findUnique({ where: { id: schoolId }, select: LETTERHEAD }),
+    loadThresholds(schoolId),
+    prisma.examSettings.findFirst({ where: { schoolId } }).catch(() => null),
+    getResultConfig(schoolId),
+  ]);
+  res.json({
+    success: true,
+    data: {
+      exam: { id: exam.id, title: exam.title, term: exam.term, dateStart: exam.dateStart, dateEnd: exam.dateEnd },
+      row: { ...row, photoUrl: student.photoUrl || null },
+      classSize: classRows.length,
+      classHighest: classRows.reduce((m, r) => Math.max(m, r.percentage), 0),
+      school: school || {},
+      grading: gradingInfo(thresholds, settings),
+      finalRemarks: config?.finalRemarks || [],
+      signatures: (config?.signatures || []).map((x) => ({ name: x.name || '', designation: x.designation || '' })),
+    },
+  });
+}));
 
 // GET /exams/:id/gazette
 router.get('/:id/gazette', wrap(async (req, res) => {

@@ -1009,10 +1009,21 @@ progress*, *Complete*). Click **Enter marks** for a class to open its sheet:
 Choose the exam, class and section: the screen shows students, passed, failed, average
 and the top positions.
 
-- **Result sheet and report cards**: the whole class with every subject, total,
+- **Result sheet and result cards**: the whole class with every subject, total,
   percentage, grade, **position in the class** and pass/fail; **Print result sheet**
-  (landscape) and **Print report cards (A4)**, one per student with photo, father's name,
-  subjects, totals, position, division and signatures.
+  (A4 landscape: the class's figures, top three marked) and **Print result cards (A4)**,
+  or the printer button on a row for one student.
+- **The result card** is one framed A4 page per student: the school's letterhead (logo,
+  name, motto, address and contact), the roll number, the student's details and photo,
+  each subject with maximum marks, marks obtained, percentage (with a small bar), grade and
+  pass or fail, the totals, position *of how many*, division, a PASSED / FAILED seal, the
+  final remark with lines for the class teacher's remarks, the school's grading scale with
+  the class's highest percentage, and the signatories with the stamp. The school's logo
+  prints faintly behind the page. The **result card header text** in Exam Settings, if
+  set, prints under the title.
+- Parents and students print the same card from their portal (**Download Result Card** /
+  **Result card**) once the result is published, as a **provisional copy**: without the
+  signature pictures and stamp, which stay on the card the school issues.
 - **Gazette**, **Merit list**, **Failed students** and **Subject analysis** open for the
   class (and section) chosen; **Whole-year result (all terms)** opens the class's annual
   result card.
@@ -1026,9 +1037,23 @@ and the top positions.
 A student passes when the overall grade is not F and no subject is F. Absent from a paper
 counts as failing that paper. Positions are within the student's own class.
 
+**Annual result card** (`/exams/annual-report`, or *Whole-year result*): choose the session,
+class and section. Every exam of the class in that session is counted (an exam saved
+without a session counts in the session it was held in, else the current one). Each
+student's year shows each exam's marks per subject, the year's total, percentage, grade,
+position in the class and pass or fail; print all cards or one. The card adds attendance
+(days present) when *Show attendance on marksheet* is on in Exam Settings, and a *Promoted
+to class* line for students who passed.
+
+All printed exam papers (result cards, result sheet, annual cards, date sheets, roll number
+slips) share one style: the letterhead with a double rule, a title ribbon, the logo faint
+behind the page, and the school's colour (navy unless a darker colour is chosen in the
+School Profile). The fee register and fee card, attendance register, syllabus, fee challan
+and receipt, and salary letter use the same letterhead style.
+
 | Also available | Where |
 |---|---|
-| Annual report card (all terms) | `/exams/annual-report` |
+| Annual result card (every exam of the session, subject by subject) | `/exams/annual-report` |
 | Subject analysis | `/exams/subject-analysis` |
 | BISE-style result card | `/exams/bise-result-card` |
 

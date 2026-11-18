@@ -9,6 +9,7 @@
  *                          downloads it.
  */
 import { printHTML } from './print';
+import { formalize } from './printKit';
 import { monthTitle, money, rs, dmy, dm, lookOf, pkYmd } from './feeYear';
 import { stampImg, STAMP_CSS } from './schoolStamp';
 
@@ -117,7 +118,7 @@ export function printFeeCard({ student, school, period, cells, totals, stamp = '
     </div>
     <footer class="ft"><span dir="auto">${esc(lh.name)}</span><span>Printed ${esc(dmy(today))}</span></footer>
   </body></html>`;
-  printHTML(html, { title: `Fee Card — ${student?.name || ''}` });
+  printHTML(formalize(html), { title: `Fee Card — ${student?.name || ''}` });
 }
 
 /** How a month reads in one small register cell. */
@@ -202,6 +203,6 @@ export function printFeeRegister({ school, period, months, groups, note, stamp =
     .ilm-stamp{width:12mm;max-height:12mm;bottom:0;left:50%;transform:translateX(-50%) rotate(-10deg)}
     .signs{align-items:flex-end}.signs .when{font-size:9px;color:#9CA3AF;white-space:nowrap;align-self:flex-end}
   </style></head><body>${pages}</body></html>`;
-  printHTML(html, { title: `Fee Register — ${period.title}` });
+  printHTML(formalize(html), { title: `Fee Register — ${period.title}` });
   return true;
 }

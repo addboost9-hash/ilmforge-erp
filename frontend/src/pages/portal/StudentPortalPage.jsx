@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import useAuthStore from '../../store/auth.store';
 import api from '../../api/client';
 import { feePeriod } from '../../utils/feeMonth';
+import { printMyResultCard } from '../../utils/resultCardPrint';
 import {
   Home, DollarSign, Award, BookOpen,
   User, ChevronRight, Download, Bell,
@@ -509,6 +510,12 @@ function StudentExamCard({ exam }) {
             <span style={{ padding: '3px 8px', borderRadius: 99, fontSize: 10.5, fontWeight: 600, background: div.bg, color: div.c }}>
               {div.text}
             </span>
+          )}
+          {hasBreakdown && (
+            <button type="button" onClick={async () => { try { await printMyResultCard({ examId: exam.id }); } catch (e) { window.alert(e.response?.data?.message || 'The result card could not be made. Try again.'); } }}
+              style={{ marginTop: 2, padding: '4px 10px', borderRadius: 7, border: `1px solid ${NAVY}40`, background: '#fff', color: NAVY, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Result card
+            </button>
           )}
         </div>
       </div>

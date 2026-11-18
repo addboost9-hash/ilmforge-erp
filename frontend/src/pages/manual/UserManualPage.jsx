@@ -372,9 +372,10 @@ const SECTIONS = [
         title: 'Step 7: Results and publishing',
         steps: [
           { n:1, text:'Choose exam, class, section: passed, failed, average, top positions' },
-          { n:2, text:'Result sheet and report cards: positions within the class, print sheet or A4 cards' },
-          { n:3, text:'Gazette, merit list and failed list open for the class chosen' },
-          { n:4, text:'Publish result → parents and students see it in their portal; Hide again takes it back' },
+          { n:2, text:'Result sheet and result cards: positions within the class; the result card is a framed A4 page with letterhead, photo, subjects with percentage bars, position of how many, a PASSED / FAILED seal, remarks, grading scale, signatures and stamp' },
+          { n:3, text:'Annual result card (/exams/annual-report): every exam of the session, subject by subject, the year\'s total, grade, position and attendance; print all or one' },
+          { n:4, text:'Gazette, merit list and failed list open for the class chosen' },
+          { n:5, text:'Publish result → parents and students see it in their portal (they print a provisional copy of the card); Hide again takes it back' },
         ],
         note: 'Result card settings only change how cards look; they do not publish anything or send SMS.',
       },

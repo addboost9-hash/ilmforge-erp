@@ -6,7 +6,7 @@
  */
 import { useState, useRef, useCallback } from 'react';
 import { signatureFromFile } from '../../utils/signatureImage';
-import { useSchoolStamp, stampFor, stampImg, STAMP_CSS } from '../../utils/schoolStamp';
+import { useSchoolStamp, stampFor } from '../../utils/schoolStamp';
 import SchoolStampCard from '../../components/settings/SchoolStampCard';
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +14,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { printHTML } from '../../utils/print';
+import { kitCss, docColor, letterhead, titleRibbon, watermark as kitWatermark, fields, signatures, footer as kitFooter, docHTML, longDate, todayLong, esc as kesc, GOLD } from '../../utils/printKit';
 import { buildTerms, examMatchesTerm } from '../../utils/terms';
 import QuestionPapersTab from './QuestionPapersTab';
 import SyllabusTab from './SyllabusTab';
@@ -519,76 +520,46 @@ function fmt12(t) {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-/* A date sheet as a page to print (one class-section, or every one): the
-   school's letterhead, the papers, and signature lines for the class
-   teacher and the principal (with the principal's name and signature
-   picture from the roll number slip design). */
+/* A date sheet as a page to print (one class-section, or every one), in the
+   school's formal style (utils/printKit.js) and the roll number slip's
+   colour: the letterhead, the papers day by day, the instructions of the
+   slip design, and signature lines for the class teacher and the principal
+   (with the principal's name and signature picture from the slip design). */
 function printDateSheets(rows, exam, school, design, stamp = '') {
-  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const pic = (v) => (/^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,/i.test(String(v || '')) || /^https?:\/\//i.test(String(v || '')) || /^\/(?!\/)/.test(String(v || '')) ? String(v) : '');
-  const day = (d) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' }) : '—');
-  const short = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
+  const color = docColor(design?.color);
+  const weekday = (d) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long' }) : '');
   const title = exam?.title || 'Exam';
+  const year = exam?.dateStart ? new Date(exam.dateStart).getFullYear() : null;
+  const examName = year && !/\b(19|20)\d{2}\b/.test(title) ? `${title} ${year}` : title;
   const name = school?.name || localStorage.getItem('schoolName') || 'School';
-  const logo = pic(school?.logoUrl || localStorage.getItem('schoolLogoPreview'));
-  const sig = pic(design?.principalSignature);
-  const dates = [short(exam?.dateStart), short(exam?.dateEnd)].filter(Boolean).join(' – ');
-  const issued = short(new Date());
-  const initials = String(name).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const sig = design?.principalSignature || '';
+  const notes = ['Bring your roll number slip to every paper.', ...((design?.instructions || []).filter((l) => l && !/roll number slip/i.test(l)))].slice(0, 6);
   const sheets = rows.filter((r) => r.entries.length).map((r) => {
     const room = r.entries.some((e) => e.room);
     const list = [...r.entries].sort((a, b) => String(a.date || '9999').localeCompare(String(b.date || '9999')) || String(a.timeFrom).localeCompare(String(b.timeFrom)));
-    return `
-    <section class="sheet">
-      <header class="head">
-        ${logo ? `<img src="${esc(logo)}" alt=""/>` : `<div class="mono">${esc(initials)}</div>`}
-        <div class="who"><div class="sch" dir="auto">${esc(name)}</div>${school?.address || school?.phone ? `<div class="ad" dir="auto">${esc([school?.address, school?.phone && `Phone ${school.phone}`].filter(Boolean).join(' · '))}</div>` : ''}</div>
-      </header>
-      <div class="band"><span>Date Sheet</span><span>${esc(title)}</span></div>
-      <div class="meta"><div>Class: <b dir="auto">${esc(r.className)}${r.sectionName && r.sectionName !== '-' ? ` — ${esc(r.sectionName)}` : ''}</b></div>${dates ? `<div>Exam: <b>${esc(dates)}</b></div>` : ''}</div>
-      <table>
-        <thead><tr><th style="width:6%">#</th><th style="width:27%">Date</th><th>Subject</th><th style="width:22%">Time</th>${room ? '<th style="width:12%">Room</th>' : ''}</tr></thead>
-        <tbody>${list.map((e, i) => `<tr><td class="n">${i + 1}</td><td>${day(e.date)}</td><td class="sub" dir="auto">${esc(e.subject)}</td><td>${esc([fmt12(e.timeFrom), fmt12(e.timeTo)].filter(Boolean).join(' – ') || '—')}</td>${room ? `<td>${esc(e.room || '—')}</td>` : ''}</tr>`).join('')}</tbody>
+    const dated = list.filter((e) => e.date);
+    const span = dated.length ? [longDate(dated[0].date), longDate(dated[dated.length - 1].date)].filter((v, i, x) => x.indexOf(v) === i).join(' – ') : '—';
+    const cls = `${r.className}${r.sectionName && r.sectionName !== '-' ? ` – ${r.sectionName}` : ''}`;
+    return `<section class="k-page"><div class="k-frame"><div class="k-in ds">
+      ${kitWatermark(school || {})}
+      ${letterhead(school || {})}
+      ${titleRibbon('Date Sheet', examName)}
+      ${fields([['Class', cls, { big: true }], ['Examination', examName], ['Exam period', span], ['Papers', String(list.length)]])}
+      <table class="k-tbl" style="margin-top:4.5mm">
+        <thead><tr><th class="c" style="width:6%">#</th><th style="width:15%">Day</th><th style="width:17%">Date</th><th>Subject</th><th style="width:21%">Time</th>${room ? '<th style="width:11%">Room</th>' : ''}</tr></thead>
+        <tbody>${list.map((e, i) => `<tr><td class="num">${i + 1}</td><td>${kesc(weekday(e.date) || '—')}</td><td style="white-space:nowrap">${kesc(longDate(e.date) || '—')}</td><td class="sub" dir="auto">${kesc(e.subject)}</td><td style="white-space:nowrap">${kesc([fmt12(e.timeFrom), fmt12(e.timeTo)].filter(Boolean).join(' – ') || '—')}</td>${room ? `<td>${kesc(e.room || '—')}</td>` : ''}</tr>`).join('')}</tbody>
       </table>
-      <p class="note">Students must bring their roll number slip to every paper.</p>
-      <div class="signs">
-        <div class="sg"><div class="img"></div><div class="ln"></div><div class="lb">Class teacher</div></div>
-        <div class="sg pr">${stampImg(pic(stamp))}<div class="img">${sig ? `<img src="${esc(sig)}" alt=""/>` : ''}</div><div class="ln"></div><div class="lb">${esc(design?.principalName || design?.principalTitle || 'Principal')}</div>${design?.principalName ? `<div class="tl">${esc(design?.principalTitle || 'Principal')}</div>` : ''}</div>
-      </div>
-      <footer class="ft"><span dir="auto">${esc(name)}</span><span>Issued ${esc(issued)}</span></footer>
-    </section>`;
+      <div class="k-box" style="margin-top:4mm;border-left:2.2pt solid ${GOLD}"><h4>Instructions</h4><ol class="ds-ins">${notes.map((l) => `<li dir="auto">${kesc(l)}</li>`).join('')}</ol></div>
+      ${signatures([{ label: 'Class teacher' }, { label: design?.principalName || design?.principalTitle || 'Principal', name: design?.principalName ? (design?.principalTitle || 'Principal') : '', img: sig, stamp }])}
+      ${kitFooter(`<b>${kesc(name)}</b>`, `Issued ${kesc(todayLong())}`)}
+    </div></div></section>`;
   }).join('');
   if (!sheets) return toast.error('No papers are scheduled yet. Use Edit to add the subjects and dates.');
-  printHTML(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)} — Date Sheet</title><style>
-    @page{size:A4 portrait;margin:12mm}
-    *{box-sizing:border-box}
-    body{font-family:Arial,'Segoe UI',sans-serif;margin:0;color:#111827;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .sheet{display:flex;flex-direction:column;min-height:270mm;break-after:page;page-break-after:always}
-    .sheet:last-child{break-after:auto;page-break-after:auto}
-    .head{display:flex;gap:14px;align-items:center;padding-bottom:10px;border-bottom:2px solid #111827}
-    .head img{width:60px;height:60px;object-fit:contain}
-    .mono{width:58px;height:58px;border-radius:50%;background:#1B2F6E;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;flex:none}
-    .who{flex:1;text-align:center;padding-right:60px}
-    .sch{font-size:22px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#1B2F6E}
-    .ad{font-size:12px;color:#4B5563;margin-top:3px}
-    .band{display:flex;justify-content:space-between;gap:12px;background:#1B2F6E;color:#fff;border-radius:4px;padding:7px 12px;margin:12px 0 10px;font-weight:800}
-    .band span:first-child{text-transform:uppercase;letter-spacing:1px}
-    .meta{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:14px;margin-bottom:10px}
-    table{width:100%;border-collapse:collapse}
-    th,td{border:1px solid #9CA3AF;padding:8px 10px;font-size:13px;text-align:left}
-    th{background:#E5E9F5;color:#1B2F6E;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
-    td.n{text-align:center}td.sub{font-weight:700}
-    .note{font-size:12px;color:#4B5563;margin:10px 0 0}
-    .signs{display:flex;justify-content:space-between;gap:40px;margin-top:auto;padding-top:30px}
-    .sg{flex:0 1 210px;text-align:center;font-size:13px}
-    .pr{position:relative}
-    ${STAMP_CSS}
-    .sg .img{height:46px;display:flex;align-items:flex-end;justify-content:center}
-    .sg .img img{max-height:100%;max-width:100%;object-fit:contain}
-    .ln{border-top:1.2px solid #111827;margin-top:2px}
-    .lb{font-weight:700;margin-top:4px}.tl{font-size:11px;color:#6B7280}
-    .ft{display:flex;justify-content:space-between;font-size:11px;color:#9CA3AF;margin-top:14px;border-top:1px solid #E5E7EB;padding-top:6px}
-  </style></head><body>${sheets}</body></html>`, { title: `${title} — Date Sheet` });
+  const css = `${kitCss(color)}
+    .k-in.ds{min-height:270mm}
+    .ds .k-tbl td{padding:2.2mm 2.4mm;font-size:10pt}
+    .ds-ins{margin:0;padding-left:4.5mm;font-size:8.8pt;color:#374151;line-height:1.45}`;
+  printHTML(docHTML({ title: `${title} — Date Sheet`, css, body: sheets }), { title: `${title} — Date Sheet` });
 }
 
 function DateSheetTab({ initialExamId = '', onGo }) {

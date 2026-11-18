@@ -10,6 +10,7 @@
  *   downloadText(name, text, type)    saves it from the browser
  */
 import { printHTML } from './print';
+import { formalize } from './printKit';
 import { amountInWords } from './feeChallan';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -71,7 +72,7 @@ export function printSalaryBankLetter({ school, bank, period, rows, date, cheque
     <p style="margin-top:12px">Thank you.</p>
     <div class="signs"><div>Authorised signatory</div><div>Authorised signatory</div></div>
   </body></html>`;
-  printHTML(html, { title: `Salary transfer ${period}` });
+  printHTML(formalize(html), { title: `Salary transfer ${period}` });
 }
 
 const csvCell = (v) => {

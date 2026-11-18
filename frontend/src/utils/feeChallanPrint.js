@@ -11,6 +11,7 @@
  *       received and what it still owes.
  */
 import { printHTML } from './print';
+import { formalize } from './printKit';
 import { amountInWords } from './feeChallan';
 import { feePeriod } from './feeMonth';
 
@@ -140,7 +141,7 @@ export function printChallans({ challans, school, settings }) {
   }).join('');
   const title = challans.length === 1 ? `Fee Challan ${challans[0].challanNo} — ${challans[0].student?.name || ''}` : `Fee Challans (${challans.length})`;
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${CHALLAN_CSS}</style></head><body>${pages}</body></html>`;
-  printHTML(html, { title });
+  printHTML(formalize(html), { title });
 }
 
 /** A receipt for fee received for several months at once. */
@@ -194,5 +195,5 @@ export function printMonthsReceipt({ school, student, receipt, cashier }) {
     <div class="sg"><div>${esc(cashier || 'Cashier')}</div><div>Parent</div></div>
     <div class="ft">Printed ${esc(dmy(todayPk()))}</div>
   </body></html>`;
-  printHTML(html, { title: `Receipt ${receipt.receiptNo}` });
+  printHTML(formalize(html), { title: `Receipt ${receipt.receiptNo}` });
 }

@@ -5,6 +5,7 @@
  * prepare in each, and notes; the principal's signature and the stamp.
  */
 import { printHTML } from './print';
+import { formalize } from './printKit';
 import { stampImg, STAMP_CSS } from './schoolStamp';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -51,7 +52,7 @@ export function printSyllabus({ school, exam, classes, stamp = '' }) {
     </section>`;
   }).join('');
   if (!pages) return false;
-  printHTML(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Syllabus — ${esc(exam?.title || '')}</title><style>
+  printHTML(formalize(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Syllabus — ${esc(exam?.title || '')}</title><style>
     @page{size:A4 portrait;margin:11mm}
     *{box-sizing:border-box}
     body{font-family:Arial,'Segoe UI','Jameel Noori Nastaleeq','Noto Nastaliq Urdu',sans-serif;margin:0;color:#111827;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -77,6 +78,6 @@ export function printSyllabus({ school, exam, classes, stamp = '' }) {
     ${STAMP_CSS}
     .ilm-stamp{width:26mm;max-height:26mm;bottom:2px}
     .ft{display:flex;justify-content:space-between;font-size:10px;color:#9CA3AF;margin-top:10px;border-top:1px solid #E5E7EB;padding-top:5px}
-  </style></head><body>${pages}</body></html>`, { title: `Syllabus — ${exam?.title || ''}` });
+  </style></head><body>${pages}</body></html>`), { title: `Syllabus — ${exam?.title || ''}` });
   return true;
 }

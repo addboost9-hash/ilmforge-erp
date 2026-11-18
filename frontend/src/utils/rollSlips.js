@@ -9,6 +9,7 @@
  */
 
 import { stampImg, STAMP_CSS } from './schoolStamp';
+import { brand, GOLD, SERIF, SANS } from './printKit';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -82,24 +83,30 @@ function slipHTML({ s, g, data, design, issued, stamp }) {
     show.principalSignature && `<div class="sg pr">${stampImg(imgSrc(stamp))}<div class="sgimg">${sig ? `<img src="${esc(sig)}" alt="">` : ''}</div><div class="ln"></div><div class="sgl">${esc(design.principalName || design.principalTitle || 'Principal')}</div>${design.principalName ? `<div class="sgt">${esc(design.principalTitle || 'Principal')}</div>` : ''}</div>`,
   ].filter(Boolean).join('');
 
-  return `<section class="slip">
+  const motto = brand().motto;
+  const field = (label, value, cls2 = '') => `<div class="f ${cls2}"><span class="fl">${esc(label)}</span><span class="fv" dir="auto">${esc(value || '—')}</span></div>`;
+  return `<section class="slip"><div class="slipin">
+  <div class="wm" aria-hidden="true">${logo ? `<img src="${esc(logo)}" alt="">` : `<span>${esc(initials(school.name))}</span>`}</div>
   <header class="hd">
     ${logo ? `<img class="logo" src="${esc(logo)}" alt="">` : `<div class="logo mono">${esc(initials(school.name))}</div>`}
     <div class="sch">
       <div class="nm" dir="auto">${esc(school.name || 'School')}</div>
+      ${motto ? `<div class="mt" dir="auto">${esc(motto)}</div>` : ''}
       ${school.address || school.phone ? `<div class="ad" dir="auto">${esc([school.address, school.phone && `Phone ${school.phone}`].filter(Boolean).join(' · '))}</div>` : ''}
     </div>
     <div class="rollbox"><div class="rl">Roll No.</div><div class="rn">${esc(slipRollNo(s, design))}</div></div>
   </header>
-  <div class="band"><span class="tt">${esc(design.title || 'Roll Number Slip')}</span><span class="ex">${esc(examLabel(data.exam))}</span></div>
+  <div class="rule"></div>
+  <div class="ttl"><i></i><b>${esc(design.title || 'Roll Number Slip')}</b><i></i></div>
+  <div class="exl" dir="auto">${esc(examLabel(data.exam))}</div>
   <div class="who">
-    <table class="info">
-      <tr><th>Name</th><td colspan="3" class="big" dir="auto">${esc(s.name)}</td></tr>
-      ${show.fatherName ? `<tr><th>Father's name</th><td colspan="3" dir="auto">${esc(s.fatherName || '—')}</td></tr>` : ''}
-      <tr><th>Class</th><td colspan="3" dir="auto">${esc(cls)}</td></tr>
-      <tr><th>Exam dates</th><td colspan="3">${esc(examDates(data.exam) || '—')}</td></tr>
-    </table>
-    ${show.photo ? `<div class="photo">${photo ? `<img src="${esc(photo)}" alt="">` : '<span>Paste<br>photo<br>here</span>'}</div>` : ''}
+    <div class="kv">
+      ${field("Candidate's name", s.name, 'wide big')}
+      ${show.fatherName ? field("Father's name", s.fatherName) : ''}
+      ${field('Class', cls)}
+      ${field('Exam dates', examDates(data.exam), show.fatherName ? 'wide' : '')}
+    </div>
+    ${show.photo ? `<div class="photo"><div>${photo ? `<img src="${esc(photo)}" alt="">` : '<span>Paste<br>photo<br>here</span>'}</div></div>` : ''}
   </div>
   <table class="papers">
     <thead><tr>${cols.map((c) => `<th${c.w ? ` style="width:${c.w}"` : ''}>${c.h}</th>`).join('')}</tr></thead>
@@ -108,7 +115,7 @@ function slipHTML({ s, g, data, design, issued, stamp }) {
   ${show.instructions && design.instructions?.length ? `<div class="ins"><div class="insh">Instructions</div><ol>${design.instructions.map((l) => `<li dir="auto">${esc(l)}</li>`).join('')}</ol></div>` : ''}
   ${signs ? `<div class="signs">${signs}</div>` : ''}
   <footer class="ft"><span>${esc(design.footerNote || '')}</span><span class="iss">Issued ${esc(issued)}</span></footer>
-</section>`;
+</div></section>`;
 }
 
 /**
@@ -133,58 +140,71 @@ export function buildSlipsDocument({ data, design, groups, preview = false, auto
   @page { size: A4 portrait; margin: 8mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
-  body { font-family: Arial, 'Segoe UI', Helvetica, sans-serif; color: #111827; background: ${preview ? '#fff' : '#E5E7EB'}; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: ${SANS}; color: #111827; background: ${preview ? '#fff' : '#E5E7EB'}; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: #fff; border-bottom: 1px solid #D1D5DB; padding: 10px 16px; font-size: 13px; }
   .bar b { color: ${color}; }
   .bar button { background: ${color}; color: #fff; border: 0; border-radius: 8px; padding: 9px 18px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
   .bar .hint { color: #6B7280; font-size: 12px; }
   .pages { width: 194mm; margin: ${preview ? '0 auto' : '12px auto 40px'}; }
   .grp + .grp { break-before: page; page-break-before: always; }
-  .slip { position: relative; background: #fff; border: 1.6pt solid ${color}; border-radius: 3mm; padding: ${two ? '4mm 5mm' : '7mm 8mm'}; break-inside: avoid; page-break-inside: avoid; display: flex; flex-direction: column; ${two ? 'min-height: 132mm;' : 'min-height: 270mm;'} ${preview ? '' : 'box-shadow: 0 1px 4px rgba(0,0,0,.12);'} }
+  .slip { position: relative; background: #fff; border: 1.4pt solid ${color}; padding: .9mm; break-inside: avoid; page-break-inside: avoid; ${two ? 'min-height: 132mm;' : 'min-height: 270mm;'} ${preview ? '' : 'box-shadow: 0 1px 4px rgba(0,0,0,.12);'} }
+  .slipin { position: relative; min-height: ${two ? '130mm' : '268mm'}; border: .6pt solid ${GOLD}; padding: ${two ? '3.2mm 4.5mm 2.4mm' : '6.5mm 7.5mm 4mm'}; display: flex; flex-direction: column; overflow: hidden; }
+  .slipin > * { position: relative; z-index: 1; }
   ${two ? '' : '.grp .slip { break-after: page; page-break-after: always; } .grp:last-child .slip:last-child { break-after: auto; page-break-after: auto; } .slip + .slip { margin-top: 10mm; }'}
-  .cut { height: 0; border-top: 1px dashed #9CA3AF; margin: 4mm 0; position: relative; }
+  .wm { position: absolute !important; inset: 0; z-index: 0 !important; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .wm img { width: ${two ? '42%' : '60%'}; max-height: 70%; object-fit: contain; opacity: .055; filter: grayscale(100%); }
+  .wm span { font: 700 ${two ? '90pt' : '150pt'}/1 ${SERIF}; color: ${color}; opacity: .045; }
+  .cut { height: 0; border-top: 1px dashed #9CA3AF; margin: ${two ? '3.2mm' : '4mm'} 0; position: relative; }
   .cut::after { content: '✂'; position: absolute; left: -1mm; top: -2.6mm; font-size: 9pt; color: #9CA3AF; background: ${preview ? '#fff' : '#E5E7EB'}; }
-  .hd { display: flex; align-items: center; gap: ${two ? '3mm' : '5mm'}; padding-bottom: ${two ? '2mm' : '3mm'}; border-bottom: 1.2pt solid ${color}; }
-  .logo { width: ${two ? '13mm' : '19mm'}; height: ${two ? '13mm' : '19mm'}; object-fit: contain; flex: none; }
-  .mono { border-radius: 50%; background: ${color}; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: ${two ? '12pt' : '16pt'}; }
+  .hd { display: flex; align-items: center; gap: ${two ? '3mm' : '5mm'}; }
+  .logo { width: ${two ? '14mm' : '20mm'}; height: ${two ? '14mm' : '20mm'}; object-fit: contain; flex: none; }
+  .mono { border-radius: 50%; background: ${color}; color: #fff; display: flex; align-items: center; justify-content: center; font: 700 ${two ? '12pt' : '16pt'} ${SERIF}; box-shadow: inset 0 0 0 .7mm ${color}, inset 0 0 0 1mm ${GOLD}; }
   .sch { flex: 1; min-width: 0; text-align: center; }
-  .nm { font-size: ${two ? '14pt' : '19pt'}; font-weight: 800; color: ${color}; line-height: 1.15; text-transform: uppercase; letter-spacing: .3pt; }
-  .ad { font-size: ${two ? '7.5pt' : '9pt'}; color: #4B5563; margin-top: 1mm; }
-  .rollbox { flex: none; border: 1.2pt solid ${color}; border-radius: 2mm; text-align: center; padding: 1mm 2.5mm; min-width: ${two ? '24mm' : '30mm'}; }
-  .rl { font-size: 6.5pt; text-transform: uppercase; letter-spacing: .6pt; color: #6B7280; }
-  .rn { font-size: ${two ? '12pt' : '15pt'}; font-weight: 800; color: ${color}; font-family: 'Courier New', monospace; }
-  .band { display: flex; justify-content: space-between; align-items: baseline; gap: 4mm; background: ${color}; color: #fff; border-radius: 1.5mm; padding: ${two ? '1.4mm 3mm' : '2mm 4mm'}; margin: ${two ? '2mm 0' : '3mm 0'}; }
-  .tt { font-size: ${two ? '10.5pt' : '13pt'}; font-weight: 800; text-transform: uppercase; letter-spacing: 1pt; }
-  .ex { font-size: ${two ? '9pt' : '11pt'}; font-weight: 600; text-align: right; }
-  .who { display: flex; gap: ${two ? '3mm' : '5mm'}; align-items: stretch; }
-  .info { flex: 1; border-collapse: collapse; font-size: ${two ? '8.8pt' : '10.5pt'}; align-self: center; }
-  .info th { text-align: left; color: #4B5563; font-weight: 600; padding: ${two ? '1mm 2mm 1mm 0' : '1.6mm 3mm 1.6mm 0'}; white-space: nowrap; width: 1%; }
-  .info td { padding: ${two ? '1mm 3mm 1mm 0' : '1.6mm 4mm 1.6mm 0'}; border-bottom: .6pt solid ${tint(color, 0.75)}; font-weight: 600; }
-  .info td.big { font-size: ${two ? '10.5pt' : '12.5pt'}; font-weight: 800; }
-  .photo { flex: none; width: ${two ? '24mm' : '30mm'}; height: ${two ? '29mm' : '37mm'}; border: 1pt solid ${tint(color, 0.4)}; border-radius: 1.5mm; overflow: hidden; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 7pt; color: #9CA3AF; background: ${tint(color, 0.95)}; }
+  .nm { font: 700 ${two ? '15pt' : '20pt'}/1.08 ${SERIF}; color: ${color}; text-transform: uppercase; letter-spacing: .5pt; }
+  .mt { font: italic ${two ? '7.8pt' : '9pt'} ${SERIF}; color: ${GOLD}; margin-top: .5mm; }
+  .ad { font-size: ${two ? '7.3pt' : '8.5pt'}; color: #4B5563; margin-top: .6mm; }
+  .rollbox { flex: none; border: 1.2pt solid ${color}; border-radius: 1.4mm; text-align: center; padding: .8mm 2.5mm; min-width: ${two ? '25mm' : '31mm'}; background: #fff; box-shadow: inset 0 0 0 .5mm #fff, inset 0 0 0 .8mm ${tint(color, 0.7)}; }
+  .rl { font-size: 6.3pt; text-transform: uppercase; letter-spacing: .7pt; color: #6B7280; }
+  .rn { font-size: ${two ? '12.5pt' : '15pt'}; font-weight: 800; color: ${color}; font-family: Consolas, 'Courier New', monospace; white-space: nowrap; }
+  .rule { height: 2.2pt; background: ${color}; margin-top: ${two ? '1.6mm' : '2.4mm'}; position: relative; }
+  .rule::after { content: ''; position: absolute; left: 0; right: 0; top: calc(100% + .9pt); height: .7pt; background: ${GOLD}; }
+  .ttl { display: flex; align-items: center; gap: 3.5mm; margin: ${two ? '2.4mm 0 .6mm' : '4mm 0 1mm'}; }
+  .ttl i { flex: 1; height: .7pt; background: ${GOLD}; }
+  .ttl b { flex: none; background: ${color}; color: #fff; font: 700 ${two ? '9.8pt' : '12pt'} ${SANS}; letter-spacing: 2pt; text-transform: uppercase; padding: ${two ? '1mm 4.5mm' : '1.5mm 6mm'}; border-radius: .8mm; }
+  .exl { text-align: center; font: 600 ${two ? '9.2pt' : '11pt'} ${SERIF}; color: ${color}; margin-bottom: ${two ? '2mm' : '3.5mm'}; }
+  .who { display: flex; gap: ${two ? '4mm' : '6mm'}; align-items: stretch; }
+  .kv { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: ${two ? '1.2mm 5mm' : '2.4mm 7mm'}; align-content: center; }
+  .f { display: flex; flex-direction: column; min-width: 0; }
+  .f.wide { grid-column: 1 / -1; }
+  .fl { font-size: ${two ? '6pt' : '6.8pt'}; text-transform: uppercase; letter-spacing: .7pt; color: #6B7280; font-weight: 600; }
+  .fv { font-size: ${two ? '9pt' : '10.5pt'}; font-weight: 700; border-bottom: .7pt dotted #9CA3AF; padding: .3mm 0 .6mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .f.big .fv { font: 700 ${two ? '11pt' : '13pt'} ${SERIF}; color: ${color}; }
+  .photo { flex: none; width: ${two ? '24mm' : '30mm'}; height: ${two ? '29mm' : '37mm'}; border: .8pt solid ${color}; padding: .8mm; background: #fff; }
+  .photo > div { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 7pt; color: #9CA3AF; background: ${tint(color, 0.95)}; overflow: hidden; }
   .photo img { width: 100%; height: 100%; object-fit: cover; }
-  .papers { width: 100%; border-collapse: collapse; margin-top: ${two ? '2.5mm' : '4mm'}; font-size: ${two ? '8.4pt' : '10pt'}; }
-  .papers th { background: ${tint(color, 0.88)}; color: ${color}; font-weight: 800; text-align: left; padding: ${two ? '1.1mm 1.6mm' : '1.8mm 2.4mm'}; border: .6pt solid ${tint(color, 0.6)}; font-size: ${two ? '7.8pt' : '9pt'}; text-transform: uppercase; letter-spacing: 0; }
-  .papers td { padding: ${two ? '1.05mm 1.6mm' : '2mm 2.4mm'}; border: .6pt solid #D1D5DB; vertical-align: middle; }
+  .papers { width: 100%; border-collapse: collapse; margin-top: ${two ? '2.4mm' : '4.5mm'}; font-size: ${two ? '8.3pt' : '10pt'}; }
+  .papers th { background: ${color}; color: #fff; font-weight: 700; text-align: left; padding: ${two ? '1.1mm 1.6mm' : '1.9mm 2.4mm'}; border: .6pt solid ${color}; font-size: ${two ? '7.2pt' : '8.4pt'}; text-transform: uppercase; letter-spacing: .4pt; }
+  .papers td { padding: ${two ? '1mm 1.6mm' : '2mm 2.4mm'}; border: .6pt solid ${tint(color, 0.72)}; vertical-align: middle; }
+  .papers tbody tr:nth-child(even) td { background: ${tint(color, 0.955)}; }
   .papers td.n { text-align: center; }
   .papers td.nw, .papers .nw { white-space: nowrap; }
   .papers td.sub { font-weight: 700; }
   .papers td.none { text-align: center; color: #B45309; padding: 3mm; }
-  .ins { margin-top: ${two ? '2mm' : '4mm'}; border: .6pt solid ${tint(color, 0.7)}; background: ${tint(color, 0.96)}; border-radius: 1.5mm; padding: ${two ? '1.4mm 3mm' : '2.5mm 4mm'}; }
-  .insh { font-weight: 800; font-size: ${two ? '7.8pt' : '9.5pt'}; color: ${color}; text-transform: uppercase; letter-spacing: .4pt; }
-  .ins ol { margin: .6mm 0 0; padding-left: 4.5mm; ${two ? 'columns: 2; column-gap: 6mm;' : ''} font-size: ${two ? '7.3pt' : '9pt'}; color: #374151; line-height: 1.32; }
+  .ins { margin-top: ${two ? '2mm' : '4mm'}; border: .6pt solid ${tint(color, 0.7)}; border-left: 2.2pt solid ${GOLD}; background: ${tint(color, 0.965)}; padding: ${two ? '1.3mm 3mm' : '2.5mm 4mm'}; }
+  .insh { font-weight: 800; font-size: ${two ? '7.4pt' : '9pt'}; color: ${color}; text-transform: uppercase; letter-spacing: .6pt; }
+  .ins ol { margin: .6mm 0 0; padding-left: 4.5mm; ${two ? 'columns: 2; column-gap: 6mm;' : ''} font-size: ${two ? '7.1pt' : '9pt'}; color: #374151; line-height: 1.32; }
   .ins li { break-inside: avoid; }
-  .signs { display: flex; justify-content: space-between; gap: 8mm; margin-top: auto; padding-top: ${two ? '2mm' : '6mm'}; }
-  .sg { flex: 1; max-width: 55mm; text-align: center; font-size: ${two ? '8pt' : '9.5pt'}; }
-  .sgimg { height: ${two ? '9mm' : '14mm'}; display: flex; align-items: flex-end; justify-content: center; }
+  .signs { display: flex; justify-content: space-between; gap: 8mm; margin-top: auto; padding-top: ${two ? '1.6mm' : '6mm'}; }
+  .sg { flex: 1; max-width: 52mm; text-align: center; font-size: ${two ? '7.8pt' : '9.3pt'}; }
+  .sgimg { height: ${two ? '8.5mm' : '14mm'}; display: flex; align-items: flex-end; justify-content: center; }
   .sgimg img { max-height: 100%; max-width: 100%; object-fit: contain; }
-  .ln { border-top: .9pt solid #111827; margin-top: .5mm; }
-  .sgl { font-weight: 700; margin-top: .8mm; }
-  .sgt { font-size: ${two ? '7pt' : '8pt'}; color: #6B7280; }
+  .ln { border-top: .8pt solid #111827; margin-top: .5mm; }
+  .sgl { font-weight: 700; margin-top: .7mm; }
+  .sgt { font-size: ${two ? '6.8pt' : '8pt'}; color: #6B7280; }
   .pr { position: relative; }
   ${STAMP_CSS}
-  .ilm-stamp { width: ${two ? '21mm' : '28mm'}; max-height: ${two ? '21mm' : '28mm'}; }
-  .ft { display: flex; justify-content: space-between; gap: 4mm; margin-top: ${two ? '1.6mm' : '3mm'}; font-size: ${two ? '7pt' : '8pt'}; color: ${color}; font-weight: 700; }
+  .ilm-stamp { width: ${two ? '20mm' : '28mm'}; max-height: ${two ? '20mm' : '28mm'}; }
+  .ft { display: flex; justify-content: space-between; gap: 4mm; margin-top: ${two ? '1.4mm' : '3mm'}; padding-top: ${two ? '.8mm' : '1.4mm'}; border-top: .5pt solid ${tint(color, 0.7)}; font-size: ${two ? '6.8pt' : '7.8pt'}; color: ${color}; font-weight: 700; }
   .ft .iss { color: #9CA3AF; font-weight: 400; white-space: nowrap; }
   @media print {
     body { background: #fff; }

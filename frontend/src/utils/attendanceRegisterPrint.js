@@ -9,6 +9,7 @@
  *                                 A4 page.
  */
 import { printHTML } from './print';
+import { formalize } from './printKit';
 import { stampImg, STAMP_CSS } from './schoolStamp';
 
 export const LETTER = { present: 'P', absent: 'A', leave: 'L', late: 'Lt' };
@@ -98,7 +99,7 @@ export function printAttendanceRegister({ school, data, groups, stamp = '', note
     </section>`;
   }).join('');
   if (!pages) return false;
-  printHTML(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Attendance Register — ${esc(monthName(data.month))}</title><style>
+  printHTML(formalize(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Attendance Register — ${esc(monthName(data.month))}</title><style>
     @page{size:A4 landscape;margin:7mm}
     ${CSS}
     .pg{break-after:page;page-break-after:always}.pg:last-child{break-after:auto;page-break-after:auto}
@@ -114,7 +115,7 @@ export function printAttendanceRegister({ school, data, groups, stamp = '', note
     tfoot td{background:#F3F4F6;font-weight:700}
     .ilm-stamp{width:12mm;max-height:12mm;bottom:0;left:50%;transform:translateX(-50%) rotate(-10deg)}
     .signs{align-items:flex-end}.signs .when{font-size:9px;color:#9CA3AF;white-space:nowrap}
-  </style></head><body>${pages}</body></html>`, { title: 'Attendance Register' });
+  </style></head><body>${pages}</body></html>`), { title: 'Attendance Register' });
   return true;
 }
 
@@ -136,7 +137,7 @@ export function printAttendanceYear({ school, year, stamp = '' }) {
     return `<div class="mo"><div class="mh">${esc(monthName(mo.month))}</div><table><thead><tr>${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((x) => `<th>${x}</th>`).join('')}</tr></thead><tbody>${weeks.join('')}</tbody></table>
       <div class="ms">P ${n('present')} · A ${n('absent')} · L ${n('leave')} · Lt ${n('late')}</div></div>`;
   }).join('');
-  printHTML(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Attendance — ${esc(s.name)}</title><style>
+  printHTML(formalize(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Attendance — ${esc(s.name)}</title><style>
     @page{size:A4 portrait;margin:10mm}
     ${CSS}
     .info{display:grid;grid-template-columns:1fr 1fr;gap:3px 20px;font-size:12px;margin:4px 0 8px}
@@ -155,5 +156,5 @@ export function printAttendanceYear({ school, year, stamp = '' }) {
     <div class="tot"><span>Present <b>${t.present}</b></span><span>Absent <b>${t.absent}</b></span><span>Leave <b>${t.leave}</b></span><span>Late <b>${t.late}</b></span><span>Days marked <b>${t.marked}</b></span>${pct !== null ? `<span>Attendance <b>${pct}%</b></span>` : ''}</div>
     <div class="tail"><div class="legend"><span>P present · A absent · L leave · Lt late · H holiday · grey: Sunday or holiday</span><span class="when">Printed ${today()}</span></div>
       <div class="signs"><div class="sg"><div class="ln"></div><div class="lb">Class teacher</div></div><div class="sg pr">${stampImg(pic(stamp))}<div class="ln"></div><div class="lb">Principal</div></div></div></div>
-  </body></html>`, { title: `Attendance — ${s.name}` });
+  </body></html>`), { title: `Attendance — ${s.name}` });
 }
