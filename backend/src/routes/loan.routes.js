@@ -126,17 +126,26 @@ router.post('/:id/pay-installment', wrap(async (req, res) => {
       message: `Cannot record an instalment against a ${loan.status} loan — approve it first.`,
     });
   }
-  const newPaid = loan.paidAmount + loan.monthlyInstallment;
+  // The last instalment is only what is left (a Rs 10,000 loan in 3
+  // instalments of 3,334 was repaid 10,002), and an instalment is counted
+  // once: the write only happens if no other one was recorded since this
+  // was read (a double click recorded two).
+  const owed = Math.max(0, loan.loanAmount - loan.paidAmount);
+  if (owed <= 0) return res.status(400).json({ success: false, message: 'This loan is already fully repaid.' });
+  const instalment = Math.min(loan.monthlyInstallment || owed, owed);
+  const newPaid = loan.paidAmount + instalment;
   const newRemaining = Math.max(0, loan.loanAmount - newPaid);
-  const updated = await prisma.staffLoan.update({
-    where: { id: loan.id },
+  const { count } = await prisma.staffLoan.updateMany({
+    where: { id: loan.id, schoolId: req.schoolId, status: 'active', paidAmount: loan.paidAmount, paidInstallments: loan.paidInstallments },
     data: {
       paidInstallments: loan.paidInstallments + 1,
       paidAmount: newPaid, remaining: newRemaining,
       status: newRemaining <= 0 ? 'completed' : 'active',
     }
   });
-  res.json({ success: true, data: updated });
+  if (count !== 1) return res.status(409).json({ success: false, message: 'An instalment was just recorded on this loan. Refresh and check before recording another.' });
+  const updated = await prisma.staffLoan.findUnique({ where: { id: loan.id } });
+  res.json({ success: true, data: updated, instalment });
 }));
 
 module.exports = router;

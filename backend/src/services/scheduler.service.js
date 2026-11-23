@@ -327,10 +327,11 @@ async function runBirthdayWishes() {
    Runs daily. Sends today's fee collection summary to admin email.
 ═══════════════════════════════════════════════════════════════════ */
 async function runDailyCollectionReport() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // Today in Pakistan. The online server runs in UTC, whose midnight is
+  // 5 am here: payments taken before 5 am went into the wrong day's report.
+  const pkNow = new Date(Date.now() + 5 * 3600e3);
+  const today = new Date(Date.UTC(pkNow.getUTCFullYear(), pkNow.getUTCMonth(), pkNow.getUTCDate()) - 5 * 3600e3);
+  const tomorrow = new Date(today.getTime() + 864e5);
 
   console.log('[Scheduler] Daily collection report running');
 
@@ -362,7 +363,7 @@ async function runDailyCollectionReport() {
         select: { email: true, name: true },
       });
 
-      const dateStr = today.toLocaleDateString('en-PK', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+      const dateStr = today.toLocaleDateString('en-PK', { timeZone: 'Asia/Karachi', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
@@ -373,7 +374,7 @@ async function runDailyCollectionReport() {
           <div style="padding:24px;background:#f8fafc;border:1px solid #e2e8f0">
             <div style="display:flex;gap:16px;margin-bottom:20px">
               <div style="flex:1;background:white;padding:16px;border-radius:8px;border-left:4px solid #00a65a;text-align:center">
-                <div style="font-size:28px;font-weight:800;color:#00a65a">Rs. ${total.toLocaleString('en-PK')}</div>
+                <div style="font-size:28px;font-weight:800;color:#00a65a">Rs. ${rupees(total)}</div>
                 <div style="color:#666;font-size:13px">Total Collected Today</div>
               </div>
               <div style="flex:1;background:white;padding:16px;border-radius:8px;border-left:4px solid #0073b7;text-align:center">
@@ -391,13 +392,13 @@ async function runDailyCollectionReport() {
       for (const admin of admins) {
         await sendEmail({
           to:      admin.email,
-          subject: `📊 Daily Collection: Rs. ${total.toLocaleString('en-PK')} — ${dateStr}`,
+          subject: `📊 Daily Collection: Rs. ${rupees(total)} — ${dateStr}`,
           html,
-          text:    `Daily Collection for ${dateStr}: Rs. ${total.toLocaleString('en-PK')} (${count} payments)`,
+          text:    `Daily Collection for ${dateStr}: Rs. ${rupees(total)} (${count} payments)`,
         });
       }
 
-      await logRun(rule.schoolId, rule.id, 'success', `Collection report sent to ${admins.length} admin(s). Total: Rs. ${total.toLocaleString('en-PK')}`);
+      await logRun(rule.schoolId, rule.id, 'success', `Collection report sent to ${admins.length} admin(s). Total: Rs. ${rupees(total)}`);
     }
   } catch (err) {
     console.error('[Scheduler] Collection report error:', err.message);

@@ -262,7 +262,7 @@ function MonthlyFeeTab({ classes }) {
     const monthNum = MONTHS.indexOf(month) + 1;
     mutation.mutate({
       type: 'monthly',
-      campusId: campus || undefined,   // send campusId for filtering
+      campusId: campus || 'all',   // send campusId for filtering
       classId:  parseInt(classId, 10),
       sectionId: sectionId ? parseInt(sectionId, 10) : undefined,
       month:  monthNum,                // send number, not string
@@ -406,7 +406,7 @@ function CustomFeeTab({ classes }) {
     // are stored in paisa across this module, so the Rupee input is scaled by 100.
     mutation.mutate({
       type: 'custom',
-      campusId: campus || undefined,
+      campusId: campus || 'all',
       classId: parseInt(classId, 10),
       sectionId: sectionId ? parseInt(sectionId, 10) : undefined,
       month: monthNum,
@@ -516,7 +516,7 @@ function TransportFeeTab({ classes }) {
     mutation.mutate({
       type:      'transport',
       feeTitle:  `Transport Fee Of ${month}`,
-      campusId:  campus || undefined,
+      campusId:  campus || 'all',
       classId:   parseInt(classId, 10),
       sectionId: sectionId ? parseInt(sectionId, 10) : undefined,
       month:     monthNum,

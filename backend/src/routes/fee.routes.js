@@ -9,6 +9,7 @@ const { sendSMS } = require('../services/sms.service');
 const { sendFeePaidNotification } = require('../services/whatsapp.service');
 const { duesByStudent } = require('../services/scheduler.service');
 const { oldestFirst, applyPayments, bad } = require('../services/feeCollect.service');
+const { recomputeInvoice, ownDiscount, setOwnDiscount, paymentTotals, figures } = require('../utils/invoiceMath');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 /* Pakistan keeps one clock all year, UTC+5. A date picked on a screen is a
@@ -139,8 +140,10 @@ router.post('/generate', requireFinanceRole, wrap(async (req, res) => {
   const MONTHS   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const monthName = MONTHS[(monthInt - 1)];
 
-  // Use campusId from body (user selection) or fall back to middleware campus
-  const filterCampusId = bodyCampusId ? parseInt(bodyCampusId) : req.campusId;
+  // The campus chosen on the form; "all" bills every campus. "All campuses"
+  // used to send nothing, which fell back to the user's own campus, so the
+  // other campuses' students were never billed.
+  const filterCampusId = bodyCampusId === 'all' ? null : (bodyCampusId ? parseInt(bodyCampusId) : req.campusId);
 
   // The class's fee: the one with this bill's title when there is one, else
   // its monthly fee, else the fee set most recently. Saving a class's fee
@@ -471,10 +474,14 @@ router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
           amountPaid: paidNum, discount: discountNum, method, receivedBy: req.user.id,
           notifiedVia: notifyVia, receiptNo, paymentDate: when.date, remarks: note }
       });
-      await tx.feeInvoice.update({
-        where: { id: parseInt(invoiceId) },
+      // Written only if the balance is still the one read above: two
+      // payments at the same moment (two counters, a double click) each
+      // read the same balance, and the second overwrote the first.
+      const { count } = await tx.feeInvoice.updateMany({
+        where: { id: parseInt(invoiceId), schoolId, dueAmount: current.dueAmount },
         data: { paidAmount: { increment: paidNum }, discount: { increment: discountNum }, dueAmount: due, status }
       });
+      if (count !== 1) throw Object.assign(new Error('This bill changed while the payment was being saved. Open it again and retry.'), { status: 409 });
       // A fee keyed in for an earlier day is legitimate (it was received
       // then), but an auditor must be able to tell it from one recorded on
       // the day, so the entry date is kept beside the date written on it.
@@ -490,7 +497,7 @@ router.post('/payments', requireFinanceRole, wrap(async (req, res) => {
     });
     payment = result.pay; newDue = result.due; newStatus = result.status;
   } catch (err) {
-    if (err.status === 400) return res.status(400).json({ success: false, message: err.message });
+    if (err.status === 400 || err.status === 409) return res.status(err.status).json({ success: false, message: err.message });
     throw err;
   }
 
@@ -629,22 +636,9 @@ router.use('/challans', requireFinanceRole, require('./feeChallan.routes'));
 // Amounts are stored in paisa; messages read back to the user in rupees.
 const rs = (paisa) => 'Rs ' + Math.round((paisa || 0) / 100).toLocaleString('en-PK');
 
-const recomputeInvoice = async (tx, invoiceId) => {
-  const inv = await tx.feeInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
-  const live = await tx.feePayment.findMany({
-    where: { invoiceId, voidedAt: null },
-    select: { amountPaid: true, discount: true },
-  });
-  const paid = live.reduce((t, r) => t + r.amountPaid, 0);
-  const disc = live.reduce((t, r) => t + r.discount, 0);
-  const due = Math.max(0, inv.totalAmount + inv.lateFee - paid - disc);
-  const status = due === 0 ? 'paid' : (paid + disc > 0 ? 'partial' : 'unpaid');
-  await tx.feeInvoice.update({
-    where: { id: invoiceId },
-    data: { paidAmount: paid, discount: disc, dueAmount: due, status },
-  });
-  return { paid, due, status };
-};
+// recomputeInvoice (utils/invoiceMath) keeps the bill's own discount: it
+// used to count only the payments' discounts, so voiding or correcting a
+// receipt on a bill with a concession put the concession back on the balance.
 
 // POST /api/v1/fees/payments/:id/void  — cancel a payment outright
 router.post('/payments/:id/void', requireFinanceRole, wrap(async (req, res) => {
@@ -665,12 +659,16 @@ router.post('/payments/:id/void', requireFinanceRole, wrap(async (req, res) => {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    await tx.feePayment.update({
-      where: { id },
+    const own = await ownDiscount(tx, existing.invoiceId);
+    // Only a payment still live is voided (two clicks cannot both count).
+    const { count } = await tx.feePayment.updateMany({
+      where: { id, voidedAt: null },
       data: { voidedAt: new Date(), voidedBy: req.user.id, voidReason: reason },
     });
-    return recomputeInvoice(tx, existing.invoiceId);
-  });
+    if (count !== 1) throw bad('This payment has already been voided.');
+    return recomputeInvoice(tx, existing.invoiceId, own);
+  }).catch((err) => { if (err.status) return { error: err }; throw err; });
+  if (result.error) return res.status(result.error.status).json({ success: false, message: result.error.message });
 
   res.json({
     success: true,
@@ -713,14 +711,16 @@ router.put('/payments/:id', requireFinanceRole, wrap(async (req, res) => {
   let out;
   try {
     out = await prisma.$transaction(async (tx) => {
+      const own = await ownDiscount(tx, existing.invoiceId);
       // Void first, so the headroom check below sees the invoice WITHOUT
       // the mistaken amount — otherwise correcting 250 up to 2,500 would
       // be rejected for "exceeding" a due it is itself responsible for.
-      await tx.feePayment.update({
-        where: { id },
+      const { count } = await tx.feePayment.updateMany({
+        where: { id, voidedAt: null, replacedBy: { is: null } },
         data: { voidedAt: new Date(), voidedBy: req.user.id, voidReason: `Corrected: ${why}` },
       });
-      const afterVoid = await recomputeInvoice(tx, existing.invoiceId);
+      if (count !== 1) throw Object.assign(new Error('This payment has just been voided or corrected.'), { status: 400 });
+      const afterVoid = await recomputeInvoice(tx, existing.invoiceId, own);
 
       if (paidNum + discNum > afterVoid.due) {
         throw Object.assign(new Error(
@@ -750,7 +750,7 @@ router.put('/payments/:id', requireFinanceRole, wrap(async (req, res) => {
           replacesId: existing.id,
         },
       });
-      const final = await recomputeInvoice(tx, existing.invoiceId);
+      const final = await recomputeInvoice(tx, existing.invoiceId, own);
       return { replacement, ...final };
     });
   } catch (err) {
@@ -817,9 +817,12 @@ router.post('/defaulters/sms', requireFinanceRole, wrap(async (req, res) => {
   const channel = req.body?.channel === 'whatsapp' ? 'whatsapp' : 'sms';
   const onlyIds = Array.isArray(studentIds) ? studentIds.map((x) => parseInt(x)).filter((x) => x > 0) : null;
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
+  // The same campus as the defaulters list it is sent from (it reminded
+  // every campus's defaulters while the list showed one campus).
   const invoices = await prisma.feeInvoice.findMany({
     where: {
       schoolId, status: { in: ['unpaid', 'partial'] }, dueAmount: { gt: 0 },
+      ...(req.campusId && { campusId: req.campusId }),
       ...(classId && { classId: parseInt(classId) }),
       ...(onlyIds && { studentId: { in: onlyIds } }),
     },
@@ -1047,20 +1050,31 @@ router.post('/invoices', requireFinanceRole, wrap(async (req, res) => {
 // and `remarks` (doesn't exist on FeeInvoice at all); both threw a Prisma
 // validation error on every call, so editing an invoice always failed.
 router.put('/invoices/:id', requireFinanceRole, wrap(async (req, res) => {
-  const { totalAmount, dueDate, status } = req.body;
+  // The status follows the amounts (paid, part paid, unpaid): it used to be
+  // set from the form, so a bill could say "paid" with nothing paid, and
+  // the balance left out the discount and the late fee.
+  const { totalAmount, dueDate } = req.body;
   const inv = await prisma.feeInvoice.findFirst({ where: { id: parseInt(req.params.id), schoolId: req.schoolId } });
   if (!inv) return res.status(404).json({ success: false, message: 'Invoice not found.' });
-  const newTotal = totalAmount !== undefined ? parseInt(totalAmount) : inv.totalAmount;
-  const updated = await prisma.feeInvoice.update({
-    where: { id: inv.id },
-    data: {
-      totalAmount: newTotal,
-      dueAmount: Math.max(0, newTotal - inv.paidAmount),
-      ...(dueDate && { dueDate: new Date(dueDate) }),
-      ...(status && { status }),
+  const newTotal = totalAmount !== undefined && totalAmount !== '' ? Number(totalAmount) : inv.totalAmount;
+  if (!Number.isInteger(newTotal) || newTotal < 0) return res.status(400).json({ success: false, message: 'The amount must be 0 or more.' });
+  if (dueDate && !isDay(String(dueDate).slice(0, 10))) return res.status(400).json({ success: false, message: 'The due date must be a date (YYYY-MM-DD).' });
+  const updated = await prisma.$transaction(async (tx) => {
+    const totals = await paymentTotals(tx, inv.id);
+    const own = Math.max(0, (inv.discount || 0) - totals.paymentDiscount);
+    if (newTotal + (inv.lateFee || 0) < totals.paid + totals.paymentDiscount) {
+      throw Object.assign(new Error(`${rs(totals.paid)} has already been paid on this bill; the amount cannot be less than that.`), { status: 400 });
     }
-  });
-  await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_UPDATED', resource: 'fee_invoice', resourceId: inv.id } }).catch(() => null);
+    // The bill's own discount stays, up to the new amount.
+    const keep = Math.min(own, Math.max(0, newTotal + (inv.lateFee || 0) - totals.paid - totals.paymentDiscount));
+    const data = figures({ ...inv, totalAmount: newTotal }, totals, keep);
+    return tx.feeInvoice.update({
+      where: { id: inv.id },
+      data: { totalAmount: newTotal, ...data, ...(dueDate && { dueDate: new Date(`${String(dueDate).slice(0, 10)}T07:00:00.000Z`) }) },
+    });
+  }).catch((err) => { if (err.status) return { error: err }; throw err; });
+  if (updated.error) return res.status(400).json({ success: false, message: updated.error.message });
+  await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'INVOICE_UPDATED', resource: 'fee_invoice', resourceId: inv.id, details: JSON.stringify({ from: inv.totalAmount, to: newTotal }) } }).catch(() => null);
   res.json({ success: true, data: updated });
 }));
 
@@ -1189,10 +1203,13 @@ router.get('/payments', requireFinanceRole, wrap(async (req, res) => {
   // Voided rows stay in the list so the correction is visible to whoever
   // is reconciling the day's cash, but they are not money collected, so
   // they are excluded from the total the dashboard also reports.
-  const totalAmount = payments
-    .filter((p) => !p.voidedAt)
-    .reduce((sum, p) => sum + p.amountPaid, 0);
-  const voidedCount = payments.filter((p) => p.voidedAt).length;
+  // Over every payment matching the filters, not only this page (the
+  // total was the first 50 rows' and read as the day's or month's total).
+  const [liveSum, voidedCount] = await Promise.all([
+    prisma.feePayment.aggregate({ where: { ...where, voidedAt: null }, _sum: { amountPaid: true } }),
+    prisma.feePayment.count({ where: { ...where, voidedAt: { not: null } } }),
+  ]);
+  const totalAmount = liveSum._sum.amountPaid || 0;
 
   res.json({
     success: true,
@@ -1344,19 +1361,38 @@ router.get('/discounts', requireFinanceRole, wrap(async (req, res) => {
 /* ── POST /fees/discounts — Apply discount to student's pending invoices ── */
 router.post('/discounts', requireFinanceRole, wrap(async (req, res) => {
   const { schoolId } = req;
+  // Sets each open bill's own discount (0 removes it). It used to set the
+  // balance to "amount − discount", forgetting what was already paid and
+  // the late fee, never changed the status, and refused 0, so "Remove"
+  // never worked.
   const { studentId, discountType, discountValue, reason } = req.body;
-  if (!studentId || !discountValue) return res.status(400).json({ success: false, message: 'studentId and discountValue required' });
-
-  const invoices = await prisma.feeInvoice.findMany({ where: { schoolId, studentId: parseInt(studentId), status: { not: 'paid' } } });
-  let applied = 0;
-  for (const inv of invoices) {
-    const discAmt = discountType === 'percent'
-      ? Math.round(inv.totalAmount * parseFloat(discountValue) / 100)
-      : Math.round(parseFloat(discountValue));
-    await prisma.feeInvoice.update({ where: { id: inv.id }, data: { discount: discAmt, dueAmount: Math.max(0, inv.totalAmount - discAmt) } });
-    applied++;
+  const value = Number(discountValue);
+  const percent = discountType === 'percent';
+  if (!studentId || discountValue === undefined || discountValue === null || discountValue === '' || !Number.isFinite(value) || value < 0) {
+    return res.status(400).json({ success: false, message: 'Choose a student and a discount of 0 or more.' });
   }
-  res.json({ success: true, message: `Discount applied to ${applied} invoice(s)`, applied });
+  if (percent && value > 100) return res.status(400).json({ success: false, message: 'A percentage discount cannot be more than 100.' });
+  const student = await prisma.student.findFirst({ where: { id: parseInt(studentId), schoolId }, select: { id: true } });
+  if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+
+  // Open bills, and bills with no balance only because of a discount (so a
+  // discount can be taken off again).
+  const invoices = (await prisma.feeInvoice.findMany({ where: { schoolId, studentId: student.id, OR: [{ status: { not: 'paid' } }, { discount: { gt: 0 } }] } }));
+  let applied = 0;
+  await prisma.$transaction(async (tx) => {
+    for (const inv of invoices) {
+      const totals = await paymentTotals(tx, inv.id);
+      // A bill settled by payments is left alone.
+      if (totals.paid + totals.paymentDiscount >= inv.totalAmount + inv.lateFee) continue;
+      const amount = percent ? Math.round(inv.totalAmount * value / 100) : Math.round(value);
+      await setOwnDiscount(tx, inv.id, amount);
+      applied++;
+    }
+    await tx.auditLog.create({
+      data: { schoolId, userId: req.user.id, action: value > 0 ? 'FEE_DISCOUNT_APPLIED' : 'FEE_DISCOUNT_REMOVED', resource: 'student', resourceId: student.id, details: JSON.stringify({ discountType: percent ? 'percent' : 'flat', discountValue: value, reason: reason || null, invoices: applied }) },
+    });
+  });
+  res.json({ success: true, message: value > 0 ? `Discount applied to ${applied} bill(s).` : `Discount removed from ${applied} bill(s).`, applied });
 }));
 
 /* ── GET /fees/student-fee-details/:studentId — Fee heads with class structure ── */
@@ -1397,23 +1433,10 @@ router.get('/student-fee-details/:studentId', requireFinanceRole, wrap(async (re
     ];
   }
 
-  // Merge saved per-student discounts from the most recent invoice remarks if any
-  const latestInvoice = await prisma.feeInvoice.findFirst({
-    where: { schoolId, studentId },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  let savedDiscounts = {};
-  let savedComments = '';
-  if (latestInvoice?.remarks) {
-    try {
-      const parsed = JSON.parse(latestInvoice.remarks);
-      if (parsed?.feeHeadDiscounts) {
-        savedDiscounts = parsed.feeHeadDiscounts;
-        savedComments  = parsed.comments || '';
-      }
-    } catch { /* ignore */ }
-  }
+  // The student's saved per-head discounts: kept with the change in the
+  // audit log (they used to be written over the remarks of every open bill,
+  // and were lost as soon as a new month was billed).
+  const { feeHeadDiscounts: savedDiscounts, comments: savedComments } = await savedHeadDiscounts(schoolId, studentId);
 
   // Apply saved discounts
   heads = heads.map(h => {
@@ -1428,7 +1451,12 @@ router.get('/student-fee-details/:studentId', requireFinanceRole, wrap(async (re
   res.json({ success: true, data: { student, feeStructure: { heads }, totalFee, discountTotal, netTotal, comments: savedComments } });
 }));
 
-/* ── PUT /fees/student-discount/:studentId — Apply per-head discounts to student ── */
+/* ── PUT /fees/student-discount/:studentId — Apply per-head discounts to student ──
+   Each open bill gets the discount of ITS fee head: the Tuition discount on
+   the monthly bills, the Admission discount on the admission bill. Every
+   head's discount used to come off every bill (a Rs 500 tuition and Rs 1,000
+   admission discount took Rs 1,500 off each month), and the remarks of every
+   bill were replaced with the discount list. */
 router.put('/student-discount/:studentId', requireFinanceRole, wrap(async (req, res) => {
   const { schoolId } = req;
   const studentId = parseInt(req.params.studentId);
@@ -1436,48 +1464,70 @@ router.put('/student-discount/:studentId', requireFinanceRole, wrap(async (req, 
 
   const student = await prisma.student.findFirst({ where: { id: studentId, schoolId, deletedAt: null } });
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+  if (!Array.isArray(heads)) return res.status(400).json({ success: false, message: 'heads must be a list.' });
 
-  // Build a discount map by head name
   const feeHeadDiscounts = {};
-  let totalDiscount = 0;
+  const byKind = new Map();
   for (const h of heads) {
-    feeHeadDiscounts[h.name] = parseInt(h.discount) || 0;
-    totalDiscount += feeHeadDiscounts[h.name];
+    const name = String(h?.name || '').trim();
+    const d = Number(h?.discount) || 0;
+    if (!name) continue;
+    if (!Number.isInteger(d) || d < 0) return res.status(400).json({ success: false, message: `The discount on ${name} must be 0 or more.` });
+    feeHeadDiscounts[name] = d;
+    byKind.set(feeKind(name), (byKind.get(feeKind(name)) || 0) + d);
   }
+  const totalDiscount = Object.values(feeHeadDiscounts).reduce((a, b) => a + b, 0);
 
-  // Store discount info on the latest unpaid invoice or all pending invoices
-  const pendingInvoices = await prisma.feeInvoice.findMany({
-    where: { schoolId, studentId, status: { not: 'paid' } },
+  // A bill's discount: its own head's, or for a bill of several heads (made
+  // on Manage Invoices) each of its heads' discounts, up to that head's amount.
+  const discountFor = (inv) => {
+    let parts = null;
+    try { const j = JSON.parse(inv.remarks || ''); if (Array.isArray(j)) parts = j; } catch { /* plain remarks */ }
+    if (parts && parts.length) return parts.reduce((t, p) => t + Math.min(byKind.get(feeKind(p.name)) || 0, Number(p.amount) || 0), 0);
+    return byKind.get(feeKind(inv.feeTitle)) || 0;
+  };
+
+  const bills = await prisma.feeInvoice.findMany({
+    where: { schoolId, studentId, OR: [{ status: { not: 'paid' } }, { discount: { gt: 0 } }] },
     orderBy: { createdAt: 'desc' },
   });
-
   let updated = 0;
-  for (const inv of pendingInvoices) {
-    const newDiscount = Math.min(totalDiscount, inv.totalAmount);
-    const newDue = Math.max(0, inv.totalAmount - inv.paidAmount - newDiscount);
+  await prisma.$transaction(async (tx) => {
+    for (const inv of bills) {
+      const totals = await paymentTotals(tx, inv.id);
+      if (totals.paid + totals.paymentDiscount >= inv.totalAmount + inv.lateFee) continue; // settled by payments
+      await setOwnDiscount(tx, inv.id, discountFor(inv));
+      updated++;
+    }
+    await tx.auditLog.create({
+      data: {
+        schoolId, userId: req.user.id, action: 'FEE_HEAD_DISCOUNTS', resource: 'student', resourceId: studentId,
+        details: JSON.stringify({ feeHeadDiscounts, comments: String(comments || '').slice(0, 500), totalDiscount, invoicesUpdated: updated }),
+      },
+    });
+  });
 
-    // FeeInvoice.remarks now exists in the schema, so persist the per-head
-    // breakdown here too — the GET handler above reads it back via
-    // latestInvoice.remarks to re-populate the discount form on reopen.
-    const updateData = {
-      discount: newDiscount,
-      dueAmount: newDue,
-      remarks: JSON.stringify({ feeHeadDiscounts, comments }),
-    };
-
-    await prisma.feeInvoice.update({ where: { id: inv.id }, data: updateData });
-    updated++;
-  }
-
-  await prisma.auditLog.create({
-    data: {
-      schoolId, userId: req.user.id, action: 'FEE_DISCOUNT_APPLIED', resource: 'student', resourceId: studentId,
-      details: JSON.stringify({ totalDiscount, heads: heads.length, invoicesUpdated: updated }),
-    },
-  }).catch(() => null);
-
-  res.json({ success: true, message: `Discounts applied. ${updated} invoice(s) updated.`, updated, totalDiscount });
+  res.json({ success: true, message: `Discounts applied. ${updated} bill(s) updated.`, updated, totalDiscount });
 }));
+
+// The per-head discounts last saved for a student (the audit log keeps
+// them; before this, the remarks of the student's latest bill did).
+async function savedHeadDiscounts(schoolId, studentId) {
+  const log = await prisma.auditLog.findFirst({
+    where: { schoolId, action: 'FEE_HEAD_DISCOUNTS', resource: 'student', resourceId: studentId },
+    orderBy: { createdAt: 'desc' },
+  });
+  try {
+    const j = JSON.parse(log?.details || '');
+    if (j?.feeHeadDiscounts) return { feeHeadDiscounts: j.feeHeadDiscounts, comments: j.comments || '' };
+  } catch { /* none */ }
+  const old = await prisma.feeInvoice.findFirst({ where: { schoolId, studentId, remarks: { contains: 'feeHeadDiscounts' } }, orderBy: { createdAt: 'desc' } });
+  try {
+    const j = JSON.parse(old?.remarks || '');
+    if (j?.feeHeadDiscounts) return { feeHeadDiscounts: j.feeHeadDiscounts, comments: j.comments || '' };
+  } catch { /* none */ }
+  return { feeHeadDiscounts: {}, comments: '' };
+}
 
 /* ── POST /fees/payments/online — Parent self-service "I have paid" ── */
 // Accessible to all authenticated users (parents included).

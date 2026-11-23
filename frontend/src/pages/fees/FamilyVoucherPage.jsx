@@ -359,24 +359,21 @@ export default function FamilyVoucherPage() {
     queryKey: ['family-search-phone', phoneSearch],
     queryFn: () => phoneSearch.length < 6
       ? Promise.resolve([])
-      : api.get('/students', { params: { parentPhone: phoneSearch, limit: 10 } }).then(r => r.data.data || []),
+      // The search finds parent phones too (parentPhone was not a filter, so
+      // this listed any ten students).
+      : api.get('/students', { params: { search: phoneSearch, limit: 10 } }).then(r => r.data.data || []),
     enabled: phoneSearch.length >= 6 && searchMode === 'phone',
   });
 
   /* family fees */
   const { data: feeData, refetch: refetchFees } = useQuery({
-    queryKey: ['family-fees', selected?.fatherName, selected?.id],
+    queryKey: ['family-fees', selected?.id],
     queryFn: async () => {
       if (!selected) return null;
-      // Fetch siblings — by fatherName or parentPhone
-      const params = selected.fatherName
-        ? { search: selected.fatherName, limit: 20 }
-        : { parentPhone: selected.parentPhone, limit: 20 };
-      const siblings = await api.get('/students', { params }).then(r => r.data.data || []);
-      const sameFamily = siblings.filter(s =>
-        (s.fatherName && s.fatherName === selected.fatherName) ||
-        (s.parentPhone && s.parentPhone === selected.parentPhone)
-      ).filter(s => s.status !== 'inactive');
+      // Brothers and sisters: the same parent account, family number or
+      // parent phone. A shared father's name is not a family.
+      const siblings = await api.get(`/students/${selected.id}/family`).then(r => r.data.data || []);
+      const sameFamily = siblings.filter(s => s.status !== 'inactive');
 
       const allInvoices = [];
       for (const s of sameFamily) {
@@ -396,7 +393,7 @@ export default function FamilyVoucherPage() {
   const handleSelect = (s) => {
     setSelected(s);
     setSearch(s.fatherName || s.name);
-    setPhoneSearch(s.parentPhone || s.phone || '');
+    setPhoneSearch(s.emergencyPhone || s.parentPhone || s.phone || '');
   };
 
   const handlePayPaid = () => {

@@ -3,6 +3,25 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+const { ownDiscount, recomputeInvoice } = require('../utils/invoiceMath');
+
+/* A transaction's amount is in RUPEES (the Payment Transactions page has
+   always saved what is typed); fee bills are paisa. Marking a transaction
+   paid added its rupees straight onto the bill, so Rs 3,500 paid counted
+   as Rs 35. */
+const toPaisa = (rupees) => Math.round(Number(rupees || 0) * 100);
+const fail = (status, message) => Object.assign(new Error(message), { status });
+
+/* from/to are Pakistan days (YYYY-MM-DD): new Date('2026-11-20') is 5 am
+   here, and "to" ended at the START of its day, leaving the day itself out. */
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+function pkDayRange(from, to) {
+  const start = (d) => new Date(Date.parse(`${d}T00:00:00.000Z`) - 5 * 3600e3);
+  const range = {};
+  if (from && DAY_RE.test(String(from))) range.gte = start(from);
+  if (to && DAY_RE.test(String(to))) range.lt = new Date(start(to).getTime() + 864e5);
+  return Object.keys(range).length ? range : null;
+}
 
 const FINANCE_ROLES = new Set(['super_admin', 'admin', 'accountant']);
 const isFinanceRole = (role) => FINANCE_ROLES.has(role);
@@ -119,10 +138,13 @@ router.post('/:id/mark-success', wrap(async (req, res) => {
   if (tx.status === 'paid') {
     return res.json({ success: true, data: tx, message: 'Transaction is already marked paid.' });
   }
+  if (tx.status === 'refunded') return res.status(400).json({ success: false, message: 'A refunded transaction cannot be marked paid.' });
 
   const updated = await prisma.$transaction(async (db) => {
-    const paidTx = await db.paymentTransaction.update({
-      where: { id: tx.id },
+    // Only from pending or failed, in one write: two clicks used to post the
+    // payment to the bill twice.
+    const { count } = await db.paymentTransaction.updateMany({
+      where: { id: tx.id, status: { in: ['pending', 'failed'] } },
       data: {
         status: 'paid',
         providerRef: providerRef ? String(providerRef) : tx.providerRef,
@@ -131,25 +153,23 @@ router.post('/:id/mark-success', wrap(async (req, res) => {
         processedBy: req.user?.id || null,
       },
     });
+    if (count !== 1) throw fail(409, 'This transaction was just marked by someone else. Refresh the list.');
+    const paidTx = await db.paymentTransaction.findUnique({ where: { id: tx.id } });
 
     if (tx.invoiceId) {
       const invoice = await db.feeInvoice.findFirst({ where: { id: tx.invoiceId, schoolId: req.schoolId } });
       if (invoice) {
-        const newPaid = invoice.paidAmount + tx.amount;
-        const newDue = Math.max(0, invoice.totalAmount - newPaid - (invoice.discount || 0));
-        const newStatus = newDue === 0 ? 'paid' : 'partial';
-
-        await db.feeInvoice.update({
-          where: { id: invoice.id },
-          data: { paidAmount: newPaid, dueAmount: newDue, status: newStatus },
-        });
-
+        const paisa = toPaisa(tx.amount);
+        if (paisa > invoice.dueAmount) {
+          throw fail(400, `This payment (Rs ${Number(tx.amount).toLocaleString('en-PK')}) is more than the bill's balance (Rs ${(invoice.dueAmount / 100).toLocaleString('en-PK')}).`);
+        }
+        const own = await ownDiscount(db, invoice.id);
         await db.feePayment.create({
           data: {
             schoolId: req.schoolId,
             invoiceId: invoice.id,
             studentId: invoice.studentId,
-            amountPaid: tx.amount,
+            amountPaid: paisa,
             discount: 0,
             method: tx.paymentMethod || 'online',
             paymentDate: new Date(),
@@ -159,11 +179,15 @@ router.post('/:id/mark-success', wrap(async (req, res) => {
             receiptNo: `RCP-${paidTx.id}-${Date.now()}`,
           },
         });
+        // Balance and status from the bill's payments (keeps the late fee
+        // and the bill's discount, which this left out).
+        await recomputeInvoice(db, invoice.id, own);
       }
     }
 
     return paidTx;
-  });
+  }).catch((err) => { if (err.status) return { error: err }; throw err; });
+  if (updated.error) return res.status(updated.error.status).json({ success: false, message: updated.error.message });
 
   await logAudit(req, 'PAYMENT_MARKED_PAID', 'payment_transaction', updated.id);
   res.json({ success: true, data: updated });
@@ -187,8 +211,8 @@ router.post('/:id/mark-failed', wrap(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Paid transaction cannot be marked failed.' });
   }
 
-  const updated = await prisma.paymentTransaction.update({
-    where: { id: tx.id },
+  const { count } = await prisma.paymentTransaction.updateMany({
+    where: { id: tx.id, status: 'pending' },
     data: {
       status: 'failed',
       failureReason: reason ? String(reason) : 'Unknown failure',
@@ -197,6 +221,8 @@ router.post('/:id/mark-failed', wrap(async (req, res) => {
       processedBy: req.user?.id || null,
     },
   });
+  if (count !== 1) return res.status(409).json({ success: false, message: 'Only a pending transaction can be marked failed.' });
+  const updated = await prisma.paymentTransaction.findUnique({ where: { id: tx.id } });
 
   await logAudit(req, 'PAYMENT_MARKED_FAILED', 'payment_transaction', updated.id);
   res.json({ success: true, data: updated });
@@ -224,8 +250,8 @@ router.post('/:id/refund', wrap(async (req, res) => {
   }
 
   const result = await prisma.$transaction(async (db) => {
-    const refundedTx = await db.paymentTransaction.update({
-      where: { id: tx.id },
+    const { count } = await db.paymentTransaction.updateMany({
+      where: { id: tx.id, status: 'paid' },
       data: {
         status: 'refunded',
         refundedAt: new Date(),
@@ -233,25 +259,19 @@ router.post('/:id/refund', wrap(async (req, res) => {
         notes: req.body?.notes ? String(req.body.notes) : tx.notes,
       },
     });
+    if (count !== 1) throw fail(409, 'This transaction has just been refunded.');
+    const refundedTx = await db.paymentTransaction.findUnique({ where: { id: tx.id } });
 
     if (tx.invoiceId) {
       const invoice = await db.feeInvoice.findFirst({ where: { id: tx.invoiceId, schoolId: req.schoolId } });
       if (invoice) {
-        const newPaid = Math.max(0, invoice.paidAmount - refundAmount);
-        const newDue = Math.max(0, invoice.totalAmount - newPaid - (invoice.discount || 0));
-        const newStatus = newPaid === 0 ? 'unpaid' : 'partial';
-
-        await db.feeInvoice.update({
-          where: { id: invoice.id },
-          data: { paidAmount: newPaid, dueAmount: newDue, status: newStatus },
-        });
-
+        const own = await ownDiscount(db, invoice.id);
         await db.feePayment.create({
           data: {
             schoolId: req.schoolId,
             invoiceId: invoice.id,
             studentId: invoice.studentId,
-            amountPaid: -refundAmount,
+            amountPaid: -toPaisa(refundAmount),
             discount: 0,
             method: 'refund',
             paymentDate: new Date(),
@@ -261,11 +281,13 @@ router.post('/:id/refund', wrap(async (req, res) => {
             receiptNo: `REF-${refundedTx.id}-${Date.now()}`,
           },
         });
+        await recomputeInvoice(db, invoice.id, own);
       }
     }
 
     return refundedTx;
-  });
+  }).catch((err) => { if (err.status) return { error: err }; throw err; });
+  if (result.error) return res.status(result.error.status).json({ success: false, message: result.error.message });
 
   await logAudit(req, 'PAYMENT_REFUNDED', 'payment_transaction', result.id);
   res.json({ success: true, data: result });
@@ -299,12 +321,7 @@ router.get('/transactions', wrap(async (req, res) => {
     ...(studentId ? { studentId: toInt(studentId, 0) } : {}),
     ...(invoiceId ? { invoiceId: toInt(invoiceId, 0) } : {}),
     ...(method ? { paymentMethod: String(method) } : {}),
-    ...((from || to) ? {
-      createdAt: {
-        ...(from ? { gte: new Date(String(from)) } : {}),
-        ...(to ? { lte: new Date(String(to)) } : {}),
-      },
-    } : {}),
+    ...(pkDayRange(from, to) ? { createdAt: pkDayRange(from, to) } : {}),
   };
 
   const [rows, total] = await Promise.all([
@@ -327,11 +344,8 @@ router.get('/summary', wrap(async (req, res) => {
   }
 
   const { schoolId } = req;
-  const from = req.query.from ? new Date(String(req.query.from)) : null;
-  const to = req.query.to ? new Date(String(req.query.to)) : null;
-  const dateFilter = (from || to)
-    ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } }
-    : {};
+  const range = pkDayRange(req.query.from, req.query.to);
+  const dateFilter = range ? { createdAt: range } : {};
 
   const whereBase = { schoolId, ...dateFilter };
 

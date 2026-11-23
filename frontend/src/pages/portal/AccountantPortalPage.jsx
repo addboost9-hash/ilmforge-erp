@@ -221,9 +221,18 @@ function DashboardTab({ user, setActiveTab }) {
     retry: false,
   });
 
-  const { data: defaulters = [] } = useQuery({
+  // The list (first page) and the server's totals for every defaulter: the
+  // tiles added up the first page of bills and counted bills, not students.
+  const { data: defaultersResp } = useQuery({
     queryKey: ['accountant-defaulters'],
-    queryFn: () => api.get('/fees/defaulters').then((r) => r.data.data || []),
+    queryFn: () => api.get('/fees/defaulters').then((r) => r.data || {}),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const defaulters = defaultersResp?.data || [];
+  const { data: paidCount } = useQuery({
+    queryKey: ['accountant-paid-count'],
+    queryFn: () => api.get('/fees/invoices', { params: { status: 'paid', limit: 1 } }).then((r) => r.data?.total ?? null),
     staleTime: 60_000,
     retry: false,
   });
@@ -283,13 +292,13 @@ function DashboardTab({ user, setActiveTab }) {
     const totalExpenses = expensesToday?.totalAmount || 0;
     return {
       totalCollected,
-      totalDue,
-      paidCount: paid.length,
-      defaulterCount: defaulters.length,
+      totalDue: defaultersResp?.summary ? defaultersResp.summary.totalDue : totalDue,
+      paidCount: paidCount ?? paid.length,
+      defaulterCount: defaultersResp?.summary ? defaultersResp.summary.students : defaulters.length,
       todayTotal,
       totalExpenses,
     };
-  }, [invoices, defaulters, lastSheet, expensesToday]);
+  }, [invoices, defaulters, defaultersResp, paidCount, lastSheet, expensesToday]);
 
   const isUnsettled =
     !lastSheet || lastSheet.status !== 'settled' || lastSheet.date !== todayISO();

@@ -899,6 +899,43 @@ router.get('/stats', wrap(async (req, res) => {
 }));
 
 // GET /api/v1/students/:id
+/* GET /students/:id/family — the student's brothers and sisters: students
+   sharing a parent account, a family number, or the parent's phone.
+   Family vouchers matched on the father's name, so two "Muhammad Ali"
+   families were billed on one voucher. Office staff only. */
+router.get('/:id/family', wrap(async (req, res) => {
+  const { schoolId } = req;
+  if (!['super_admin', 'admin', 'principal', 'accountant'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const id = parseInt(req.params.id);
+  const me = await prisma.student.findFirst({ where: { id, schoolId, deletedAt: null }, select: { id: true, familyNo: true, emergencyPhone: true } });
+  if (!me) return res.status(404).json({ success: false, message: 'Student not found.' });
+  const links = await prisma.parentStudent.findMany({ where: { schoolId, studentId: id }, select: { parentId: true } });
+  const viaParent = links.length
+    ? (await prisma.parentStudent.findMany({ where: { schoolId, parentId: { in: links.map((l) => l.parentId) } }, select: { studentId: true } })).map((x) => x.studentId)
+    : [];
+  const digits = (p) => String(p || '').replace(/\D/g, '').slice(-10);
+  const phone = digits(me.emergencyPhone);
+  const family = String(me.familyNo || '').trim();
+  const OR = [{ id: { in: [id, ...viaParent] } }];
+  if (family) OR.push({ familyNo: family });
+  if (phone.length === 10) OR.push({ emergencyPhone: { contains: phone.slice(-7) } });
+  const rows = await prisma.student.findMany({
+    where: { schoolId, deletedAt: null, OR },
+    select: {
+      id: true, name: true, rollNo: true, fatherName: true, status: true, emergencyPhone: true, familyNo: true,
+      class: { select: { name: true } }, section: { select: { name: true } },
+    },
+    orderBy: { name: 'asc' },
+  });
+  const parentSet = new Set([id, ...viaParent]);
+  const data = rows.filter((s) => parentSet.has(s.id)
+    || (family && String(s.familyNo || '').trim() === family)
+    || (phone.length === 10 && digits(s.emergencyPhone) === phone));
+  res.json({ success: true, data });
+}));
+
 router.get('/:id', wrap(async (req, res) => {
   const studentId = parseInt(req.params.id);
   const student = await prisma.student.findFirst({

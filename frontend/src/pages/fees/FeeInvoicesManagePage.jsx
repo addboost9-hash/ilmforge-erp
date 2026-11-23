@@ -122,7 +122,7 @@ export default function FeeInvoicesManagePage() {
     onError: (e) => toast.error(errText(e, 'The invoice could not be created.')),
   });
   const updateInv = useMutation({
-    mutationFn: () => api.put(`/fees/invoices/${modal.inv.id}`, { ...editVals, totalAmount: toPaisa(editVals.totalAmount) }),
+    mutationFn: () => api.put(`/fees/invoices/${modal.inv.id}`, { dueDate: editVals.dueDate, totalAmount: toPaisa(editVals.totalAmount) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['fee-invoices-manage'] }); setModal(null); toast.success('Invoice updated'); },
     onError: (e) => toast.error(errText(e, 'The invoice could not be saved.')),
   });
@@ -261,13 +261,11 @@ export default function FeeInvoicesManagePage() {
               <input className={input + ' mb-2'} type="number" value={editVals.totalAmount} onChange={e => setEditVals(v => ({ ...v, totalAmount: e.target.value }))} />
               <label className="text-[10px] font-extrabold text-slate-400 uppercase">Due Date</label>
               <input className={input + ' mb-2'} type="date" value={editVals.dueDate || ''} onChange={e => setEditVals(v => ({ ...v, dueDate: e.target.value }))} />
-              <label className="text-[10px] font-extrabold text-slate-400 uppercase">Status</label>
-              <select className={input + ' mb-3'} value={editVals.status} onChange={e => setEditVals(v => ({ ...v, status: e.target.value }))}>
-                {/* FIX: backend only ever recognises unpaid|partial|paid (see fee.routes.js) —
-                    'overdue'/'cancelled'/'pending' silently excluded this invoice from defaulter
-                    lists and reports since they filter on status IN ('unpaid','partial'). */}
-                {['unpaid', 'partial', 'paid'].map(s => <option key={s}>{s}</option>)}
-              </select>
+              {/* The status follows the payments (it could be set to "paid" with nothing paid). */}
+              <p className="text-[11px] text-slate-500 mb-3">
+                Status: <b>{String(modal.inv.status || '').toUpperCase()}</b>. It changes by itself as fees are collected;
+                the balance keeps any discount and late fee on this bill.
+              </p>
               <button onClick={() => updateInv.mutate()} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-sm">Save Changes</button>
             </>)}
           </div>

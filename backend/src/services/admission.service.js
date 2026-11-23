@@ -15,6 +15,7 @@ const prisma = require('../config/prisma');
 const phoneUtil = require('../utils/phone');
 const { checkPhoto } = require('../utils/photo');
 const { pastDate } = require('../utils/pastDate');
+const { MONTHS_FULL } = require('../utils/feeMonth');
 
 const genPassword = (len = 8) => {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -364,20 +365,26 @@ async function admitStudent(ctx, input) {
 
     let invoice = null;
     if (generateFirstInvoice) {
-      const now = new Date();
-      const monthName = now.toLocaleString('default', { month: 'long' });
+      // This month in Pakistan (the server's clock is UTC: for the first
+      // five hours of a month it still said last month), its name in English
+      // whatever the server's language.
+      const pk = new Date(Date.now() + 5 * 3600e3);
+      const mIdx = pk.getUTCMonth();
+      const yr = pk.getUTCFullYear();
+      const monthName = MONTHS_FULL[mIdx];
       const amount = parseInt(monthlyFee) || 0;
       if (amount > 0) {
-        const vNo = `ADM-${String(student.id).padStart(4, '0')}-${now.getFullYear()}`;
+        const vNo = `ADM-${String(student.id).padStart(4, '0')}-${yr}`;
         invoice = await tx.feeInvoice.create({
           data: {
             schoolId, campusId: student.campusId, studentId: student.id,
             classId: student.classId,
             feeTitle: `Monthly Fee Of ${monthName}`,
-            month: monthName, year: now.getFullYear(),
+            month: String(mIdx + 1), year: yr,
             totalAmount: amount, paidAmount: 0, dueAmount: amount,
             status: 'unpaid', voucherNo: vNo,
-            dueDate: new Date(now.getFullYear(), now.getMonth(), 10),
+            // The 10th, at midday in Pakistan (a day, wherever it is read).
+            dueDate: new Date(Date.UTC(yr, mIdx, 10, 7)),
           },
         }).catch(() => null);
       }

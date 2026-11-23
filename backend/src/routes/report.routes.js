@@ -82,15 +82,19 @@ router.get('/students/excel', wrap(async (req, res) => {
 // ─── 2. GET /report/fees/income ─────────────────────────────────────────────
 router.get('/fees/income', wrap(async (req, res) => {
   const { month, year } = req.query;
+  // The month (or the whole year) in Pakistan time: the server's own
+  // midnight is 5 a.m. here, so the first hours of each month fell into
+  // the month before.
+  const y = parseInt(year);
+  const m = parseInt(month);
+  const range = y ? {
+    gte: new Date(Date.UTC(y, (m || 1) - 1, 1) - PKT_MS),
+    lt: new Date(Date.UTC(y, m || 12, 1) - PKT_MS),
+  } : null;
   const payments = await prisma.feePayment.findMany({
     where: { voidedAt: null,
       schoolId: req.schoolId,
-      ...(year && {
-        paymentDate: {
-          gte: new Date(parseInt(year), (parseInt(month) || 1) - 1, 1),
-          lt: new Date(parseInt(year), (parseInt(month) || 12), 1),
-        },
-      }),
+      ...(range && { paymentDate: range }),
     },
     include: {
       invoice: {
@@ -104,11 +108,11 @@ router.get('/fees/income', wrap(async (req, res) => {
 
 // ─── 3. GET /report/fees/balance-sheet ──────────────────────────────────────
 router.get('/fees/balance-sheet', wrap(async (req, res) => {
+  // A Pakistan day (setHours(0) on the server began it at 5 a.m. here).
   const { date } = req.query;
-  const targetDate = date ? new Date(date) : new Date();
-  targetDate.setHours(0, 0, 0, 0);
-  const nextDay = new Date(targetDate);
-  nextDay.setDate(nextDay.getDate() + 1);
+  if (date && !isDay(date)) return res.status(400).json({ success: false, message: 'The date must be YYYY-MM-DD.' });
+  const targetDate = dayStart(date || pktDay());
+  const nextDay = new Date(targetDate.getTime() + 864e5);
   const [income, expense] = await Promise.all([
     prisma.feePayment.aggregate({
       _sum: { amountPaid: true },
@@ -124,7 +128,7 @@ router.get('/fees/balance-sheet', wrap(async (req, res) => {
   res.json({
     success: true,
     data: {
-      date: targetDate.toISOString(),
+      date: date || pktDay(),
       income: incomeVal,
       expense: expenseVal,
       profit: incomeVal - expenseVal,

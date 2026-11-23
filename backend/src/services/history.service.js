@@ -28,6 +28,7 @@ const ExcelJS = require('exceljs');
 const prisma = require('../config/prisma');
 const phoneUtil = require('../utils/phone');
 const { monthNumber, monthKeys, feeKind, MONTHS_SHORT } = require('../utils/feeMonth');
+const { ownDiscount, recomputeInvoice } = require('../utils/invoiceMath');
 const {
   cellText, parseDate, pickList, norm, mapHeaders, addSheet, sheetColors,
 } = require('./records.service');
@@ -924,6 +925,7 @@ const WRITERS = {
       const paid = toPaisa(r.paid), disc = toPaisa(r.concession);
       if (!inv || paid + disc > inv.dueAmount) throw Object.assign(new Error(`${st.name}'s ${monthText(m, y)} bill changed while importing. Check the file again.`), { status: 400 });
       const when = r.paidOn ? dayFrom(...r.paidOn.split('-').map(Number), now) : defaultDay(y, m, 10, now);
+      const own = await ownDiscount(tx, inv.id);
       await tx.feePayment.create({
         data: {
           schoolId, invoiceId: inv.id, studentId: st.id, amountPaid: paid, discount: disc,
@@ -931,11 +933,8 @@ const WRITERS = {
           receiptNo: r.receiptNo || `HIS-RCP-${inv.id}`, remarks: 'From old records', importBatch: batchId, createdAt: when.at,
         },
       });
-      const live = await tx.feePayment.findMany({ where: { invoiceId: inv.id, voidedAt: null }, select: { amountPaid: true, discount: true } });
-      const sumPaid = live.reduce((t, p) => t + p.amountPaid, 0);
-      const sumDisc = live.reduce((t, p) => t + p.discount, 0);
-      const { due, status } = settle(inv.totalAmount, inv.lateFee, sumPaid, sumDisc);
-      await tx.feeInvoice.update({ where: { id: inv.id }, data: { paidAmount: sumPaid, discount: sumDisc, dueAmount: due, status } });
+      // Recomputed keeping the bill's own concession (it was dropped).
+      await recomputeInvoice(tx, inv.id, own);
       total += paid;
     }
 
@@ -1108,6 +1107,9 @@ async function undoBatch({ schoolId, actorUserId, batchId }) {
       where: { schoolId, importBatch: batchId, invoice: { OR: [{ importBatch: null }, { importBatch: { not: batchId } }] } },
       select: { invoiceId: true },
     });
+    // Their own discounts, read while the payments are still there.
+    const ownOf = new Map();
+    for (const invoiceId of new Set(touched.map((t) => t.invoiceId))) ownOf.set(invoiceId, await ownDiscount(tx, invoiceId));
 
     // Voided receipts on these bills changed nothing, but they cannot outlive
     // their bill; their details are kept in the audit log instead.
@@ -1122,14 +1124,9 @@ async function undoBatch({ schoolId, actorUserId, batchId }) {
     const expenses = await tx.expense.deleteMany({ where: { schoolId, importBatch: batchId } });
     const salaries = await tx.salaryRecord.deleteMany({ where: { schoolId, importBatch: batchId } });
 
-    for (const invoiceId of new Set(touched.map((t) => t.invoiceId))) {
-      const inv = await tx.feeInvoice.findUnique({ where: { id: invoiceId }, select: { totalAmount: true, lateFee: true } });
-      if (!inv) continue;
-      const live = await tx.feePayment.findMany({ where: { invoiceId, voidedAt: null }, select: { amountPaid: true, discount: true } });
-      const paid = live.reduce((t, p) => t + p.amountPaid, 0);
-      const disc = live.reduce((t, p) => t + p.discount, 0);
-      const { due, status } = settle(inv.totalAmount, inv.lateFee, paid, disc);
-      await tx.feeInvoice.update({ where: { id: invoiceId }, data: { paidAmount: paid, discount: disc, dueAmount: due, status } });
+    for (const [invoiceId, own] of ownOf) {
+      const inv = await tx.feeInvoice.findUnique({ where: { id: invoiceId }, select: { id: true } });
+      if (inv) await recomputeInvoice(tx, invoiceId, own);
     }
 
     const counts = { bills: bills.count, payments: payments.count, salaries: salaries.count, expenses: expenses.count };
