@@ -94,6 +94,7 @@ const SHEETS = {
 /* ═══ Cell value repair ═══════════════════════════════════════════════ */
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const { ROLL_RE, ROLL_RULE } = require('./admission.service');
 
 /** Whatever ExcelJS hands back, as plain text. */
 function cellText(v) {
@@ -375,6 +376,7 @@ async function validate(schoolId, raw) {
     else out.action = 'create';
     if (out.action === 'skip-exists') add('Students', row, 'info', 'Roll No', 'Already in this school — will be skipped.');
 
+    if (out.rollNo && !ROLL_RE.test(out.rollNo)) err('Roll No', `"${out.rollNo}" cannot be a roll number. ${ROLL_RULE}`);
     if (out.rollNo) {
       const k = norm(out.rollNo);
       if (seenRolls.has(k)) err('Roll No', `Roll number ${out.rollNo} is also used on row ${seenRolls.get(k)}.`);

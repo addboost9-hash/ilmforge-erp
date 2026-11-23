@@ -29,8 +29,10 @@ router.get('/student/:studentId', wrap(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Access denied for this student.' });
   }
 
+  // Parents and students see published results only.
+  const family = ['parent', 'student'].includes(req.user?.role);
   const marks = await prisma.examMark.findMany({
-    where: { studentId, exam: { schoolId } },
+    where: { studentId, exam: { schoolId, ...(family && { isPublished: true }) } },
     include: { exam: { select: { id: true, title: true, dateStart: true, term: true } } },
     orderBy: [{ exam: { dateStart: 'desc' } }],
     take: 200,

@@ -22,6 +22,38 @@ const staffOnly = (req, res, next) => {
   next();
 };
 
+/* The ids a request writes for. They came straight from the request body, so
+   a teacher allowed one class could overwrite another class's (or another
+   school's) attendance and text those parents. Returns null when all are
+   this school's (and, with classId, this class's), else a message. */
+const STATUSES = ['present', 'absent', 'leave', 'late'];
+async function badStudentIds(schoolId, classId, ids) {
+  const want = [...new Set(ids.map((x) => parseInt(x)).filter(Number.isInteger))];
+  if (!want.length || want.length !== ids.length) return 'Each record needs the student it is for.';
+  const found = await prisma.student.findMany({
+    where: { id: { in: want }, schoolId, deletedAt: null, ...(classId && { classId: parseInt(classId) }) },
+    select: { id: true },
+  });
+  return found.length === want.length ? null : 'Some of these students are not in this class.';
+}
+async function badStaffIds(schoolId, ids) {
+  const want = [...new Set(ids.map((x) => parseInt(x)).filter(Number.isInteger))];
+  if (!want.length || want.length !== ids.length) return 'Each record needs the staff member it is for.';
+  const found = await prisma.staff.count({ where: { id: { in: want }, schoolId } });
+  return found === want.length ? null : 'Some of these staff are not of this school.';
+}
+// Pakistan clock time of an instant, "08:05"; and a day's clock time as an instant.
+const PKT_MS = 5 * 3600 * 1000;
+const pkClockOf = (d) => (d ? new Date(new Date(d).getTime() + PKT_MS).toISOString().slice(11, 16) : null);
+const pkInstant = (ymd, hhmm) => {
+  if (!ymd || !/^\d{1,2}:\d{2}$/.test(String(hhmm || ''))) return null;
+  const [h, m] = String(hhmm).split(':').map(Number);
+  const [y, mo, d] = String(ymd).slice(0, 10).split('-').map(Number);
+  const t = new Date(Date.UTC(y, mo - 1, d, h, m) - PKT_MS);
+  return Number.isNaN(t.getTime()) ? null : t;
+};
+const ADMIN_ROLES = ['super_admin', 'admin', 'principal'];
+
 // ---------------------------------------------------------------------------
 // EXISTING ENDPOINTS
 // ---------------------------------------------------------------------------
@@ -73,6 +105,10 @@ router.post('/save', wrap(async (req, res) => {
   if (!(await teacherCanAccessClass(req, classId))) {
     return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
   }
+  if (!Array.isArray(records) || !records.length) return res.status(400).json({ success: false, message: 'Nothing to save.' });
+  if (records.some((r) => !STATUSES.includes(r?.status))) return res.status(400).json({ success: false, message: `Status must be one of: ${STATUSES.join(', ')}.` });
+  const wrongIds = await badStudentIds(schoolId, classId, records.map((r) => r.studentId));
+  if (wrongIds) return res.status(400).json({ success: false, message: wrongIds });
 
   const targetDate = date ? new Date(date) : new Date(); targetDate.setHours(0, 0, 0, 0);
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
@@ -155,11 +191,8 @@ router.get('/staff', staffOnly, wrap(async (req, res) => {
     where: { schoolId, date: targetDate },
   });
 
-  const toTimeStr = (d) => {
-    if (!d) return null;
-    const dt = new Date(d);
-    return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
-  };
+  // Pakistan time: the live server's clock is UTC, so 08:05 showed as 03:05.
+  const toTimeStr = pkClockOf;
 
   const data = records.map(r => ({
     staffId: r.staffId,
@@ -174,9 +207,15 @@ router.get('/staff', staffOnly, wrap(async (req, res) => {
 router.post('/staff', staffOnly, wrap(async (req, res) => {
   const { schoolId } = req;
   const { date, records } = req.body;
+  // The office marks staff (teachers could mark themselves present).
+  if (!ADMIN_ROLES.includes(req.user?.role)) return res.status(403).json({ success: false, message: 'Only the office marks staff attendance.' });
   if (!Array.isArray(records) || records.length === 0) {
     return res.status(400).json({ success: false, message: 'records array is required.' });
   }
+  const wrongStaff = await badStaffIds(schoolId, records.map((r) => r.staffId));
+  if (wrongStaff) return res.status(400).json({ success: false, message: wrongStaff });
+  if (records.some((r) => r.status && !STATUSES.includes(r.status))) return res.status(400).json({ success: false, message: `Status must be one of: ${STATUSES.join(', ')}.` });
+  const dayYmd = /^\d{4}-\d{2}-\d{2}/.test(String(date || '')) ? String(date).slice(0, 10) : new Date(Date.now() + PKT_MS).toISOString().slice(0, 10);
 
   const targetDate = date ? new Date(date) : new Date();
   targetDate.setHours(0, 0, 0, 0);
@@ -188,17 +227,17 @@ router.post('/staff', staffOnly, wrap(async (req, res) => {
   // attendance never actually persisted despite the "saved" message.
   let saved = 0;
   for (const rec of records) {
-    const toDateTime = (t) => {
-      if (!t) return null;
-      const d = new Date(`${targetDate.toISOString().split('T')[0]}T${t}`);
-      return isNaN(d.getTime()) ? null : d;
-    };
+    // Times typed are Pakistan times of that day. A time left out keeps the
+    // one already recorded (a fingerprint check-in is not wiped by a save).
+    const toDateTime = (t) => pkInstant(dayYmd, t);
+    const checkIn = toDateTime(rec.timeIn);
+    const checkOut = toDateTime(rec.timeOut);
     await prisma.staffAttendance.upsert({
       where: { staffId_date: { staffId: parseInt(rec.staffId), date: targetDate } },
       update: {
         status: rec.status || 'present',
-        checkIn:  toDateTime(rec.timeIn),
-        checkOut: toDateTime(rec.timeOut),
+        ...(checkIn && { checkIn }),
+        ...(checkOut && { checkOut }),
         markedBy: req.user?.id || null,
       },
       create: {
@@ -253,6 +292,11 @@ router.post('/period', staffOnly, wrap(async (req, res) => {
   if (!classId || !Array.isArray(records)) {
     return res.status(400).json({ success: false, message: 'classId and records are required.' });
   }
+  // The same rules as the register: who may mark, their own class, its students.
+  if (!REGISTER_EDITORS.includes(req.user?.role)) return res.status(403).json({ success: false, message: 'Only teachers and the office mark attendance.' });
+  if (!(await teacherCanAccessClass(req, classId))) return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
+  const wrongIds = await badStudentIds(schoolId, classId, [...new Set(records.map((r) => r?.studentId))]);
+  if (wrongIds) return res.status(400).json({ success: false, message: wrongIds });
 
   const targetDate = date ? new Date(date) : new Date();
   targetDate.setHours(0, 0, 0, 0);
@@ -352,6 +396,7 @@ router.get('/period/summary', staffOnly, wrap(async (req, res) => {
 router.post('/bulk-import', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
   const { records } = req.body;
+  if (!ADMIN_ROLES.includes(req.user?.role)) return res.status(403).json({ success: false, message: 'Only the office imports attendance.' });
   if (!Array.isArray(records) || !records.length) {
     return res.status(400).json({ success: false, message: 'records array is required.' });
   }
@@ -361,7 +406,7 @@ router.post('/bulk-import', staffOnly, wrap(async (req, res) => {
 
   const students = await prisma.student.findMany({
     where: {
-      schoolId, deletedAt: null,
+      schoolId, deletedAt: null, status: 'active',
       OR: [
         ...(rollNos.length ? [{ rollNo: { in: rollNos } }] : []),
         ...(names.length ? [{ name: { in: names } }] : []),
@@ -369,14 +414,23 @@ router.post('/bulk-import', staffOnly, wrap(async (req, res) => {
     },
     select: { id: true, rollNo: true, name: true, classId: true, sectionId: true },
   });
-  const byRoll = new Map(students.filter(s => s.rollNo).map(s => [s.rollNo, s]));
-  const byName = new Map(students.filter(s => s.name).map(s => [s.name, s]));
+  // A roll number or name two students share is not used: it could be either.
+  const unique = (key) => {
+    const m = new Map();
+    for (const st of students) { const k = st[key]; if (!k) continue; m.set(k, m.has(k) ? 'many' : st); }
+    return m;
+  };
+  const byRoll = unique('rollNo');
+  const byName = unique('name');
 
   let imported = 0;
   const failed = [];
   for (const r of records) {
-    const student = (r.rollNo && byRoll.get(r.rollNo)) || (r.studentName && byName.get(r.studentName));
+    const pick = (r.rollNo && byRoll.get(r.rollNo)) || (r.studentName && byName.get(r.studentName));
+    if (pick === 'many') { failed.push({ ...r, reason: 'More than one student has this roll number or name' }); continue; }
+    const student = pick;
     if (!student) { failed.push({ ...r, reason: 'Student not found' }); continue; }
+    if (!STATUSES.includes(r.status)) { failed.push({ ...r, reason: `Status must be one of: ${STATUSES.join(', ')}` }); continue; }
     const targetDate = new Date(r.date); targetDate.setHours(0, 0, 0, 0);
     if (isNaN(targetDate.getTime())) { failed.push({ ...r, reason: 'Invalid date' }); continue; }
 
@@ -582,6 +636,7 @@ router.get('/summary', wrap(async (req, res) => {
   // hard-restricted to their own (or their linked children's) record;
   // an explicit studentId is honored for staff roles.
   let effectiveStudentId = studentId ? parseInt(studentId) : null;
+  let familyIds = null;
   if (req.user?.role === 'student') {
     const self = await prisma.student.findFirst({ where: { schoolId, userId: req.user.id, deletedAt: null }, select: { id: true } });
     effectiveStudentId = self?.id || -1;
@@ -594,6 +649,8 @@ router.get('/summary', wrap(async (req, res) => {
       const parent = await prisma.parent.findFirst({ where: { schoolId, userId: req.user.id } });
       const links = parent ? await prisma.parentStudent.findMany({ where: { schoolId, parentId: parent.id }, select: { studentId: true } }) : [];
       if (links.length === 1) effectiveStudentId = links[0].studentId;
+      // With no child, or several, it used to return the whole school.
+      else familyIds = links.map((l) => l.studentId);
     }
   }
 
@@ -603,6 +660,7 @@ router.get('/summary', wrap(async (req, res) => {
       ...(classId && { classId: parseInt(classId) }),
       ...(sectionId && { sectionId: parseInt(sectionId) }),
       ...(effectiveStudentId && { id: effectiveStudentId }),
+      ...(familyIds && { id: { in: familyIds.length ? familyIds : [-1] } }),
     },
   });
 
@@ -1260,6 +1318,10 @@ router.post('/correction-request', wrap(async (req, res) => {
   if (!studentId || !date || !requestedStatus) {
     return res.status(400).json({ success: false, message: 'studentId, date, and requestedStatus are required.' });
   }
+  if (!STATUSES.includes(requestedStatus)) return res.status(400).json({ success: false, message: `Status must be one of: ${STATUSES.join(', ')}.` });
+  const ofSchool = await prisma.student.findFirst({ where: { id: parseInt(studentId), schoolId, deletedAt: null }, select: { classId: true } });
+  if (!ofSchool) return res.status(404).json({ success: false, message: 'Student not found.' });
+  if (ofSchool.classId && !(await teacherCanAccessClass(req, ofSchool.classId))) return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
 
   const correction = await prisma.attendanceCorrection.create({
     data: {
@@ -1331,10 +1393,13 @@ router.put('/corrections/:id/approve', requireRole('admin', 'super_admin', 'prin
       data: { status: correction.requestedStatus, markedBy: req.user.id },
     });
   } else {
-    // Create attendance record if not yet present
+    // Create attendance record if not yet present, in the student's class:
+    // without it the day vanished from every class report.
+    const st = await prisma.student.findFirst({ where: { id: correction.studentId, schoolId }, select: { classId: true, sectionId: true, campusId: true } });
     await prisma.attendance.create({
       data: {
         schoolId,
+        classId: st?.classId ?? null, sectionId: st?.sectionId ?? null, campusId: st?.campusId ?? null,
         studentId: correction.studentId,
         date: targetDate,
         status: correction.requestedStatus,

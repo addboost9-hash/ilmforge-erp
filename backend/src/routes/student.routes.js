@@ -585,6 +585,7 @@ router.post('/promote', wrap(async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/promotion-history', wrap(async (req, res) => {
   const { schoolId } = req;
+  if (!STAFF_ROLES.includes(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
   const { sessionId, limit = 200 } = req.query;
 
   // Try to query PromotionLog; if the table doesn't exist fall back to AuditLog
@@ -774,7 +775,10 @@ async function studentsWithBirthdays(schoolId, days) {
 
 // GET /api/v1/students/birthdays/upcoming?days=7
 // Returns students with birthdays in the next N days (default 7)
+// Staff only: the list carries every student's date of birth, phone and photo.
+const STAFF_ROLES = ['super_admin', 'admin', 'principal', 'teacher', 'accountant'];
 router.get('/birthdays/upcoming', wrap(async (req, res) => {
+  if (!STAFF_ROLES.includes(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
   const days = Math.max(0, Math.min(parseInt(req.query.days) || 7, 30));
   const data = await studentsWithBirthdays(req.schoolId, days);
   res.json({ success: true, data });
@@ -782,6 +786,7 @@ router.get('/birthdays/upcoming', wrap(async (req, res) => {
 
 // GET /api/v1/students/birthdays/today
 router.get('/birthdays/today', wrap(async (req, res) => {
+  if (!STAFF_ROLES.includes(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
   const data = (await studentsWithBirthdays(req.schoolId, 0)).map(({ _daysUntil, ...s }) => s);
   res.json({ success: true, data });
 }));
@@ -819,8 +824,11 @@ router.get('/:id/exam-results', wrap(async (req, res) => {
   // FIX: Exam has no `name`/`date` columns (it's `title`/`dateStart`) — this
   // threw a Prisma validation error on every call, so exam results could
   // never actually be viewed for any student.
+  // Parents and students see published results only (the per-exam list
+  // below already held back unpublished ones; this flat list did not).
+  const familyView = ['parent', 'student'].includes(req.user?.role);
   const marks = await prisma.examMark.findMany({
-    where: { studentId, exam: { schoolId } },
+    where: { studentId, exam: { schoolId, ...(familyView && { isPublished: true }) } },
     include: {
       exam: { select: { id: true, title: true, dateStart: true } },
     },

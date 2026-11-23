@@ -52,19 +52,19 @@ export default function LeavePage() {
       setShowForm(false);
       setForm({ studentName:'', rollNo:'', classId:'', fatherPhone:'', type:'Sick Leave', from:'', to:'', reason:'' });
     },
-    onError: () => toast.error('Failed to submit leave application.'),
+    onError: (e) => toast.error(e?.response?.data?.message || 'Failed to submit leave application.'),
   });
 
   const approveMutation = useMutation({
     mutationFn: (id) => api.patch(`/leaves/${id}/approve`).then(r => r.data),
     onSuccess: () => { qc.invalidateQueries(['leaves']); toast.success('Leave approved!'); },
-    onError: () => toast.error('Failed to approve leave.'),
+    onError: (e) => toast.error(e?.response?.data?.message || 'Failed to approve leave.'),
   });
 
   const rejectMutation = useMutation({
     mutationFn: (id) => api.patch(`/leaves/${id}/reject`).then(r => r.data),
     onSuccess: () => { qc.invalidateQueries(['leaves']); toast.success('Leave rejected!'); },
-    onError: () => toast.error('Failed to reject leave.'),
+    onError: (e) => toast.error(e?.response?.data?.message || 'Failed to reject leave.'),
   });
 
   // ── derived counts ───────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ export default function LeavePage() {
 
   // ── submit handler ───────────────────────────────────────────────────────────
   const addLeave = () => {
-    if (!form.studentName || !form.from || !form.to) return toast.error('Fill required fields');
+    if (!form.rollNo.trim() || !form.from || !form.to) return toast.error('Enter the roll number and the dates.');
     const days = Math.ceil((new Date(form.to) - new Date(form.from)) / (1000 * 60 * 60 * 24)) + 1;
     const selectedClass = (classes || []).find(c => c.id === parseInt(form.classId));
     submitLeave.mutate({
@@ -89,6 +89,7 @@ export default function LeavePage() {
       className: selectedClass?.name || '',
       fatherPhone: form.fatherPhone,
       type: form.type,
+      leaveType: form.type,
       fromDate: form.from,
       toDate: form.to,
       days,
@@ -132,11 +133,11 @@ export default function LeavePage() {
           <h3 style={{ fontSize:14, fontWeight:700, color:'#111827', marginBottom:16 }}>New Leave Application</h3>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
             <div className="form-group">
-              <label className="form-label">Student Name *</label>
+              <label className="form-label">Student Name</label>
               <input className="form-input" placeholder="Student full name" value={form.studentName} onChange={e => setForm(f => ({...f, studentName:e.target.value}))}/>
             </div>
             <div className="form-group">
-              <label className="form-label">Roll No</label>
+              <label className="form-label">Roll No *</label>
               <input className="form-input" placeholder="ST-001" value={form.rollNo} onChange={e => setForm(f => ({...f, rollNo:e.target.value}))}/>
             </div>
             <div className="form-group">
@@ -236,7 +237,8 @@ export default function LeavePage() {
                       <td style={{ color:'#9CA3AF', fontSize:12 }}>{i + 1}</td>
                       <td>
                         <div style={{ fontWeight:700, fontSize:13, color:'#111827' }}>
-                          {leave.studentName || `User #${leave.applicantId}`}
+                          {leave.applicantName || leave.studentName || `User #${leave.applicantId}`}
+                          {leave.applicantType === 'staff' && <span className="badge badge-blue" style={{ marginLeft:6, fontSize:10 }}>Staff</span>}
                         </div>
                         <div style={{ fontSize:11, color:'#9CA3AF' }}>{leave.rollNo || ''}</div>
                       </td>
@@ -247,8 +249,8 @@ export default function LeavePage() {
                       <td style={{ textAlign:'center' }}>
                         <span style={{ fontWeight:700, color: days > 2 ? '#DC2626' : '#374151', fontSize:14 }}>{days}</span>
                       </td>
-                      <td style={{ maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:12.5, color:'#6B7280' }}>
-                        {leave.reason}
+                      <td title={leave.reason} style={{ maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:12.5, color:'#6B7280' }}>
+                        {String(leave.reason || '').replace(/^\[[^\]]+\]\s*/, '')}
                       </td>
                       <td>
                         <span className={`badge ${sc.badge}`}>

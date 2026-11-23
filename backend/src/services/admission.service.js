@@ -18,7 +18,8 @@ const { pastDate } = require('../utils/pastDate');
 
 const genPassword = (len = 8) => {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const { randomInt } = require('crypto');
+  return Array.from({ length: len }, () => chars[randomInt(chars.length)]).join('');
 };
 const slugify = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
 
@@ -30,8 +31,9 @@ const slugify = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0
    duplicated a roll number - and an import of many rows hit it repeatedly.
    The sequence now starts there and steps forward until it is free. */
 async function generateRollNo(schoolId, classId, sectionId, client = prisma) {
-  const cls = classId ? await client.class.findUnique({ where: { id: parseInt(classId) } }) : null;
-  const sec = sectionId ? await client.section.findUnique({ where: { id: parseInt(sectionId) } }) : null;
+  // This school's class and section only (another school's id named the prefix).
+  const cls = classId ? await client.class.findFirst({ where: { id: parseInt(classId), schoolId } }) : null;
+  const sec = sectionId ? await client.section.findFirst({ where: { id: parseInt(sectionId), class: { schoolId } } }) : null;
 
   let prefix = 'STU';
   if (cls) {
@@ -56,6 +58,43 @@ async function generateRollNo(schoolId, classId, sectionId, client = prisma) {
   // 1,000 consecutive collisions means something else is wrong; fall back to
   // a unique suffix rather than refusing the admission.
   return `${prefix}-${yr}-${Date.now().toString(36).slice(-5).toUpperCase()}`;
+}
+
+/* What a roll number may be (the same rule as changing one on the Roll
+   Numbers page): it is also the student's code on the ID card, at the
+   kiosk and the fee scanner, and to sign in. */
+const ROLL_RE = /^[A-Za-z0-9][A-Za-z0-9/_.-]{0,29}$/;
+const ROLL_RULE = 'Use letters, digits and - / _ . (up to 30, no spaces).';
+
+/* A typed roll number nobody else in the school has, whatever the capitals
+   (compared here so SQLite and PostgreSQL agree). Admission used to save any
+   text, so two students could share one: the kiosk, the fee scanner and the
+   roll-number sign-in then picked either of them. */
+async function rollNoTaken(schoolId, rollNo, client = prisma) {
+  const want = String(rollNo).trim().toLowerCase();
+  const rows = await client.student.findMany({
+    where: { schoolId, deletedAt: null, rollNo: { not: null } },
+    select: { name: true, rollNo: true, status: true, class: { select: { name: true } } },
+  });
+  return rows.find((r) => String(r.rollNo).trim().toLowerCase() === want) || null;
+}
+
+const badRequest = (message) => { const e = new Error(message); e.status = 400; return e; };
+
+/* The class, section, session and class teacher named on the form, checked
+   against this school: ids from another school were saved as they came. */
+async function checkPlacement(schoolId, { classId, sectionId, sessionId, teacherId }) {
+  const cid = classId ? parseInt(classId) : null;
+  const [cls, sec, ses, teacher] = await Promise.all([
+    cid ? prisma.class.findFirst({ where: { id: cid, schoolId }, select: { id: true } }) : null,
+    sectionId ? prisma.section.findFirst({ where: { id: parseInt(sectionId), class: { schoolId } }, select: { id: true, classId: true } }) : null,
+    sessionId ? prisma.academicSession.findFirst({ where: { id: parseInt(sessionId), schoolId }, select: { id: true } }) : null,
+    teacherId ? prisma.staff.findFirst({ where: { id: parseInt(teacherId), schoolId, deletedAt: null }, select: { id: true } }) : null,
+  ]);
+  if (cid && !cls) throw badRequest('This class is not in your school.');
+  if (sectionId && (!sec || (cid && sec.classId !== cid))) throw badRequest('This section is not in the chosen class.');
+  if (sessionId && !ses) throw badRequest('This session is not in your school.');
+  if (teacherId && !teacher) throw badRequest('This teacher is not in your school.');
 }
 
 /* Admission test marks are optional, but what is typed must be a plain
@@ -149,18 +188,28 @@ async function admitStudent(ctx, input) {
     throw e;
   }
 
-  const finalRollNo = rollNo && String(rollNo).trim()
-    ? String(rollNo).trim()
-    : await generateRollNo(schoolId, classId, sectionId);
+  await checkPlacement(schoolId, { classId, sectionId, sessionId, teacherId });
+
+  const typedRoll = rollNo && String(rollNo).trim() ? String(rollNo).trim() : '';
+  if (typedRoll) {
+    if (!ROLL_RE.test(typedRoll)) throw badRequest(`"${typedRoll}" cannot be a roll number. ${ROLL_RULE}`);
+    const other = await rollNoTaken(schoolId, typedRoll);
+    if (other) {
+      const where = [other.class?.name, other.status !== 'active' && other.status].filter(Boolean).join(', ');
+      throw badRequest(`Roll number ${typedRoll} already belongs to ${other.name}${where ? ` (${where})` : ''}.`);
+    }
+  }
+  const finalRollNo = typedRoll || await generateRollNo(schoolId, classId, sectionId);
 
   const school = ctx.school || await prisma.school.findUnique({ where: { id: schoolId } });
   const slug = school?.slug || 'school';
 
-  // Parent password: last 5 digits of the phone + 123, memorable for parents.
-  const parentPassword = emergencyPhone
-    ? String(emergencyPhone).replace(/[^0-9]/g, '').slice(-5) + '123'
-    : genPassword();
-  const studentPassword = finalRollNo.replace(/[^a-zA-Z0-9]/g, '') + '123';
+  /* Random first passwords, shown once on the admission slip and changed at
+     the first sign-in. They used to be "roll number + 123" and "last 5
+     digits of the phone + 123": anyone who knew (or guessed, in order) a
+     roll number could sign in as that student. */
+  const parentPassword = genPassword();
+  const studentPassword = genPassword();
 
   const uniq = Date.now().toString(36).slice(-4);
   const studentEmail = `${slugify(name)}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}@${slug}.student`;
@@ -258,7 +307,7 @@ async function admitStudent(ctx, input) {
           role: 'student',
           passwordHash: studentPasswordHash,
           phoneVerifiedAt: new Date(),
-          mustChangePassword: false,
+          mustChangePassword: true,
         },
       });
       await tx.student.update({ where: { id: student.id }, data: { userId: studentUser.id } });
@@ -296,7 +345,7 @@ async function admitStudent(ctx, input) {
             role: 'parent',
             passwordHash: parentPasswordHash,
             phoneVerifiedAt: new Date(),
-            mustChangePassword: false,
+            mustChangePassword: true,
           },
         });
         parentRec = await tx.parent.create({
@@ -335,7 +384,7 @@ async function admitStudent(ctx, input) {
     }
 
     if (teacherId && classId) {
-      const cls = await tx.class.findUnique({ where: { id: parseInt(classId) }, select: { classTeacherId: true } });
+      const cls = await tx.class.findFirst({ where: { id: parseInt(classId), schoolId }, select: { classTeacherId: true } });
       if (cls && !cls.classTeacherId) {
         await tx.class.update({ where: { id: parseInt(classId) }, data: { classTeacherId: parseInt(teacherId) } }).catch(() => null);
       }
@@ -367,7 +416,7 @@ async function admitStudent(ctx, input) {
       password: studentPassword,
       portal: 'Student Portal',
       portalLink: linkFor('student'),
-      passwordHint: `Roll number + 123 (e.g. ${finalRollNo.replace(/[^a-zA-Z0-9]/g, '')}123)`,
+      passwordHint: 'A new password is chosen at the first sign-in',
     },
     parent: result.parentReused
       ? {
@@ -386,13 +435,11 @@ async function admitStudent(ctx, input) {
           password: parentPassword,
           portal: 'Parent Portal',
           portalLink: linkFor('parent'),
-          passwordHint: emergencyPhone
-            ? `Last 5 digits of phone + 123 (e.g. ${String(emergencyPhone).replace(/[^0-9]/g, '').slice(-5)}123)`
-            : null,
+          passwordHint: 'A new password is chosen at the first sign-in',
         },
   } : null;
 
   return { student: result.student, invoice: result.invoice, credentials, parentReused: result.parentReused };
 }
 
-module.exports = { admitStudent, generateRollNo, resolveCampus, genPassword, slugify, testMarksValue };
+module.exports = { admitStudent, generateRollNo, resolveCampus, genPassword, slugify, testMarksValue, ROLL_RE, ROLL_RULE };

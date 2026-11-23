@@ -169,6 +169,22 @@ router.get('/stats', wrap(async (req, res) => {
   // Revalidate: a 30s browser cache meant the dashboard could still show the
   // old totals right after a fee was collected or attendance was marked.
   res.setHeader('Cache-Control', 'private, no-cache');
+  // Money is for the office: teachers, parents, students and the gate get the
+  // head counts and attendance only (every role used to receive the school's
+  // income and expenses and the latest payments with names).
+  const money = ['super_admin', 'admin', 'principal', 'accountant'].includes(req.user?.role);
+  const noFees = (c) => ({ classId: c.classId, className: c.className, strength: c.strength, presentToday: c.presentToday });
+  if (!money) {
+    return res.json({
+      success: true,
+      data: {
+        students: { total: totalStudents, male: maleStudents, female: femaleStudents, passout: passoutStudents, presentToday: presentStudentsToday, newThisMonth },
+        staff: { total: totalStaff, presentToday: presentStaff, absentToday: absentStaff },
+        attendanceTrend,
+        classStats: classStats.map(noFees),
+      },
+    });
+  }
   res.json({
     success: true,
     data: {

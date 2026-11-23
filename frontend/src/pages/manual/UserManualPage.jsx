@@ -446,7 +446,8 @@ const SECTIONS = [
           { n:2, text:'Generate bulk credentials: for students/parents, class-wise' },
           { n:3, text:'Use "Email Credentials" or "SMS Credentials" to send logins to 03XX numbers' },
           { n:4, text:'The parent\'s username is usually the child\'s registration number' },
-          { n:5, text:'The admin can reset a password at any time' },
+          { n:5, text:'The admin can reset a password at any time; that person then sets their own at the next sign-in, and their other devices are signed out' },
+          { n:6, text:'Students and parents get a random first password on the admission slip and choose their own at the first sign-in' },
         ],
         isTable: true,
         content: [

@@ -149,10 +149,11 @@ function MarkAttendanceModal({ row, date, onClose, onSaved }) {
         classId: row.classId,
         sectionId: row.sectionId || null,
         date,
-        records: students.map((s) => ({
-          studentId: s.id,
-          status: (statuses[s.id] || 'present').toLowerCase().replace('not marked', 'absent'),
-        })),
+        // Only the students marked: "Not marked" is not absent (it used to be
+        // saved as absent, and their parents were texted).
+        records: students
+          .map((s) => ({ studentId: s.id, status: String(statuses[s.id] || 'present').toLowerCase() }))
+          .filter((r) => r.status !== 'not marked'),
       }, { label: `${row.className}${row.sectionName ? ' ' + row.sectionName : ''}, ${date}` }),
     onSuccess: (res) => {
       if (res?.queued) toast(res.data.message, OFFLINE_TOAST);
@@ -375,10 +376,11 @@ function ExpandedDetailRow({ row, students, loading, date, onSaved }) {
         classId: row.classId,
         sectionId: row.sectionId || null,
         date,
-        records: students.map((s) => ({
-          studentId: s.id,
-          status: (statuses[s.id] || 'Not Marked').toLowerCase().replace('not marked', 'absent'),
-        })),
+        // Only the students marked: "Not marked" is not absent (it used to be
+        // saved as absent, and their parents were texted).
+        records: students
+          .map((s) => ({ studentId: s.id, status: String(statuses[s.id] || 'Not Marked').toLowerCase() }))
+          .filter((r) => r.status !== 'not marked'),
       }, { label: `${row.className}${row.sectionName ? ' ' + row.sectionName : ''}, ${date}` }),
     onSuccess: (res) => {
       if (res?.queued) toast(res.data.message, OFFLINE_TOAST);
@@ -695,6 +697,20 @@ function StaffAttendanceTab() {
     queryFn: () => api.get('/staff').then((r) => r.data.data || []),
     staleTime: 300_000,
   });
+
+  // What is already recorded for the day (fingerprint check-ins, earlier
+  // saves). The tab used to start everyone as present with no times, so a
+  // save turned absent staff present.
+  const { data: saved } = useQuery({
+    queryKey: ['staff-attendance-day', date],
+    queryFn: () => api.get('/attendance/staff', { params: { date } }).then((r) => r.data.data || []),
+  });
+  useEffect(() => {
+    if (!saved) return;
+    const st = {}; const tin = {}; const tout = {};
+    saved.forEach((r) => { st[r.staffId] = r.status; if (r.timeIn) tin[r.staffId] = r.timeIn; if (r.timeOut) tout[r.staffId] = r.timeOut; });
+    setStaffStatus(st); setTimeIn(tin); setTimeOut(tout);
+  }, [saved]);
 
   const toggleAll = (v) => {
     setSelectAll(v);

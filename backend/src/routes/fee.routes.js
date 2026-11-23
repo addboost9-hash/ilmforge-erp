@@ -1360,7 +1360,10 @@ router.post('/discounts', requireFinanceRole, wrap(async (req, res) => {
 }));
 
 /* ── GET /fees/student-fee-details/:studentId — Fee heads with class structure ── */
-router.get('/student-fee-details/:studentId', wrap(async (req, res) => {
+// Finance staff only: it returns the whole student record (parents' CNICs,
+// medical notes, phones) and any child's discounts; parents and students could
+// read it for any child of the school.
+router.get('/student-fee-details/:studentId', requireFinanceRole, wrap(async (req, res) => {
   const { schoolId } = req;
   const studentId = parseInt(req.params.studentId);
 

@@ -22,7 +22,7 @@ const canManageExams = (role) => ['super_admin', 'admin', 'teacher'].includes(ro
 // only: they had no role check, so a parent's or student's sign-in could read
 // every child's marks.
 const canSeeResults = (role) => ['super_admin', 'admin', 'teacher', 'principal', 'accountant'].includes(role);
-const { teacherCanAccessClass } = require('../utils/teacherScope');
+const { teacherCanAccessClass, teacherCanMarkSubject } = require('../utils/teacherScope');
 const annual = require('../services/annualResult.service');
 
 /* The classes an exam is for: its classIds list, or the single classId. */
@@ -185,7 +185,11 @@ router.get('/template/excel', wrap(async (req, res) => {
 
 // GET /exams/cumulative — aggregated totals across all exams in a session per student
 router.get('/cumulative', wrap(async (req, res) => {
+  // Every student's totals: staff only (parents and students could read the
+  // whole school's results, unpublished ones too).
+  if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
   const { sessionId, classId } = req.query;
+  if (classId && !(await teacherCanAccessClass(req, parseInt(classId)))) return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
   if (!sessionId) return res.status(400).json({ success: false, message: 'sessionId is required.' });
 
   const exams = await prisma.exam.findMany({
@@ -330,7 +334,7 @@ router.get('/annual', wrap(async (req, res) => {
       classHighest: rows.reduce((m, r) => Math.max(m, r.percentage), 0),
       school: school || {},
       grading: gradingInfo(thresholds, settings),
-      showAttendance: !!settings?.showAttendanceOnMarksheet,
+      showAttendance: !!(settings?.showAttendance ?? settings?.showAttendanceOnMarksheet),
     },
   });
 }));
@@ -1108,6 +1112,17 @@ router.post(
       return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
     }
   }
+  // ...and only the subjects they teach (or, as class teacher, all of the
+  // class's): a teacher of Maths could change or clear the English marks.
+  if (req.user?.role === 'teacher') {
+    const pairs = new Set(marks.map((m) => `${studentById.get(parseInt(m.studentId))?.classId}:${m.subjectId ? parseInt(m.subjectId) : ''}`));
+    for (const pair of pairs) {
+      const [cid, sid] = pair.split(':');
+      if (sid && !(await teacherCanMarkSubject(req, cid, sid))) {
+        return res.status(403).json({ success: false, message: `You do not teach ${subjectById.get(parseInt(sid))?.name || 'this subject'} in this class.` });
+      }
+    }
+  }
   const forClasses = examClassIds(exam);
   const outside = students.filter((x) => forClasses.length && !forClasses.includes(x.classId));
   if (outside.length) {
@@ -1669,13 +1684,16 @@ router.get('/:id/results/excel', wrap(async (req, res) => {
 
 // GET /exams/:id/subject-analysis — per-subject statistics
 router.get('/:id/subject-analysis', wrap(async (req, res) => {
+  if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
   const examId = parseInt(req.params.id);
   // Ownership check: verify exam belongs to this school
   const exam = await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } });
   if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
 
+  // The class (and section) chosen on the page: it used to mix every class.
+  const scope = studentScope(req.query);
   const marks = await prisma.examMark.findMany({
-    where: { examId },
+    where: { examId, ...(Object.keys(scope).length && { student: scope }) },
     include: { subject: { select: { id: true, name: true } } },
   });
 

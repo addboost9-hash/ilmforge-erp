@@ -17,6 +17,12 @@ const authMiddleware = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
 
+    // A default or reset password must be changed first: until then only the
+    // sign-in routes (change password, who am I, sign out) answer.
+    if (decoded.mcp && !String(req.originalUrl || '').startsWith('/api/v1/auth/')) {
+      return res.status(403).json({ success: false, code: 'MUST_CHANGE_PASSWORD', message: 'Please set a new password first.' });
+    }
+
     /* ── School Status Check ─────────────────────────────────────
        Check if school is still active — cached per request
        Platform owner can suspend any school via /platform/schools/:id/suspend

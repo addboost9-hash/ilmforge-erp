@@ -183,6 +183,9 @@ missing required fields — required ones are marked with a red asterisk.
    to upload one. Two optional panels at the bottom, *Previous Institutional History* and
    *Health & Emergency Information*, can be filled now or left for later.
 2. **Class & Section** — pick the class and section, and the class teacher if asked.
+   Leave the roll number empty and IlmForge makes one. A roll number you type must be new
+   in the school (capitals do not matter) and use only letters, digits and - / _ . with no
+   spaces, because it is also the student's sign-in and ID card code.
 3. **Fee Details** — the fee pulls from the class fee structure. Apply a discount here if
    the school has agreed one, or mark the student as free.
 4. **Parent Details** — parent name and **phone number**. The phone number is how the
@@ -197,7 +200,8 @@ On the success screen:
   already filled in, with signature lines for parent, class teacher, coordinator and
   principal. Print it, get it signed, keep it in the student's file.
 - **Print Credentials Slip** — the student's and parent's portal sign-in details.
-  Hand this to the parent.
+  Hand this to the parent. The passwords on it are random and shown only on this slip;
+  at the first sign-in the student and the parent are asked to choose their own.
 
 > Both are shown only on this screen. If you miss them:
 > the admission form can be reprinted any time from **Admissions → Admission Form Print**
@@ -1143,7 +1147,13 @@ sign-in page as that person will see it.
 
 Parent accounts are created automatically during admission. The parent signs in with the
 **phone number** entered in step 4 of the wizard. Their password is on the credentials
-slip printed at admission.
+slip printed at admission, and they choose a new one at the first sign-in.
+
+> **First passwords.** Students and parents admitted before this change may still have the
+> old password made from their roll number or phone number. Anyone who signs in with such a
+> password is now asked to set a new one (at least 8 characters) before anything else opens.
+> When a password is changed or reset, every other device signed in to that account is
+> signed out.
 
 Common problem: the parent's number was typed wrongly at admission. Correct it on the
 student record and the parent can then sign in.
@@ -1205,7 +1215,7 @@ description. The list shows one month at a time with its total; choose another m
 
 | Task | Where |
 |---|---|
-| Leave applications and balances | `/leaves`, `/attendance/leave-balance` |
+| Leave applications and balances | `/leaves`, `/attendance/leave-balance` (see below) |
 | Staff loans and advances | `/salary/loans` |
 | Appraisals | `/staff/appraisals` |
 | Departments | `/staff/departments` |
@@ -1213,6 +1223,14 @@ description. The list shows one month at a time with its total; choose another m
 | CV bank | `/staff/cv-bank` |
 
 ---
+
+### Leave applications
+
+- To record a student's leave from the office, enter the student's **roll number** and the
+  dates; the list shows the student's name and class.
+- **Approve** takes the days off the student's (or staff member's) leave balance for the
+  session the leave starts in, once. Rejecting a leave that was approved puts the days back.
+- Leave is decided by the admin or the principal.
 
 <a name="part-10"></a>
 ## Part 10 — Reports and printing

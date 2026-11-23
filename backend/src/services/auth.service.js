@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../config/prisma');
 const phoneUtil = require('../utils/phone');
@@ -7,6 +8,13 @@ const slugUtil = require('../utils/slug');
 const { equals: ciEquals } = require('../utils/search');
 const { sendSMS } = require('./sms.service');
 const { sendEmail, sendWelcomeEmail, sendOTPEmail, sendSchoolReadyEmail } = require('./email.service');
+
+// The refresh tokens' key. The Windows installer (Setup.ps1) and
+// START_LOCAL.bat never set JWT_REFRESH_SECRET, and signing with no key threw,
+// so sign-in failed there. Without one, a key derived from JWT_SECRET is used
+// (never the access key itself, so an access token is no refresh token).
+const refreshSecret = () => process.env.JWT_REFRESH_SECRET
+  || (process.env.JWT_SECRET && crypto.createHmac('sha256', process.env.JWT_SECRET).update('ilmforge-refresh-token').digest('hex'));
 
 const FRONTEND_URL = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://ilmforge-erp.vercel.app' : 'http://localhost:3000');
 
@@ -36,7 +44,7 @@ const generatePassword = () => {
   const chars    = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz';
   const digits   = '23456789';
   const specials = '#@!$';
-  const rand = (s) => s[Math.floor(Math.random() * s.length)];
+  const rand = (s) => s[crypto.randomInt(s.length)];
   return (
     'Sch' +
     rand(digits) + rand(digits) + rand(digits) +
@@ -268,7 +276,7 @@ const resendCredentialsForUser = async ({ userId, requestOrigin = '' }) => {
 
   const tempPassword = generatePassword();
   const passwordHash = await bcrypt.hash(tempPassword, 12);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: true } });
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: true, tokenVersion: { increment: 1 } } });
 
   const loginUrl = frontendBase;
   const mail = await sendSchoolReadyEmail({
@@ -449,13 +457,19 @@ const login = async ({ email, phone, password, schoolSlug }) => {
     // numbers are upper case, so "nura-26-016" is also tried as "NURA-26-016";
     // on PostgreSQL the match is fully case-insensitive.
     const roll = identifier.trim();
+    // Roll numbers repeat from school to school. Opened from a school's own
+    // link, only that school's students are looked at; it used to look at
+    // the first 20 across all schools, so a student could land in another
+    // school's account, or miss their own once 20 schools shared the number.
+    const rollWhere = {
+      OR: [{ rollNo: ciEquals(roll) }, { rollNo: roll.toUpperCase() }],
+      deletedAt: null, NOT: { userId: null },
+      ...(linkSchool && { schoolId: linkSchool.id }),
+    };
     const candidates = await prisma.student.findMany({
-      where: {
-        OR: [{ rollNo: ciEquals(roll) }, { rollNo: roll.toUpperCase() }],
-        deletedAt: null, NOT: { userId: null },
-      },
+      where: rollWhere,
       select: { userId: true, schoolId: true },
-      take: 20,
+      take: linkSchool ? 5 : 20,
     });
     for (const c of linkFirst(candidates, (r) => r.schoolId)) {
       const candidate = await prisma.user.findFirst({
@@ -479,6 +493,15 @@ const login = async ({ email, phone, password, schoolSlug }) => {
       data: { schoolId: user.schoolId, userId: user.id, action: 'LOGIN_FAILED', resource: 'user', resourceId: user.id }
     });
     throw { status: 401, message: 'Invalid credentials.' };
+  }
+
+  /* Student and parent accounts made before passwords were random still have
+     the password worked out from the roll number or the phone ("roll + 123",
+     "last 5 digits + 123"), which anyone can work out. Signing in with it
+     now asks for a new password before anything else. */
+  if (!user.mustChangePassword && await isGuessablePassword(user, password)) {
+    await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });
+    user.mustChangePassword = true;
   }
 
   if (!user.phoneVerifiedAt) {
@@ -510,12 +533,25 @@ const login = async ({ email, phone, password, schoolSlug }) => {
   return { ...tokens, user: sanitizeUser(user), school: publicSchool(user.school), mustChangePassword: user.mustChangePassword };
 };
 
+/* The old default passwords, worked out from the roll number or the phone. */
+const isGuessablePassword = async (user, password) => {
+  if (user.role === 'student') {
+    const st = await prisma.student.findFirst({ where: { userId: user.id }, select: { rollNo: true } });
+    return !!st?.rollNo && password === `${String(st.rollNo).replace(/[^a-zA-Z0-9]/g, '')}123`;
+  }
+  if (user.role === 'parent') {
+    const digits = String(user.phone || '').replace(/[^0-9]/g, '');
+    return digits.length >= 5 && password === `${digits.slice(-5)}123`;
+  }
+  return false;
+};
+
 // Refresh token
 const refreshToken = async ({ refreshToken: token }) => {
   // Step 1: Verify JWT signature — real token errors
   let decoded;
   try {
-    decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+    decoded = jwt.verify(token, refreshSecret());
   } catch {
     throw { status: 401, message: 'Invalid or expired refresh token.' };
   }
@@ -535,6 +571,8 @@ const refreshToken = async ({ refreshToken: token }) => {
   }
 
   if (!user || !user.isActive) throw { status: 401, message: 'Account not found or deactivated.' };
+  // A password change or reset since this token was issued signs it out.
+  if ((decoded.v || 0) !== (user.tokenVersion || 0)) throw { status: 401, message: 'Your password was changed. Please sign in again.' };
   return generateTokens(user);
 };
 
@@ -545,15 +583,23 @@ const changePassword = async ({ userId, currentPassword, newPassword }) => {
 
   const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
   if (!isValid) throw { status: 400, message: 'Current password is incorrect.' };
+  if (!newPassword || String(newPassword).length < 8) throw { status: 400, message: 'The new password must be at least 8 characters.' };
+  if (newPassword === currentPassword) throw { status: 400, message: 'Choose a password different from the current one.' };
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
-  await prisma.user.update({ where: { id: userId }, data: { passwordHash, mustChangePassword: false } });
+  // Every other signed-in device is signed out; this one gets new tokens.
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash, mustChangePassword: false, tokenVersion: { increment: 1 } },
+  });
 
-  return { message: 'Password changed successfully.' };
+  return { message: 'Password changed successfully.', ...generateTokens(updated) };
 };
 
 // Forgot password - send reset link
 const forgotPassword = async ({ email }) => {
+  email = String(email || '').trim().toLowerCase();
+  if (!email) return { message: 'If that email exists, you will receive a reset link.' };
   const user = await prisma.user.findFirst({ where: { email, deletedAt: null } });
   if (!user) return { message: 'If that email exists, you will receive a reset link.' };
 
@@ -576,6 +622,11 @@ const forgotPassword = async ({ email }) => {
 
 // Reset password with token
 const resetPassword = async ({ userId, token, newPassword }) => {
+  // The id comes from the link's address, as text: the database wants a number
+  // (every reset used to fail on this).
+  userId = parseInt(userId, 10);
+  if (!Number.isInteger(userId) || !token) throw { status: 400, message: 'Reset link is invalid or expired.' };
+  if (!newPassword || String(newPassword).length < 8) throw { status: 400, message: 'The new password must be at least 8 characters.' };
   const record = await prisma.otpToken.findFirst({
     where: { userId, type: 'reset', isUsed: false },
     orderBy: { createdAt: 'desc' }
@@ -588,7 +639,7 @@ const resetPassword = async ({ userId, token, newPassword }) => {
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await prisma.$transaction([
-    prisma.user.update({ where: { id: userId }, data: { passwordHash } }),
+    prisma.user.update({ where: { id: userId }, data: { passwordHash, mustChangePassword: false, tokenVersion: { increment: 1 } } }),
     prisma.otpToken.update({ where: { id: record.id }, data: { isUsed: true } }),
   ]);
 
@@ -618,8 +669,11 @@ const verifyEmail = async ({ userId, token }) => {
 // Helper: generate JWT tokens
 const generateTokens = (user) => {
   const payload = { id: user.id, schoolId: user.schoolId, campusId: user.campusId, role: user.role, email: user.email };
+  // Until a required password change is done, the access token says so and
+  // the server refuses everything but the change itself (auth.middleware).
+  if (user.mustChangePassword) payload.mcp = true;
   const accessToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '15m' });
-  const refreshToken = jwt.sign({ id: user.id }, process.env.JWT_REFRESH_SECRET, { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' });
+  const refreshToken = jwt.sign({ id: user.id, v: user.tokenVersion || 0 }, refreshSecret(), { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' });
   return { accessToken, refreshToken };
 };
 

@@ -197,7 +197,13 @@ function Run-Install($cfg) {
     # 3 - Write .env for local SQLite (Prisma reads this automatically)
     S "Setting up local database config..." 35
     L ">>> Writing .env for SQLite..." "a"
-    $envContent = "DATABASE_URL=`"file:./prisma/dev.db`"`r`nNODE_ENV=production`r`nPORT=5000`r`nJWT_SECRET=IlmForgeLocal@2026#OfflineKey`r`nJWT_EXPIRES_IN=24h`r`nLICENSE_SECRET=IlmForgeLicense@Secret#2026!OfflineKey`r`nFRONTEND_URL=http://localhost:3000`r`nAPP_URL=http://localhost:5000"
+    # Sign-in keys made for this computer: every install used to share one
+    # fixed key, so anyone with a copy of the installer could make a valid
+    # sign-in for any school's install.
+    $rnd = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $b1 = New-Object byte[] 48; $rnd.GetBytes($b1); $jwtKey = ([Convert]::ToBase64String($b1) -replace '[^A-Za-z0-9]','')
+    $b2 = New-Object byte[] 48; $rnd.GetBytes($b2); $jwtRefreshKey = ([Convert]::ToBase64String($b2) -replace '[^A-Za-z0-9]','')
+    $envContent = "DATABASE_URL=`"file:./prisma/dev.db`"`r`nNODE_ENV=production`r`nPORT=5000`r`nJWT_SECRET=$jwtKey`r`nJWT_REFRESH_SECRET=$jwtRefreshKey`r`nJWT_EXPIRES_IN=24h`r`nLICENSE_SECRET=IlmForgeLicense@Secret#2026!OfflineKey`r`nFRONTEND_URL=http://localhost:3000`r`nAPP_URL=http://localhost:5000"
     [System.IO.File]::WriteAllText("$dir\backend\.env", $envContent, [System.Text.Encoding]::ASCII)
     L ".env file written" "g"
 
@@ -249,7 +255,8 @@ function Run-Install($cfg) {
     $bat += "set DATABASE_URL=file:./prisma/dev.db`r`n"
     $bat += "set NODE_ENV=production`r`n"
     $bat += "set PORT=5000`r`n"
-    $bat += "set JWT_SECRET=IlmForgeLocal@2026#OfflineKey`r`n"
+    $bat += "set JWT_SECRET=$jwtKey`r`n"
+    $bat += "set JWT_REFRESH_SECRET=$jwtRefreshKey`r`n"
     $bat += "set JWT_EXPIRES_IN=24h`r`n"
     $bat += "set LICENSE_SECRET=IlmForgeLicense@Secret#2026!OfflineKey`r`n"
     $bat += "set FRONTEND_URL=http://localhost:3000`r`n"

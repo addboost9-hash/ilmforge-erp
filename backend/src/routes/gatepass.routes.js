@@ -29,7 +29,7 @@ const writeGatePassAudit = async (req, action, passId, details = null) => {
 router.get('/', wrap(async (req, res) => {
   const passes = await prisma.gatePass.findMany({ where: { schoolId: req.schoolId }, orderBy: { createdAt: 'desc' }, take: 100 });
   const sids = passes.map(p => p.studentId);
-  const students = sids.length ? await prisma.student.findMany({ where: { id: { in: sids } }, select: { id: true, name: true, rollNo: true } }) : [];
+  const students = sids.length ? await prisma.student.findMany({ where: { id: { in: sids }, schoolId: req.schoolId }, select: { id: true, name: true, rollNo: true } }) : [];
   const smap = Object.fromEntries(students.map(s => [s.id, s]));
   res.json({ success: true, data: passes.map(p => ({ ...p, student: smap[p.studentId] })) });
 }));
@@ -37,6 +37,9 @@ router.get('/', wrap(async (req, res) => {
 router.post('/', wrap(async (req, res) => {
   const { studentId, parentName, reason, validDate } = req.body;
   if (!studentId || !parentName) return res.status(400).json({ success: false, message: 'Student and parent name required.' });
+  // A student of this school (any id used to be accepted).
+  const ofSchool = await prisma.student.findFirst({ where: { id: parseInt(studentId), schoolId: req.schoolId, deletedAt: null }, select: { id: true } });
+  if (!ofSchool) return res.status(404).json({ success: false, message: 'Student not found.' });
   const passCode = 'GP-' + req.schoolId + '-' + Date.now().toString(36).toUpperCase();
   const pass = await prisma.gatePass.create({
     data: { schoolId: req.schoolId, studentId: parseInt(studentId), parentName, reason, passCode, validDate: validDate ? new Date(validDate) : new Date(), issuedBy: req.user.id }
@@ -51,8 +54,16 @@ router.post('/verify', wrap(async (req, res) => {
   const pass = await prisma.gatePass.findFirst({ where: { schoolId: req.schoolId, passCode } });
   if (!pass) return res.status(404).json({ success: false, message: 'Invalid pass code.' });
   if (pass.status === 'used') return res.status(400).json({ success: false, message: 'Pass already used at ' + pass.usedAt, data: pass });
-  const student = await prisma.student.findUnique({ where: { id: pass.studentId }, select: { name: true, rollNo: true } });
-  const updated = await prisma.gatePass.update({ where: { id: pass.id }, data: { status: 'used', usedAt: new Date() } });
+  // A cancelled pass, or one for another day, does not release the child
+  // (only a used pass was refused).
+  if (pass.status !== 'active') return res.status(400).json({ success: false, message: 'This pass was cancelled. Do not release the student.', data: pass });
+  const pkDay = (d) => new Date(new Date(d).getTime() + 5 * 3600e3).toISOString().slice(0, 10);
+  if (pkDay(pass.validDate) !== pkDay(new Date())) return res.status(400).json({ success: false, message: `This pass is for ${pkDay(pass.validDate).split('-').reverse().join('/')}, not today. Do not release the student.`, data: pass });
+  const student = await prisma.student.findFirst({ where: { id: pass.studentId, schoolId: req.schoolId }, select: { name: true, rollNo: true } });
+  // Only while still active: two scans at once release the child once.
+  const { count } = await prisma.gatePass.updateMany({ where: { id: pass.id, status: 'active' }, data: { status: 'used', usedAt: new Date() } });
+  if (count !== 1) return res.status(400).json({ success: false, message: 'This pass was just used.' });
+  const updated = await prisma.gatePass.findUnique({ where: { id: pass.id } });
   await writeGatePassAudit(req, 'GATEPASS_VERIFIED', pass.id, { passCode, usedAt: updated.usedAt });
   res.json({ success: true, data: { ...updated, student }, message: 'Pass verified — student release authorized.' });
 }));

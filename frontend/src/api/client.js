@@ -57,10 +57,24 @@ const clearAndRedirect = () => {
 
 // Response interceptor — handle 401 + school suspension
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // A password change signs other devices out and returns this device's
+    // new tokens: keep them, or this device would be signed out too.
+    const d = res?.data?.data;
+    if (/\/auth\/change-password$/.test(String(res?.config?.url || '')) && d?.accessToken) {
+      try { localStorage.setItem('accessToken', d.accessToken); if (d.refreshToken) localStorage.setItem('refreshToken', d.refreshToken); } catch { /* not kept */ }
+    }
+    return res;
+  },
   async (err) => {
     const status = err.response?.status;
     const code   = err.response?.data?.code;
+
+    // The account must set a new password before anything else.
+    if (status === 403 && code === 'MUST_CHANGE_PASSWORD' && !window.location.pathname.startsWith('/change-password-required')) {
+      window.location.href = '/change-password-required';
+      return Promise.reject(err);
+    }
 
     // School suspended / inactive / expired
     if (status === 403 && ['SCHOOL_SUSPENDED','SCHOOL_INACTIVE','TRIAL_EXPIRED','LICENSE_EXPIRED'].includes(code)) {

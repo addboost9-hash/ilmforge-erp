@@ -167,7 +167,10 @@ const resetStaffPasswordHandler = wrap(async (req, res) => {
   }
 
   const hashed = await bcrypt.hash(newPassword, 10);
-  await prisma.user.update({ where: { id: targetUser.id }, data: { passwordHash: hashed } });
+  // A password set by an admin is temporary: the person chooses their own at
+  // the next sign-in (not when admins reset their own).
+  const own = targetUser.id === req.user?.id;
+  await prisma.user.update({ where: { id: targetUser.id }, data: { passwordHash: hashed, tokenVersion: { increment: 1 }, ...(!own && { mustChangePassword: true }) } });
   res.json({ success: true, message: 'Password reset successfully.' });
 });
 

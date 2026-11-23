@@ -33,11 +33,37 @@ const teacherCanAccessClass = async (req, classId) => {
   if (!schoolHasAnyAssignment) return true;
 
   const classIdInt = parseInt(classId);
-  const [subjectMatch, timetableMatch] = await Promise.all([
+  const [subjectMatch, timetableMatch, classTeacher] = await Promise.all([
     prisma.subject.findFirst({ where: { schoolId: req.schoolId, classId: classIdInt, teacherId: staff.id } }),
     prisma.timetableEntry.findFirst({ where: { schoolId: req.schoolId, classId: classIdInt, teacherId: staff.id } }),
+    // The class teacher of the class (they were refused their own class).
+    prisma.class.findFirst({ where: { id: classIdInt, schoolId: req.schoolId, classTeacherId: staff.id }, select: { id: true } }),
   ]);
-  return !!(subjectMatch || timetableMatch);
+  return !!(subjectMatch || timetableMatch || classTeacher);
 };
 
-module.exports = { teacherCanAccessClass };
+/**
+ * Whether the requesting user may enter marks for this subject of this class.
+ * Once a school assigns teachers to subjects, a teacher marks their own
+ * subjects (by Subject.teacherId or a timetable period of it); the class
+ * teacher may mark every subject of the class. Before any assignment, the
+ * class check alone decides (as teacherCanAccessClass).
+ */
+const teacherCanMarkSubject = async (req, classId, subjectId) => {
+  const role = req.user?.role;
+  if (['super_admin', 'admin'].includes(role)) return true;
+  if (!(await teacherCanAccessClass(req, classId))) return false;
+  if (!subjectId) return true;
+  const staff = await prisma.staff.findFirst({ where: { userId: req.user.id, schoolId: req.schoolId, isActive: true, deletedAt: null }, select: { id: true } });
+  if (!staff) return false;
+  const subjectsAssigned = await prisma.subject.findFirst({ where: { schoolId: req.schoolId, teacherId: { not: null } }, select: { id: true } });
+  if (!subjectsAssigned) return true;
+  const [own, period, classTeacher] = await Promise.all([
+    prisma.subject.findFirst({ where: { id: parseInt(subjectId), schoolId: req.schoolId, teacherId: staff.id }, select: { id: true } }),
+    prisma.timetableEntry.findFirst({ where: { schoolId: req.schoolId, classId: parseInt(classId), subjectId: parseInt(subjectId), teacherId: staff.id }, select: { id: true } }),
+    prisma.class.findFirst({ where: { id: parseInt(classId), schoolId: req.schoolId, classTeacherId: staff.id }, select: { id: true } }),
+  ]);
+  return !!(own || period || classTeacher);
+};
+
+module.exports = { teacherCanAccessClass, teacherCanMarkSubject };
