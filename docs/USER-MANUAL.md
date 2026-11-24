@@ -331,7 +331,7 @@ service to be read and are not stored by IlmForge.
 | Sheet | Columns |
 |---|---|
 | Classes | Class\*, Sections (e.g. `A, B`), Order |
-| Students | Roll No (leave blank), Student Name\*, Father Name\*, Gender, Date of Birth, B-Form No, Class\*, Section, Parent Phone, Parent Email, Mother Name, Address, Religion, Blood Group, Admission Date, Status |
+| Students | Roll No (leave blank), Student Name\*, Father Name\*, Father CNIC, Gender, Date of Birth, B-Form No, Class\*, Section, Parent Phone, Parent Email, Mother Name, Address, Religion, Blood Group, Admission Date, Status |
 | Staff | Employee Code (leave blank), Name\*, Designation, Role, Phone or Email\*, CNIC, Gender, Date of Birth, Department, Joining Date, Monthly Salary (Rs), Salary Type, Status (Active / Left) |
 
 Each sheet's first row is a grey **Example** row; leave it or delete it, it is never imported.

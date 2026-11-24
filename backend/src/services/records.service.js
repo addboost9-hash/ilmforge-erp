@@ -51,6 +51,7 @@ const STUDENT_COLUMNS = [
   { key: 'rollNo', header: 'Roll No', type: 'text', width: 14, example: '', note: 'Leave blank to generate', aliases: ['rollno', 'roll', 'rollnumber', 'admissionno', 'grno'] },
   { key: 'name', header: 'Student Name', required: true, width: 24, example: 'Ayesha Khan', aliases: ['studentname', 'name', 'student'] },
   { key: 'fatherName', header: 'Father Name', required: true, width: 22, example: 'Imran Khan', aliases: ['fathername', 'father', 'guardianname'] },
+  { key: 'fatherCnic', header: 'Father CNIC', type: 'text', width: 18, example: '35202-7654321-9', aliases: ['fathercnic', 'fatherscnic', 'fathercnicno', 'fatherscnicno', 'fathernic', 'fatheridcard', 'fathercnicnumber', 'guardiancnic', 'parentcnic'] },
   { key: 'gender', header: 'Gender', list: STUDENT_GENDERS, width: 10, example: 'Female', aliases: ['gender', 'sex'] },
   { key: 'dob', header: 'Date of Birth', type: 'date', width: 14, example: '14/03/2014', note: 'DD/MM/YYYY', aliases: ['dateofbirth', 'dob', 'birthdate', 'birth'] },
   { key: 'bFormNo', header: 'B-Form No', type: 'text', width: 18, example: '35202-1234567-1', aliases: ['bformno', 'bform', 'cnic', 'bformnumber'] },
@@ -363,6 +364,10 @@ async function validate(schoolId, raw) {
     out.bFormNo = b.value;
     if (b.warning) warn('B-Form No', b.warning);
 
+    const fc = parseCnic(r.fatherCnic);
+    out.fatherCnic = fc.value;
+    if (fc.warning) warn('Father CNIC', fc.warning);
+
     const className = cellText(r.className);
     const cls = className ? classMap.get(norm(className)) : null;
     if (!className) err('Class', 'Class is required.');
@@ -625,6 +630,7 @@ async function importChunk(ctx, chunk) {
         { schoolId, campusId: ctx.campusId, actorUserId: ctx.actorUserId, school, auditAction: 'STUDENT_IMPORTED' },
         {
           name: st.name, fatherName: st.fatherName, motherName: st.motherName,
+          fatherCnic: st.fatherCnic || null, parentCnic: st.fatherCnic || null,
           gender: st.gender, dob: st.dob, bFormNo: st.bFormNo,
           classId: cls?.id, sectionId: sec?.id, rollNo: st.rollNo,
           emergencyPhone: st.emergencyPhone, parentEmail: st.parentEmail,
@@ -793,7 +799,7 @@ async function buildExport(schoolId) {
   addSheet(wb, SHEETS.students, students.map((s) => {
     const parentUser = s.parents?.[0]?.parent?.user;
     return {
-      rollNo: s.rollNo, name: s.name, fatherName: s.fatherName,
+      rollNo: s.rollNo, name: s.name, fatherName: s.fatherName, fatherCnic: s.fatherCnic || '',
       gender: cap(s.gender), dob: fmt(s.dob), bFormNo: s.bFormNo,
       className: s.class?.name || '', sectionName: s.section?.name || '',
       emergencyPhone: s.emergencyPhone || parentUser?.phone || '',

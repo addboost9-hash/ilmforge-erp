@@ -968,7 +968,7 @@ const SECTIONS = [
       {
         title: 'Fill and import students and staff',
         steps: [
-          { n:1, text:'Students sheet — required: Student Name, Father Name, Class. Also: Gender, Date of Birth, B-Form, Section, Parent Phone, Parent Email, Address, Blood Group, Admission Date' },
+          { n:1, text:'Students sheet — required: Student Name, Father Name, Class. Also: Father CNIC, Gender, Date of Birth, B-Form, Section, Parent Phone, Parent Email, Address, Blood Group, Admission Date' },
           { n:2, text:'Staff sheet — required: Name, and a Phone or Email. Also: Designation, Role, CNIC, Department, Joining Date, Monthly Salary (Rs), Status (Active, or Left for someone who no longer works here: added for their old salaries, with no login)' },
           { n:3, text:'Leave Roll No and Employee Code blank — IlmForge creates them (e.g. C5A-26-001, TCH-26-0019)' },
           { n:4, text:'Dates are day first: 14/03/2014 is 14 March. Type phones as 03001234567' },
