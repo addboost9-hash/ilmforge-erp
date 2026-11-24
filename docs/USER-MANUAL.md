@@ -308,7 +308,12 @@ service to be read and are not stored by IlmForge.
 
 > Dates are day first: **14/03/2014** is 14 March. Type phones as **03001234567**.
 > Brothers and sisters with the same parent phone share one parent account.
-> Importing the same file twice is safe; anyone already in the school is skipped.
+> **Nobody is added twice.** A student already in the school is skipped (*Already in this
+> school: … Will be skipped*): the same roll number, the same B-Form number (with or
+> without dashes), or the same name and father's name with the same date of birth or
+> parent phone. A student listed twice in the file is added once. Importing the same file
+> again is safe. A roll number in the file that belongs to a *different* student is shown
+> as a problem to fix.
 > Students who have already left can be added with **Status = Inactive**, and staff who have
 > left with **Status = Left**, when you will bring in their old fees or salaries
 > ([Past records](#past-records)). Staff marked Left get no login.
@@ -331,6 +336,30 @@ service to be read and are not stored by IlmForge.
 
 Each sheet's first row is a grey **Example** row; leave it or delete it, it is never imported.
 The class typed for a student must exist on the Classes sheet or already be in IlmForge.
+
+### Adding every student's photo at once
+
+After the students are imported, **Import & Export → Student photos in bulk** (at the
+bottom of the page) adds all the photos in one go.
+
+1. **Name each photo file with the student's roll number**, for example `NUR-26-001.jpg`.
+   **Download the photo list**: every student with their class, roll number and the file
+   name to give their photo (a `/` in a roll number is written `-`). The B-Form number
+   (`3520212345671.jpg`) or the student's full name (`Ayesha Khan.jpg`, when no other
+   student has that name) also work.
+2. Click **Choose photos** and select them all (in the folder press **Ctrl + A**), or
+   **Choose a folder**. Large camera photos are fine: each is made small (about 40 KB)
+   before it is sent.
+3. The list shows who each photo is for: **Ready**, **Has a photo: kept**, or why a photo
+   was not matched (for example a camera name like `IMG_2041.jpg`). Nothing is saved yet.
+4. Click **Upload**. A student who already has a photo keeps it, unless **Replace photos
+   students already have** is ticked.
+
+Photos not matched are left out: rename them and choose them again. Choosing the same
+photos twice is harmless.
+
+> Quickest way: give the photographer the photo list, class by class, and ask for each
+> photo to be saved with the roll number as its name.
 
 ### Adding or changing a photo
 

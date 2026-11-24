@@ -107,4 +107,34 @@ router.post('/import', wrap(async (req, res) => {
   res.json({ success: true, data: results });
 }));
 
+/* ── Student photos in bulk (services/studentPhotos.service.js) ───────── */
+const photos = require('../services/studentPhotos.service');
+const MAX_PHOTO_FILES = 5000;  // names checked at once
+const MAX_PHOTO_BATCH = 25;    // photos saved per request (each ~40 KB)
+
+// GET /api/v1/bulk/photo-list — every active student and the name to give
+// their photo file (the roll number), with who has a photo already.
+router.get('/photo-list', wrap(async (req, res) => {
+  const { wb } = await photos.buildPhotoList(req.schoolId);
+  await sendWorkbook(res, wb, `student-photo-list-${new Date().toISOString().slice(0, 10)}.xlsx`);
+}));
+
+// POST /api/v1/bulk/photos/match   body: { files: ['NUR-26-001.jpg', …] }
+// Which student each file is for. Writes nothing.
+router.post('/photos/match', wrap(async (req, res) => {
+  const files = req.body?.files;
+  if (!Array.isArray(files) || !files.length) return res.status(400).json({ success: false, message: 'Choose the photos first.' });
+  if (files.length > MAX_PHOTO_FILES) return res.status(400).json({ success: false, message: `Choose at most ${MAX_PHOTO_FILES} photos at a time.` });
+  res.json({ success: true, data: await photos.matchFiles(req.schoolId, files.map((f) => String(f || '').slice(0, 200))) });
+}));
+
+// POST /api/v1/bulk/photos   body: { photos: [{ file, photo }], replace }
+router.post('/photos', wrap(async (req, res) => {
+  const list = req.body?.photos;
+  if (!Array.isArray(list) || !list.length) return res.status(400).json({ success: false, message: 'No photos sent.' });
+  if (list.length > MAX_PHOTO_BATCH) return res.status(400).json({ success: false, message: `Send at most ${MAX_PHOTO_BATCH} photos per request.` });
+  const data = await photos.savePhotos(req.schoolId, list, { replace: req.body?.replace === true, actorUserId: req.user.id });
+  res.json({ success: true, data });
+}));
+
 module.exports = router;

@@ -265,7 +265,7 @@ async function parseWorkbook(base64) {
 async function validate(schoolId, raw) {
   const [dbClasses, dbStudents, dbStaff, dbUsers] = await Promise.all([
     prisma.class.findMany({ where: { schoolId }, include: { sections: true } }),
-    prisma.student.findMany({ where: { schoolId, deletedAt: null }, select: { rollNo: true, name: true, fatherName: true, dob: true } }),
+    prisma.student.findMany({ where: { schoolId, deletedAt: null }, select: { id: true, rollNo: true, name: true, lastName: true, fatherName: true, dob: true, bFormNo: true, emergencyPhone: true, class: { select: { name: true } } } }),
     prisma.staff.findMany({ where: { schoolId, deletedAt: null }, select: { empCode: true, cnic: true } }),
     prisma.user.findMany({ where: { schoolId }, select: { email: true, phone: true, role: true } }),
   ]);
@@ -296,10 +296,39 @@ async function validate(schoolId, raw) {
     }
   }
 
-  /* Students */
-  const knownRolls = new Set(dbStudents.map((s) => norm(s.rollNo)).filter(Boolean));
-  const knownPeople = new Set(dbStudents.map((s) => `${norm(s.name)}|${norm(s.fatherName)}|${s.dob ? s.dob.toISOString().slice(0, 10) : ''}`));
+  /* Students. Anyone already in the school, and the same child twice in the
+     file, is skipped, never added again: the same rule as the admission
+     form (the same B-Form number, or the same name and father's name with
+     the same date of birth or parent's phone), so importing a file twice,
+     or a file with children already admitted by hand, is harmless. */
+  const digits = (v) => String(v || '').replace(/\D/g, '');
+  const pname = (v) => String(v || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const fullName = (x) => pname([x.name, x.lastName].filter(Boolean).join(' '));
+  const who = (x) => `${[x.name, x.lastName].filter(Boolean).join(' ')}${x.fatherName ? ` s/o ${x.fatherName}` : ''}${[x.class?.name, x.rollNo && `roll no. ${x.rollNo}`].filter(Boolean).length ? ` (${[x.class?.name, x.rollNo && `roll no. ${x.rollNo}`].filter(Boolean).join(', ')})` : ''}`;
+  const DAY = 14 * 3600e3;
+  const sameDay = (a, ymd) => !!(a && ymd) && Math.abs(new Date(a).getTime() - Date.parse(`${ymd}T00:00:00Z`)) <= DAY;
+  const byRoll = new Map(dbStudents.filter((x) => x.rollNo).map((x) => [norm(x.rollNo), x]));
+  const byBform = new Map();
+  const byPerson = new Map();
+  for (const x of dbStudents) {
+    const b = digits(x.bFormNo);
+    if (b.length >= 10) byBform.set(b, x);
+    const k = `${fullName(x)}|${pname(x.fatherName)}`;
+    if (!byPerson.has(k)) byPerson.set(k, []);
+    byPerson.get(k).push(x);
+  }
+  /* Of the records with this name and father's name, the one that is this
+     child: the same date of birth or phone; with neither date of birth, the
+     same phone or one of them without a phone. */
+  const samePerson = (list, dob, phone) => (list || []).find((x) => {
+    const xp = digits(x.emergencyPhone).slice(-10);
+    if (dob && x.dob) return sameDay(x.dob, dob) || (phone && xp === phone);
+    if (phone && xp) return xp === phone;
+    return true;
+  });
   const seenRolls = new Map();
+  const seenBforms = new Map();
+  const seenPeople = []; // { key, dob, phone, row }
   const students = [];
 
   for (const r of raw.students || []) {
@@ -368,16 +397,39 @@ async function validate(schoolId, raw) {
     out.status = st.value ? st.value.toLowerCase() : 'active';
     if (st.unknown) err('Status', `"${st.value}" must be Active, Inactive or Passout.`);
 
-    // Already in the school? Skipped, not duplicated — re-importing the
-    // same file twice must be harmless.
-    const personKey = `${norm(out.name)}|${norm(out.fatherName)}|${out.dob || ''}`;
-    if (out.rollNo && knownRolls.has(norm(out.rollNo))) out.action = 'skip-exists';
-    else if (!out.rollNo && knownPeople.has(personKey)) out.action = 'skip-exists';
-    else out.action = 'create';
-    if (out.action === 'skip-exists') add('Students', row, 'info', 'Roll No', 'Already in this school — will be skipped.');
+    // Already in the school, or earlier in this file? Skipped, not
+    // duplicated.
+    out.action = 'create';
+    const skip = (field, message) => { out.action = 'skip-exists'; add('Students', row, 'info', field, message); };
+    const bform = digits(out.bFormNo);
+    const phone = digits(out.emergencyPhone).slice(-10);
+    const key = `${pname(out.name)}|${pname(out.fatherName)}`;
+    const rollHolder = out.rollNo ? byRoll.get(norm(out.rollNo)) : null;
+    if (rollHolder) {
+      // The same roll number on someone else is a mistake in the file, not
+      // this child already admitted.
+      if (fullName(rollHolder) === pname(out.name) || pname(rollHolder.fatherName) === pname(out.fatherName)) skip('Roll No', `Already in this school: ${who(rollHolder)}. Will be skipped.`);
+      else err('Roll No', `Roll number ${out.rollNo} already belongs to ${who(rollHolder)}.`);
+    } else if (bform.length >= 10 && byBform.has(bform)) {
+      skip('B-Form No', `B-Form number already belongs to ${who(byBform.get(bform))}. Will be skipped.`);
+    } else if (out.name && out.fatherName && samePerson(byPerson.get(key), out.dob, phone)) {
+      skip('Student Name', `Already in this school: ${who(samePerson(byPerson.get(key), out.dob, phone))}. Will be skipped.`);
+    } else if (bform.length >= 10 && seenBforms.has(bform)) {
+      skip('B-Form No', `The same B-Form number as row ${seenBforms.get(bform)}: the same child twice. Will be skipped.`);
+    } else {
+      const twin = out.name && out.fatherName && seenPeople.find((x) => x.key === key && (
+        (out.dob && x.dob) ? (out.dob === x.dob || (phone && x.phone === phone)) : (phone && x.phone) ? x.phone === phone : true));
+      if (twin) skip('Student Name', `The same student as row ${twin.row}. Will be skipped.`);
+    }
+    if (out.action === 'create') {
+      if (bform.length >= 10) seenBforms.set(bform, row);
+      if (out.name && out.fatherName) seenPeople.push({ key, dob: out.dob, phone, row });
+    }
 
     if (out.rollNo && !ROLL_RE.test(out.rollNo)) err('Roll No', `"${out.rollNo}" cannot be a roll number. ${ROLL_RULE}`);
-    if (out.rollNo) {
+    // A row skipped as already in the school is not a second use of its roll
+    // number; only rows to be added are compared.
+    if (out.rollNo && out.action !== 'skip-exists') {
       const k = norm(out.rollNo);
       if (seenRolls.has(k)) err('Roll No', `Roll number ${out.rollNo} is also used on row ${seenRolls.get(k)}.`);
       else seenRolls.set(k, row);
@@ -583,7 +635,9 @@ async function importChunk(ctx, chunk) {
       );
       results.students.push({ row: st._row, id: out.student.id, name: st.name, status: 'imported', rollNo: out.student.rollNo, credentials: out.credentials });
     } catch (e) {
-      results.students.push({ row: st._row, name: st.name, status: 'failed', error: e.message });
+      // Admitted meanwhile (by hand, or the same file imported at once twice).
+      if (e.status === 409) results.students.push({ row: st._row, name: st.name, status: 'skipped (already exists)', error: e.message });
+      else results.students.push({ row: st._row, name: st.name, status: 'failed', error: e.message });
     }
   }
 

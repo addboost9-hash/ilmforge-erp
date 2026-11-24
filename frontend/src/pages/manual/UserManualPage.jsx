@@ -976,7 +976,17 @@ const SECTIONS = [
           { n:6, text:'Click "Import". Then click "Download login details" straight away — it lists every new username and password' },
           { n:7, text:'The imported students are listed underneath. Filter "Incomplete", "No photo", "No date of birth" or "No parent phone" and fix each one there with Edit or the photo button' },
         ],
-        tip: 'Importing the same file twice is safe: anyone already in the school is skipped. Brothers and sisters with the same parent phone share one parent account.',
+        tip: 'Nobody is added twice: a student already in the school (the same roll number, the same B-Form number, or the same name and father\'s name with the same date of birth or parent phone) is skipped, and a student listed twice in the file is added once. Importing the same file again is safe. Brothers and sisters with the same parent phone share one parent account.',
+      },
+      {
+        title: 'Every student\'s photo at once',
+        steps: [
+          { n:1, text:'After the students are imported: Sidebar → Import & Export → "Student photos in bulk" (bottom of the page)' },
+          { n:2, text:'Name each photo file with the student\'s roll number, e.g. NUR-26-001.jpg. "Photo list" downloads every student with the file name to use. The B-Form number, or the student\'s full name when no other student has it, also work' },
+          { n:3, text:'Click "Choose photos" and select them all (Ctrl + A in the folder), or "Choose a folder". Large camera photos are fine: each is made small first' },
+          { n:4, text:'Check the list of who each photo is for, then click "Upload". Students who already have a photo keep it, unless "Replace photos students already have" is ticked' },
+        ],
+        tip: 'Give the photographer the photo list, class by class, and ask for each photo to be saved with the roll number as its name.',
       },
       {
         title: 'Fixing a student\'s record',

@@ -21,6 +21,7 @@ import {
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import ImportedStudents from './ImportedStudents';
+import BulkPhotos from './BulkPhotos';
 
 const CHUNK = 25; // people per request
 
@@ -400,12 +401,16 @@ export default function RecordsImportExportPage() {
           <div className="card-body" style={{ fontSize: 13.5, lineHeight: 1.7, display: 'grid', gap: 8 }}>
             <p style={{ margin: 0 }}>Fill the <strong>Classes</strong> sheet first, then <strong>Students</strong> and <strong>Staff</strong>. Columns with * are required. Leave Roll No and Employee Code blank and they are created for you.</p>
             <p style={{ margin: 0 }}>Dates are day first: <strong>14/03/2014</strong> is 14 March. Type phone numbers as <strong>03001234567</strong>. The template keeps the leading zero for you.</p>
-            <p style={{ margin: 0 }}>Brothers and sisters with the same parent phone share one parent account. Anyone already in the school is skipped, so importing the same file twice never creates duplicates.</p>
+            <p style={{ margin: 0 }}>Brothers and sisters with the same parent phone share one parent account. <strong>Students already in the school are skipped, never added twice</strong>: the same roll number, the same B-Form number, or the same name and father's name with the same date of birth or parent phone. A student listed twice in the file is added once. Importing the same file again is safe.</p>
+            <p style={{ margin: 0 }}><strong>Photos:</strong> import the students first, then add every photo at once below (each photo file named with the student's roll number).</p>
             <p style={{ margin: 0 }}><strong>Moving to another server:</strong> export here, then import the file on the new server. Classes, students, parents and staff move across. Fee history, attendance and exam marks are not included, and everyone gets a new password in the login details sheet.</p>
             <p style={{ margin: 0 }}><strong>Old fees, salaries and expenses</strong> from before the school used IlmForge have their own template: <Link to="/settings/past-records" style={{ color: 'var(--primary, #0F3D33)', fontWeight: 600, textDecoration: 'underline' }}>Past Records</Link>. Add students and staff here first (including those who have left), because past records are matched to them.</p>
           </div>
         </div>
       )}
+
+      {/* ── Photos in bulk (once the students are in) ────────── */}
+      {busy !== 'importing' && <BulkPhotos saveFromApi={saveFromApi} />}
     </div>
   );
 }
@@ -436,7 +441,7 @@ function Tally({ label, add, skip, bad, extra }) {
       <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: 'tabular-nums', margin: '2px 0' }}>{add} <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-muted)' }}>to add</span></div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-        {skip ? `${skip} already in school` : 'none already in school'}
+        {skip ? `${skip} skipped: already in school or listed twice` : 'none already in school'}
         {bad ? <span style={{ color: '#B23742' }}> · {bad} with problems</span> : null}
         {extra ? ` · ${extra}` : null}
       </div>
