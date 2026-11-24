@@ -39,9 +39,11 @@ cause of "the system won't let me" during training.
 
 **Sidebar → School Settings**
 
-1. Fill in **School Identity** — school name, and **Upload Logo**.
+1. Fill in **School Identity** — school name, and **Upload Logo**. To print without a logo,
+   click **Remove Logo**. The name can be changed here at any time.
 2. Fill in **Contact Details** — address, phone, email.
-3. Click **Save Profile**.
+3. Click **Save Profile**. A logo removed here disappears from every computer the next time
+   it opens IlmForge.
 
 > The logo and name you set here appear on ID cards, fee vouchers, admission forms,
 > result cards and the login page your staff and parents see. Set it properly once.
@@ -191,6 +193,18 @@ missing required fields — required ones are marked with a red asterisk.
 4. **Parent Details** — parent name and **phone number**. The phone number is how the
    parent will sign in, so enter it correctly.
 5. **Review & Admit** — check everything, then click **Complete Admission**.
+
+**The same child is never admitted twice.** Admission is refused, with the name, class and
+roll number of the record already there, when:
+
+- the **B-Form number** already belongs to a student (with or without dashes), or
+- the **same name and father's name** are already admitted with the **same date of birth**
+  or the **same parent's phone**.
+
+This also stops a second record when **Complete Admission** is clicked twice. A student
+who has left is not admitted again: open their record and set them to *Active*. Two
+children with the same names but a different phone and date of birth are admitted as
+usual. The same check applies to Excel imports and to admission leads.
 
 ### After admission — two things to print
 
@@ -878,7 +892,9 @@ entry, question papers and result cards all use it.
 
 ### Step 1 — Exam Setup
 
-1. Choose the term (*1st Term*, *2nd Term*…) and click **Add Exam**.
+1. Choose the term (*1st Term*, *2nd Term*…) and click **Add Exam**. The form opens on the
+   term you are looking at. **Add a term** (next to the term tabs, admin) adds a 3rd, 4th…
+   term, up to six; **Remove** takes the last one away (only once it has no exams).
 2. Pick **all the classes** the exam is for (one *First Term* exam can cover the whole
    school), name it, and set the dates. **Submit**.
 3. Each exam row shows its classes and dates, its **progress** (how many class-sections
@@ -940,9 +956,24 @@ Choose the term and the exam (or click **Roll no. slips** on the exam's row). Th
 2. **Design the slip** — the preview on the right is exactly what prints.
    - **Title** (for example *Roll Number Slip* or *Admit Card*) and **colour**.
    - **Two slips on an A4 page** (saves paper; cut along the dashed line) or **one, larger**.
-   - **Roll number**: the student's own, or **exam roll numbers** numbered for the exam
-     class by class (with a prefix, such as *T1-*, and the first number, such as 1001). A
-     student has the same exam roll number whichever class is printed.
+   - **School name and logo**: the name printed on the slip (empty: the name in School
+     Profile), **Print the logo on the slip** (untick to print without it) and, for the
+     admin, **Add logo / Change logo** (the school's logo everywhere).
+   - **Roll number**, one of three:
+     - **the student's own** roll number;
+     - **exam roll numbers, class by class**: every student of the first class, then the
+       next class;
+     - **mixed exam roll numbers, to stop copying**: one student of each class in turn.
+       From 5001: the first student of Play Group 5001, of Nursery 5002, of Prep 5003… then
+       the second student of each class, and so on. Seat the hall in number order (print
+       the **Seating list**) and no student sits beside a classmate. Classes follow the
+       order in School Settings → Classes.
+
+     Exam roll numbers can have a prefix (such as *T1-*) and a first number (such as 5001).
+     They are **fixed the first time the slips are printed**: a slip printed again later
+     keeps its number, and a student admitted since gets the next number after the highest,
+     so no number is ever given twice. Before the slips are handed out, the admin or
+     principal can **Number this exam afresh**.
    - **On the slip**: photo, father's name, day and time of each paper, room, marks of each
      paper, an invigilator's signature column, instructions, and the signatures at the
      bottom: the **student's**, the **principal's** and, if wanted, the class teacher's.
@@ -959,6 +990,11 @@ Choose the term and the exam (or click **Roll no. slips** on the exam's row). Th
      number).
    - The **Check** column shows a class with no date sheet, students without a roll number
      and students without a photo, so they can be fixed first.
+   - **Seating list** (with exam roll numbers): every candidate in number order with class
+     and an empty *Seat / room* column, to arrange the hall.
+   - Every student gets **one** slip. A child recorded twice in a class (the same name and
+     father's name) is printed once, and a yellow note names the extra record so it can be
+     removed in Students.
 
 The slips are also at `/exams/exam-slip`.
 

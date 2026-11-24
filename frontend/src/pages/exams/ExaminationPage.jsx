@@ -4,7 +4,7 @@
  * Marks Entry | Results
  * URL: /examination?tab=
  */
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { signatureFromFile } from '../../utils/signatureImage';
 import { useSchoolStamp, stampFor } from '../../utils/schoolStamp';
 import SchoolStampCard from '../../components/settings/SchoolStampCard';
@@ -15,7 +15,9 @@ import toast from 'react-hot-toast';
 import api from '../../api/client';
 import { printHTML } from '../../utils/print';
 import { kitCss, docColor, letterhead, titleRibbon, watermark as kitWatermark, fields, signatures, footer as kitFooter, docHTML, longDate, todayLong, esc as kesc, GOLD } from '../../utils/printKit';
-import { buildTerms, examMatchesTerm } from '../../utils/terms';
+import { examMatchesTerm, MAX_TERMS } from '../../utils/terms';
+import useExamTerms, { EXAM_TERMS_KEY } from '../../hooks/useExamTerms';
+import useAuthStore from '../../store/auth.store';
 import QuestionPapersTab from './QuestionPapersTab';
 import SyllabusTab from './SyllabusTab';
 import RollNoSlipsTab from './RollNoSlipsTab';
@@ -150,10 +152,10 @@ function ClassMultiSelect({ classes = [], selectedClasses, onChange }) {
 }
 
 /* ─────────────────────── EXAM MODAL ─────────────────────── */
-function ExamModal({ classes = [], initial = null, onClose, onSubmit, isSubmitting }) {
+function ExamModal({ classes = [], initial = null, defaultTerm = '1st', onClose, onSubmit, isSubmitting }) {
   const terms = useTerms();
   const [form, setForm] = useState(() => {
-    if (!initial) return { title: '', term: '1st', selectedClasses: [], dateStart: '', dateEnd: '' };
+    if (!initial) return { title: '', term: defaultTerm, selectedClasses: [], dateStart: '', dateEnd: '' };
     let selectedClasses = [];
     try { selectedClasses = initial.classIds ? JSON.parse(initial.classIds) : []; } catch { selectedClasses = []; }
     if (selectedClasses.length === 0 && initial.classId) {
@@ -302,14 +304,50 @@ function ExamProgress({ p }) {
 }
 
 /* How many exam terms this school runs. Two by default, up to six, set in
-   School Settings -> Exam Settings. Cached, because all four tabs ask for it. */
-function useTerms() {
-  const { data } = useQuery({
-    queryKey: ['exam-settings'],
-    queryFn: () => api.get('/settings/exam').then(r => r.data.data).catch(() => null),
-    staleTime: 300_000,
-  });
-  return buildTerms(data?.termsCount ?? 2);
+   School Settings -> Exam Settings or with "Add a term" in Exam Setup. */
+const useTerms = () => useExamTerms();
+
+/* Add a term, or remove the last one (admins). A term that still has exams
+   is not removed: the server says which. */
+function TermsControl({ terms, onChanged }) {
+  const qc = useQueryClient();
+  const role = useAuthStore((s) => s.user?.role);
+  const [busy, setBusy] = useState(false);
+  if (!['admin', 'super_admin'].includes(role)) return null;
+  const n = terms.length;
+  const last = terms[n - 1];
+  const change = async (count) => {
+    if (count < n && !window.confirm(`Remove the ${last.label}? Its tab goes from every exam page.`)) return;
+    setBusy(true);
+    try {
+      const { data } = await api.put('/exams/terms', { termsCount: count });
+      toast.success(data.message || 'Saved.');
+      // The new count at once: the tabs (and the term opened) must not wait
+      // for a reload, or the page falls back to a term that is still there.
+      qc.setQueryData(EXAM_TERMS_KEY, data.data?.termsCount ?? count);
+      qc.invalidateQueries({ queryKey: EXAM_TERMS_KEY });
+      qc.invalidateQueries({ queryKey: ['exam-settings'] });
+      onChanged?.(count);
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Could not change the terms.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginLeft: 10, flexWrap: 'wrap' }}>
+      {n < MAX_TERMS && (
+        <button type="button" disabled={busy} onClick={() => change(n + 1)} className="btn btn-outline btn-sm" title={`Add the ${['1st', '2nd', '3rd', '4th', '5th', '6th'][n]} Term`}>
+          <Plus size={13} /> Add a term
+        </button>
+      )}
+      {n > 1 && (
+        <button type="button" disabled={busy} onClick={() => change(n - 1)} className="btn btn-outline btn-sm" style={{ color: '#B91C1C' }} title={`Remove the ${last.label}`}>
+          <Trash2 size={12} /> Remove {last.label}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function ExamSetupTab({ onGo }) {
@@ -324,6 +362,8 @@ function ExamSetupTab({ onGo }) {
   const { data: school } = useQuery({ queryKey: ['school-profile'], queryFn: () => api.get('/settings/school').then(r => r.data.data).catch(() => ({})) });
 
   const terms = useTerms();
+  // A term removed (here or in School Settings) while it was open.
+  useEffect(() => { if (terms.length && !terms.some(t => t.key === activeTerm)) setActiveTerm(terms[terms.length - 1].key); }, [terms, activeTerm]);
   const filteredExams = allExams.filter(e => examMatchesTerm(e, activeTerm));
   const { data: overview = [] } = useQuery({
     queryKey: ['exams-overview'],
@@ -364,12 +404,13 @@ function ExamSetupTab({ onGo }) {
     <div>
       {/* Term toggle + actions */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap', rowGap: 8 }}>
           {terms.map(t => (
             <button key={t.key} style={termBtnStyle(activeTerm === t.key)} onClick={() => setActiveTerm(t.key)}>
               {t.label}
             </button>
           ))}
+          <TermsControl terms={terms} onChanged={(count) => setActiveTerm(['1st', '2nd', '3rd', '4th', '5th', '6th'][count - 1])} />
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => exportExamsPDF(filteredExams, (terms.find(t => t.key === activeTerm) || {}).label || activeTerm, school)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>PDF</button>
@@ -379,7 +420,7 @@ function ExamSetupTab({ onGo }) {
 
       {/* Add button */}
       <div style={{ marginBottom: 14, textAlign: 'center' }}>
-        <button
+        <button title={`Add an exam to the ${(terms.find(t => t.key === activeTerm) || {}).label || 'term'}`}
           style={{ border: `1.5px solid ${TEAL}`, background: 'transparent', color: TEAL, borderRadius: 7, padding: '8px 20px', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
           onClick={() => setShowAddModal(true)}
         >
@@ -501,7 +542,7 @@ function ExamSetupTab({ onGo }) {
       </div>
 
       {showAddModal && (
-        <ExamModal classes={classes} onClose={() => setShowAddModal(false)} onSubmit={d => add.mutate(d)} isSubmitting={add.isPending} />
+        <ExamModal classes={classes} defaultTerm={activeTerm} onClose={() => setShowAddModal(false)} onSubmit={d => add.mutate(d)} isSubmitting={add.isPending} />
       )}
       {editExam && (
         <ExamModal classes={classes} initial={editExam} onClose={() => setEditExam(null)} onSubmit={d => editMut.mutate({ id: editExam.id, ...d })} isSubmitting={editMut.isPending} />

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Save, GraduationCap, CheckCircle } from 'lucide-react';
 import api from '../../api/client';
@@ -53,6 +54,7 @@ function SkeletonCard({ height = 160, span = 1 }) {
 }
 
 export default function ExamSettingsPage() {
+  const qc = useQueryClient();
   const [form, setForm]       = useState(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -87,6 +89,9 @@ export default function ExamSettingsPage() {
       await api.put('/settings/exam', form);
       /* Expose for other pages (ExamMarksPage, print, etc.) */
       window.__examSettings = form;
+      // The Exam Vault's term tabs and every page reading these settings.
+      qc.invalidateQueries({ queryKey: ['exam-terms'] });
+      qc.invalidateQueries({ queryKey: ['exam-settings'] });
       setSaved(true);
       toast.success('Exam settings saved!');
       setTimeout(() => setSaved(false), 2000);

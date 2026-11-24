@@ -97,3 +97,71 @@ describe('instructions', () => {
     expect(instructionLines(null)).toEqual(DEFAULT_INSTRUCTIONS);
   });
 });
+
+describe('exam roll numbers', () => {
+  const { numberingOrder, examNumbers, oneRecordEach } = slips;
+  const cls = (name, n) => Array.from({ length: n }, (_, i) => ({ id: `${name}${i + 1}` }));
+  const PG = cls('PG', 3); const NUR = cls('NUR', 2); const PREP = cls('PREP', 3);
+
+  it('class by class: all of one class, then the next', () => {
+    expect(numberingOrder([PG, NUR], 'exam').map((s) => s.id)).toEqual(['PG1', 'PG2', 'PG3', 'NUR1', 'NUR2']);
+  });
+
+  it('mixed: one student of each class in turn, a class that runs out is passed over', () => {
+    expect(numberingOrder([PG, NUR, PREP], 'mixed').map((s) => s.id))
+      .toEqual(['PG1', 'NUR1', 'PREP1', 'PG2', 'NUR2', 'PREP2', 'PG3', 'PREP3']);
+  });
+
+  it('mixed from 5001: Play Group 5001, Nursery 5002, Prep 5003, then the second students', () => {
+    const { byStudent, fresh } = examNumbers([PG, NUR, PREP], { mode: 'mixed', start: 5001 });
+    expect(byStudent.get('PG1')).toBe('5001');
+    expect(byStudent.get('NUR1')).toBe('5002');
+    expect(byStudent.get('PREP1')).toBe('5003');
+    expect(byStudent.get('PG2')).toBe('5004');
+    expect(fresh).toHaveLength(8);
+    expect(new Set(fresh.map((f) => f.number)).size).toBe(8); // never twice
+  });
+
+  it('a prefix goes in front of every number', () => {
+    expect(examNumbers([PG], { mode: 'exam', start: 1, prefix: 'T1-' }).byStudent.get('PG3')).toBe('T1-3');
+  });
+
+  it('fixed numbers stay; a student admitted since gets the next number after the highest', () => {
+    const saved = [
+      { studentId: 'PG1', number: 5001, prefix: '', rollNo: '5001', mode: 'mixed' },
+      { studentId: 'NUR1', number: 5002, prefix: '', rollNo: '5002', mode: 'mixed' },
+      { studentId: 'PG2', number: 5003, prefix: '', rollNo: '5003', mode: 'mixed' },
+    ];
+    // A new Nursery student (NUR0) now comes first in the class's roll order.
+    const { byStudent, fresh, mode, fixed } = examNumbers([[{ id: 'PG1' }, { id: 'PG2' }], [{ id: 'NUR0' }, { id: 'NUR1' }]], { mode: 'exam', start: 1, saved });
+    expect(fixed).toBe(true);
+    expect(mode).toBe('mixed'); // the numbering already printed carries on
+    expect(byStudent.get('PG1')).toBe('5001');
+    expect(byStudent.get('NUR1')).toBe('5002');
+    expect(byStudent.get('NUR0')).toBe('5004');
+    expect(fresh).toEqual([{ studentId: 'NUR0', number: 5004, prefix: '', rollNo: '5004' }]);
+  });
+
+  it('a student recorded twice in a class gets one slip; the record with a roll number is kept', () => {
+    const { keep, duplicates } = oneRecordEach([
+      { id: 9, classId: 1, name: 'Ali  Raza', fatherName: 'Imran', rollNo: '' },
+      { id: 4, classId: 1, name: 'ali raza', fatherName: 'IMRAN.', rollNo: '12' },
+      { id: 5, classId: 2, name: 'Ali Raza', fatherName: 'Imran', rollNo: '30' }, // another class: another child
+      { id: 6, classId: 1, name: 'Ali Raza', fatherName: 'Kamran', rollNo: '13' }, // another father
+      { id: 7, classId: 1, name: 'Sara', fatherName: '', rollNo: '' },
+      { id: 8, classId: 1, name: 'Sara', fatherName: '', rollNo: '' }, // no father's name: never merged
+    ]);
+    expect(keep.map((s) => s.id).sort()).toEqual([4, 5, 6, 7, 8]);
+    expect(duplicates).toEqual([{ student: expect.objectContaining({ id: 9 }), keptId: 4 }]);
+  });
+});
+
+describe('the school name and logo on the slip', () => {
+  it('the name can be the slip\'s own, and the logo can be left off', () => {
+    const { design } = checkDesign({ schoolName: '  City  Grammar   School ', show: { logo: false } });
+    expect(design.schoolName).toBe('City Grammar School');
+    expect(design.show.logo).toBe(false);
+    expect(checkDesign({}).design.show.logo).toBe(true);
+    expect(checkDesign({ rollNumber: 'mixed' }).design.rollNumber).toBe('mixed');
+  });
+});

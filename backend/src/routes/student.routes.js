@@ -237,6 +237,8 @@ router.post('/', wrap(async (req, res) => {
     res.status(201).json({ success: true, data: out.student, credentials: out.credentials, invoice: out.invoice });
   } catch (err) {
     if (err.status === 400) return res.status(400).json({ success: false, message: err.message });
+    // The same child is already on the records (or being admitted).
+    if (err.status === 409) return res.status(409).json({ success: false, code: err.code || 'DUPLICATE_STUDENT', message: err.message });
     throw err;
   }
 }));

@@ -32,8 +32,9 @@ export function syncSchoolBranding(school) {
   }
   if (school.logoUrl) set('schoolLogoPreview', school.logoUrl);
   // No logo on the record: an older version may have kept this school's logo
-  // only in this browser, so keep that; another school's logo must go.
-  else if (!sameSchool) drop('schoolLogoPreview');
+  // only in this browser, so keep that; another school's logo must go. An
+  // empty logo (rather than none) was removed on purpose: drop it here too.
+  else if (!sameSchool || school.logoUrl === '') drop('schoolLogoPreview');
 
   const address = [school.address, school.city].filter(Boolean).join(', ');
   if (address) set('schoolAddress', address); else if (!sameSchool) drop('schoolAddress');

@@ -9,20 +9,17 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
 import { buildTerms, examMatchesTerm } from '../../utils/terms';
+import { useTermsCount } from '../../hooks/useExamTerms';
 
 const NAVY = '#1B2F6E';
 const label = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: '#374151' };
 
 export function useExamPick(initialExamId = '') {
-  const { data: settings } = useQuery({
-    queryKey: ['exam-settings'],
-    queryFn: () => api.get('/settings/exam').then((r) => r.data.data).catch(() => null),
-    staleTime: 300_000,
-  });
+  const termsCount = useTermsCount();
   const { data: allExams = [], isLoading } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams').then((r) => r.data.data || []) });
-  // Teachers may not read the settings: then as many terms as the exams use.
+  // Until the number is known: as many terms as the exams use.
   const termNo = (t) => ['1st', '2nd', '3rd', '4th', '5th', '6th'].indexOf(String(t || '').toLowerCase()) + 1;
-  const terms = buildTerms(settings?.termsCount ?? Math.max(2, ...allExams.map((e) => termNo(e.term))));
+  const terms = buildTerms(termsCount ?? Math.max(2, ...allExams.map((e) => termNo(e.term))));
   const [term, setTerm] = useState('');
   const [examId, setExamId] = useState(initialExamId ? String(initialExamId) : '');
   useEffect(() => {

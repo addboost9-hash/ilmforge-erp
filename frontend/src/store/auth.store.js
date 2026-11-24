@@ -109,6 +109,8 @@ const useAuthStore = create((set) => ({
     // A full browser storage must not undo a save the server already made.
     const put = (k, v) => { try { localStorage.setItem(k, v); } catch { /* storage full */ } };
     if (updates.logo)         put('schoolLogoPreview',    updates.logo);
+    // The logo removed on purpose.
+    else if (updates.logo === '') { try { localStorage.removeItem('schoolLogoPreview'); } catch { /* blocked */ } }
     if (updates.primaryColor) put('brandPrimaryColor',    updates.primaryColor);
     if (updates.tagline)      put('brandTagline',         updates.tagline);
     if (updates.motto)        put('brandMotto',           updates.motto);
@@ -133,7 +135,8 @@ const useAuthStore = create((set) => ({
   updateSchool: (school) => {
     try { localStorage.setItem('school', JSON.stringify(school)); } catch { /* storage full */ }
     syncSchoolBranding(school);
-    set((s) => ({ school, branding: { ...s.branding, logo: school?.logoUrl || s.branding.logo, schoolName: school?.name || s.branding.schoolName } }));
+    // An empty logo (not a missing one) means the school removed it.
+    set((s) => ({ school, branding: { ...s.branding, logo: school?.logoUrl === '' ? '' : (school?.logoUrl || s.branding.logo), schoolName: school?.name || s.branding.schoolName } }));
   },
 
   /* The school's details as saved now: a logo or name changed on another

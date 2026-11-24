@@ -81,6 +81,71 @@ async function rollNoTaken(schoolId, rollNo, client = prisma) {
 }
 
 const badRequest = (message) => { const e = new Error(message); e.status = 400; return e; };
+const conflict = (message) => { const e = new Error(message); e.status = 409; e.code = 'DUPLICATE_STUDENT'; return e; };
+
+/* ── The same child admitted twice ─────────────────────────────────────── */
+
+const personName = (v) => String(v || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const digitsOf = (v) => String(v || '').replace(/\D/g, '');
+const SAME_DAY_MS = 14 * 3600e3; // a date of birth saved at midnight here or in UTC
+
+/**
+ * A student already on the school's records who is this child: the same
+ * B-Form number, or the same name and father's name with the same date of
+ * birth or parent's phone. Nothing stopped a second admission (a double
+ * click, the form sent again, the child entered by someone else), and each
+ * made another record: a second roll number slip, fee bill and portal
+ * account. Students who have left count too: they are brought back, not
+ * admitted again. Compared here, not in the query, so SQLite and PostgreSQL
+ * agree whatever the capitals and spacing.
+ *   input  { name, lastName, fatherName, dob, bFormNo, emergencyPhone }
+ * Returns { student, why: 'bform' | 'person' } or null.
+ */
+async function findSameStudent(schoolId, input, { excludeId = null, client = prisma } = {}) {
+  const bform = digitsOf(input.bFormNo);
+  const phone = digitsOf(input.emergencyPhone).slice(-10);
+  const dob = input.dob ? new Date(input.dob) : null;
+  const born = dob && !Number.isNaN(dob.getTime()) ? dob.getTime() : null;
+  const OR = [];
+  // The 7 middle digits of a 13-digit B-Form/CNIC are together whether it was
+  // typed with dashes (35202-1234567-1) or without.
+  if (bform.length >= 10) OR.push({ bFormNo: { contains: bform.length === 13 ? bform.slice(5, 12) : bform } });
+  if (phone.length >= 7) OR.push({ emergencyPhone: { contains: phone.slice(-7) } });
+  if (born !== null) OR.push({ dob: { gte: new Date(born - SAME_DAY_MS), lte: new Date(born + SAME_DAY_MS) } });
+  if (!OR.length) return null;
+  const rows = await client.student.findMany({
+    where: { schoolId, deletedAt: null, OR, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    select: { id: true, name: true, lastName: true, fatherName: true, dob: true, bFormNo: true, emergencyPhone: true, rollNo: true, status: true, class: { select: { name: true } } },
+    take: 500,
+  });
+  if (bform.length >= 10) {
+    const hit = rows.find((r) => digitsOf(r.bFormNo) === bform);
+    if (hit) return { student: hit, why: 'bform' };
+  }
+  const full = personName([input.name, input.lastName].filter(Boolean).join(' '));
+  const father = personName(input.fatherName);
+  if (!full || !father) return null;
+  const hit = rows.find((r) => personName([r.name, r.lastName].filter(Boolean).join(' ')) === full
+    && personName(r.fatherName) === father
+    && ((born !== null && r.dob && Math.abs(r.dob.getTime() - born) <= SAME_DAY_MS)
+      || (phone.length >= 7 && digitsOf(r.emergencyPhone).slice(-10) === phone)));
+  return hit ? { student: hit, why: 'person' } : null;
+}
+
+/* What the office is told about the record already there. */
+function sameStudentMessage({ student: s, why }, input) {
+  const who = `${[s.name, s.lastName].filter(Boolean).join(' ')}${s.fatherName ? ` s/o ${s.fatherName}` : ''}`;
+  const where = [s.class?.name, s.rollNo && `roll no. ${s.rollNo}`].filter(Boolean).join(', ');
+  const left = s.status && s.status !== 'active';
+  const head = why === 'bform'
+    ? `B-Form number ${String(input.bFormNo).trim()} already belongs to ${who}${where ? ` (${where})` : ''}.`
+    : `${who} is already admitted${where ? ` (${where})` : ''}.`;
+  return `${head} ${left ? `Their record says "${s.status}": open it and set them to Active to bring them back, instead of admitting them again.` : 'Open their record instead of admitting them again.'}`;
+}
+
+/* Admissions in progress, so the same child sent twice at once (a double
+   click) cannot pass the check above twice before either is saved. */
+const admitting = new Set();
 
 /* The class, section, session and class teacher named on the form, checked
    against this school: ids from another school were saved as they came. */
@@ -136,6 +201,17 @@ async function resolveCampus(schoolId, campusId) {
  * @returns {{ student, invoice, credentials, parentReused }}
  */
 async function admitStudent(ctx, input) {
+  const key = `${ctx.schoolId}|${personName([input?.name, input?.lastName].filter(Boolean).join(' '))}|${personName(input?.fatherName)}`;
+  if (admitting.has(key)) throw conflict(`${input.name} is being admitted right now (the form was sent twice). Check the students list before trying again.`);
+  admitting.add(key);
+  try {
+    return await admitOne(ctx, input);
+  } finally {
+    admitting.delete(key);
+  }
+}
+
+async function admitOne(ctx, input) {
   const { schoolId, actorUserId } = ctx;
   const {
     name, lastName, fatherName, motherName, gender, dob, classId, sectionId, sessionId,
@@ -190,6 +266,9 @@ async function admitStudent(ctx, input) {
   }
 
   await checkPlacement(schoolId, { classId, sectionId, sessionId, teacherId });
+
+  const same = await findSameStudent(schoolId, { name, lastName, fatherName, dob, bFormNo, emergencyPhone });
+  if (same) throw conflict(sameStudentMessage(same, { bFormNo }));
 
   const typedRoll = rollNo && String(rollNo).trim() ? String(rollNo).trim() : '';
   if (typedRoll) {
@@ -449,4 +528,4 @@ async function admitStudent(ctx, input) {
   return { student: result.student, invoice: result.invoice, credentials, parentReused: result.parentReused };
 }
 
-module.exports = { admitStudent, generateRollNo, resolveCampus, genPassword, slugify, testMarksValue, ROLL_RE, ROLL_RULE };
+module.exports = { admitStudent, generateRollNo, resolveCampus, genPassword, slugify, testMarksValue, ROLL_RE, ROLL_RULE, findSameStudent, sameStudentMessage };

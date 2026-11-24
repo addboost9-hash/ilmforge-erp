@@ -522,6 +522,27 @@ model Exam {
   @@index([schoolId, classId])
 }
 
+// An exam roll number (seat number), fixed when the exam's slips are first
+// printed so a slip printed later never repeats a number already handed out.
+// mode: exam (class by class) | mixed (one student of each class in turn, so
+// students seated in number order do not sit beside a classmate).
+// A student admitted later gets the next number after the highest.
+model ExamRollNumber {
+  id        Int      @id @default(autoincrement())
+  schoolId  Int
+  examId    Int
+  studentId Int
+  number    Int
+  prefix    String   @default("")
+  rollNo    String
+  mode      String   @default("exam")
+  createdAt DateTime @default(now())
+
+  @@unique([examId, studentId])
+  @@unique([examId, number])
+  @@index([schoolId, examId])
+}
+
 // A question paper written in the Exam Vault: for one exam, class and
 // subject, with its questions. Papers used to be rows of the class-test table
 // with a "[BANK]" title and no questions, so they printed as empty templates.

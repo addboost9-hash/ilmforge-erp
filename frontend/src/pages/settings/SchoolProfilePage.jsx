@@ -10,7 +10,7 @@ import useAuthStore from '../../store/auth.store';
 import { useBranding } from '../../hooks/useBranding';
 import { compressLogo } from '../../utils/photo';
 import SchoolStampCard from '../../components/settings/SchoolStampCard';
-import { Save, Upload, Camera, Palette, Building2, Globe, Phone, Mail, MapPin, CheckCircle, BookOpen, Clock } from 'lucide-react';
+import { Save, Upload, Camera, Palette, Building2, Globe, Phone, Mail, MapPin, CheckCircle, BookOpen, Clock, Trash2 } from 'lucide-react';
 
 const THEME_PRESETS = [
   { name:'Teal',   p:'#0D9488', s:'#0369A1' },
@@ -43,6 +43,9 @@ export default function SchoolProfilePage() {
   });
 
   const [logoPreview,    setLogoPreview]    = useState(logo || '');
+  // "Remove logo" pressed: saved as no logo (an empty value), so every
+  // computer drops the copy it kept, and documents print without one.
+  const [logoRemoved,    setLogoRemoved]    = useState(false);
   const [selectedColor,  setSelectedColor]  = useState(primaryColor || '#0D9488');
   const [selectedPreset, setSelectedPreset] = useState(null);
 
@@ -73,6 +76,7 @@ export default function SchoolProfilePage() {
     try {
       const small = await compressLogo(file);
       setLogoPreview(small);
+      setLogoRemoved(false);
       updateBranding({ logo: small });
       toast('Logo ready: press Save to keep it', { icon: '🖼️' });
     } catch (err) {
@@ -89,18 +93,20 @@ export default function SchoolProfilePage() {
         city:    form.city,
         phone:   form.phone,
         email:   form.email,
-        ...(logoPreview && { logoUrl: logoPreview }),
+        ...(logoPreview ? { logoUrl: logoPreview } : logoRemoved ? { logoUrl: '' } : {}),
       });
     },
     onSuccess: () => {
+      const logoChange = logoPreview ? { logo: logoPreview } : logoRemoved ? { logo: '' } : {};
       updateBranding({
         primaryColor: selectedColor,
         schoolName:   form.name,
         tagline:      form.tagline,
         motto:        form.motto,
-        ...(logoPreview && { logo: logoPreview }),
+        ...logoChange,
       });
-      updateSchool({ ...school, name:form.name, address:form.address, city:form.city, phone:form.phone, email:form.email, ...(logoPreview && { logoUrl: logoPreview }) });
+      updateSchool({ ...school, name:form.name, address:form.address, city:form.city, phone:form.phone, email:form.email, ...(logoPreview ? { logoUrl: logoPreview } : logoRemoved ? { logoUrl: '' } : {}) });
+      setLogoRemoved(false);
       /* Apply CSS var immediately */
       document.documentElement.style.setProperty('--teal', selectedColor);
       toast.success('School profile saved! 🎉');
@@ -159,14 +165,23 @@ export default function SchoolProfilePage() {
                 }
               </div>
               <div>
-                <button type="button" onClick={()=>logoRef.current?.click()}
-                  className="btn btn-teal btn-sm" style={{ marginBottom:8, display:'inline-flex', alignItems:'center', gap:6 }}>
-                  <Upload size={13}/> {logoPreview?'Change Logo':'Upload Logo'}
-                </button>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:8 }}>
+                  <button type="button" onClick={()=>logoRef.current?.click()}
+                    className="btn btn-teal btn-sm" style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                    <Upload size={13}/> {logoPreview?'Change Logo':'Upload Logo'}
+                  </button>
+                  {logoPreview && (
+                    <button type="button" onClick={()=>{ setLogoPreview(''); setLogoRemoved(true); toast('Logo removed: press Save to keep it', { icon: '🗑️' }); }}
+                      className="btn btn-outline btn-sm" style={{ display:'inline-flex', alignItems:'center', gap:6, color:'#DC2626' }}>
+                      <Trash2 size={13}/> Remove Logo
+                    </button>
+                  )}
+                </div>
                 <p style={{ fontSize:11.5,color:'#64748B',lineHeight:1.6,margin:0 }}>
                   PNG or JPG, max 2MB.<br/>
                   Recommended: 250×250px with transparent bg.<br/>
                   Used on login page, sidebar, PDFs & ID cards.
+                  {logoRemoved && <><br/><strong style={{ color:'#B45309' }}>No logo: press Save Profile to remove it everywhere.</strong></>}
                 </p>
               </div>
               <input ref={logoRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleLogo}/>

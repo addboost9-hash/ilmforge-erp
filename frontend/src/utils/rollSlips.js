@@ -52,15 +52,24 @@ export function examDates(exam) {
   return a && b && a !== b ? `${a} – ${b}` : a || b;
 }
 
-/* The roll number printed for a student under this design. */
-export const slipRollNo = (s, design) => (design?.rollNumber === 'exam' ? s.examRollNo : s.rollNo) || `ID-${s.id}`;
+/* The roll number printed for a student under this design: the student's
+   own, or the exam's (class by class, or mixed across the classes). */
+export const usesExamNumbers = (design) => design?.rollNumber === 'exam' || design?.rollNumber === 'mixed';
+export const slipRollNo = (s, design) => (usesExamNumbers(design) ? s.examRollNo : s.rollNo) || `ID-${s.id}`;
+
+/* The school's name as printed: the slip's own (Design -> School name on the
+   slip), else the name in School Profile. */
+export const slipSchoolName = (data, design) => String(design?.schoolName || '').trim() || data?.school?.name || 'School';
 
 const initials = (name) => String(name || 'School').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 function slipHTML({ s, g, data, design, issued, stamp }) {
   const show = design.show || {};
   const school = data.school || {};
-  const logo = imgSrc(school.logoUrl);
+  const schoolName = slipSchoolName(data, design);
+  // "Print the school logo" off: no logo, no initials in its place, no watermark.
+  const noLogo = show.logo === false;
+  const logo = noLogo ? '' : imgSrc(school.logoUrl);
   const photo = imgSrc(s.photoUrl);
   const sig = imgSrc(design.principalSignature);
   const cls = `${g.className}${g.sectionName ? ` — ${g.sectionName}` : ''}`;
@@ -86,11 +95,11 @@ function slipHTML({ s, g, data, design, issued, stamp }) {
   const motto = brand().motto;
   const field = (label, value, cls2 = '') => `<div class="f ${cls2}"><span class="fl">${esc(label)}</span><span class="fv" dir="auto">${esc(value || '—')}</span></div>`;
   return `<section class="slip"><div class="slipin">
-  <div class="wm" aria-hidden="true">${logo ? `<img src="${esc(logo)}" alt="">` : `<span>${esc(initials(school.name))}</span>`}</div>
+  ${noLogo ? '' : `<div class="wm" aria-hidden="true">${logo ? `<img src="${esc(logo)}" alt="">` : `<span>${esc(initials(schoolName))}</span>`}</div>`}
   <header class="hd">
-    ${logo ? `<img class="logo" src="${esc(logo)}" alt="">` : `<div class="logo mono">${esc(initials(school.name))}</div>`}
+    ${noLogo ? '' : logo ? `<img class="logo" src="${esc(logo)}" alt="">` : `<div class="logo mono">${esc(initials(schoolName))}</div>`}
     <div class="sch">
-      <div class="nm" dir="auto">${esc(school.name || 'School')}</div>
+      <div class="nm" dir="auto">${esc(schoolName)}</div>
       ${motto ? `<div class="mt" dir="auto">${esc(motto)}</div>` : ''}
       ${school.address || school.phone ? `<div class="ad" dir="auto">${esc([school.address, school.phone && `Phone ${school.phone}`].filter(Boolean).join(' · '))}</div>` : ''}
     </div>
@@ -218,6 +227,56 @@ export function buildSlipsDocument({ data, design, groups, preview = false, auto
 ${preview ? '' : `<div class="bar"><div><b>${esc(docTitle)}</b> · ${count} slip${count === 1 ? '' : 's'}<div class="hint">To download, choose <b>Save as PDF</b> as the printer.</div></div><button type="button" onclick="window.print()">Print / Save as PDF</button></div>`}
 <main class="pages">${body || '<p style="padding:24px;color:#6B7280">No students to print.</p>'}</main>
 ${autoPrint ? '<script>window.addEventListener("load",function(){setTimeout(function(){window.print()},350)});<\/script>' : ''}
+</body></html>`;
+}
+
+/* The number part of an exam roll number ("T1-5012" -> 5012), for ordering. */
+const numberOf = (v) => { const m = /(\d+)\D*$/.exec(String(v || '')); return m ? Number(m[1]) : Infinity; };
+
+/**
+ * The seating list: every candidate of the exam in roll number order, for
+ * the invigilators to seat the hall by. With mixed numbers, neighbours in
+ * this list are from different classes.
+ */
+export function buildSeatingDocument({ data, design, title = '' }) {
+  const color = HEX_RE.test(design?.color) ? design.color : '#1B2F6E';
+  const rows = (data.groups || [])
+    .flatMap((g) => g.students.map((s) => ({ s, cls: `${g.className}${g.sectionName ? ` — ${g.sectionName}` : ''}` })))
+    .sort((a, b) => numberOf(a.s.examRollNo) - numberOf(b.s.examRollNo) || String(a.s.examRollNo).localeCompare(String(b.s.examRollNo)));
+  const school = slipSchoolName(data, design);
+  const docTitle = title || `Seating list — ${examLabel(data.exam)}`;
+  const mixed = data.rollNumbers?.mode === 'mixed';
+  const body = rows.map(({ s, cls }, i) => `<tr><td class="n">${i + 1}</td><td class="r">${esc(s.examRollNo || '')}</td><td dir="auto"><b>${esc(s.name)}</b></td><td dir="auto">${esc(s.fatherName || '')}</td><td>${esc(cls)}</td><td></td></tr>`).join('');
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><title>${esc(docTitle)}</title>
+<style>
+  @page { size: A4 portrait; margin: 10mm; }
+  * { box-sizing: border-box; }
+  body { font-family: ${SANS}; color: #111827; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bar { position: sticky; top: 0; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: #fff; border-bottom: 1px solid #D1D5DB; padding: 10px 16px; font-size: 13px; }
+  .bar button { background: ${color}; color: #fff; border: 0; border-radius: 8px; padding: 9px 18px; font-weight: 700; cursor: pointer; }
+  main { max-width: 190mm; margin: 0 auto; padding: 10px 0 30px; }
+  h1 { font: 700 17pt ${SERIF}; color: ${color}; text-align: center; margin: 0; text-transform: uppercase; }
+  h2 { font: 600 11.5pt ${SERIF}; text-align: center; margin: 2mm 0 1mm; }
+  .note { text-align: center; font-size: 9pt; color: #4B5563; margin-bottom: 4mm; }
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  thead { display: table-header-group; }
+  th { background: ${color}; color: #fff; text-align: left; padding: 1.6mm 2mm; font-size: 8.4pt; text-transform: uppercase; letter-spacing: .4pt; }
+  td { border: .6pt solid ${tint(color, 0.7)}; padding: 1.4mm 2mm; }
+  tr { break-inside: avoid; }
+  tbody tr:nth-child(even) td { background: ${tint(color, 0.955)}; }
+  td.n { text-align: center; color: #6B7280; width: 8%; }
+  td.r { font-family: Consolas, 'Courier New', monospace; font-weight: 800; color: ${color}; white-space: nowrap; width: 14%; }
+  @media print { .bar { display: none; } main { padding: 0; } }
+</style></head><body>
+<div class="bar"><div><b>${esc(docTitle)}</b> · ${rows.length} candidate${rows.length === 1 ? '' : 's'}</div><button type="button" onclick="window.print()">Print / Save as PDF</button></div>
+<main>
+  <h1 dir="auto">${esc(school)}</h1>
+  <h2 dir="auto">Seating list — ${esc(examLabel(data.exam))}</h2>
+  <div class="note">Seat the candidates in roll number order.${mixed ? ' The numbers go round the classes in turn, so no candidate sits beside a classmate.' : ''}</div>
+  <table><thead><tr><th>#</th><th>Roll No.</th><th>Candidate's name</th><th>Father's name</th><th>Class</th><th style="width:14%">Seat / room</th></tr></thead>
+  <tbody>${body || '<tr><td colspan="6" style="text-align:center;color:#6B7280">No candidates.</td></tr>'}</tbody></table>
+</main>
 </body></html>`;
 }
 

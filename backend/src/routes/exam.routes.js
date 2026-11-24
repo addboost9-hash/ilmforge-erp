@@ -760,6 +760,41 @@ const allowedClassIds = async (req, ids) => {
   return out;
 };
 
+// GET /exams/terms — how many exam terms the school runs (School Settings ->
+// Exam Settings). Teachers may not read the settings, so the Exam Vault
+// showed them two terms even where the school runs three or more.
+router.get('/terms', wrap(async (req, res) => {
+  const row = await prisma.examSettings.findFirst({ where: { schoolId: req.schoolId }, select: { termsCount: true } }).catch(() => null);
+  const n = parseInt(row?.termsCount);
+  res.json({ success: true, data: { termsCount: Math.min(6, Math.max(1, Number.isFinite(n) ? n : 2)) } });
+}));
+
+// PUT /exams/terms — add or remove a term from the Exam Vault (admins).
+// A term that still has exams cannot be removed: they would disappear from
+// every page.
+router.put('/terms', wrap(async (req, res) => {
+  if (!['super_admin', 'admin'].includes(req.user?.role)) return res.status(403).json({ success: false, message: 'Only the admin can change the number of terms.' });
+  const n = Number(req.body?.termsCount);
+  if (!Number.isInteger(n) || n < 1 || n > 6) return res.status(400).json({ success: false, message: 'A school runs 1 to 6 exam terms.' });
+  const existing = await prisma.examSettings.findFirst({ where: { schoolId: req.schoolId } });
+  const ORD = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
+  const removed = ORD.slice(n);
+  if (removed.length) {
+    const exams = await prisma.exam.findMany({
+      where: { schoolId: req.schoolId, OR: [{ term: { in: removed } }, { type: { in: removed.map((t) => `term_${ORD.indexOf(t) + 1}`) } }] },
+      select: { title: true, term: true },
+    });
+    if (exams.length) {
+      const t = exams[0].term || removed[0];
+      return res.status(400).json({ success: false, message: `The ${t} Term still has ${exams.length === 1 ? `an exam (${exams[0].title})` : `${exams.length} exams`}. Move ${exams.length === 1 ? 'it' : 'them'} to another term or delete ${exams.length === 1 ? 'it' : 'them'} first.` });
+    }
+  }
+  const row = existing
+    ? await prisma.examSettings.update({ where: { id: existing.id }, data: { termsCount: n } })
+    : await prisma.examSettings.create({ data: { schoolId: req.schoolId, termsCount: n } });
+  res.json({ success: true, data: { termsCount: row.termsCount }, message: `The school now runs ${n} exam term${n === 1 ? '' : 's'}.` });
+}));
+
 // GET /exams/slip-design — how the school's roll number slips look
 router.get('/slip-design', wrap(async (req, res) => {
   if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
@@ -840,7 +875,44 @@ router.get('/:id/slips', wrap(async (req, res) => {
     if (!only.length) return res.status(403).json({ success: false, message: 'You can print the slips of your own classes only.' });
   }
   const photos = req.query.photos !== '0';
-  res.json({ success: true, data: await slips.slipData(req.schoolId, exam, { classIds: only, sectionId, photos }) });
+  // ?mode=&start=&prefix= : the numbering on the design page, not saved yet.
+  let numbering = null;
+  if (req.query.mode !== undefined || req.query.start !== undefined || req.query.prefix !== undefined) {
+    const { design, error } = slips.checkDesign({
+      ...(req.query.mode !== undefined && { rollNumber: String(req.query.mode) }),
+      ...(req.query.start !== undefined && { rollStart: Number(req.query.start) }),
+      ...(req.query.prefix !== undefined && { rollPrefix: String(req.query.prefix) }),
+    }, await slips.readDesign(req.schoolId));
+    if (error) return res.status(400).json({ success: false, message: error });
+    numbering = { mode: design.rollNumber, start: design.rollStart, prefix: design.rollPrefix };
+  }
+  res.json({ success: true, data: await slips.slipData(req.schoolId, exam, { classIds: only, sectionId, photos, numbering }) });
+}));
+
+// POST /exams/:id/roll-numbers — fix the exam roll numbers as they are about
+// to be printed (everyone's the first time; afterwards only students who
+// have none yet), so a slip printed later never repeats a number.
+// Body: { mode: exam|mixed, start, prefix } — the numbering being printed.
+router.post('/:id/roll-numbers', wrap(async (req, res) => {
+  if (!canSeeResults(req.user?.role)) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const examId = parseInt(req.params.id);
+  const exam = Number.isInteger(examId) ? await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } }) : null;
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  const out = await slips.fixRollNumbers(req.schoolId, exam, req.body || {});
+  if (out.error) return res.status(400).json({ success: false, message: out.error });
+  res.json({ success: true, data: out.rollNumbers, added: out.added });
+}));
+
+// DELETE /exams/:id/roll-numbers — number the exam afresh (only before the
+// slips are handed out: printed slips no longer match).
+router.delete('/:id/roll-numbers', wrap(async (req, res) => {
+  if (!['super_admin', 'admin', 'principal'].includes(req.user?.role)) return res.status(403).json({ success: false, message: 'Only the admin or principal can renumber an exam.' });
+  const examId = parseInt(req.params.id);
+  const exam = Number.isInteger(examId) ? await prisma.exam.findFirst({ where: { id: examId, schoolId: req.schoolId } }) : null;
+  if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+  const count = await slips.resetRollNumbers(req.schoolId, exam.id);
+  await prisma.auditLog.create({ data: { schoolId: req.schoolId, userId: req.user.id, action: 'EXAM_ROLL_NUMBERS_RESET', resource: 'exam', resourceId: exam.id, details: JSON.stringify({ count }) } }).catch(() => {});
+  res.json({ success: true, message: count ? `${count} roll numbers cleared: the next print numbers everyone afresh.` : 'This exam had no fixed roll numbers.' });
 }));
 
 // PUT /exams/:examId/datesheet/class/:classId — a class's papers for this
@@ -979,6 +1051,7 @@ router.delete('/:id', wrap(async (req, res) => {
   try {
     await prisma.examTimetable.deleteMany({ where: { examId } });
   } catch (_) {}
+  await prisma.examRollNumber.deleteMany({ where: { examId, schoolId: req.schoolId } });
 
   await prisma.exam.delete({ where: { id: examId } });
   res.json({ success: true, message: 'Exam and associated marks deleted.' });

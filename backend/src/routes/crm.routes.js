@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { findSameStudent, sameStudentMessage } = require('../services/admission.service');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 router.get('/leads', wrap(async (req, res) => {
@@ -66,9 +67,16 @@ router.post('/leads/:id/convert', wrap(async (req, res) => {
     if (!sec) return res.status(400).json({ success: false, message: 'Invalid sectionId.' });
   }
 
+  if (lead.stage === 'admitted') return res.status(409).json({ success: false, message: 'This lead has already been admitted.' });
+  const same = await findSameStudent(req.schoolId, { name: lead.studentName, fatherName: lead.parentName, emergencyPhone: lead.phone });
+  if (same) return res.status(409).json({ success: false, code: 'DUPLICATE_STUDENT', message: sameStudentMessage(same, {}) });
+
   const autoRoll = `CRM-${Date.now().toString(36).toUpperCase()}`;
 
   const result = await prisma.$transaction(async (tx) => {
+    // Once only, even when the button is pressed twice at the same moment.
+    const { count } = await tx.admissionLead.updateMany({ where: { id: lead.id, schoolId: req.schoolId, stage: { not: 'admitted' } }, data: { stage: 'admitted' } });
+    if (count !== 1) throw Object.assign(new Error('This lead has already been admitted.'), { status: 409 });
     const student = await tx.student.create({
       data: {
         schoolId: req.schoolId,
@@ -101,7 +109,8 @@ router.post('/leads/:id/convert', wrap(async (req, res) => {
     });
 
     return student;
-  });
+  }).catch((err) => { if (err.status === 409) return { error: err }; throw err; });
+  if (result.error) return res.status(409).json({ success: false, message: result.error.message });
 
   await prisma.auditLog.create({
     data: {
