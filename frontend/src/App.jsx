@@ -173,6 +173,7 @@ import AdmissionCRMPage        from './pages/crm/AdmissionCRMPage';
 import GatePassPage            from './pages/gatepass/GatePassPage';
 import SOPsPage                from './pages/sops/SOPsPage';
 import RecordsImportExportPage from './pages/students/RecordsImportExportPage';
+import RegisterFromPhotosPage from './pages/students/RegisterFromPhotosPage';
 import HistoryImportPage from './pages/students/HistoryImportPage';
 import RoboBuddyPage           from './pages/robobuddy/RoboBuddyPage';
 import FeeInvoicesManagePage   from './pages/fees/FeeInvoicesManagePage';
@@ -637,6 +638,7 @@ export default function App() {
             <Route path="/gate-passes"                element={<GatePassPage />} />
             <Route path="/sops"                       element={<SOPsPage />} />
             <Route path="/students/bulk-import"       element={<RecordsImportExportPage />} />
+            <Route path="/students/from-photos"       element={<RegisterFromPhotosPage />} />
             <Route path="/settings/import-export"     element={<RecordsImportExportPage />} />
             <Route path="/settings/past-records"      element={<HistoryImportPage />} />
             <Route path="/robobuddy"                  element={<RoboBuddyPage />} />

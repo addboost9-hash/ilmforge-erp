@@ -989,6 +989,17 @@ const SECTIONS = [
         tip: 'Give the photographer the photo list, class by class, and ask for each photo to be saved with the roll number as its name.',
       },
       {
+        title: 'New students from their photos',
+        steps: [
+          { n:1, text:'Sidebar → Import & Export → "Register from photos". Name each photo with the student\'s name, e.g. Ali Raza.jpg' },
+          { n:2, text:'Choose the class and section (photos in class folders, like Class 5/A/Ali Raza.jpg, go to their own class)' },
+          { n:3, text:'What is not known yet is filled the same for everyone: father\'s name ".", father\'s CNIC 11111111111, parent phone 111111 (change them if you like)' },
+          { n:4, text:'Choose the photos. Each is cut to passport size (head and shoulders); click a photo to move or zoom its frame' },
+          { n:5, text:'Click "Register", then "Download login details". Fill in the real details later with Edit: until then the records show as incomplete' },
+        ],
+        tip: 'Each student gets a parent account of their own, so the stand-in phone never joins two students as brother and sister.',
+      },
+      {
         title: 'Fixing a student\'s record',
         steps: [
           { n:1, text:'Student Registry → type a name or roll number, or choose a class to list the whole class' },

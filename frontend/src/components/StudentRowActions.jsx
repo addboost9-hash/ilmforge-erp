@@ -12,13 +12,17 @@ import api from '../api/client';
 import EditStudentModal from './EditStudentModal';
 
 /** The details a school usually needs on every record. */
+const digitsOf = (v) => String(v || '').replace(/\D/g, '');
 export function missingInfo(s) {
   const out = [];
   if (!s.photoUrl) out.push('photo');
   if (!s.dob) out.push('date of birth');
-  if (!s.emergencyPhone) out.push('parent phone');
+  // A stand-in ("111111", or "." for the father) is not the real detail:
+  // students registered from their photos show as incomplete until fixed.
+  if (digitsOf(s.emergencyPhone).length < 10) out.push('parent phone');
   if (s.bFormNo !== undefined && !s.bFormNo) out.push('B-Form');
-  if (!s.fatherName) out.push("father's name");
+  if (!/\p{L}/u.test(String(s.fatherName || ''))) out.push("father's name");
+  if (s.fatherCnic && digitsOf(s.fatherCnic).length !== 13) out.push("father's CNIC");
   return out;
 }
 

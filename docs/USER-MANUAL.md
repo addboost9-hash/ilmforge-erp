@@ -361,6 +361,30 @@ photos twice is harmless.
 > Quickest way: give the photographer the photo list, class by class, and ask for each
 > photo to be saved with the roll number as its name.
 
+### New students from their photos
+
+When all you have is each student's photo and name, **Import & Export → New students from
+photos** (`/students/from-photos`) registers them in one go.
+
+1. Name each photo with the student's name: `Ali Raza.jpg`. (`ali raza.jpg` becomes
+   *Ali Raza*; a camera name such as `IMG_2041.jpg` is pointed out, and you type the name.)
+2. Choose the **class and section**, and if you like the gender and admission date. Photos
+   kept in class folders (`Class 5/A/Ali Raza.jpg`, then **Choose a folder**) go to their
+   own class and section.
+3. What is not known yet is filled the same for everyone: **father's name `.`**, **father's
+   CNIC `11111111111`**, **parent phone `111111`**. Change them on the page if you want
+   other stand-ins.
+4. Choose the photos. Each is framed as a **passport photo (35 × 45 mm, head and
+   shoulders)**: the head is found on the plain wall behind. Click a photo to move or zoom
+   its frame. A name already in the class, or twice in the photos, is left out unless you
+   tick it.
+5. Click **Register**, then **Download login details**.
+
+Each student gets a roll number, the passport photo, and a parent account of their own: a
+stand-in phone never joins two students as brother and sister. In the Student Registry
+they show as **incomplete** (father's name, parent phone, father's CNIC) until you put in
+the real details with **Edit**; the real phone then becomes the parent's sign-in.
+
 ### Adding or changing a photo
 
 A student's photo can be added or changed wherever you need it:

@@ -298,12 +298,23 @@ async function admitOne(ctx, input) {
     ? `${slugify(name)}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}.${uniq}@${slug}.student`
     : studentEmail;
 
-  const normalizedPhone = String(emergencyPhone || '').replace(/\D/g, '').slice(-10);
+  /* Only a real number (10 digits and more) is the parent's: it finds the
+     brothers' and sisters' parent account and is the parent's sign-in. A
+     placeholder typed for a number not known yet ("111111", "0") is
+     neither: it put every student admitted with it under ONE parent account,
+     sharing a portal and a family voucher. Those students get a parent
+     account of their own; the real number, entered later, becomes its
+     sign-in (syncParentLoginPhone). */
+  const realPhone = !!phoneUtil.canonical(emergencyPhone);
+  const normalizedPhone = realPhone ? phoneUtil.core(emergencyPhone) : '';
+  // A father's name of only dots or dashes (a placeholder) gives no name.
+  const fatherSlug = slugify(fatherName) || 'parent';
+  const fatherKnown = /\p{L}/u.test(String(fatherName || ''));
   const finalParentEmail = (parentEmail && String(parentEmail).trim())
     ? String(parentEmail).trim().toLowerCase()
     : normalizedPhone
-      ? `${slugify(fatherName || 'parent')}.${normalizedPhone}@${slug}.parent`
-      : `${slugify(fatherName || 'parent')}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}@${slug}.parent`;
+      ? `${fatherSlug}.${normalizedPhone}@${slug}.parent`
+      : `${fatherSlug}.${finalRollNo.toLowerCase().replace(/[^a-z0-9]/g, '')}@${slug}.parent`;
 
   const existingParentByEmail = finalParentEmail
     ? await prisma.user.findFirst({ where: { schoolId, email: finalParentEmail, role: 'parent', deletedAt: null } })
@@ -392,7 +403,7 @@ async function admitOne(ctx, input) {
       });
       await tx.student.update({ where: { id: student.id }, data: { userId: studentUser.id } });
 
-      const existingParentUser = emergencyPhone
+      const existingParentUser = realPhone
         ? await tx.user.findFirst({
             where: {
               schoolId, role: 'parent', deletedAt: null,
@@ -419,9 +430,9 @@ async function admitOne(ctx, input) {
         parentUser = await tx.user.create({
           data: {
             schoolId, campusId: student.campusId,
-            name: fatherName || `Parent of ${name}`,
+            name: fatherKnown ? fatherName : `Parent of ${name}`,
             email: finalParentEmail,
-            phone: phoneUtil.canonical(emergencyPhone) || emergencyPhone || null,
+            phone: realPhone ? phoneUtil.canonical(emergencyPhone) : null,
             role: 'parent',
             passwordHash: parentPasswordHash,
             phoneVerifiedAt: new Date(),

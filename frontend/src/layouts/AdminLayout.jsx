@@ -705,6 +705,7 @@ export default function AdminLayout() {
   const ROUTE_LABELS = {
   'import-export': 'Import & Export',
   'bulk-import':   'Import & Export',
+  'from-photos':   'Students from Photos',
   'past-records':  'Past Records',
   'barcode':       'Attendance Kiosk',
   'exam-slip':     'Roll Number Slips',

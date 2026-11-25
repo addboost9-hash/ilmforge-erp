@@ -27,7 +27,7 @@ async function syncParentLoginPhone({ schoolId, studentId, oldPhone, newPhone })
     where: { schoolId, studentId },
     include: { parent: { include: { user: { select: { id: true, phone: true } } } } },
   });
-  const users = links.map((l) => l.parent?.user).filter((u) => u && (!oldPhone || phoneUtil.same(u.phone, oldPhone)));
+  const users = links.map((l) => l.parent?.user).filter((u) => u && (!oldPhone || !u.phone || phoneUtil.same(u.phone, oldPhone)));
   if (!users.length) return { changed: false };
   const taken = await prisma.user.findFirst({
     where: { schoolId, deletedAt: null, id: { notIn: users.map((u) => u.id) }, OR: phoneUtil.variants(newPhone).map((v) => ({ phone: v })) },

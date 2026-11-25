@@ -16,11 +16,12 @@ import { useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Download, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle,
-  Info, RefreshCw, KeyRound, ArrowRightLeft,
+  Info, RefreshCw, KeyRound, ArrowRightLeft, UserPlus,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import ImportedStudents from './ImportedStudents';
+import { downloadLogins } from '../../utils/loginSheet';
 import BulkPhotos from './BulkPhotos';
 
 const CHUNK = 25; // people per request
@@ -45,60 +46,6 @@ const toBase64 = (file) => new Promise((resolve, reject) => {
   r.readAsDataURL(file);
 });
 
-/* The sheet of new usernames and passwords, built in the browser so the
-   passwords are never sent anywhere else. */
-async function downloadLogins(results, schoolLabel) {
-  const ExcelJS = (await import('exceljs')).default;
-  const wb = new ExcelJS.Workbook();
-  wb.creator = 'IlmForge';
-  const head = (ws) => {
-    const r = ws.getRow(1);
-    r.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F3D33' } };
-    ws.views = [{ state: 'frozen', ySplit: 1 }];
-  };
-
-  const st = wb.addWorksheet('Students & Parents');
-  st.columns = [
-    { header: 'Student', key: 'name', width: 24 },
-    { header: 'Roll No', key: 'roll', width: 16 },
-    { header: 'Student signs in with', key: 'sLogin', width: 20 },
-    { header: 'Student password', key: 'sPass', width: 18 },
-    { header: 'Parent signs in with', key: 'pLogin', width: 22 },
-    { header: 'Parent password', key: 'pPass', width: 30 },
-    { header: 'Portal link', key: 'link', width: 50 },
-  ];
-  head(st);
-  results.students.filter(r => r.credentials).forEach(r => st.addRow({
-    name: r.name, roll: r.rollNo,
-    sLogin: r.credentials.student.loginId, sPass: r.credentials.student.password,
-    pLogin: r.credentials.parent.loginId, pPass: r.credentials.parent.password,
-    link: r.credentials.parent.portalLink,
-  }));
-
-  const sf = wb.addWorksheet('Staff');
-  sf.columns = [
-    { header: 'Name', key: 'name', width: 24 },
-    { header: 'Employee Code', key: 'code', width: 16 },
-    { header: 'Portal', key: 'portal', width: 18 },
-    { header: 'Signs in with', key: 'login', width: 28 },
-    { header: 'Temporary password', key: 'pass', width: 20 },
-    { header: 'Portal link', key: 'link', width: 50 },
-  ];
-  head(sf);
-  results.staff.filter(r => r.credentials).forEach(r => sf.addRow({
-    name: r.name, code: r.credentials.empCode, portal: r.credentials.portal,
-    login: r.credentials.loginId, pass: r.credentials.password, link: r.credentials.portalLink,
-  }));
-
-  const buf = await wb.xlsx.writeBuffer();
-  const href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-  const a = document.createElement('a');
-  a.href = href; a.download = `${schoolLabel}-login-details-${new Date().toISOString().slice(0, 10)}.xlsx`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(href), 2000);
-}
-
 const LEVEL = {
   error:   { Icon: XCircle,       color: '#B23742', bg: '#D6455014', label: 'Problem' },
   warning: { Icon: AlertTriangle, color: '#9A6408', bg: '#F2A33A22', label: 'Check' },
@@ -106,6 +53,7 @@ const LEVEL = {
 };
 
 export default function RecordsImportExportPage() {
+  const navigate = useNavigate();
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(''); // 'template' | 'export' | 'checking' | 'importing'
   const [fileName, setFileName] = useState('');
@@ -249,6 +197,12 @@ export default function RecordsImportExportPage() {
           text="All classes, students and staff in the same format. Import it on another server to move the school."
           button={busy === 'export' ? 'Exporting…' : 'Export records'}
           ButtonIcon={Download} onClick={doExport} disabled={!!busy}
+        />
+        <ActionCard
+          step="📷" title="New students from photos" Icon={UserPlus}
+          text="Each photo named with the student's name becomes a new student of the class, with a passport-size photo. Details not known yet are filled in later."
+          button="Register from photos"
+          ButtonIcon={UserPlus} onClick={() => navigate('/students/from-photos')} disabled={!!busy}
         />
       </div>
       <input ref={fileRef} type="file" accept=".xlsx" aria-label="Excel file to import"
