@@ -368,9 +368,14 @@ photos** (`/students/from-photos`) registers them in one go.
 
 1. Name each photo with the student's name: `Ali Raza.jpg`. (`ali raza.jpg` becomes
    *Ali Raza*; a camera name such as `IMG_2041.jpg` is pointed out, and you type the name.)
-2. Choose the **class and section**, and if you like the gender and admission date. Photos
-   kept in class folders (`Class 5/A/Ali Raza.jpg`, then **Choose a folder**) go to their
-   own class and section.
+2. Choose the **class and section**, and if you like the gender and admission date.
+   **The whole school at once:** keep one folder with a folder per class
+   (`School Photos/Class Five/Ali Raza.jpg`, sections as `Class Five/A/…` if you like) and
+   click **Choose a folder**. Each class folder finds its class however it is written:
+   *Class Five*, *Class 5*, *5th*, *Grade 5* and *Class V* are all Class 5; *PG* is Play
+   Group, *Nur* Nursery. A table shows each folder with its class, how many photos are
+   ready and how many students are already registered; a folder that names no class asks
+   for its class there.
 3. What is not known yet is filled the same for everyone: **father's name `.`**, **father's
    CNIC `11111111111`**, **parent phone `111111`**. Change them on the page if you want
    other stand-ins.

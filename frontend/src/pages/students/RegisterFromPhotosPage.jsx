@@ -28,6 +28,7 @@ import {
 import api from '../../api/client';
 import { previewOf, passportFromFile, cropStyle, nameFromFile, suggestCrop, centreCrop, RATIO } from '../../utils/passportPhoto';
 import { downloadLogins } from '../../utils/loginSheet';
+import { placeFromPath } from '../../utils/classMatch';
 
 const GREEN = '#0F3D33';
 const IMAGE_RE = /\.(jpe?g|png|webp)$/i;
@@ -36,25 +37,6 @@ const norm = (v) => String(v || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' 
 const today = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
 const label = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: '#374151' };
 const placeKey = (classId, sectionId) => `${classId || ''}|${sectionId || ''}`;
-
-/* The class (and section) a photo's folder names: "Class 5/A/Ali.jpg". */
-function placeFromPath(path, classes) {
-  const parts = String(path || '').split('/').slice(0, -1);
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const c = classes.find((x) => norm(x.name) === norm(parts[i]));
-    if (c) {
-      const sec = parts[i + 1] ? c.sections.find((s) => norm(s.name) === norm(parts[i + 1])) : null;
-      return { classId: c.id, sectionId: sec?.id || null, fromFolder: true };
-    }
-    // "Class 5 A" / "Class 5-A" in one folder name
-    for (const x of classes) {
-      for (const s of x.sections) {
-        if (norm(parts[i]) === norm(`${x.name} ${s.name}`)) return { classId: x.id, sectionId: s.id, fromFolder: true };
-      }
-    }
-  }
-  return null;
-}
 
 /* ── Moving and zooming one frame ──────────────────────────────────── */
 function CropEditor({ row, onClose, onSave }) {
@@ -170,11 +152,14 @@ export default function RegisterFromPhotosPage() {
       try {
         const pv = await previewOf(file);
         const n = nameFromFile(file.name);
-        const folder = placeFromPath(file.webkitRelativePath, classes);
-        const place = folder ? placeKey(folder.classId, folder.sectionId) : form.place;
-        out.push({ key: `${Date.now()}-${i}`, file, ...pv, name: n.name, problem: n.problem || '', place, fromFolder: !!folder, include: true });
+        const at = placeFromPath(file.webkitRelativePath, classes);
+        const place = at.classId ? placeKey(at.classId, at.sectionId) : form.place;
+        out.push({
+          key: `${Date.now()}-${i}`, file, ...pv, name: n.name, problem: n.problem || '', place,
+          folder: at.folder, fromFolder: !!at.classId, folderMiss: at.folder && !at.classId ? at.folder : '', include: true,
+        });
       } catch (e) {
-        out.push({ key: `${Date.now()}-${i}`, file, src: '', name: '', problem: e.message, place: form.place, include: false, unreadable: true });
+        out.push({ key: `${Date.now()}-${i}`, file, src: '', name: '', problem: e.message, place: form.place, folder: '', include: false, unreadable: true });
       }
       if (i % 10 === 9) setProgress({ done: i + 1, total: files.length });
     }
@@ -193,7 +178,7 @@ export default function RegisterFromPhotosPage() {
       let skip = false;
       if (r.unreadable) why = r.problem;
       else if (!r.name.trim()) why = r.problem || 'Type the student\'s name.';
-      else if (!p) why = 'Choose the class.';
+      else if (!p) why = r.folderMiss ? `The folder "${r.folderMiss}" is not a class in IlmForge: choose its class above.` : 'Choose the class.';
       else {
         const k = `${p.classId}|${norm(r.name)}`;
         const there = (existing[p.classId] || []).find((s) => norm(s.name) === norm(r.name));
@@ -208,6 +193,31 @@ export default function RegisterFromPhotosPage() {
 
   const chosen = checked.filter((r) => r.on);
   const update = (key, patch) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+
+  // One line per folder (a whole school chosen at once: a folder per class).
+  const folders = useMemo(() => {
+    const m = new Map();
+    for (const r of checked) {
+      const k = r.folder || '';
+      if (!m.has(k)) m.set(k, { folder: k, rows: [] });
+      m.get(k).rows.push(r);
+    }
+    return [...m.values()].map((g) => {
+      const placesHere = [...new Set(g.rows.map((r) => r.place))];
+      return {
+        ...g,
+        place: placesHere.length === 1 ? placesHere[0] : '',
+        mixed: placesHere.length > 1,
+        ready: g.rows.filter((r) => r.on).length,
+        already: g.rows.filter((r) => /^Already in/.test(r.why) && !r.on).length,
+        toCheck: g.rows.filter((r) => !r.on && !/^Already in/.test(r.why)).length,
+      };
+    });
+  }, [checked]);
+  const setFolderPlace = (folder, key) => {
+    setRows((rs) => rs.map((r) => ((r.folder || '') === folder ? { ...r, place: key, fromFolder: true, folderMiss: key ? '' : r.folderMiss } : r)));
+    loadClass(placeOf(key)?.classId);
+  };
 
   const register = async () => {
     if (!chosen.length) return;
@@ -270,7 +280,7 @@ export default function RegisterFromPhotosPage() {
 
       <div className="card" style={{ padding: 18, marginBottom: 14, display: 'grid', gap: 14 }}>
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
-          <label style={label}>Class and section *
+          <label style={label}>Class and section
             <select className="form-select" value={form.place} onChange={(e) => {
               const v = e.target.value;
               setRows((rs) => rs.map((r) => (r.fromFolder || (r.place && r.place !== form.place) ? r : { ...r, place: v })));
@@ -280,7 +290,7 @@ export default function RegisterFromPhotosPage() {
               <option value="">Choose…</option>
               {places.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
             </select>
-            <span style={{ fontWeight: 400, color: '#64748B' }}>Photos in class folders go to that class.</span>
+            <span style={{ fontWeight: 400, color: '#64748B' }}>For photos not in a class folder. Photos in class folders go to their own class.</span>
           </label>
           <label style={label}>Gender
             <select className="form-select" value={form.gender} onChange={(e) => set({ gender: e.target.value })}>
@@ -316,7 +326,7 @@ export default function RegisterFromPhotosPage() {
           <button type="button" className="btn btn-primary" disabled={!!busy || !classes.length} onClick={() => filesRef.current?.click()}><Camera size={15} /> Choose photos</button>
           <button type="button" className="btn btn-outline" disabled={!!busy || !classes.length} onClick={() => folderRef.current?.click()}><FolderOpen size={15} /> Choose a folder</button>
           {rows.length > 0 && !busy && <button type="button" className="btn btn-outline btn-sm" onClick={() => { setRows([]); setDone(null); }}><RefreshCw size={13} /> Start again</button>}
-          <span style={{ fontSize: 12.5, color: '#64748B' }}>Name each photo with the student's name, e.g. <code>Ali Raza.jpg</code>. A folder may hold class folders: <code>Class 5/A/Ali Raza.jpg</code>.</span>
+          <span style={{ fontSize: 12.5, color: '#64748B' }}>Name each photo with the student's name, e.g. <code>Ali Raza.jpg</code>. For the whole school, choose one folder holding a folder per class: <code>Class Five/Ali Raza.jpg</code> (Class Five, Class 5 or 5th all find the class).</span>
         </div>
         <input ref={filesRef} type="file" multiple accept="image/jpeg,image/png,image/webp" aria-label="Student photos" style={{ display: 'none' }} onChange={(e) => choose(e.target.files, e.target)} />
         <input ref={folderRef} type="file" multiple webkitdirectory="" directory="" aria-label="Folder of student photos" style={{ display: 'none' }} onChange={(e) => choose(e.target.files, e.target)} />
@@ -327,6 +337,30 @@ export default function RegisterFromPhotosPage() {
             <div style={{ fontSize: 13, color: '#475569' }}>
               <strong>{chosen.length}</strong> of {checked.length} ready to register. Click a photo to move or zoom its passport frame.
             </div>
+            {(folders.length > 1 || folders.some((f) => f.folder)) && (
+              <div className="table-wrap" style={{ maxHeight: 320, overflowY: 'auto' }}>
+                <table className="data-table" aria-label="Photos by folder">
+                  <thead><tr><th>Folder</th><th>Class</th><th style={{ textAlign: 'right' }}>Photos</th><th style={{ textAlign: 'right' }}>Ready</th><th style={{ textAlign: 'right' }}>Already registered</th><th style={{ textAlign: 'right' }}>To check</th></tr></thead>
+                  <tbody>
+                    {folders.map((f) => (
+                      <tr key={f.folder || '(none)'}>
+                        <td style={{ fontWeight: 700 }}>{f.folder || 'Photos not in a folder'}</td>
+                        <td>
+                          <select className="form-select" aria-label={`Class of ${f.folder || 'loose photos'}`} style={{ padding: '3px 6px', fontSize: 12.5, minWidth: 150, borderColor: f.place ? undefined : '#F87171' }} value={f.mixed ? '' : f.place} disabled={!!busy} onChange={(e) => setFolderPlace(f.folder, e.target.value)}>
+                            <option value="">{f.mixed ? 'Several classes' : 'Choose the class…'}</option>
+                            {places.map((pl) => <option key={pl.key} value={pl.key}>{pl.label}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{f.rows.length}</td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#15803D', fontWeight: 700 }}>{f.ready}</td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#92400E' }}>{f.already || '—'}</td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: f.toCheck ? '#B91C1C' : '#94A3B8' }}>{f.toCheck || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))' }}>
               {checked.map((r) => (
                 <div key={r.key} style={{ display: 'flex', gap: 10, border: `1px solid ${r.on ? '#BBF7D0' : r.blocked ? '#FECACA' : '#E2E8F0'}`, background: r.on ? '#F0FDF4' : '#fff', borderRadius: 10, padding: 8 }}>
