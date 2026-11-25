@@ -1039,6 +1039,9 @@ Choose the term and the exam (or click **Roll no. slips** on the exam's row). Th
    - **On the slip**: photo, father's name, day and time of each paper, room, marks of each
      paper, an invigilator's signature column, instructions, and the signatures at the
      bottom: the **student's**, the **principal's** and, if wanted, the class teacher's.
+     Untick any of them to leave it off every slip. Untick **Father's name** to print the
+     slips (and the seating list) without it, e.g. while students registered from photos
+     still have the stand-in `.`; with it ticked, a `.` prints as "—".
    - **Principal**: name, title and a **picture of the signature** (sign on white paper and
      take a clear photo; the white is removed). Without a picture, the principal signs each
      slip by hand. If the result card settings have the principal's signature, the slip

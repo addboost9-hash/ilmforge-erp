@@ -18,7 +18,7 @@ import api from '../../api/client';
 import { printHTML } from '../../utils/print';
 import { examMatchesTerm } from '../../utils/terms';
 import useExamTerms from '../../hooks/useExamTerms';
-import { buildSlipsDocument, buildSeatingDocument, openSlipsWindow, examLabel, slipRollNo, usesExamNumbers } from '../../utils/rollSlips';
+import { buildSlipsDocument, buildSeatingDocument, openSlipsWindow, examLabel, slipRollNo, usesExamNumbers, fatherOf } from '../../utils/rollSlips';
 import { signatureFromFile } from '../../utils/signatureImage';
 import { compressLogo } from '../../utils/photo';
 import useAuthStore from '../../store/auth.store';
@@ -247,6 +247,8 @@ function DesignStep({ examId, summary, draft, setDraft, saved, onSaved, onNumber
     ? `${classNames.slice(0, 3).map((c, i) => `${c} ${draft.rollPrefix || ''}${start + i}`).join(', ')}${classNames.length > 3 ? ' …' : ''}, then the second student of each class, and so on.`
     : 'The first student of each class, then the second student of each class, and so on.';
   const groups = (summary?.groups || []).filter((g) => g.students.length);
+  // Students with no father's name yet ("." from Students from Photos).
+  const noFather = groups.reduce((n, x) => n + x.students.filter((s) => !fatherOf(s)).length, 0);
   const [previewKey, setPreviewKey] = useState('');
   useEffect(() => { if (!previewKey && groups.length) setPreviewKey(`${groups[0].classId}_${groups[0].sectionId || ''}`); }, [groups, previewKey]);
   const [pc, ps] = previewKey.split('_');
@@ -384,6 +386,12 @@ function DesignStep({ examId, summary, draft, setDraft, saved, onSaved, onNumber
                 <input type="checkbox" checked={!!draft.show[k]} onChange={(e) => setShow(k, e.target.checked)} /> {t}
               </label>
             ))}
+          </div>
+          <div style={{ fontSize: 12.5, color: '#64748B' }}>
+            Untick a line to leave it off every slip{draft.show.fatherName ? '' : ' (the father\'s name is off the slips and the seating list)'}.
+            {draft.show.fatherName && noFather > 0 && (
+              <> {noFather === 1 ? 'One student has' : `${noFather} students have`} no father's name yet: theirs shows "—". Untick <b>Father's name</b> to leave it off every slip and the seating list.</>
+            )}
           </div>
         </section>
 
@@ -540,7 +548,7 @@ function PrintStep({ examId, exam, summary, design, designDirty, onDesign, onNum
             <ul style={{ margin: '4px 0', paddingLeft: 18 }}>
               {dups.slice(0, 8).map((d) => (
                 <li key={d.id}>
-                  {d.name}{d.fatherName ? ` s/o ${d.fatherName}` : ''}, {d.className}: the record {d.rollNo ? `with roll no. ${d.rollNo}` : 'without a roll number'} is the same child as roll no. {d.keptRollNo || '—'}.{' '}
+                  {d.name}{fatherOf(d) ? ` s/o ${fatherOf(d)}` : ''}, {d.className}: the record {d.rollNo ? `with roll no. ${d.rollNo}` : 'without a roll number'} is the same child as roll no. {d.keptRollNo || '—'}.{' '}
                   <a href={`/students/${d.id}`} target="_blank" rel="noreferrer" style={{ color: NAVY, fontWeight: 700 }}>Open the extra record</a>
                 </li>
               ))}

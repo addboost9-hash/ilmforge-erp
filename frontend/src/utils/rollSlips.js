@@ -57,6 +57,10 @@ export function examDates(exam) {
 export const usesExamNumbers = (design) => design?.rollNumber === 'exam' || design?.rollNumber === 'mixed';
 export const slipRollNo = (s, design) => (usesExamNumbers(design) ? s.examRollNo : s.rollNo) || `ID-${s.id}`;
 
+/* The father's name as printed: a stand-in such as "." (a student
+   registered from a photo, details to come) is no name, so it is left blank. */
+export const fatherOf = (s) => (/\p{L}/u.test(String(s?.fatherName || '')) ? String(s.fatherName).trim() : '');
+
 /* The school's name as printed: the slip's own (Design -> School name on the
    slip), else the name in School Profile. */
 export const slipSchoolName = (data, design) => String(design?.schoolName || '').trim() || data?.school?.name || 'School';
@@ -111,7 +115,7 @@ function slipHTML({ s, g, data, design, issued, stamp }) {
   <div class="who">
     <div class="kv">
       ${field("Candidate's name", s.name, 'wide big')}
-      ${show.fatherName ? field("Father's name", s.fatherName) : ''}
+      ${show.fatherName ? field("Father's name", fatherOf(s)) : ''}
       ${field('Class', cls)}
       ${field('Exam dates', examDates(data.exam), show.fatherName ? 'wide' : '')}
     </div>
@@ -246,7 +250,8 @@ export function buildSeatingDocument({ data, design, title = '' }) {
   const school = slipSchoolName(data, design);
   const docTitle = title || `Seating list — ${examLabel(data.exam)}`;
   const mixed = data.rollNumbers?.mode === 'mixed';
-  const body = rows.map(({ s, cls }, i) => `<tr><td class="n">${i + 1}</td><td class="r">${esc(s.examRollNo || '')}</td><td dir="auto"><b>${esc(s.name)}</b></td><td dir="auto">${esc(s.fatherName || '')}</td><td>${esc(cls)}</td><td></td></tr>`).join('');
+  const withFather = design?.show?.fatherName !== false;
+  const body = rows.map(({ s, cls }, i) => `<tr><td class="n">${i + 1}</td><td class="r">${esc(s.examRollNo || '')}</td><td dir="auto"><b>${esc(s.name)}</b></td>${withFather ? `<td dir="auto">${esc(fatherOf(s))}</td>` : ''}<td>${esc(cls)}</td><td></td></tr>`).join('');
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${esc(docTitle)}</title>
 <style>
@@ -274,8 +279,8 @@ export function buildSeatingDocument({ data, design, title = '' }) {
   <h1 dir="auto">${esc(school)}</h1>
   <h2 dir="auto">Seating list — ${esc(examLabel(data.exam))}</h2>
   <div class="note">Seat the candidates in roll number order.${mixed ? ' The numbers go round the classes in turn, so no candidate sits beside a classmate.' : ''}</div>
-  <table><thead><tr><th>#</th><th>Roll No.</th><th>Candidate's name</th><th>Father's name</th><th>Class</th><th style="width:14%">Seat / room</th></tr></thead>
-  <tbody>${body || '<tr><td colspan="6" style="text-align:center;color:#6B7280">No candidates.</td></tr>'}</tbody></table>
+  <table><thead><tr><th>#</th><th>Roll No.</th><th>Candidate's name</th>${withFather ? '<th>Father\'s name</th>' : ''}<th>Class</th><th style="width:14%">Seat / room</th></tr></thead>
+  <tbody>${body || `<tr><td colspan="${withFather ? 6 : 5}" style="text-align:center;color:#6B7280">No candidates.</td></tr>`}</tbody></table>
 </main>
 </body></html>`;
 }
