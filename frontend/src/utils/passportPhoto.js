@@ -162,6 +162,14 @@ export function cropStyle(src, crop, bw) {
   };
 }
 
+/* A photo's file name without its folder, extension, " (1)" or "copy",
+   with _ . - as spaces: "9th_ zaria-khan (1).JPG" -> "9th zaria khan". */
+export function fileBase(fileName) {
+  return String(fileName || '').split(/[\\/]/).pop().replace(/\.[A-Za-z0-9]{2,5}$/, '')
+    .replace(/\s*\(\d+\)\s*$/, '').replace(/\s*-?\s*copy$/i, '')
+    .replace(/[_.]+/g, ' ').replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 /**
  * The student's name from a photo's file name: "ali raza.jpg" -> "Ali Raza".
  * A camera's name ("IMG_2041", "WhatsApp Image 2026-11-05") is not a name.

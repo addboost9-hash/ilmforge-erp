@@ -6,6 +6,8 @@
  *   classKey('Class Five') === classKey('Class 5')   // '5'
  *   placeFromPath('All/Class Five/Ali Raza.jpg', classes)
  *     -> { classId, sectionId, folder: 'Class Five' } or { folder, classId: null }
+ *   classInName('9th Zaria khan', classes)
+ *     -> { token: '9th', classId, sectionId, rest: 'Zaria khan' }
  */
 
 const WORDS = {
@@ -36,6 +38,59 @@ export function classKey(name) {
   });
   const key = out.join(' ');
   return ALIAS[key] || key;
+}
+
+/* Words that are names as often as classes: "Nur Muhammad" is a boy, not
+   Nursery. In a folder name they are classes; in a photo's name they are not. */
+const NAME_LIKE = new Set(['nur', 'noor', 'nurs', 'play']);
+const CLASS_LIKE = /^((class|grade)\s+)?\d{1,2}(st|nd|rd|th)?$/i;
+
+/**
+ * A class written in the photo's name, before or after the student's name
+ * (a file name cannot hold "/", so the class goes into the name):
+ * "9th Zaria khan", "Class Five Ali Raza", "9th A Zaria khan" (section A),
+ * "Ali Raza 5th". Returns { token, classId, sectionId, rest }, with
+ * classId null when the name holds a class this school does not have
+ * ("11th"), or null when the name holds no class.
+ */
+export function classInName(text, classes) {
+  const words = String(text || '').replace(/[_.]+/g, ' ').replace(/-/g, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  if (words.length < 2) return null;
+  const find = (part) => {
+    if (NAME_LIKE.has(part.toLowerCase())) return null;
+    const key = classKey(part);
+    return key ? classes.find((c) => classKey(c.name) === key) || null : null;
+  };
+  const most = Math.min(3, words.length - 1);
+  // At the start, the longest first ("Class Five" before "Class").
+  for (let k = most; k >= 1; k--) {
+    const token = words.slice(0, k).join(' ');
+    const c = find(token);
+    if (!c) continue;
+    let rest = words.slice(k);
+    let sec = null;
+    if (rest.length >= 2) {
+      sec = c.sections.find((s) => classKey(s.name) === classKey(rest[0])) || null;
+      if (sec) rest = rest.slice(1);
+    }
+    return { token, classId: c.id, sectionId: sec?.id || null, rest: rest.join(' ') };
+  }
+  // At the end, only with a number or "class" in it ("Ali Raza 5th").
+  for (let k = most; k >= 1; k--) {
+    const token = words.slice(words.length - k).join(' ');
+    if (!/\d|\b(class|grade)\b/i.test(token)) continue;
+    const c = find(token);
+    if (c) return { token, classId: c.id, sectionId: null, rest: words.slice(0, words.length - k).join(' ') };
+  }
+  // A class this school does not have: "11th Ali", "Ali Class 12".
+  for (const k of [2, 1]) {
+    if (words.length <= k) continue;
+    const head = words.slice(0, k).join(' ');
+    if (CLASS_LIKE.test(head)) return { token: head, classId: null, sectionId: null, rest: words.slice(k).join(' ') };
+    const tail = words.slice(words.length - k).join(' ');
+    if (CLASS_LIKE.test(tail)) return { token: tail, classId: null, sectionId: null, rest: words.slice(0, words.length - k).join(' ') };
+  }
+  return null;
 }
 
 /* The class (and section) a photo's folders name: "Class Five/Ali.jpg",

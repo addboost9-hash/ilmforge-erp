@@ -26,9 +26,9 @@ import {
   ArrowLeft, Camera, FolderOpen, UserPlus, CheckCircle2, XCircle, Crop, RefreshCw, Download, Users, AlertTriangle,
 } from 'lucide-react';
 import api from '../../api/client';
-import { previewOf, passportFromFile, cropStyle, nameFromFile, suggestCrop, centreCrop, RATIO } from '../../utils/passportPhoto';
+import { previewOf, passportFromFile, cropStyle, nameFromFile, fileBase, suggestCrop, centreCrop, RATIO } from '../../utils/passportPhoto';
 import { downloadLogins } from '../../utils/loginSheet';
-import { placeFromPath } from '../../utils/classMatch';
+import { placeFromPath, classInName, classKey } from '../../utils/classMatch';
 
 const GREEN = '#0F3D33';
 const IMAGE_RE = /\.(jpe?g|png|webp)$/i;
@@ -151,15 +151,29 @@ export default function RegisterFromPhotosPage() {
     for (const [i, file] of files.entries()) {
       try {
         const pv = await previewOf(file);
-        const n = nameFromFile(file.name);
+        // The class: in the photo's name ("9th Zaria khan"), else its folder
+        // ("Class Five/Zaria khan.jpg"), else the class chosen above.
+        const cut = classInName(fileBase(file.name), classes);
+        const n = nameFromFile(cut ? cut.rest : fileBase(file.name));
         const at = placeFromPath(file.webkitRelativePath, classes);
-        const place = at.classId ? placeKey(at.classId, at.sectionId) : form.place;
+        const fromName = cut?.classId ? placeKey(cut.classId, cut.sectionId) : '';
+        const fromFolder = at.classId ? placeKey(at.classId, at.sectionId) : '';
         out.push({
-          key: `${Date.now()}-${i}`, file, ...pv, name: n.name, problem: n.problem || '', place,
-          folder: at.folder, fromFolder: !!at.classId, folderMiss: at.folder && !at.classId ? at.folder : '', include: true,
+          key: `${Date.now()}-${i}`, file, ...pv, name: n.name, problem: n.problem || '',
+          // A class named in the photo's name that the school does not have
+          // ("11th") is asked for, never guessed from the class chosen above.
+          place: fromName || fromFolder || (cut ? '' : form.place),
+          nameMiss: !!cut && !cut.classId && !fromFolder,
+          folder: at.folder, fromFolder: !!(fromName || fromFolder),
+          // What named a class IlmForge does not have: the name's "11th", or the folder.
+          folderMiss: fromName || fromFolder ? '' : (cut ? cut.token : at.folder),
+          // One line of the summary per class in the names, else per folder.
+          group: cut ? `name:${classKey(cut.token)}` : (at.folder || ''),
+          groupLabel: cut ? `"${cut.token}" in the photo names` : at.folder,
+          include: true,
         });
       } catch (e) {
-        out.push({ key: `${Date.now()}-${i}`, file, src: '', name: '', problem: e.message, place: form.place, folder: '', include: false, unreadable: true });
+        out.push({ key: `${Date.now()}-${i}`, file, src: '', name: '', problem: e.message, place: form.place, folder: '', group: '', include: false, unreadable: true });
       }
       if (i % 10 === 9) setProgress({ done: i + 1, total: files.length });
     }
@@ -178,7 +192,11 @@ export default function RegisterFromPhotosPage() {
       let skip = false;
       if (r.unreadable) why = r.problem;
       else if (!r.name.trim()) why = r.problem || 'Type the student\'s name.';
-      else if (!p) why = r.folderMiss ? `The folder "${r.folderMiss}" is not a class in IlmForge: choose its class above.` : 'Choose the class.';
+      else if (!p) {
+        why = !r.folderMiss ? 'Choose the class.'
+          : String(r.group || '').startsWith('name:') ? `"${r.folderMiss}" in the photo's name is not a class in IlmForge: choose its class above.`
+            : `The folder "${r.folderMiss}" is not a class in IlmForge: choose its class above.`;
+      }
       else {
         const k = `${p.classId}|${norm(r.name)}`;
         const there = (existing[p.classId] || []).find((s) => norm(s.name) === norm(r.name));
@@ -198,8 +216,8 @@ export default function RegisterFromPhotosPage() {
   const folders = useMemo(() => {
     const m = new Map();
     for (const r of checked) {
-      const k = r.folder || '';
-      if (!m.has(k)) m.set(k, { folder: k, rows: [] });
+      const k = r.group || '';
+      if (!m.has(k)) m.set(k, { folder: k, label: r.groupLabel || '', rows: [] });
       m.get(k).rows.push(r);
     }
     return [...m.values()].map((g) => {
@@ -215,7 +233,7 @@ export default function RegisterFromPhotosPage() {
     });
   }, [checked]);
   const setFolderPlace = (folder, key) => {
-    setRows((rs) => rs.map((r) => ((r.folder || '') === folder ? { ...r, place: key, fromFolder: true, folderMiss: key ? '' : r.folderMiss } : r)));
+    setRows((rs) => rs.map((r) => ((r.group || '') === folder ? { ...r, place: key, fromFolder: true, nameMiss: false, folderMiss: key ? '' : r.folderMiss } : r)));
     loadClass(placeOf(key)?.classId);
   };
 
@@ -283,7 +301,7 @@ export default function RegisterFromPhotosPage() {
           <label style={label}>Class and section
             <select className="form-select" value={form.place} onChange={(e) => {
               const v = e.target.value;
-              setRows((rs) => rs.map((r) => (r.fromFolder || (r.place && r.place !== form.place) ? r : { ...r, place: v })));
+              setRows((rs) => rs.map((r) => (r.fromFolder || r.nameMiss || (r.place && r.place !== form.place) ? r : { ...r, place: v })));
               set({ place: v });
               loadClass(placeOf(v)?.classId);
             }}>
@@ -326,7 +344,7 @@ export default function RegisterFromPhotosPage() {
           <button type="button" className="btn btn-primary" disabled={!!busy || !classes.length} onClick={() => filesRef.current?.click()}><Camera size={15} /> Choose photos</button>
           <button type="button" className="btn btn-outline" disabled={!!busy || !classes.length} onClick={() => folderRef.current?.click()}><FolderOpen size={15} /> Choose a folder</button>
           {rows.length > 0 && !busy && <button type="button" className="btn btn-outline btn-sm" onClick={() => { setRows([]); setDone(null); }}><RefreshCw size={13} /> Start again</button>}
-          <span style={{ fontSize: 12.5, color: '#64748B' }}>Name each photo with the student's name, e.g. <code>Ali Raza.jpg</code>. For the whole school, choose one folder holding a folder per class: <code>Class Five/Ali Raza.jpg</code> (Class Five, Class 5 or 5th all find the class).</span>
+          <span style={{ fontSize: 12.5, color: '#64748B' }}>Name each photo with the student's name, e.g. <code>Ali Raza.jpg</code>. The class can go first in the name: <code>9th Zaria khan.jpg</code>, <code>Class Five Ali Raza.jpg</code>. Or keep a folder per class: <code>Class Five/Ali Raza.jpg</code>. (Class Five, Class 5, 5th all find the class.)</span>
         </div>
         <input ref={filesRef} type="file" multiple accept="image/jpeg,image/png,image/webp" aria-label="Student photos" style={{ display: 'none' }} onChange={(e) => choose(e.target.files, e.target)} />
         <input ref={folderRef} type="file" multiple webkitdirectory="" directory="" aria-label="Folder of student photos" style={{ display: 'none' }} onChange={(e) => choose(e.target.files, e.target)} />
@@ -340,13 +358,13 @@ export default function RegisterFromPhotosPage() {
             {(folders.length > 1 || folders.some((f) => f.folder)) && (
               <div className="table-wrap" style={{ maxHeight: 320, overflowY: 'auto' }}>
                 <table className="data-table" aria-label="Photos by folder">
-                  <thead><tr><th>Folder</th><th>Class</th><th style={{ textAlign: 'right' }}>Photos</th><th style={{ textAlign: 'right' }}>Ready</th><th style={{ textAlign: 'right' }}>Already registered</th><th style={{ textAlign: 'right' }}>To check</th></tr></thead>
+                  <thead><tr><th>Folder, or class in the photo names</th><th>Class</th><th style={{ textAlign: 'right' }}>Photos</th><th style={{ textAlign: 'right' }}>Ready</th><th style={{ textAlign: 'right' }}>Already registered</th><th style={{ textAlign: 'right' }}>To check</th></tr></thead>
                   <tbody>
                     {folders.map((f) => (
                       <tr key={f.folder || '(none)'}>
-                        <td style={{ fontWeight: 700 }}>{f.folder || 'Photos not in a folder'}</td>
+                        <td style={{ fontWeight: 700 }}>{f.label || 'Photos not in a folder'}</td>
                         <td>
-                          <select className="form-select" aria-label={`Class of ${f.folder || 'loose photos'}`} style={{ padding: '3px 6px', fontSize: 12.5, minWidth: 150, borderColor: f.place ? undefined : '#F87171' }} value={f.mixed ? '' : f.place} disabled={!!busy} onChange={(e) => setFolderPlace(f.folder, e.target.value)}>
+                          <select className="form-select" aria-label={`Class of ${f.label || 'loose photos'}`} style={{ padding: '3px 6px', fontSize: 12.5, minWidth: 150, borderColor: f.place ? undefined : '#F87171' }} value={f.mixed ? '' : f.place} disabled={!!busy} onChange={(e) => setFolderPlace(f.folder, e.target.value)}>
                             <option value="">{f.mixed ? 'Several classes' : 'Choose the class…'}</option>
                             {places.map((pl) => <option key={pl.key} value={pl.key}>{pl.label}</option>)}
                           </select>

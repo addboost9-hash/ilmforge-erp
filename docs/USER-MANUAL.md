@@ -368,6 +368,10 @@ photos** (`/students/from-photos`) registers them in one go.
 
 1. Name each photo with the student's name: `Ali Raza.jpg`. (`ali raza.jpg` becomes
    *Ali Raza*; a camera name such as `IMG_2041.jpg` is pointed out, and you type the name.)
+   **The class can be part of the name** (a file name cannot hold `/`): `9th Zaria khan.jpg`
+   is *Zaria Khan* in Class 9; `Class Five Ali Raza.jpg`, `9th A Zaria khan.jpg` (section A)
+   and `Ali Raza 5th.jpg` work too. A class the school does not have (`11th …`) is asked
+   for, never guessed. *Nur Muhammad* stays a name, not Nursery.
 2. Choose the **class and section**, and if you like the gender and admission date.
    **The whole school at once:** keep one folder with a folder per class
    (`School Photos/Class Five/Ali Raza.jpg`, sections as `Class Five/A/…` if you like) and
