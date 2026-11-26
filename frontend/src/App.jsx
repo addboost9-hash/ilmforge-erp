@@ -175,6 +175,7 @@ import SOPsPage                from './pages/sops/SOPsPage';
 import RecordsImportExportPage from './pages/students/RecordsImportExportPage';
 import RegisterFromPhotosPage from './pages/students/RegisterFromPhotosPage';
 import VisitorDeskPage from './pages/visitors/VisitorDeskPage';
+import DuplicateStudentsPage from './pages/students/DuplicateStudentsPage';
 import VisitorKioskPage from './pages/visitors/VisitorKioskPage';
 import HistoryImportPage from './pages/students/HistoryImportPage';
 import RoboBuddyPage           from './pages/robobuddy/RoboBuddyPage';
@@ -645,6 +646,7 @@ export default function App() {
             <Route path="/sops"                       element={<SOPsPage />} />
             <Route path="/students/bulk-import"       element={<RecordsImportExportPage />} />
             <Route path="/students/from-photos"       element={<RegisterFromPhotosPage />} />
+            <Route path="/students/duplicates"        element={<DuplicateStudentsPage />} />
             <Route path="/settings/import-export"     element={<RecordsImportExportPage />} />
             <Route path="/settings/past-records"      element={<HistoryImportPage />} />
             <Route path="/robobuddy"                  element={<RoboBuddyPage />} />

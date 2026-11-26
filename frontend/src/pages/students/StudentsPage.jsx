@@ -16,7 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams, Link, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  Search, X, UserPlus, Upload, Printer, TrendingUp, Users, ChevronRight, GraduationCap, FolderOpen,
+  Search, X, UserPlus, Upload, Printer, TrendingUp, Users, ChevronRight, GraduationCap, FolderOpen, Copy,
 } from 'lucide-react';
 import api from '../../api/client';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -284,6 +284,7 @@ export default function StudentsPage() {
         <div className="flex flex-wrap gap-2">
           {canManage && <button type="button" onClick={admitHere} className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-3.5 py-2 rounded-lg"><UserPlus size={15} /> Admit student</button>}
           {canManage && <Link to="/students/bulk-import" className="inline-flex items-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold px-3.5 py-2 rounded-lg"><Upload size={15} /> Import &amp; Export</Link>}
+          {canManage && <Link to="/students/duplicates" className="inline-flex items-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold px-3.5 py-2 rounded-lg"><Copy size={15} /> Duplicates</Link>}
         </div>
       </header>
 

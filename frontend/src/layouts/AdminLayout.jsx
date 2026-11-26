@@ -708,6 +708,7 @@ export default function AdminLayout() {
   'bulk-import':   'Import & Export',
   'from-photos':   'Students from Photos',
   'visitor-desk':  'Visitor Desk',
+  'duplicates':    'Duplicate Students',
   'past-records':  'Past Records',
   'barcode':       'Attendance Kiosk',
   'exam-slip':     'Roll Number Slips',

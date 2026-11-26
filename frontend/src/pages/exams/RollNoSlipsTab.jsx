@@ -554,7 +554,8 @@ function PrintStep({ examId, exam, summary, design, designDirty, onDesign, onNum
               ))}
               {dups.length > 8 && <li>… and {dups.length - 8} more.</li>}
             </ul>
-            Remove the extra records in Students, so fee bills and attendance are not doubled either.
+            Delete the extra records, so fee bills and attendance are not doubled either:{' '}
+            <a href="/students/duplicates" target="_blank" rel="noreferrer" style={{ color: NAVY, fontWeight: 700 }}>Duplicate Students</a>.
           </div>
         </div>
       )}

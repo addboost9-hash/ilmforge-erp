@@ -459,6 +459,15 @@ Roll number slips, result cards, the fee and attendance registers follow the new
 
 ### Finding and fixing student records
 
+**A child recorded twice** (admitted again, imported from Excel and then registered from
+photos, a form saved twice): **Students → Duplicates** lists every child recorded more than
+once, the records side by side with what each holds (fee payments, bills, attendance, marks,
+photo, roll number), and marks the one to **keep**. **Delete** the extra one (it asks first),
+or **Delete all the extra records** for the groups that are surely one child (same B-Form, or
+same name and father). "Possibly the same child" (same name in the class, father's name
+missing) is for you to check one by one. A record with fee payments cannot be deleted: keep
+that one. Roll number slips also warn about children recorded twice and link here.
+
 **Sidebar → Student Registry** (`/students`)
 
 - Search by name, roll number or father name, or choose a class in **All classes** to list

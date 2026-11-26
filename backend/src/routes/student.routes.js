@@ -6,6 +6,7 @@ const phoneUtil = require('../utils/phone');
 const { checkPhoto } = require('../utils/photo');
 const { normalizeStudentUpdate } = require('../utils/studentUpdate');
 const { syncParentLoginPhone } = require('../services/parentPhone.service');
+const { findDuplicates } = require('../services/studentDuplicates.service');
 
 /* The Inactive tab means everyone not studying here now. A comma list
    (status=inactive,left,withdrawn) means exactly those statuses: the
@@ -332,6 +333,22 @@ router.put('/roll-numbers', wrap(async (req, res) => {
     success: true,
     data: { changed: real.length, changes: real },
     message: real.length ? `${real.length} roll number${real.length === 1 ? '' : 's'} changed.` : 'No roll number changed.',
+  });
+}));
+
+// GET /api/v1/students/duplicates — students recorded twice, to delete the
+// extra record (admin). See services/studentDuplicates.service.js.
+router.get('/duplicates', wrap(async (req, res) => {
+  if (!['super_admin', 'admin'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Only the admin can see duplicate records.' });
+  }
+  const groups = await findDuplicates(req.schoolId);
+  const shown = groups.slice(0, 150);
+  res.json({
+    success: true,
+    data: shown,
+    total: groups.length,
+    records: groups.reduce((n, g) => n + g.students.length - 1, 0),
   });
 }));
 
