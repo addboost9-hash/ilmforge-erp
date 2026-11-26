@@ -703,6 +703,13 @@ export default function GatekeeperPortalPage() {
           </button>
         </div>
 
+        {/* Face attendance: this phone or tablet recognises faces at the gate */}
+        <button type="button" onClick={() => navigate('/gatekeeper-portal/face')}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, padding: '12px 16px', borderRadius: 12, border: `1px solid ${CYAN}60`, background: `${CYAN}14`, color: '#E2E8F0', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
+          <span><strong style={{ color: CYAN, fontSize: 15 }}>🙂 Face Attendance</strong><br /><span style={{ fontSize: 12, color: '#94A3B8' }}>This phone's camera recognises faces and marks attendance (auto or confirm)</span></span>
+          <span style={{ fontSize: 20, color: CYAN }}>→</span>
+        </button>
+
         {/* ══ TABS ══ */}
         <div
           style={{

@@ -395,6 +395,7 @@ export default function App() {
           <Route path="/accountant-portal" element={<RoleRoute allow={['accountant']}><AccountantPortalPage /></RoleRoute>}/>
           <Route path="/gatekeeper-portal" element={<RoleRoute allow={['gatekeeper']}><GatekeeperPortalPage /></RoleRoute>}/>
           <Route path="/gatekeeper-portal/visitors" element={<RoleRoute allow={['gatekeeper']}><VisitorDeskPage standalone /></RoleRoute>}/>
+          <Route path="/gatekeeper-portal/face" element={<RoleRoute allow={['gatekeeper']}><React.Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}><FaceAttendancePage standalone /></React.Suspense></RoleRoute>}/>
 
           {/* ── School Mentor Hub — hidden (copyright risk) ── */}
           {/* <Route path="/school-mentor" element={<Protected><SchoolMentorHub /></Protected>} /> */}

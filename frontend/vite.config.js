@@ -23,6 +23,9 @@ export default defineConfig({
       workbox: {
         // Pre-cache the app shell
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Face recognition (1.3 MB) is loaded only by the face attendance
+        // page: not pre-downloaded by every phone that opens IlmForge.
+        globIgnores: ['**/vendor-face-*.js'],
         // A link to a downloadable file (the Excel import template, a PDF)
         // must reach the file, not be answered with the app shell.
         navigateFallbackDenylist: [/^\/api\//, /\.[a-z0-9]{2,5}$/i],
@@ -51,6 +54,16 @@ export default defineConfig({
               cacheName: 'api-cache',
               networkTimeoutSeconds: 10,
               expiration: { maxEntries: 100, maxAgeSeconds: 24 * 60 * 60 },
+            },
+          },
+          {
+            // Face recognition: its library and models (about 7 MB), once
+            // downloaded kept on the phone, so the kiosk starts offline too.
+            urlPattern: ({ url }) => url.pathname.startsWith('/models/face/') || /\/vendor-face-[^/]+\.js$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'face-models',
+              expiration: { maxEntries: 20, maxAgeSeconds: 365 * 24 * 60 * 60 },
             },
           },
           {
@@ -221,6 +234,7 @@ export default defineConfig({
             if (seg) return `page-${seg}`;
           }
           if (!id.includes('node_modules')) return;
+          if (id.includes('@vladmandic/face-api')) return 'vendor-face';
           if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) return 'vendor-react';
           if (id.includes('@tanstack/react-query')) return 'vendor-query';
           if (id.includes('recharts')) return 'vendor-charts';

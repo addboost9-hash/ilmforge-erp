@@ -573,7 +573,7 @@ The school may use any of these instead of marking by hand:
 | Method | Where | Status |
 |---|---|---|
 | ID card scan (QR / barcode) | `/attendance/barcode` | Works: handheld scanner or camera |
-| Photo check-in | `/attendance/face-attendance` | Works, but a person taps the photo; it does not recognise faces |
+| Face attendance | `/attendance/face-attendance` | A phone recognises faces: Auto or Confirm (see *Face attendance* below) |
 | Fingerprint device | `/attendance/biometric-attendance` | Screen works; a physical machine cannot send punches in yet |
 | Spreadsheet import (CSV) | `/attendance/excel` | Works: columns `date` (YYYY-MM-DD), `rollNo`, `status` |
 | Period-wise (per subject) | `/attendance/period` | Works |
@@ -628,15 +628,42 @@ live site is).
 
 Use Google Chrome or Microsoft Edge.
 
-### Photo check-in (no face recognition)
+### Face attendance: a phone that recognises faces
 
-**Attendance Tracker → Photo Check-in** shows the photos of a class. The person on duty taps a
-student's photo to mark them present. It does **not** recognise faces by itself, and
-no camera is needed. Add student photos first (see *Adding or changing a photo*).
+A phone or tablet on a stand at the gate (or a classroom door) with IlmForge open recognises
+the faces of students and staff and marks them, in the same register as the fingerprint
+machine (present, late after the school's time, left on a later pass).
 
-Automatic face recognition is not part of IlmForge yet. It would need a separate
-recognition model and good-quality enrolment photos; ask your IlmForge contact if your
-school wants it.
+**Where:** the admin: **Attendance Tracker → Face Attendance**. The gate: sign in with the
+**Gatekeeper** account → **Face Attendance**.
+
+**1. Teach it the faces (admin, once):** **Face Attendance → Teach faces → Learn faces**. It
+reads the photo on each student's (or staff member's) record and keeps only 128 numbers for
+the face. Photos in which no face is found are listed: change the photo, or use **Add a face
+with the camera** (2–3 photos looking at the camera, in the light of the place where the
+phone will stand). Run **Learn faces** again after changing photos (tick *Again for everyone*).
+
+**2. Put the phone on a stand** at face height, facing the line, and press **Start**. The
+first time it downloads the face models (about 7 MB); after that they are kept on the phone.
+
+**3. Choose the mode** (the phone remembers it):
+
+| Mode | What happens | Use it when |
+|---|---|---|
+| **Confirm** | The name and photo appear; the person on duty taps **Yes, mark** (or **Not this person**) | Starting out, or no-one watches the line closely |
+| **Auto** | Marked by itself as soon as the face is surely recognised (twice in a row, clearly nearer than anyone else) | Someone on duty can see the phone |
+
+- **Who**: everyone, students only or staff only; **Class**: one class only (a classroom door).
+- **Strictness**: Normal; **Strict** if it mixes up children who look alike; **Easy** if it
+  often fails to recognise.
+- The same person within a minute is not marked again.
+- Not recognised? **Find by name or roll no.** under the camera and tap **Mark**.
+- No internet? The mark is kept on the phone with its time and sent when the internet is back.
+
+**Good to know:** in Auto mode a photo held up to the camera could be taken for the person,
+so keep the phone where someone on duty can see it (a fingerprint or face *machine* is harder
+to fool). Faces are recognised on the phone itself; only the 128 numbers per face are kept,
+and **Delete their face data** removes them for anyone (for example when a parent asks).
 
 ### Fingerprint machines
 

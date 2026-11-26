@@ -1100,13 +1100,15 @@ const SECTIONS = [
         warning: 'Use Chrome or Edge, and the https:// address. Browsers refuse the camera on plain http.',
       },
       {
-        title: 'Photo check-in and face recognition',
+        title: 'Face attendance (phone camera)',
         steps: [
-          { n:1, text:'Attendance Tracker → Photo Check-in shows the class photos. The person on duty taps a student\'s photo to mark them present' },
-          { n:2, text:'It does not recognise faces by itself and needs no camera' },
-          { n:3, text:'Add student photos first (Import, Export & Photos → Student and staff photos)' },
+          { n:1, text:'Attendance Tracker → Face Attendance → Teach faces → Learn faces: every student\'s and staff member\'s face is learnt from the photo on their record' },
+          { n:2, text:'Photos with no face found are listed: change them, or "Add a face with the camera" (2–3 photos)' },
+          { n:3, text:'Put a phone on a stand at the gate (Gatekeeper account → Face Attendance), choose Auto or Confirm, press Start' },
+          { n:4, text:'Confirm: the name and photo appear, the person on duty taps "Yes, mark". Auto: marked by itself when the face is surely recognised' },
+          { n:5, text:'Not recognised? Find by name under the camera and tap Mark. The same person within a minute is not marked again' },
         ],
-        note: 'Automatic face recognition is not part of IlmForge yet.',
+        note: 'In Auto mode a photo held up to the camera could fool it: keep the phone where someone on duty can see it. Faces are recognised on the phone; only 128 numbers per face are kept.',
       },
       {
         title: 'Fingerprint machines (ZKTeco, eSSL)',

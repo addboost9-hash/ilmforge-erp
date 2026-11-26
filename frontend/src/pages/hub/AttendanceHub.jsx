@@ -36,7 +36,7 @@ export default function AttendanceHub() {
         { id: 'reports',   label: 'Reports',           hint: 'Monthly summaries',       render: L(AttendanceReport) },
         { id: 'awards',    label: 'Awards',            hint: '100% attendance',         render: L(AttendanceAwards) },
         { id: 'biometric', label: 'Fingerprint Machines', hint: 'Set up, connect, test', render: L(BiometricPage) },
-        { id: 'face',      label: 'Photo Check-in',    hint: 'Tap the student’s photo',            render: L(FacePage) },
+        { id: 'face',      label: 'Face Attendance',   hint: 'Phone camera: auto or confirm',   render: L(FacePage) },
       ]}
     />
   );
