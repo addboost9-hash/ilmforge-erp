@@ -20,7 +20,9 @@ router.get('/', gateOnly, wrap(async (req, res) => {
   const { scope = 'today' } = req.query;
   const limit = Math.min(parseInt(req.query.limit) || 100, 500);
 
-  const where = { schoolId: req.schoolId };
+  // Kiosk entries waiting for the desk, and cancelled ones, are not visitors
+  // in the school.
+  const where = { schoolId: req.schoolId, status: { notIn: ['pending', 'cancelled'] } };
   if (scope === 'today')  where.checkinAt = { gte: startOfToday() };
   if (scope === 'inside') where.checkoutAt = null;
 
@@ -31,7 +33,7 @@ router.get('/', gateOnly, wrap(async (req, res) => {
   });
 
   const insideCount = await prisma.visitorLog.count({
-    where: { schoolId: req.schoolId, checkoutAt: null },
+    where: { schoolId: req.schoolId, checkoutAt: null, status: { notIn: ['pending', 'cancelled'] } },
   });
 
   res.json({ success: true, data: visitors, insideCount });
@@ -54,6 +56,8 @@ router.post('/', gateOnly, wrap(async (req, res) => {
       hostName:   hostName  || null,
       vehicleNo:  vehicleNo || null,
       recordedBy: req.user?.id || null,
+      source:     'gate',
+      passCode:   require('../services/visitorDesk.service').newPassCode(),
     },
   });
 
@@ -67,8 +71,8 @@ router.put('/:id/checkout', gateOnly, wrap(async (req, res) => {
   const id = parseInt(req.params.id);
 
   const { count } = await prisma.visitorLog.updateMany({
-    where: { id, schoolId: req.schoolId, checkoutAt: null },
-    data: { checkoutAt: new Date() },
+    where: { id, schoolId: req.schoolId, checkoutAt: null, status: { notIn: ['pending', 'cancelled'] } },
+    data: { checkoutAt: new Date(), status: 'out', checkedOutBy: req.user?.id || null },
   });
 
   if (count === 0) {

@@ -12,13 +12,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Bell, UserPlus, MessageSquareWarning, CalendarClock, ChevronRight, CheckCheck } from 'lucide-react';
+import { Bell, UserPlus, MessageSquareWarning, CalendarClock, ChevronRight, CheckCheck, DoorOpen, ShieldCheck } from 'lucide-react';
 import api from '../api/client';
 import useAuthStore from '../store/auth.store';
 
 const ALERT_ROLES = ['super_admin', 'admin', 'principal'];
-const ICON = { admission: UserPlus, complaint: MessageSquareWarning, leave: CalendarClock };
-const TONE = { admission: '#0F766E', complaint: '#DC2626', leave: '#7C3AED' };
+const ICON = { admission: UserPlus, complaint: MessageSquareWarning, leave: CalendarClock, visitor: DoorOpen, 'visitor-update': ShieldCheck };
+const TONE = { admission: '#0F766E', complaint: '#DC2626', leave: '#7C3AED', visitor: '#DC2626', 'visitor-update': '#B45309' };
 
 const seenKey = (userId) => `ilm.alerts.seen.${userId || 'me'}`;
 const readSeen = (userId) => { try { return Number(localStorage.getItem(seenKey(userId))) || 0; } catch { return 0; } };
@@ -62,6 +62,11 @@ export default function NotificationBell() {
         .filter((i) => !known.current.has(i.id) && i.type === 'admission' && new Date(i.at).getTime() > seenAt)
         .slice(0, 3)
         .forEach((i) => toast(`New admission application: ${i.body}`, { icon: '🎓', id: `alert-${i.id}`, duration: 7000 }));
+      // At the Visitor Desk: a child being taken early, a safety complaint.
+      items
+        .filter((i) => !known.current.has(i.id) && i.type === 'visitor')
+        .slice(0, 3)
+        .forEach((i) => toast(`${i.title}: ${i.body}`, { icon: '🚨', id: `alert-${i.id}`, duration: 12000 }));
     }
     known.current = ids;
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -723,9 +723,92 @@ model VisitorLog {
   checkinAt   DateTime  @default(now())
   checkoutAt  DateTime?
   recordedBy  Int?
+  // The Visitor Desk (reception and kiosk). A visit by a known person
+  // (Visitor, one per CNIC); what it is about, the children it concerns,
+  // what the visitor said and what the office noted.
+  visitorId    Int?
+  cnic         String? // as given at this visit: 35202-1234567-1
+  relation     String? // to the children: father|mother|guardian|grandparent|uncle|brother|other
+  reason       String? // admission|complaint|fee|meet_teacher|meet_principal|early_pickup|result|documents|interview|vendor|other
+  detail       String? // the complaint's category, the class asked about…
+  childName    String? // admission: the child to be admitted
+  studentIds   String? // JSON list of the children's ids
+  remarks      String? // what the visitor said (shown on the live feed)
+  staffNotes   String? // the office's own notes; never shown to the visitor
+  outcome      String? // at check-out: resolved|follow_up|called_again
+  method       String    @default("manual") // how they were found: manual|cnic|phone|qr|thumb
+  source       String    @default("gate") // gate|desk|kiosk|late (written later from the paper register)
+  status       String    @default("in") // pending (kiosk, not confirmed)|in|out|cancelled
+  passCode     String? // on the slip's QR code
+  urgent       Boolean   @default(false) // early pick-up, a safety complaint
+  linkType     String? // what the visit started: lead|complaint|gatepass
+  linkId       Int?
+  kioskData    String? // a kiosk entry's details (JSON) until the desk confirms it
+  confirmedBy  Int?
+  checkedOutBy Int?
 
   @@index([schoolId, checkinAt])
   @@index([schoolId, checkoutAt])
+  @@index([schoolId, status])
+  @@index([schoolId, visitorId])
+}
+
+// A person who comes to the school: one per CNIC (the parent of a student,
+// someone asking about admission, a vendor). Their visits are VisitorLog rows.
+model Visitor {
+  id           Int       @id @default(autoincrement())
+  schoolId     Int
+  name         String
+  cnic         String? // 35202-1234567-1
+  phone        String? // +923001234567
+  address      String?
+  city         String?
+  photoUrl     String? // optional, from the desk's camera (small JPEG data URL)
+  cnicPhotoUrl String? // optional picture of the CNIC card
+  visitCount   Int       @default(0)
+  lastVisitAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([schoolId, cnic])
+  @@index([schoolId, phone])
+}
+
+// A tablet at reception where visitors fill the form themselves. It signs in
+// with its own key (not a person's account) and can only add visits, which
+// wait for the desk to confirm them.
+model KioskDevice {
+  id         Int       @id @default(autoincrement())
+  schoolId   Int
+  name       String
+  tokenHash  String    @unique // sha256 of the device's key
+  createdBy  Int?
+  lastSeenAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([schoolId])
+}
+
+// A parent's details given at the desk for a child whose record lacks them
+// (father's name ".", CNIC 11111-1111111-1 from Students from Photos). The
+// record changes only when the admin approves.
+model VisitorRecordUpdate {
+  id          Int       @id @default(autoincrement())
+  schoolId    Int
+  studentId   Int
+  visitId     Int?
+  fatherName  String?
+  fatherCnic  String?
+  phone       String?
+  status      String    @default("pending") // pending|approved|rejected
+  requestedBy Int?
+  decidedBy   Int?
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([schoolId, status])
+  @@index([schoolId, studentId])
 }
 
 // One row per student per promotion action. Backs the promotion history view

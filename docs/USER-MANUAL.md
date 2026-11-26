@@ -25,6 +25,7 @@ uses (see *Who can do what* at the end).
 12. [Who can do what](#part-12)
 13. [When something goes wrong](#part-13)
 14. [IlmForge desktop — no internet needed](#part-14)
+15. [The Visitor Desk — everyone who comes to the school](#part-15)
 
 ---
 
@@ -1441,7 +1442,7 @@ Train each person on only the parts they need.
 | **Admin / Principal** | Everything, including Import & Export and Past Records | All |
 | **Accountant** | Fees, vouchers, defaulters, daily balance, expenses | 5, 10 |
 | **Teacher** | Attendance and marks for their own classes | 4, 6 |
-| **Gatekeeper** | Gate entry, visitors, gate passes | — |
+| **Gatekeeper** (also the receptionist) | Gate entry, the Visitor Desk, gate passes | 15 |
 | **Parent** | Their own children only: fees, attendance, results | 8 |
 | **Student** | Their own record only | 8 |
 
@@ -1666,6 +1667,90 @@ in the desktop app.
 Windows **Settings → Apps → IlmForge School Management → Uninstall** removes the program
 only: the school's records and backups stay in the folder above. To remove those too, first
 save a backup copy somewhere safe, then delete that folder.
+
+---
+
+<a name="part-15"></a>
+## Part 15 — The Visitor Desk: everyone who comes to the school
+
+Parents, people asking about admission, someone with a complaint, a parent paying the fee or
+taking a child early, a job candidate, a vendor: each is written down at reception, with why
+they came, which child it is about, what they said, and when they left. The admin sees it all
+as it happens.
+
+**Where:** the admin: sidebar → **Visitor Desk**. Reception: sign in with a **Gatekeeper**
+account (make one for the receptionist under Staff) → **Visitor** tab → **Open the Visitor Desk**.
+
+### A visitor comes in
+
+1. Type their **CNIC** (the dashes come by themselves). Someone who came before is found at
+   once: name, mobile, address, how many visits and the last one. No CNIC? Tick **No CNIC**:
+   the mobile number finds them instead.
+2. A first visit: write the **name**, **mobile** and **address** (not needed for a delivery).
+   A **photo** of the visitor and of the **CNIC card** can be taken with the computer's camera.
+   Both are optional: no camera, no photo.
+3. Choose **why they came**: Admission, Complaint, Fee, Meet a teacher, Meet the principal,
+   Take a child early, Result, Certificate / documents, Job interview, Vendor, Other.
+   - **Complaint**: choose what it is about (teacher, studies, transport, fee, cleanliness,
+     bullying / safety, uniform / books). It goes to **Complaints** for the principal.
+   - **Admission**: the child's name and class. It becomes a lead in **Admission CRM**.
+   - **Take a child early**: a **gate pass** is made for each child whose record has the
+     visitor's CNIC (or the father's typed). Any other child: the desk is told not to release
+     the child until the office has checked.
+4. **The child**: a CNIC finds the children whose record has it as the father's CNIC, so
+   whoever comes (mother, uncle) types the **father's CNIC**. Or find the child by **name, roll
+   number or B-Form**. For a fee visit, the fee still due shows with each child.
+5. **Remarks**: what the visitor said (it shows on the admin's live feed, and in the
+   complaint), and **office notes**, which only the office ever sees.
+6. **Check in**, then **Print the slip**. The slip has a number (V-1042) and a QR code.
+
+### A child whose record lacks the father's details
+
+Students registered from their photos have the father's name `.`, CNIC `11111-1111111-1`
+and phone `111111`. That stand-in CNIC finds nobody, so find the child by name. The desk then
+asks for the father's name, CNIC and mobile, which are offered from the visitor when he is
+the father. They are **not** written to the record straight away: the admin approves them
+under **Visitor Desk → Approvals** (the bell says when some wait). Approved, they go on the
+child's record, and the parent's sign-in moves to the real mobile number.
+
+### Leaving
+
+At the gate, scan the slip's **QR code** (a USB scanner types it into the box by itself; or
+**Camera**), or type the **slip number**, and choose the result: **Resolved**, **Follow-up
+needed** or **Called again**. Without the slip: **Inside now** → **Check out**. Before closing,
+**Inside now** shows who is still in the school, which is also the list to check in an emergency.
+
+### The admin's live feed
+
+**Visitor Desk → Live feed**, and the top of the dashboard: everyone who came today, newest
+first, with what they said, how long they have been in and who wrote them down. It updates by
+itself every few seconds and works on a phone. A child being taken early or a bullying /
+safety complaint shows in **red**, and pops up on the admin's screen through the bell.
+CNICs show in part (35202-•••••••-1) on lists, the feed and the slip.
+
+### The kiosk: visitors fill the form themselves
+
+A tablet at reception, in **Urdu or English** with big buttons.
+
+1. The admin: **Visitor Desk → Kiosk tablets → Add a kiosk tablet**. Open the link it shows
+   on the tablet once (scan its QR code with the tablet's camera). The tablet remembers it.
+2. The visitor chooses why they came, writes their details, and gets a number (V-1043).
+   Their entry waits under **From the kiosk** at the desk until reception **Confirms** it.
+3. A parent sees their children only with the **father's CNIC and the last 4 digits of the
+   mobile number the school has**, and then only first names and classes: the kiosk never
+   shows photos and cannot search children by name, so a stranger cannot look children up.
+4. With nobody using it for a minute, the form clears itself for the next visitor.
+5. A lost or stolen tablet: **Remove** it under Kiosk tablets; it can do nothing after that.
+
+### When a device does not work
+
+| Not working | Instead |
+|---|---|
+| Camera | Skip the photo; it is optional |
+| QR scanner | Type the slip number, or Inside now → Check out |
+| Printer | Tell the visitor the slip number |
+| Kiosk tablet | Reception enters the visitor at the desk |
+| Internet or computer | **Write in later → Print the paper register** (print a few in advance). Write visitors on it; when the system is back, enter each line under **Write in later** with the times on the paper. |
 
 ---
 

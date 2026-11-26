@@ -195,6 +195,18 @@ const SECTIONS = [
         note: 'A gate pass QR code is valid for a single use only — scanning it again shows "already used".',
       },
       {
+        title: 'Visitor Desk (reception and kiosk)',
+        steps: [
+          { n:1, text:'Sidebar → Visitor Desk (reception: Gatekeeper portal → Visitor → Open the Visitor Desk)' },
+          { n:2, text:'Type the CNIC: someone who came before is found. A first visit: name, mobile, address; photos are optional' },
+          { n:3, text:'Choose why they came. A complaint goes to Complaints, an admission to Admission CRM, taking a child early makes a gate pass' },
+          { n:4, text:'The child: the father\'s CNIC finds the children (whoever comes), or search by name. Missing father\'s details wait for the admin under Approvals' },
+          { n:5, text:'Write what they said (live feed) and office notes (office only), Check in, Print the slip. At the gate the slip\'s QR code or number checks them out' },
+          { n:6, text:'Admin: Live feed (also on the dashboard), Approvals, Kiosk tablets (a tablet where visitors fill the form in Urdu or English)' },
+        ],
+        tip: 'No internet? Write in later → Print the paper register; enter the lines when the system is back.',
+      },
+      {
         title: 'Student CRM & Promotion',
         steps: [
           { n:1, text:'Admissions → CRM: inquiry leads (New → Contacted → Visited → Admitted/Lost)' },

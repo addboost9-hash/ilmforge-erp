@@ -171,6 +171,7 @@ function CollapseHeader({ open, onToggle, title, badge, children: badgeChildren 
    capped at 50 rows — so each gate device showed a different list, and the
    record of who was inside the building was lost whenever site data cleared. */
 function VisitorTab({ CYAN, NAVY }) {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [form, setForm] = useState({ visitorName:'', phone:'', purpose:'Meeting', hostName:'', vehicleNo:'' });
 
@@ -222,6 +223,12 @@ function VisitorTab({ CYAN, NAVY }) {
 
   return (
     <div style={{ padding:'0 18px 20px' }}>
+      {/* The full Visitor Desk: CNIC, the parent's children, slips, the kiosk */}
+      <button type="button" onClick={() => navigate('/gatekeeper-portal/visitors')}
+        style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:16, padding:'14px 16px', borderRadius:12, border:`1px solid ${CYAN}60`, background:`${CYAN}18`, color:'#E2E8F0', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
+        <span><strong style={{ color:CYAN, fontSize:15 }}>🛎️ Open the Visitor Desk</strong><br /><span style={{ fontSize:12, color:'#94A3B8' }}>CNIC, the parent's children, complaints, admissions, slips with QR, kiosk entries</span></span>
+        <span style={{ fontSize:20, color:CYAN }}>→</span>
+      </button>
       {/* Stats */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:16 }}>
         {[

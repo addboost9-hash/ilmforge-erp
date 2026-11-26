@@ -227,7 +227,8 @@ router.get('/alerts', wrap(async (req, res) => {
     return res.json({ success: true, data: { items: [], counts: { admissions: 0, complaints: 0, leaves: 0 } } });
   }
   const schoolId = req.schoolId;
-  const [admissions, admissionCount, complaints, complaintCount, leaves, leaveCount] = await Promise.all([
+  const vd = require('../services/visitorDesk.service');
+  const [admissions, admissionCount, complaints, complaintCount, leaves, leaveCount, urgentVisits, recordUpdates, lastUpdate] = await Promise.all([
     prisma.admissionInquiry.findMany({
       where: { schoolId, status: 'open' }, orderBy: { createdAt: 'desc' }, take: 15,
       select: { id: true, name: true, phone: true, classInterested: true, notes: true, createdAt: true },
@@ -243,7 +244,13 @@ router.get('/alerts', wrap(async (req, res) => {
       select: { id: true, applicantType: true, applicantId: true, fromDate: true, toDate: true, createdAt: true },
     }).catch(() => []),
     prisma.leaveApplication.count({ where: { schoolId, status: 'pending' } }).catch(() => 0),
+    prisma.visitorLog.findMany({
+      where: { schoolId, urgent: true, status: 'in', checkoutAt: null, checkinAt: { gte: vd.pkDayStart() } }, orderBy: { checkinAt: 'desc' }, take: 10,
+    }).catch(() => []),
+    prisma.visitorRecordUpdate.count({ where: { schoolId, status: 'pending' } }).catch(() => 0),
+    prisma.visitorRecordUpdate.findFirst({ where: { schoolId, status: 'pending' }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }).catch(() => null),
   ]);
+  const visitViews = urgentVisits.length ? await vd.visitViews(schoolId, urgentVisits, { fullCnic: false, staffNotes: false }) : [];
 
   // Names for leave requests (applicantId points at a student or a staff row).
   const ids = (type) => leaves.filter((l) => l.applicantType === type).map((l) => l.applicantId);
@@ -274,11 +281,27 @@ router.get('/alerts', wrap(async (req, res) => {
       at: l.createdAt,
       link: '/leaves',
     })),
+    ...visitViews.map((v) => ({
+      type: 'visitor',
+      id: `visitor-${v.id}`,
+      title: v.reason === 'early_pickup' ? 'Child being taken early' : 'Safety complaint at the desk',
+      body: [v.visitorName, v.students.map((s) => `${s.name} (${s.className})`).join(', '), v.remarks].filter(Boolean).join(' · ').slice(0, 160),
+      at: v.checkinAt,
+      link: '/visitor-desk?tab=live',
+    })),
+    ...(recordUpdates ? [{
+      type: 'visitor-update',
+      id: `visitor-updates-${recordUpdates}`,
+      title: 'Parents\' details to approve',
+      body: `${recordUpdates} from the Visitor Desk, for children's records`,
+      at: lastUpdate?.createdAt || new Date(),
+      link: '/visitor-desk?tab=approvals',
+    }] : []),
   ].sort((x, y) => new Date(y.at) - new Date(x.at)).slice(0, 25);
 
   res.json({
     success: true,
-    data: { items, counts: { admissions: admissionCount, complaints: complaintCount, leaves: leaveCount } },
+    data: { items, counts: { admissions: admissionCount, complaints: complaintCount, leaves: leaveCount, urgentVisitors: urgentVisits.length, recordUpdates } },
   });
 }));
 

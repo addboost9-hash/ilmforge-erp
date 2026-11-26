@@ -11,7 +11,7 @@ import { LANGUAGES, t as i18nT } from '../i18n/translations';
 import api from '../api/client';
 import {
   LayoutDashboard, Users, GraduationCap,
-  DollarSign, UserCheck,
+  DollarSign, UserCheck, DoorOpen,
   Bell, MessageSquare, Settings, LogOut,
   Menu, ChevronRight, Search,
   Briefcase,
@@ -57,6 +57,7 @@ const NAV = [
       { to: '/attendance-hub', icon: CheckSquare,   label: 'Attendance Tracker', shortcut: 'Ctrl+A' },
       { to: '/behaviour',      icon: ShieldCheck,   label: 'Behaviour Log' },
       { to: '/gate-passes',    icon: QrCode,        label: 'Gate Control',       roles: ['super_admin','admin','gatekeeper'] },
+      { to: '/visitor-desk',   icon: DoorOpen,      label: 'Visitor Desk',       roles: ['super_admin','admin'] },
       { to: '/ptm',            icon: Users,         label: 'Parent Meetings',    roles: ['super_admin','admin'] },
     ],
   },
@@ -706,6 +707,7 @@ export default function AdminLayout() {
   'import-export': 'Import & Export',
   'bulk-import':   'Import & Export',
   'from-photos':   'Students from Photos',
+  'visitor-desk':  'Visitor Desk',
   'past-records':  'Past Records',
   'barcode':       'Attendance Kiosk',
   'exam-slip':     'Roll Number Slips',

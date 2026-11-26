@@ -165,6 +165,10 @@ app.use('/api/v1/auth', R('./routes/auth.routes'));
 // admission form. See routes/public.routes.js.
 app.use('/api/v1/public', R('./routes/public.routes'));
 
+// ─── The visitor kiosk: a reception tablet with its own key (no sign-in) ──
+// It can only add visits for reception to confirm. See routes/kiosk.routes.js.
+app.use('/api/v1/kiosk', R('./routes/kiosk.routes'));
+
 // ─── PUBLIC: Fee lookup by roll number — rate-limited, schoolSlug required, PII stripped ───
 app.get('/api/v1/public/fees/by-roll/:rollNo', publicFeeLimiter, async (req, res) => {
   try {
@@ -322,6 +326,8 @@ app.use('/api/v1/biometric',       protect, ATTENDANCE_ROLES, R('./routes/biomet
 app.use('/api/v1/face',            protect, ATTENDANCE_ROLES, R('./routes/face.routes'));
 app.use('/api/v1/gatepasses',      protect, R('./routes/gatepass.routes'));
 app.use('/api/v1/visitors',        protect, R('./routes/visitor.routes'));
+// The Visitor Desk: reception, the live feed, kiosk tablets (roles checked inside).
+app.use('/api/v1/visitor-desk',    protect, R('./routes/visitorDesk.routes'));
 app.use('/api/v1/crm',             protect, FINANCE, R('./routes/crm.routes'));
 app.use('/api/v1/backups',         protect, ADMIN_ONLY, R('./routes/backup.routes'));
 // The whole school as one file, for the desktop app ("Download everything").

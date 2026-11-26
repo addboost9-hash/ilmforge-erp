@@ -39,6 +39,7 @@ import WidgetShell from '../../components/dashboard/WidgetShell';
 import HealthRing from '../../components/dashboard/HealthRing';
 import DriverBars from '../../components/dashboard/DriverBars';
 import QuickActions from '../../components/dashboard/QuickActions';
+import VisitorFeed from '../../components/visitors/VisitorFeed';
 import '../../styles/dashboard-tokens.css';
 
 /* Every area of the school, grouped the way the Reports Hub groups reports. */
@@ -378,6 +379,13 @@ export default function AdminDashboard() {
               {a.absentToday.count > a.absentToday.list.length && <li className="d-list-more">and {a.absentToday.count - a.absentToday.list.length} more</li>}
             </ul>
           )}
+        </section>
+      </div>
+
+      {/* ── Visitor Desk: who is at the school now ────────────────── */}
+      <div className="d-row d-no-print">
+        <section className="d-panel" style={{ gridColumn: '1 / -1' }} aria-label="Visitor Desk live feed">
+          <VisitorFeed compact />
         </section>
       </div>
 

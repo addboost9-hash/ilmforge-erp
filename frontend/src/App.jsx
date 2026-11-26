@@ -174,6 +174,8 @@ import GatePassPage            from './pages/gatepass/GatePassPage';
 import SOPsPage                from './pages/sops/SOPsPage';
 import RecordsImportExportPage from './pages/students/RecordsImportExportPage';
 import RegisterFromPhotosPage from './pages/students/RegisterFromPhotosPage';
+import VisitorDeskPage from './pages/visitors/VisitorDeskPage';
+import VisitorKioskPage from './pages/visitors/VisitorKioskPage';
 import HistoryImportPage from './pages/students/HistoryImportPage';
 import RoboBuddyPage           from './pages/robobuddy/RoboBuddyPage';
 import FeeInvoicesManagePage   from './pages/fees/FeeInvoicesManagePage';
@@ -378,6 +380,8 @@ export default function App() {
           {/* Platform Owner Control — Hidden URL, key-protected */}
           <Route path="/platform-control"  element={<PlatformControlPage />} />
           <Route path="/suspended"         element={<SuspendedPage />} />
+          {/* The visitor kiosk: a reception tablet with its own key, no sign-in. */}
+          <Route path="/kiosk"             element={<VisitorKioskPage />} />
 
           {/* ── Role-based portal redirect ── */}
           <Route path="/portal"            element={<PortalRedirect />} />
@@ -389,6 +393,7 @@ export default function App() {
           <Route path="/student-portal"    element={<RoleRoute allow={['student']}><StudentPortalPage /></RoleRoute>}/>
           <Route path="/accountant-portal" element={<RoleRoute allow={['accountant']}><AccountantPortalPage /></RoleRoute>}/>
           <Route path="/gatekeeper-portal" element={<RoleRoute allow={['gatekeeper']}><GatekeeperPortalPage /></RoleRoute>}/>
+          <Route path="/gatekeeper-portal/visitors" element={<RoleRoute allow={['gatekeeper']}><VisitorDeskPage standalone /></RoleRoute>}/>
 
           {/* ── School Mentor Hub — hidden (copyright risk) ── */}
           {/* <Route path="/school-mentor" element={<Protected><SchoolMentorHub /></Protected>} /> */}
@@ -636,6 +641,7 @@ export default function App() {
             <Route path="/settings/license"           element={<LicenseRenewalPage />} />
             <Route path="/admissions/crm"             element={<AdmissionCRMPage />} />
             <Route path="/gate-passes"                element={<GatePassPage />} />
+            <Route path="/visitor-desk"               element={<VisitorDeskPage />} />
             <Route path="/sops"                       element={<SOPsPage />} />
             <Route path="/students/bulk-import"       element={<RecordsImportExportPage />} />
             <Route path="/students/from-photos"       element={<RegisterFromPhotosPage />} />
