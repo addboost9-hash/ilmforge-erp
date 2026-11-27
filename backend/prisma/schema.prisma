@@ -1113,6 +1113,8 @@ model BiometricDevice {
   isActive   Boolean   @default(true)
   lastSyncAt DateTime?
   createdAt  DateTime  @default(now())
+  infoJson   String? // what the machine reports: users, fingers, faces, firmware, push version, clock
+  infoAt     DateTime?
 
   @@index([schoolId])
 }
@@ -1121,15 +1123,89 @@ model BiometricPunch {
   id         Int      @id @default(autoincrement())
   schoolId   Int
   deviceId   Int?
-  personType String   @default("student") // student|staff
+  personType String   @default("student") // student|staff|unknown (a machine user not linked to anyone yet)
   personId   Int
   method     String   @default("thumb") // thumb|face|card
   punchTime  DateTime @default(now())
   direction  String   @default("in") // in|out
   matched    Boolean  @default(true)
+  pin        String? // the user number on the machine
 
   @@index([schoolId, personType, personId])
   @@index([schoolId, punchTime])
+  @@index([schoolId, pin])
+}
+
+// Everyone on the school's fingerprint machines, by the user number (PIN)
+// they are enrolled under, and the student or staff member it is. A PIN put
+// on the machine by IlmForge is linked from the start; one enrolled on the
+// machine before IlmForge (an old machine) is linked by the office.
+model BiometricUser {
+  id          Int       @id @default(autoincrement())
+  schoolId    Int
+  pin         String
+  machineName String? // the name typed on the machine
+  personType  String? // student|staff; null = not linked yet
+  personId    Int?
+  linkHow     String? // sent|auto|manual
+  linkedBy    Int?
+  linkedAt    DateTime?
+  card        String?
+  fingers     Int       @default(0) // fingerprints kept in IlmForge
+  faces       Int       @default(0)
+  onDevices   String? // JSON: ids of the machines this user is on
+  waiting     Int       @default(0) // punches kept until the PIN is linked
+  lastPunchAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([schoolId, pin])
+  @@index([schoolId, personType, personId])
+}
+
+// Fingerprints and faces as the machine uploaded them: a backup, and the
+// copy sent to the school's other machines or to a replaced machine.
+model BiometricTemplate {
+  id        Int      @id @default(autoincrement())
+  schoolId  Int
+  pin       String
+  kind      String // finger|face|palm
+  slot      Int // finger number 0-9, or the face/palm index
+  format    String   @default("fp") // fp: FP / FACE lines (push 1-2) | bio: BIODATA (push 3)
+  bioType   Int?
+  majorVer  String?
+  minorVer  String?
+  size      Int      @default(0)
+  valid     Int      @default(1)
+  data      String
+  deviceId  Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([schoolId, pin, kind, slot])
+  @@index([schoolId, pin])
+}
+
+// Work waiting for a machine (put people on it, copy fingers, fetch punches
+// again…). The machine collects it when it next calls in; kept in the
+// database so a server restart does not lose it.
+model DeviceCommand {
+  id        Int       @id @default(autoincrement())
+  schoolId  Int
+  deviceId  Int
+  job       String // people|fingers|remove|info|fetch|users|clock|reboot|enrol
+  cmd       String
+  pin       String?
+  status    String    @default("pending") // pending|sent|done|failed|cancelled
+  tries     Int       @default(0)
+  result    Int?
+  createdBy Int?
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+  doneAt    DateTime?
+
+  @@index([deviceId, status])
+  @@index([schoolId, createdAt])
 }
 
 model FaceEnrollment {

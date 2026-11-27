@@ -574,7 +574,7 @@ The school may use any of these instead of marking by hand:
 |---|---|---|
 | ID card scan (QR / barcode) | `/attendance/barcode` | Works: handheld scanner or camera |
 | Face attendance | `/attendance/face-attendance` | A phone recognises faces: Auto or Confirm (see *Face attendance* below) |
-| Fingerprint device | `/attendance/biometric-attendance` | Screen works; a physical machine cannot send punches in yet |
+| Fingerprint machine | `/attendance/biometric-attendance` | Works: ZKTeco machines in Cloud server (ADMS) mode (see *Fingerprint machines* below) |
 | Spreadsheet import (CSV) | `/attendance/excel` | Works: columns `date` (YYYY-MM-DD), `rollNo`, `status` |
 | Period-wise (per subject) | `/attendance/period` | Works |
 
@@ -667,20 +667,87 @@ and **Delete their face data** removes them for anyone (for example when a paren
 
 ### Fingerprint machines
 
-The **Biometric Attendance** screen can list your devices and records punches entered
-through it, but a physical fingerprint machine (ZKTeco, eSSL and similar) **cannot yet
-send its punches to IlmForge by itself**. Until that link is added:
+**Attendance Tracker → Fingerprint Machines** (`/attendance/biometric-attendance`). A ZKTeco
+machine (K40, MB160, MB20, SpeedFace and others with **Cloud Server Setting** or **ADMS** in
+its menu) sends every punch to IlmForge by itself over the internet; no software runs on the
+school's computer. Students are marked present (late after the school's time); staff are
+checked in and out. The page has five tabs.
 
-- Do not buy a fingerprint machine expecting it to mark attendance in IlmForge.
-- If you already own one, you can copy its daily log into a spreadsheet with the columns
-  `date` (YYYY-MM-DD), `rollNo` and `status` (present/absent/leave/late), save it as CSV and
-  load it on **Attendance → Excel import**. For daily use, ID card scanning at the gate is
-  far less work.
+**Buying a machine:** check with the dealer that its menu has **Comm → Cloud Server Setting**
+(or ADMS) before you buy. A machine with both finger and face (MB160, SpeedFace) helps people
+whose fingerprints are worn.
 
-When the device link is added, setting up a machine will be: enter the machine's serial
-number in IlmForge, then on the machine set **Comm → Cloud server (ADMS)** to the
-IlmForge server address. Each person's ID on the machine must be their roll number
-(students) or employee code (staff).
+**1. Machines: connect one**
+
+1. **Add machine** with a name ("Main gate") and its serial number (on the machine:
+   **Menu → System Info → Device Info**, or the sticker on the back).
+2. On the machine, **Menu → Comm. → Cloud Server Setting**: type the server address and port
+   shown under *What to type into the fingerprint machine*, with HTTPS on (online).
+3. Within a minute the card says **Connected** and shows what is on the machine: users,
+   fingers, faces, punches stored, its fingerprint version.
+
+Each machine's card also shows the work going to it ("Names put on: 120 of 300 done") and
+what the office can ask of it:
+
+| Button | What it does |
+|---|---|
+| **Put names on it** | Everyone's name and Device ID onto the machine (everyone, students, staff or one class) |
+| **Copy fingers here** | The fingerprints IlmForge keeps, onto this machine: enrol once, every machine knows the finger. Tick *reset or replaced* to send everything back to a machine that lost its users |
+| **Fetch punches again** | The punches of chosen days, sent again (after the internet was down). Nothing is counted twice |
+| **Get users and fingers** | Everyone on the machine, with their fingerprints, sent to IlmForge (an old machine) |
+| **Remove people who left** | Takes students and staff who left off the machine, with their fingerprints |
+| **Set clock** | Sets the machine's clock. IlmForge warns when a machine's clock is more than 5 minutes off |
+| **Machine log** | The work sent to it, the machine's answers, and the last exchanges: for when something does not work |
+| **Restart**, **Switch off**, **Remove** | A switched-off or removed machine's punches are refused |
+
+Work for a machine that is off waits and goes when it connects; work it never answers is sent
+again. The bell tells the office when a machine has been silent for 15 minutes in the school day.
+
+**2. People & fingers: who is enrolled**
+
+- Each person's **Device ID** (1 then the student's number; 2 then the staff member's number),
+  the machines they are on, and how many fingerprints IlmForge **keeps** (a backup: a machine
+  sends the fingerprint after it is enrolled).
+- Tick **No fingerprint kept yet** and **Print list** for the people still to enrol.
+- **Enrol** starts enrolment from the office: the connected machine asks for the finger
+  three times. Some models cannot be started this way; then enrol on the machine
+  (**Menu → User Mgt.**).
+- **Users on the machines**: everyone enrolled, by user number. A machine that had users
+  before IlmForge: press **Get users and fingers** on it, then link each user here once (by the
+  suggested name, or **Find…**); **Link clear matches by name** links all the sure ones. Their
+  fingers need not be enrolled again. Punches from a user not linked are kept, and marked at
+  their own time when the user is linked.
+- A Device ID already used on a machine by someone else is never overwritten: it is reported.
+
+**3. Punch log:** every punch and scan of any days, by machine, students or staff, not linked
+yet, or how (finger, face, card); CSV.
+
+**4. Staff timesheet** (administrator): each staff member's month against their shift: arrived,
+left, hours, late and early minutes, half days, overtime, absent days (a working day with no
+attendance and no approved leave), days with no check-out. Open a name for the day by day,
+and the pencil to correct a day: a reason is required and kept in the audit log. CSV (opens in
+Excel) and Print. Days before the school kept staff attendance, or before someone joined,
+are not counted absent.
+
+**5. Rules**
+
+- **Auto-absent:** at the time you choose (for example 09:30), on school days and not on
+  holidays, every student with no attendance yet in the chosen classes is marked absent (or
+  leave when a leave is approved), and parents get the register's absent message. Choose only
+  the classes that punch on a machine. **Safety:** if far fewer students arrived by machine
+  than usual (a machine off or offline), nobody is marked and the bell says why. **Run now**
+  and **Undo today** (only the automatic marks nobody changed).
+- **Staff shifts:** start, end, grace minutes (late after start + grace; early when leaving
+  more than the grace before the end), half day when fewer hours were worked, overtime after
+  the end, working days; then who works which shift. Shifts past midnight are not supported.
+- **Late times and check-out:** students' late time, staff without a shift, minutes before a
+  second punch counts as leaving, the machines' time zone.
+- **Late rule for payroll:** "every 3 lates count as 1 day" shows on the timesheet as
+  *Lates as days*. Salaries are not changed by it.
+
+**Good to know:** IlmForge keeps fingerprints exactly as the machine sends them; they copy only
+to machines with the same fingerprint version (shown on each card). Machines must be on the
+internet (online edition) or on the same network as the school's computer (desktop edition).
 
 ### The attendance register
 

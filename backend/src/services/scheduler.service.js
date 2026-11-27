@@ -410,6 +410,15 @@ async function runDailyCollectionReport() {
    Uses node-cron if available. Falls back to setInterval for
    environments where node-cron is not installed.
 ═══════════════════════════════════════════════════════════════════ */
+/* Students who did not come, marked absent at each school's own time. */
+async function runAutoAbsent() {
+  try {
+    await require('./attendanceRules.service').runAutoAbsentAll(new Date());
+  } catch (err) {
+    console.error('[Scheduler] Auto-absent error:', err.message);
+  }
+}
+
 function initScheduler() {
   if (process.env.NODE_ENV === 'test') return;
 
@@ -434,12 +443,17 @@ function initScheduler() {
     // Daily collection report — Mon–Sat at 6:00 PM
     cron.schedule('0 18 * * 1-6', runDailyCollectionReport, { timezone: 'Asia/Karachi' });
 
+    // Auto-absent — every 5 minutes; each school at its own time
+    cron.schedule('*/5 * * * *', runAutoAbsent, { timezone: 'Asia/Karachi' });
+
     console.log('[Scheduler] Cron jobs initialized (PKT Asia/Karachi):');
     console.log('  • Fee Reminders    → daily 09:00');
     console.log('  • Absent Alerts    → Mon-Sat 08:00');
     console.log('  • Birthday Wishes  → daily 07:00');
     console.log('  • Collection Report→ Mon-Sat 18:00');
+    console.log('  • Auto-absent      → every 5 min (schools that turned it on)');
   } else {
+    setInterval(runAutoAbsent, 5 * 60 * 1000);
     // Fallback: run every hour, jobs do their own day-of-month checks
     setInterval(() => {
       const h = new Date().getHours();

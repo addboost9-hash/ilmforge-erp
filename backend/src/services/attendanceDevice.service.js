@@ -21,6 +21,7 @@
 const prisma = require('../config/prisma');
 const { readSettings } = require('../utils/schoolSettings');
 const { dayStart } = require('./attendanceMark.service');
+const { cleanShift } = require('./biometricProtocol');
 
 const PK_MS = 5 * 3600 * 1000;
 const isClock = (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v || ''));
@@ -33,14 +34,28 @@ const toMinutes = (hhmm) => parseInt(hhmm.slice(0, 2), 10) * 60 + parseInt(hhmm.
 const devicePin = (kind, id) => `${kind === 'staff' ? 2 : 1}${id}`;
 
 /* The school's rules for devices and scanners (Settings → Attendance
-   devices). Times are Pakistan time, "HH:MM", or null for "never late". */
+   devices). Times are Pakistan time, "HH:MM", or null for "never late".
+   Staff on a shift are late after the shift's start and grace minutes;
+   staff without one after staffLateAfter. */
 async function deviceSettings(schoolId) {
   const s = (await readSettings(schoolId)).attendanceDevices || {};
   const gap = parseInt(s.gapMinutes, 10);
+  const shifts = (Array.isArray(s.shifts) ? s.shifts : []).map(cleanShift).filter(Boolean);
+  const byId = new Map(shifts.map((x) => [x.id, x]));
+  const staffShifts = s.staffShifts && typeof s.staffShifts === 'object' && !Array.isArray(s.staffShifts) ? s.staffShifts : {};
+  const defaultShift = byId.has(s.defaultShift) ? s.defaultShift : null;
   return {
     lateAfter: isClock(s.lateAfter) ? s.lateAfter : null,
     staffLateAfter: isClock(s.staffLateAfter) ? s.staffLateAfter : null,
     gapMinutes: gap >= 1 && gap <= 600 ? gap : 30,
+    shifts,
+    staffShifts,
+    defaultShift,
+    shiftFor: (staffId) => {
+      const own = staffShifts[staffId];
+      if (own === 'none') return null;
+      return byId.get(own) || byId.get(defaultShift) || null;
+    },
   };
 }
 
@@ -210,7 +225,10 @@ async function markPass(o) {
 
   // Staff
   if (person.isActive === false) return { error: `${person.name} is not an active staff member.`, status: 409, person: view };
-  const staffLate = !!rules.staffLateAfter && pkMinutes(at) > toMinutes(rules.staffLateAfter);
+  const shift = rules.shiftFor(person.id);
+  const staffLate = shift
+    ? pkMinutes(at) > toMinutes(shift.start) + shift.graceIn
+    : !!rules.staffLateAfter && pkMinutes(at) > toMinutes(rules.staffLateAfter);
   const existing = await prisma.staffAttendance.findUnique({ where: { staffId_date: { staffId: person.id, date } } });
   const staffMethod = ['fingerprint', 'face', 'card'].includes(method) ? 'biometric' : method === 'qr' ? 'qr' : 'barcode';
   let checkIn = existing?.checkIn || null;

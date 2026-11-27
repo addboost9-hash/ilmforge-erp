@@ -219,6 +219,61 @@ router.get('/stats', wrap(async (req, res) => {
  * (last time the bell was opened), so this only reports what is open.
  */
 const ALERT_ROLES = ['super_admin', 'admin', 'principal'];
+
+/* Fingerprint machines that need the office: silent during the school day,
+   a clock that is off, punches from people not linked yet, and an
+   auto-absent that did not run because the machines were silent. */
+const MACHINE_LINK = '/attendance/biometric-attendance';
+async function machineAlerts(schoolId) {
+  const registry = require('../services/deviceRegistry');
+  const { readSettings } = require('../utils/schoolSettings');
+  const { dayStart } = require('../services/attendanceMark.service');
+  const now = Date.now();
+  const pk = new Date(now + 5 * 3600e3);
+  const pkMin = pk.getUTCHours() * 60 + pk.getUTCMinutes();
+  const schoolHours = pk.getUTCDay() !== 0 && pkMin >= 6 * 60 + 30 && pkMin <= 17 * 60;
+  const today = dayStart(new Date());
+  const [devices, serials, unknown, lastUnknown, settings] = await Promise.all([
+    prisma.biometricDevice.findMany({ where: { schoolId, isActive: true }, select: { id: true, name: true, lastSyncAt: true } }),
+    registry.serialsOf(schoolId),
+    prisma.biometricPunch.count({ where: { schoolId, matched: false, punchTime: { gte: today } } }),
+    prisma.biometricPunch.findFirst({ where: { schoolId, matched: false, punchTime: { gte: today } }, orderBy: { punchTime: 'desc' }, select: { punchTime: true } }),
+    readSettings(schoolId),
+  ]);
+  const items = [];
+  for (const d of devices) {
+    const serial = Object.keys(serials).find((k) => Number(serials[k]) === d.id);
+    const st = serial ? registry.statusOf(serial) : null;
+    const seen = st?.lastSeen || (d.lastSyncAt ? new Date(d.lastSyncAt).getTime() : 0);
+    if (schoolHours && seen && now - seen > 15 * 60e3) {
+      items.push({
+        type: 'machine', id: `machine-off-${d.id}-${seen}`, title: `${d.name} is not connected`,
+        body: `No contact since ${new Date(seen + 5 * 3600e3).toISOString().slice(11, 16)}. Check its power, network cable or Wi-Fi.`,
+        at: new Date(seen + 15 * 60e3), link: MACHINE_LINK,
+      });
+    }
+    const off = st?.clockOffsetSec;
+    if (off && Math.abs(off) > 300) {
+      items.push({
+        type: 'machine', id: `machine-clock-${d.id}-${Math.round(off / 300)}`, title: `${d.name}: its clock is about ${Math.round(Math.abs(off) / 60)} min ${off > 0 ? 'slow' : 'fast'}`,
+        body: 'Punch times are taken from the machine’s clock. Set it from the machine page (Set clock) or on the machine.', at: new Date(st.clockAt || now), link: MACHINE_LINK,
+      });
+    }
+  }
+  if (unknown) {
+    items.push({
+      type: 'machine', id: `machine-unlinked-${unknown}`, title: `${unknown} punch${unknown === 1 ? '' : 'es'} from people not linked`,
+      body: 'Someone on a machine is not linked to a student or staff member. Link them and their punches are marked.',
+      at: lastUnknown?.punchTime || new Date(), link: `${MACHINE_LINK}?view=people`,
+    });
+  }
+  const last = settings.autoAbsentLast;
+  const pkToday = pk.toISOString().slice(0, 10);
+  if (last?.date === pkToday && !last.ok && last.reason) {
+    items.push({ type: 'machine', id: `auto-absent-${pkToday}`, title: 'Auto-absent did not run today', body: last.reason, at: new Date(last.at || now), link: `${MACHINE_LINK}?view=rules` });
+  }
+  return items;
+}
 const fmtDay = (d) => new Date(d).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' });
 
 router.get('/alerts', wrap(async (req, res) => {
@@ -251,6 +306,7 @@ router.get('/alerts', wrap(async (req, res) => {
     prisma.visitorRecordUpdate.findFirst({ where: { schoolId, status: 'pending' }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }).catch(() => null),
   ]);
   const visitViews = urgentVisits.length ? await vd.visitViews(schoolId, urgentVisits, { fullCnic: false, staffNotes: false }) : [];
+  const machineItems = await machineAlerts(schoolId).catch(() => []);
 
   // Names for leave requests (applicantId points at a student or a staff row).
   const ids = (type) => leaves.filter((l) => l.applicantType === type).map((l) => l.applicantId);
@@ -297,11 +353,12 @@ router.get('/alerts', wrap(async (req, res) => {
       at: lastUpdate?.createdAt || new Date(),
       link: '/visitor-desk?tab=approvals',
     }] : []),
+    ...machineItems,
   ].sort((x, y) => new Date(y.at) - new Date(x.at)).slice(0, 25);
 
   res.json({
     success: true,
-    data: { items, counts: { admissions: admissionCount, complaints: complaintCount, leaves: leaveCount, urgentVisitors: urgentVisits.length, recordUpdates } },
+    data: { items, counts: { admissions: admissionCount, complaints: complaintCount, leaves: leaveCount, urgentVisitors: urgentVisits.length, recordUpdates, machines: machineItems.length } },
   });
 }));
 

@@ -432,7 +432,7 @@ const SECTIONS = [
         title: 'Staff Attendance & Appraisals',
         steps: [
           { n:1, text:'Staff → Attendance → mark daily present/absent/leave' },
-          { n:2, text:'Staff are marked on Attendance → Staff Attendance (fingerprint machines cannot send punches in yet — see Attendance Devices)' },
+          { n:2, text:'Staff are marked on Attendance → Staff Attendance, or by a fingerprint machine (check-in and check-out); Fingerprint Machines → Staff timesheet shows the month against each shift' },
           { n:3, text:'Leave applications are submitted through the staff portal — admins approve/reject them' },
           { n:4, text:'Appraisals: Staff → Appraisals → performance rating + remarks' },
           { n:5, text:'The annual appraisal report supports increment decisions' },
@@ -1111,12 +1111,16 @@ const SECTIONS = [
         note: 'In Auto mode a photo held up to the camera could fool it: keep the phone where someone on duty can see it. Faces are recognised on the phone; only 128 numbers per face are kept.',
       },
       {
-        title: 'Fingerprint machines (ZKTeco, eSSL)',
+        title: 'Fingerprint machines (ZKTeco)',
         steps: [
-          { n:1, text:'A physical fingerprint machine cannot yet send its punches to IlmForge by itself' },
-          { n:2, text:'Do not buy one expecting it to mark attendance in IlmForge — use ID card scanning at the gate instead' },
-          { n:3, text:'If you already own one: put its daily log in a sheet with columns date (YYYY-MM-DD), rollNo, status, save as CSV, and load it on Attendance → Excel import' },
+          { n:1, text:'Attendance Tracker → Fingerprint Machines → Add machine: a name and its serial number (Menu → System Info → Device Info)' },
+          { n:2, text:'On the machine: Menu → Comm. → Cloud Server Setting → the address and port shown in IlmForge, HTTPS on. The card then says Connected' },
+          { n:3, text:'Put names on it (everyone, staff or one class), then enrol fingers on the machine or with Enrol on the People tab' },
+          { n:4, text:'Copy fingers here: fingerprints kept by IlmForge go to the school\'s other machines, or back to a machine that was reset' },
+          { n:5, text:'An old machine with users already: Get users and fingers, then link each user on People → Users on the machines' },
+          { n:6, text:'Rules: auto-absent at a set time (not when the machines were silent), staff shifts, the late rule; Staff timesheet shows each month' },
         ],
+        note: 'Buy a ZKTeco machine whose menu has Cloud Server Setting (ADMS). The bell warns when a machine is offline, its clock is off, or someone punching is not linked.',
       },
     ],
   },
@@ -1156,7 +1160,7 @@ const SECTIONS = [
         title: 'SOPs, Biometric & Admin Roles',
         steps: [
           { n:1, text:'SOPs: Settings → SOPs → store standard operating procedure documents' },
-          { n:2, text:'Biometric: Settings → Biometric lists devices; a physical machine cannot send punches in yet (see Attendance Devices)' },
+          { n:2, text:'Biometric: Attendance Tracker → Fingerprint Machines connects ZKTeco machines, links their users and keeps fingerprints (see Attendance Devices)' },
           { n:3, text:'Admin Roles: create multiple admins with scoped permissions' },
           { n:4, text:'Audit log: tracks which user changed what — for accountability' },
           { n:5, text:'Users: reset password, deactivate, re-assign roles' },
