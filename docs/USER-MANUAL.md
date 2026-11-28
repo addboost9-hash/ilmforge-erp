@@ -574,7 +574,7 @@ The school may use any of these instead of marking by hand:
 |---|---|---|
 | ID card scan (QR / barcode) | `/attendance/barcode` | Works: handheld scanner or camera |
 | Face attendance | `/attendance/face-attendance` | A phone recognises faces: Auto or Confirm (see *Face attendance* below) |
-| Fingerprint machine | `/attendance/biometric-attendance` | Works: ZKTeco machines in Cloud server (ADMS) mode (see *Fingerprint machines* below) |
+| Fingerprint / face machine | `/attendance/biometric-attendance` | Works with any make: ZKTeco (Cloud Server / ADMS), Hikvision (HTTP listening), others that post to a link, or any machine's USB log file (see *Fingerprint machines* below) |
 | Spreadsheet import (CSV) | `/attendance/excel` | Works: columns `date` (YYYY-MM-DD), `rollNo`, `status` |
 | Period-wise (per subject) | `/attendance/period` | Works |
 
@@ -667,26 +667,55 @@ and **Delete their face data** removes them for anyone (for example when a paren
 
 ### Fingerprint machines
 
-**Attendance Tracker → Fingerprint Machines** (`/attendance/biometric-attendance`). A ZKTeco
-machine (K40, MB160, MB20, SpeedFace and others with **Cloud Server Setting** or **ADMS** in
-its menu) sends every punch to IlmForge by itself over the internet; no software runs on the
-school's computer. Students are marked present (late after the school's time); staff are
-checked in and out. The page has five tabs.
+**Attendance Tracker → Fingerprint Machines** (`/attendance/biometric-attendance`). Fingerprint,
+face and card machines of any make mark attendance in IlmForge. Students are marked present
+(late after the school's time); staff are checked in and out. The page has five tabs.
 
-**Buying a machine:** check with the dealer that its menu has **Comm → Cloud Server Setting**
-(or ADMS) before you buy. A machine with both finger and face (MB160, SpeedFace) helps people
-whose fingerprints are worn.
+**Which machine:** **Add machine** asks which kind the school has:
+
+| Kind | How its punches reach IlmForge | What IlmForge can do with it |
+|---|---|---|
+| **ZKTeco (or eSSL)** with **Comm. → Cloud Server Setting** (ADMS) in its menu: K40, MB160, MB20, uFace, SpeedFace… | It sends every punch by itself over the internet | Everything below: put names on it, copy fingers, fetch punches again, set its clock |
+| **Hikvision** face or fingerprint terminal (DS-K1T…) | **HTTP Listening** set to the machine's own private link | Marks each recognised face, finger or card; names are added on the machine |
+| **Another make, or attendance software**, whose settings take a server, push, HTTP or webhook address | It posts each punch to the machine's own private link | As Hikvision |
+| **Any machine at all**: older ZKTeco or eSSL without Cloud Server, or any make | The office uploads the attendance log from a USB stick | Marks the punches in the file (the last 30 days) |
+
+For the online website a machine that sends by itself must have **HTTPS** in that setting.
+Without it, upload its USB file instead, or use IlmForge Desktop on the school's computer.
+A machine with both finger and face (MB160, SpeedFace, Hikvision DS-K1T671) helps people whose
+fingerprints are worn.
 
 **1. Machines: connect one**
 
-1. **Add machine** with a name ("Main gate") and its serial number (on the machine:
-   **Menu → System Info → Device Info**, or the sticker on the back).
-2. On the machine, **Menu → Comm. → Cloud Server Setting**: type the server address and port
-   shown under *What to type into the fingerprint machine*, with HTTPS on (online).
-3. Within a minute the card says **Connected** and shows what is on the machine: users,
-   fingers, faces, punches stored, its fingerprint version.
+1. **Add machine**, choose the kind, give it a name ("Main gate"); a ZKTeco also needs its serial
+   number (on the machine: **Menu → System Info → Device Info**, or the sticker on the back).
+2. The next step shows exactly what to type into the machine, with copy buttons:
+   - ZKTeco: **Menu → Comm. → Cloud Server Setting**, the server address and port, HTTPS on.
+   - Hikvision: on its web page, **Configuration → Network → Advanced Settings → HTTP Listening**:
+     the address, the URL (its private link), the port and HTTPS.
+   - Another make: its private link, and the form a punch takes (`{"id": "1843", "time":
+     "2026-11-28 08:01:02"}`, as JSON, a form or a GET).
+   - USB file: choose the file (below).
+3. The step waits and says **IlmForge hears** the machine at its first call (ZKTeco) or first punch.
+   A ZKTeco's card then shows what is on it: users, fingers, faces, punches stored, its
+   fingerprint version.
 
-Each machine's card also shows the work going to it ("Names put on: 120 of 300 done") and
+The private link of a Hikvision or other-make machine is shown only to the administrator.
+**More → New link** makes a new one when it was shared where it should not be; the old one
+stops at once.
+
+**Uploading a log file** (a file machine's main button; **More → Upload a log file** on any
+other): on the machine, **USB Manager (or Data Mgt.) → Download → Attendance**, then choose the
+file. IlmForge recognises ZKTeco and eSSL files (`attlog.dat`, `GLG_001.TXT`), ZKTeco and
+Hikvision exports, CSV, text and Excel (`.xlsx`; an old `.xls` must be saved as `.xlsx` or CSV
+first). It shows what it found (punches, people, dates), which column is the user number and which
+the time (change them if needed; when every date could be day-first or month-first, choose), who each
+number is, and the punches it leaves out (older than 30 days, dated after today, unreadable rows).
+**Mark attendance** then marks them at their own times. Arriving and leaving are decided by the time,
+as for the machines, unless you tick *Use its in / out column*. The same file uploaded twice marks
+nothing twice. Numbers not linked yet are kept and marked when they are linked.
+
+A ZKTeco's card also shows the work going to it ("Names put on: 120 of 300 done") and
 what the office can ask of it:
 
 | Button | What it does |
@@ -701,7 +730,8 @@ what the office can ask of it:
 | **Restart**, **Switch off**, **Remove** | A switched-off or removed machine's punches are refused |
 
 Work for a machine that is off waits and goes when it connects; work it never answers is sent
-again. The bell tells the office when a machine has been silent for 15 minutes in the school day.
+again. The bell tells the office when a ZKTeco has been silent for 15 minutes in the school day
+(other makes are heard only when someone punches, so they are not reported for being quiet).
 
 **2. People & fingers: who is enrolled**
 

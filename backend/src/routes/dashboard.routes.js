@@ -234,7 +234,7 @@ async function machineAlerts(schoolId) {
   const schoolHours = pk.getUTCDay() !== 0 && pkMin >= 6 * 60 + 30 && pkMin <= 17 * 60;
   const today = dayStart(new Date());
   const [devices, serials, unknown, lastUnknown, settings] = await Promise.all([
-    prisma.biometricDevice.findMany({ where: { schoolId, isActive: true }, select: { id: true, name: true, lastSyncAt: true } }),
+    prisma.biometricDevice.findMany({ where: { schoolId, isActive: true }, select: { id: true, name: true, lastSyncAt: true, kind: true } }),
     registry.serialsOf(schoolId),
     prisma.biometricPunch.count({ where: { schoolId, matched: false, punchTime: { gte: today } } }),
     prisma.biometricPunch.findFirst({ where: { schoolId, matched: false, punchTime: { gte: today } }, orderBy: { punchTime: 'desc' }, select: { punchTime: true } }),
@@ -245,7 +245,10 @@ async function machineAlerts(schoolId) {
     const serial = Object.keys(serials).find((k) => Number(serials[k]) === d.id);
     const st = serial ? registry.statusOf(serial) : null;
     const seen = st?.lastSeen || (d.lastSyncAt ? new Date(d.lastSyncAt).getTime() : 0);
-    if (schoolHours && seen && now - seen > 15 * 60e3) {
+    // Only a ZKTeco calls every few seconds: other makes are heard only when
+    // someone punches, and a file machine never calls.
+    const calls = !d.kind || d.kind === 'zkteco';
+    if (calls && schoolHours && seen && now - seen > 15 * 60e3) {
       items.push({
         type: 'machine', id: `machine-off-${d.id}-${seen}`, title: `${d.name} is not connected`,
         body: `No contact since ${new Date(seen + 5 * 3600e3).toISOString().slice(11, 16)}. Check its power, network cable or Wi-Fi.`,

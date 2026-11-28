@@ -1,6 +1,8 @@
 /**
- * One fingerprint machine: is it connected, what it holds, the work going
- * to it, and everything the office can ask of it.
+ * One machine: is it connected, what it holds, the work going to it, and
+ * everything the office can ask of it. A ZKTeco in Cloud Server mode can be
+ * sent work; a Hikvision or other make sends to its link; a file machine's
+ * log is uploaded. Any of them can have a log file uploaded.
  */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -8,8 +10,11 @@ import toast from 'react-hot-toast';
 import api from '../../../api/client';
 import {
   Wifi, WifiOff, Send, Fingerprint, History, UserMinus, Clock, Info, RotateCcw, ScrollText, Power, Trash2, AlertTriangle, ChevronDown, ChevronUp, Square,
+  Upload, Link2, KeyRound, Hourglass, FileText,
 } from 'lucide-react';
 import { ago, dayTimeOf, timeOf, num, errText, hint, pkToday, JOB_LABEL, WhoPicker } from './shared';
+import { HikSetup, WebSetup } from './setup';
+import ImportFile from './ImportFile';
 
 const whoBody = (w) => ({ type: w.type, ...(w.classId ? { classId: Number(w.classId) } : {}) });
 
@@ -111,7 +116,18 @@ function LeftList({ id, name, onDone }) {
   );
 }
 
-export default function MachineCard({ d, isAdmin, classes }) {
+/* The badge: connected or not (ZKTeco), last heard (link machines), last file. */
+function Status({ d }) {
+  const badge = (cls, Icon, words) => <span className={`badge ${cls}`} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon size={12} /> {words}</span>;
+  if (d.kind === 'file') return d.lastImport ? badge('badge-gray', FileText, `Last file ${ago(d.lastImport.at)}`) : badge('badge-yellow', Hourglass, 'No file yet');
+  if (d.kind === 'hikvision' || d.kind === 'web') {
+    if (d.online) return badge('badge-green', Wifi, 'Receiving');
+    return d.lastSeen ? badge('badge-gray', Wifi, `Last heard ${ago(d.lastSeen)}`) : badge('badge-yellow', Hourglass, 'Waiting for its first punch');
+  }
+  return d.online ? badge('badge-green', Wifi, 'Connected') : badge('badge-red', WifiOff, d.lastSeen ? 'Not connected' : 'Never connected');
+}
+
+export default function MachineCard({ d, isAdmin, classes, conn }) {
   const qc = useQueryClient();
   const [panel, setPanel] = useState(null);
   const [more, setMore] = useState(false);
@@ -130,6 +146,11 @@ export default function MachineCard({ d, isAdmin, classes }) {
     onSuccess: refresh,
     onError: (e) => toast.error(errText(e, 'It could not be changed.')),
   });
+  const newLink = useMutation({
+    mutationFn: () => api.post(`/biometric/devices/${d.id}/new-link`),
+    onSuccess: (r) => { toast.success(r.data.message, { duration: 8000 }); setPanel('setup'); refresh(); },
+    onError: (e) => toast.error(errText(e, 'It could not be changed.')),
+  });
   const remove = useMutation({
     mutationFn: () => api.delete(`/biometric/devices/${d.id}`),
     onSuccess: (r) => { toast.success(r.data.message); refresh(); },
@@ -139,6 +160,10 @@ export default function MachineCard({ d, isAdmin, classes }) {
   const clockOff = d.clockOffsetSec !== null && Math.abs(d.clockOffsetSec) > 300;
   const waiting = Object.values(d.work || {}).reduce((n, j) => n + j.pending + j.sent, 0);
   const info = d.info || {};
+  const zk = (d.kind || 'zkteco') === 'zkteco';
+  const linked = d.kind === 'hikvision' || d.kind === 'web';
+  const imp = d.lastImport;
+  const short = (x) => new Date(x).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' });
 
   return (
     <article className="card" aria-label={`Machine ${d.name}`} style={{ padding: 16, opacity: d.isActive ? 1 : 0.6, display: 'grid', gap: 12, minWidth: 0, alignContent: 'start' }}>
@@ -146,15 +171,17 @@ export default function MachineCard({ d, isAdmin, classes }) {
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ fontWeight: 800, fontSize: 16, color: '#0F172A' }}>{d.name}</div>
           <div style={{ fontSize: 12, color: '#64748B' }}>
-            {[d.location, info.model, d.serialNo && `SN ${d.serialNo}`].filter(Boolean).join(' · ') || <span style={{ color: '#B91C1C' }}>serial number not set</span>}
+            {zk
+              ? ([d.location, info.model, d.serialNo && `SN ${d.serialNo}`].filter(Boolean).join(' · ') || <span style={{ color: '#B91C1C' }}>serial number not set</span>)
+              : [d.location, { hikvision: 'Hikvision, sends to its link', web: 'Sends to its link', file: 'Log file uploaded' }[d.kind]].filter(Boolean).join(' · ')}
           </div>
         </div>
-        {d.online
-          ? <span className="badge badge-green" style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Wifi size={12} /> Connected</span>
-          : <span className="badge badge-red" style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><WifiOff size={12} /> {d.lastSeen ? 'Not connected' : 'Never connected'}</span>}
+        <Status d={d} />
       </div>
       <div style={{ fontSize: 12, color: '#475569' }}>
-        Last contact {ago(d.lastSeen)}{d.ip ? ` · ${d.ip}` : ''}{d.lastPunchAt ? ` · last punch ${timeOf(d.lastPunchAt)}` : ''}
+        {d.kind === 'file'
+          ? (imp ? <>Last file{imp.file ? ` ${imp.file}` : ''}, {dayTimeOf(imp.at)}: {num(imp.marked)} marked of {num(imp.received)}{imp.notLinked ? `, ${num(imp.notLinked)} not linked` : ''}</> : 'Upload the log file from the machine to mark its punches.')
+          : <>{linked ? 'Last heard' : 'Last contact'} {ago(d.lastSeen)}{d.ip ? ` · ${d.ip}` : ''}{d.lastPunchAt ? ` · last punch ${timeOf(d.lastPunchAt)}` : ''}</>}
         {!d.isActive && <strong style={{ color: '#B91C1C' }}> · switched off in IlmForge (its punches are refused)</strong>}
       </div>
 
@@ -169,10 +196,15 @@ export default function MachineCard({ d, isAdmin, classes }) {
       {/* Flex, not grid: the app turns every inline grid into one column on phones. */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
         <Stat label="Punches today" value={num(d.punchesToday)} sub={d.notLinkedToday ? `${d.notLinkedToday} not linked` : null} />
-        <Stat label="Users on it" value={num(info.users)} sub={d.known?.users ? `${d.known.linked} linked in IlmForge` : null} />
-        <Stat label="Fingers on it" value={num(info.fingers)} sub={info.fpVersion ? `version ${info.fpVersion}` : null} />
-        <Stat label="Faces on it" value={num(info.faces)} sub={info.faceVersion ? `version ${info.faceVersion}` : null} />
-        <Stat label="Punches stored" value={num(info.punches)} sub={info.firmware ? info.firmware.slice(0, 22) : null} />
+        {zk && (
+          <>
+            <Stat label="Users on it" value={num(info.users)} sub={d.known?.users ? `${d.known.linked} linked in IlmForge` : null} />
+            <Stat label="Fingers on it" value={num(info.fingers)} sub={info.fpVersion ? `version ${info.fpVersion}` : null} />
+            <Stat label="Faces on it" value={num(info.faces)} sub={info.faceVersion ? `version ${info.faceVersion}` : null} />
+            <Stat label="Punches stored" value={num(info.punches)} sub={info.firmware ? info.firmware.slice(0, 22) : null} />
+          </>
+        )}
+        {!zk && imp && <Stat label="Last file" value={num(imp.marked)} sub={`marked${imp.first ? `, ${short(imp.first)} to ${short(imp.last)}` : ''}`} />}
       </div>
       {d.refused > 0 && <div style={{ fontSize: 12, color: '#B45309' }}>{d.refused} punches were refused before it was added; the machine sends them again.</div>}
 
@@ -181,20 +213,28 @@ export default function MachineCard({ d, isAdmin, classes }) {
       {isAdmin && (
         <>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <button type="button" className="btn btn-sm btn-teal" disabled={!d.serialNo} onClick={() => open('send')}><Send size={13} /> Put names on it</button>
-            <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => open('fingers')}><Fingerprint size={13} /> Copy fingers here</button>
-            <button type="button" className="btn btn-sm btn-outline" onClick={() => open('log')}><ScrollText size={13} /> Machine log</button>
+            {zk && <button type="button" className="btn btn-sm btn-teal" disabled={!d.serialNo} onClick={() => open('send')}><Send size={13} /> Put names on it</button>}
+            {zk && <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => open('fingers')}><Fingerprint size={13} /> Copy fingers here</button>}
+            {d.kind === 'file' && <button type="button" className="btn btn-sm btn-teal" disabled={!d.isActive} onClick={() => open('import')}><Upload size={13} /> Upload a log file</button>}
+            {linked && <button type="button" className={`btn btn-sm ${d.lastSeen ? 'btn-outline' : 'btn-teal'}`} onClick={() => open('setup')}><Link2 size={13} /> How to connect</button>}
+            {d.kind !== 'file' && <button type="button" className="btn btn-sm btn-outline" onClick={() => open('log')}><ScrollText size={13} /> Machine log</button>}
             <button type="button" className="btn btn-sm btn-outline" aria-expanded={more} onClick={() => setMore((v) => !v)}>More {more ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
             {waiting > 0 && <button type="button" className="btn btn-sm btn-outline" onClick={() => act.mutate({ path: 'cancel' })}><Square size={12} /> Stop {waiting} waiting</button>}
           </div>
           {more && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => open('fetch')}><History size={13} /> Fetch punches again</button>
-              <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => act.mutate({ path: 'fetch-users' })}><Fingerprint size={13} /> Get users and fingers</button>
-              <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => open('left')}><UserMinus size={13} /> Remove people who left</button>
-              <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => act.mutate({ path: 'command', body: { action: 'clock' } })}><Clock size={13} /> Set clock</button>
-              <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => act.mutate({ path: 'command', body: { action: 'info' } })}><Info size={13} /> Refresh details</button>
-              <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => open('reboot')}><RotateCcw size={13} /> Restart</button>
+              {zk && (
+                <>
+                  <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => open('fetch')}><History size={13} /> Fetch punches again</button>
+                  <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => act.mutate({ path: 'fetch-users' })}><Fingerprint size={13} /> Get users and fingers</button>
+                  <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => open('left')}><UserMinus size={13} /> Remove people who left</button>
+                  <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => act.mutate({ path: 'command', body: { action: 'clock' } })}><Clock size={13} /> Set clock</button>
+                  <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => act.mutate({ path: 'command', body: { action: 'info' } })}><Info size={13} /> Refresh details</button>
+                  <button type="button" className="btn btn-sm btn-outline" disabled={!d.serialNo} onClick={() => open('reboot')}><RotateCcw size={13} /> Restart</button>
+                </>
+              )}
+              {d.kind !== 'file' && <button type="button" className="btn btn-sm btn-outline" disabled={!d.isActive} onClick={() => open('import')}><Upload size={13} /> Upload a log file</button>}
+              {linked && <button type="button" className="btn btn-sm btn-outline" onClick={() => open('newlink')}><KeyRound size={13} /> New link</button>}
               <button type="button" className="btn btn-sm btn-outline" onClick={() => update.mutate({ isActive: !d.isActive })}><Power size={13} /> {d.isActive ? 'Switch off' : 'Switch on'}</button>
               <button type="button" className="btn btn-sm btn-outline" style={{ color: '#DC2626', borderColor: '#FECACA' }} onClick={() => open('remove')}><Trash2 size={13} /> Remove</button>
             </div>
@@ -239,6 +279,16 @@ export default function MachineCard({ d, isAdmin, classes }) {
             </>
           )}
           {panel === 'left' && <LeftList id={d.id} name={d.name} onDone={() => { setPanel(null); refresh(); }} />}
+          {panel === 'import' && <ImportFile device={d} onDone={() => setPanel(null)} />}
+          {panel === 'setup' && d.kind === 'hikvision' && <HikSetup conn={conn} pushKey={d.pushKey} />}
+          {panel === 'setup' && d.kind === 'web' && <WebSetup conn={conn} pushKey={d.pushKey} />}
+          {panel === 'newlink' && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 13, flex: '1 1 240px' }}>Make a new link for {d.name}? The old link stops at once, so put the new one into the machine straight away. Do this if the link was shared where it should not be.</span>
+              <button type="button" className="btn btn-sm btn-teal" disabled={newLink.isPending} onClick={() => newLink.mutate()}>Yes, new link</button>
+              <button type="button" className="btn btn-sm btn-outline" onClick={() => setPanel(null)}>Cancel</button>
+            </div>
+          )}
           {panel === 'log' && <MachineLog id={d.id} />}
           {panel === 'reboot' && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>

@@ -239,14 +239,17 @@ async function recount(schoolId, pins) {
 }
 
 /** A punch from a PIN nobody is linked to: kept until the office links it. */
-async function keepUnmatched({ schoolId, deviceId, pin, at, method }) {
+async function keepUnmatched({ schoolId, deviceId, pin, at, method, name }) {
   const dup = await prisma.biometricPunch.findFirst({ where: { schoolId, pin, punchTime: at, matched: false }, select: { id: true } });
   if (dup) return false;
   await prisma.biometricPunch.create({ data: { schoolId, deviceId, personType: 'unknown', personId: 0, method, direction: 'in', punchTime: at, matched: false, pin } });
+  // Some makes (Hikvision, files with a name column) send the name on the
+  // machine with each punch: kept, so the office is shown who it probably is.
+  const machineName = typeof name === 'string' && name.trim() ? name.trim().slice(0, 40) : null;
   await prisma.biometricUser.upsert({
     where: { schoolId_pin: { schoolId, pin } },
-    update: { waiting: { increment: 1 }, lastPunchAt: at },
-    create: { schoolId, pin, waiting: 1, lastPunchAt: at, onDevices: deviceId ? JSON.stringify([deviceId]) : null },
+    update: { waiting: { increment: 1 }, lastPunchAt: at, ...(machineName && { machineName }) },
+    create: { schoolId, pin, waiting: 1, lastPunchAt: at, onDevices: deviceId ? JSON.stringify([deviceId]) : null, ...(machineName && { machineName }) },
   });
   return true;
 }

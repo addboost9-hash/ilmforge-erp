@@ -139,6 +139,10 @@ app.use('/api/', limiter);
 // JSON and form parsers, which would take the machine's text apart.
 const deviceLimiter = rateLimit({ windowMs: 60 * 1000, max: 600, skip: () => process.env.ILMFORGE_DESKTOP === '1', standardHeaders: true, legacyHeaders: false });
 app.use('/iclock', deviceLimiter, express.text({ type: () => true, limit: '5mb' }), require('./routes/iclock.routes'));
+// Machines of other makes (Hikvision, any machine or program that can post to
+// a web address): each has its own secret link. Raw body: Hikvision sends
+// multipart with the face photo, others JSON, forms or text.
+app.use('/machine', deviceLimiter, express.raw({ type: () => true, limit: '8mb' }), require('./routes/machinePush.routes'));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

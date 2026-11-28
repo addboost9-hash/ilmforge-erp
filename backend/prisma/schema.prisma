@@ -1115,6 +1115,10 @@ model BiometricDevice {
   createdAt  DateTime  @default(now())
   infoJson   String? // what the machine reports: users, fingers, faces, firmware, push version, clock
   infoAt     DateTime?
+  // How it sends punches: zkteco (Cloud Server / ADMS), hikvision (HTTP
+  // listening to its own secret link), web (any machine or software posting
+  // to its secret link), file (a log file from the machine, uploaded)
+  kind       String    @default("zkteco")
 
   @@index([schoolId])
 }

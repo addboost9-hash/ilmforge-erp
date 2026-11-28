@@ -19,6 +19,15 @@
  *   POST   /biometric/devices/:id/cancel         stop the work still waiting             (admin)
  *   GET    /biometric/devices/:id/commands       the latest work and the machine's answers
  *   GET    /biometric/devices/:id/log            the latest exchanges with the machine   (admin)
+ *   POST   /biometric/devices/:id/new-link       a new secret link (Hikvision / web)     (admin)
+ *   POST   /biometric/devices/:id/import         punches read from its log file          (admin)
+ *   POST   /biometric/import-check               who these user numbers are (file preview) (admin)
+ *
+ * Kinds of machine (BiometricDevice.kind):
+ *   zkteco     ZKTeco in Cloud Server (ADMS) mode, known by its serial number (/iclock)
+ *   hikvision  Hikvision terminal, HTTP listening to its secret link (/machine/<key>)
+ *   web        any machine or program that posts to its secret link (/machine/<key>)
+ *   file       any machine at all: its log file (USB) uploaded by the office
  * People
  *   GET    /biometric/people              students and staff: Device ID, on the machines, fingers kept
  *   GET    /biometric/machine-users       users on the machines, linked or not, with suggestions (admin)
@@ -43,6 +52,7 @@ const registry = require('../services/deviceRegistry');
 const M = require('../services/biometricMachines.service');
 const P = require('../services/biometricProtocol');
 const rulesSvc = require('../services/attendanceRules.service');
+const I = require('../services/punchIntake.service');
 const {
   findPerson, markPass, devicePin, deviceSettings, isClock, personView, STUDENT_SELECT, STAFF_SELECT,
 } = require('../services/attendanceDevice.service');
@@ -75,11 +85,14 @@ router.get('/connection', wrap(async (req, res) => {
   if (isDesktop()) {
     const lan = process.env.HOST === '0.0.0.0';
     const port = parseInt(process.env.PORT, 10) || 8090;
+    const addresses = lan ? lanAddresses() : [];
     return res.json({
       success: true,
       data: {
         edition: 'desktop', lanOn: lan, port, https: false,
-        addresses: lan ? lanAddresses() : [],
+        addresses,
+        // Other makes post to /machine/<key> on this computer.
+        linkBase: addresses[0] ? `http://${addresses[0]}:${port}/machine/` : null, linkPath: '/machine/',
         note: lan
           ? 'Type one of these addresses and the port into the machine. The machine and this computer must be on the same network.'
           : 'The machine cannot reach this computer yet. Turn on "Other computers and phones in the school" in Settings → This Computer (or the menu School network → "Let other computers and phones in the school use IlmForge"), then open this page again.',
@@ -92,6 +105,7 @@ router.get('/connection', wrap(async (req, res) => {
     success: true,
     data: {
       edition: 'online', host: host.replace(/:\d+$/, ''), port: https ? 443 : (parseInt(host.split(':')[1], 10) || 80), https,
+      linkBase: host ? `${https ? 'https' : 'http'}://${host}/machine/` : null, linkPath: '/machine/',
       note: 'The machine needs the internet. Turn on HTTPS (or "SSL") in its Cloud Server Setting and enter the address without https://.',
     },
   });
@@ -100,7 +114,20 @@ router.get('/connection', wrap(async (req, res) => {
 /* ══ Machines ══ */
 
 const ONLINE_MS = 2 * 60e3;
-async function deviceRows(schoolId) {
+const KINDS = ['zkteco', 'hikvision', 'web', 'file'];
+const LINK_KINDS = ['hikvision', 'web'];
+const kindOf = (d) => (KINDS.includes(d?.kind) ? d.kind : 'zkteco');
+const KIND_NAME = { zkteco: 'ZKTeco', hikvision: 'Hikvision', web: 'web link', file: 'log file' };
+
+/* A secret link key: 24 letters and digits that cannot be mistaken for one
+   another (about 120 bits), so nobody can guess another school's link. */
+function newKey() {
+  const ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return [...require('crypto').randomBytes(24)].map((b) => ABC[b % 32]).join('');
+}
+
+/* admin: the secret link is shown to the administrator only. */
+async function deviceRows(schoolId, { admin = false } = {}) {
   const today = dayStart(new Date());
   const [rows, serials] = await Promise.all([
     prisma.biometricDevice.findMany({ where: { schoolId }, orderBy: { createdAt: 'asc' } }),
@@ -122,8 +149,15 @@ async function deviceRows(schoolId) {
     const info = { ...M.deviceInfo(d), ...(st?.info || {}) };
     const mine = linkedOn.filter((u) => M.listOf(u.onDevices).includes(d.id));
     const { infoJson, ...rest } = d;
+    const kind = kindOf(d);
     out.push({
-      ...rest, serialNo: serial, lastSeen,
+      ...rest, kind, kindName: KIND_NAME[kind],
+      // A link machine's "serial" is its secret key: never shown as a serial.
+      serialNo: kind === 'zkteco' ? serial : null,
+      pushKey: LINK_KINDS.includes(kind) && admin ? serial : null,
+      hasLink: LINK_KINDS.includes(kind) && !!serial,
+      lastImport: info.lastImport || null,
+      lastSeen,
       online: !!(lastSeen && Date.now() - new Date(lastSeen).getTime() < ONLINE_MS),
       ip: st?.ip || info.ip || null, pushver: st?.pushver || info.pushver || null,
       info: {
@@ -141,25 +175,51 @@ async function deviceRows(schoolId) {
   return out;
 }
 
+const isAdminReq = (req) => ADMIN.includes(req.user?.role);
+
 router.get('/devices', wrap(async (req, res) => {
-  res.json({ success: true, data: await deviceRows(req.schoolId) });
+  res.json({ success: true, data: await deviceRows(req.schoolId, { admin: isAdminReq(req) }) });
 }));
 
 router.post('/devices', adminOnly, wrap(async (req, res) => {
   const name = text(req.body?.name, 60);
-  const serial = registry.cleanSerial(req.body?.serialNo);
+  const kind = KINDS.includes(req.body?.kind) ? req.body.kind : 'zkteco';
+  const serial = kind === 'zkteco' ? registry.cleanSerial(req.body?.serialNo) : LINK_KINDS.includes(kind) ? newKey() : null;
   if (!name) return bad(res, 'Give the machine a name, such as "Main gate".');
-  if (!serial) return bad(res, 'Enter the machine\'s serial number (on the machine: Menu → System Info → Device Info).');
+  if (kind === 'zkteco' && !serial) return bad(res, 'Enter the machine\'s serial number (on the machine: Menu → System Info → Device Info).');
   const d = await prisma.biometricDevice.create({
     data: {
-      schoolId: req.schoolId, name, deviceType: ['thumb', 'face', 'card'].includes(req.body?.deviceType) ? req.body.deviceType : 'thumb',
+      schoolId: req.schoolId, name, kind, deviceType: ['thumb', 'face', 'card'].includes(req.body?.deviceType) ? req.body.deviceType : 'thumb',
       ipAddress: text(req.body?.ipAddress, 45) || null, port: parseInt(req.body?.port, 10) || 4370, location: text(req.body?.location, 80) || null,
     },
   });
-  const r = await registry.registerSerial(req.schoolId, serial, d.id);
-  if (r.error) { await prisma.biometricDevice.delete({ where: { id: d.id } }); return bad(res, r.error, 409); }
-  const row = (await deviceRows(req.schoolId)).find((x) => x.id === d.id);
-  res.status(201).json({ success: true, data: row, message: `${name} added. Its punches are saved from now on.` });
+  if (serial) {
+    const r = await registry.registerSerial(req.schoolId, serial, d.id);
+    if (r.error) { await prisma.biometricDevice.delete({ where: { id: d.id } }); return bad(res, r.error, 409); }
+  }
+  const row = (await deviceRows(req.schoolId, { admin: true })).find((x) => x.id === d.id);
+  const message = {
+    zkteco: `${name} added. Its punches are saved from now on.`,
+    hikvision: `${name} added. Put its link into the machine (HTTP listening); its punches are saved from then on.`,
+    web: `${name} added. Send its punches to its link; they are saved from then on.`,
+    file: `${name} added. Upload its log file whenever you take it off the machine.`,
+  }[kind];
+  res.status(201).json({ success: true, data: row, message });
+}));
+
+// A new secret link: the old one stops working at once (a link that was
+// shared or shown where it should not be).
+router.post('/devices/:id/new-link', adminOnly, wrap(async (req, res) => {
+  const device = await ownDevice(req);
+  if (!device) return bad(res, 'Device not found.', 404);
+  if (!LINK_KINDS.includes(kindOf(device))) return bad(res, 'Only a Hikvision or web-link machine has a link.');
+  await registry.unregisterSerial(req.schoolId, device.id);
+  const r = await registry.registerSerial(req.schoolId, newKey(), device.id);
+  if (r.error) return bad(res, r.error, 409);
+  res.json({
+    success: true, data: (await deviceRows(req.schoolId, { admin: true })).find((x) => x.id === device.id),
+    message: `${device.name} has a new link. Put it into the machine: the old link no longer works.`,
+  });
 }));
 
 const ownDevice = (req) => prisma.biometricDevice.findFirst({ where: { id: parseInt(req.params.id, 10) || 0, schoolId: req.schoolId } });
@@ -169,7 +229,7 @@ router.put('/devices/:id', adminOnly, wrap(async (req, res) => {
   if (!existing) return bad(res, 'Device not found.', 404);
   const id = existing.id;
   const b = req.body || {};
-  if (b.serialNo !== undefined) {
+  if (b.serialNo !== undefined && kindOf(existing) === 'zkteco') {
     const serial = registry.cleanSerial(b.serialNo);
     if (!serial) return bad(res, 'Enter the serial number.');
     await registry.unregisterSerial(req.schoolId, id);
@@ -185,7 +245,7 @@ router.put('/devices/:id', adminOnly, wrap(async (req, res) => {
       ...(b.isActive !== undefined && { isActive: !!b.isActive }),
     },
   });
-  res.json({ success: true, data: (await deviceRows(req.schoolId)).find((x) => x.id === id) });
+  res.json({ success: true, data: (await deviceRows(req.schoolId, { admin: true })).find((x) => x.id === id) });
 }));
 
 router.delete('/devices/:id', adminOnly, wrap(async (req, res) => {
@@ -207,6 +267,10 @@ router.get('/unregistered', adminOnly, wrap(async (req, res) => {
 async function machineFor(req, res) {
   const device = await ownDevice(req);
   if (!device) { bad(res, 'Device not found.', 404); return null; }
+  if (kindOf(device) !== 'zkteco') {
+    bad(res, `IlmForge can send work only to a ZKTeco machine in Cloud Server mode. On ${device.name} (${KIND_NAME[kindOf(device)]}), add names and fingers on the machine itself, with each person's Device ID as their number.`);
+    return null;
+  }
   const serial = await registry.serialOf(req.schoolId, device.id);
   if (!serial) { bad(res, 'Add the machine\'s serial number first.'); return null; }
   const st = registry.statusOf(serial);
@@ -352,6 +416,58 @@ router.get('/devices/:id/log', adminOnly, wrap(async (req, res) => {
   if (!device) return bad(res, 'Device not found.', 404);
   const serial = await registry.serialOf(req.schoolId, device.id);
   res.json({ success: true, data: serial ? registry.logOf(serial) : [] });
+}));
+
+/* ══ Log files (any machine) ══ */
+
+/**
+ * Punches the office read from a machine's log file (the page reads the file
+ * and sends it here in parts, oldest first):
+ *   { importId, file, punches: [{ pin, stamp: "YYYY-MM-DD HH:mm:ss", dir?, name? }] }
+ * Marked like a live punch, at its own time; the same punch twice counts once.
+ * The parts of one file add up in the machine's "last file".
+ */
+router.post('/devices/:id/import', adminOnly, wrap(async (req, res) => {
+  const device = await ownDevice(req);
+  if (!device) return bad(res, 'Device not found.', 404);
+  if (!device.isActive) return bad(res, `${device.name} is switched off in IlmForge: switch it on to take in its file.`);
+  const punches = Array.isArray(req.body?.punches) ? req.body.punches : [];
+  if (!punches.length) return bad(res, 'No punches were found in the file.');
+  if (punches.length > 2000) return bad(res, 'Send at most 2000 punches at a time.');
+  const tz = ((await readSettings(req.schoolId)).attendanceDevices || {}).timeZone;
+  const r = await I.takePunches({
+    schoolId: req.schoolId, deviceId: device.id, tz: /^[+-]\d{2}:\d{2}$/.test(tz || '') ? tz : '+05:00',
+    punches: punches.map((p) => ({ pin: p?.pin, stamp: typeof p?.stamp === 'string' ? p.stamp : null, dir: p?.dir, name: typeof p?.name === 'string' ? p.name : undefined, method: p?.method })),
+  });
+  // The machine's last file: the parts of one import add up.
+  const importId = text(req.body?.importId, 40) || null;
+  const info = M.deviceInfo(device);
+  const prev = info.lastImport?.id && info.lastImport.id === importId ? info.lastImport : null;
+  const add = (k) => (prev?.[k] || 0) + (r[k] || 0);
+  const lastImport = {
+    id: importId, file: text(req.body?.file, 80) || prev?.file || null, at: new Date(), by: req.user?.id || null,
+    received: add('received'), marked: add('marked'), again: add('again'), notLinked: add('notLinked'), refused: add('refused'), old: add('old'), future: add('future'), bad: add('bad'),
+    first: [prev?.first, r.first].filter(Boolean).map((d) => new Date(d)).sort((a, b) => a - b)[0] || null,
+    last: [prev?.last, r.last].filter(Boolean).map((d) => new Date(d)).sort((a, b) => b - a)[0] || null,
+  };
+  await prisma.biometricDevice.update({
+    where: { id: device.id },
+    data: { infoJson: JSON.stringify({ ...info, lastImport }), ...(kindOf(device) === 'file' && { lastSyncAt: new Date() }) },
+  });
+  res.json({ success: true, data: r, message: I.summaryText(r) });
+}));
+
+// Who the user numbers in a file are, before anything is marked.
+router.post('/import-check', adminOnly, wrap(async (req, res) => {
+  const pins = [...new Set((Array.isArray(req.body?.pins) ? req.body.pins : []).map((p) => P.cleanPin(p)).filter(Boolean))].slice(0, 1500);
+  const out = {};
+  for (const pin of pins) {
+    const f = await M.personForPin(req.schoolId, pin, { remember: false });
+    if (f.error) { out[pin] = null; continue; }
+    const v = personView(f.kind, f.person);
+    out[pin] = { kind: f.kind, id: v.id, name: v.name, label: [v.className, v.sectionName].filter(Boolean).join(' — ') };
+  }
+  res.json({ success: true, data: out });
 }));
 
 /* ══ People ══ */
