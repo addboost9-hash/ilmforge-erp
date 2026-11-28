@@ -20,6 +20,7 @@ const P = require('./biometricProtocol');
 const { readSettings, mergeSettings } = require('../utils/schoolSettings');
 const { dayStart } = require('./attendanceMark.service');
 const { deviceSettings } = require('./attendanceDevice.service');
+const { weeklyOffOf, schoolDaysOf, DAY_NAMES } = require('../utils/weeklyOff');
 
 const PK_MS = 5 * 3600e3;
 const DAY = 864e5;
@@ -29,13 +30,14 @@ const two = (n) => String(n).padStart(2, '0');
 // A stored attendance day (local midnight, as dayStart makes it) as YYYY-MM-DD.
 const dayKey = (d) => { const t = new Date(d); return `${t.getFullYear()}-${two(t.getMonth() + 1)}-${two(t.getDate())}`; };
 
-function cleanAutoAbsent(a = {}) {
+/* off: the school's weekly off days; the auto-absent days default to the rest. */
+function cleanAutoAbsent(a = {}, off = [0]) {
   const share = Number(a.minShare);
   return {
     on: !!a.on,
     at: P.isClock(a.at) ? a.at : '09:30',
     classIds: Array.isArray(a.classIds) ? [...new Set(a.classIds.map(Number).filter((n) => n > 0))] : [],
-    days: Array.isArray(a.days) && a.days.length ? [...new Set(a.days.map(Number).filter((d) => d >= 0 && d <= 6))].sort() : [1, 2, 3, 4, 5, 6],
+    days: Array.isArray(a.days) && a.days.length ? [...new Set(a.days.map(Number).filter((d) => d >= 0 && d <= 6))].sort() : schoolDaysOf(off),
     minShare: Number.isFinite(share) && share >= 0 && share <= 1 ? share : 0.3,
     notify: a.notify !== false,
   };
@@ -91,7 +93,8 @@ async function arrivalsByDay(schoolId, from, to) {
  */
 async function runAutoAbsent(schoolId, { now = new Date(), force = false, userId = null } = {}) {
   const settings = await readSettings(schoolId);
-  const cfg = cleanAutoAbsent(settings.attendanceDevices?.autoAbsent);
+  const off = weeklyOffOf(settings);
+  const cfg = cleanAutoAbsent(settings.attendanceDevices?.autoAbsent, off);
   const ymd = pkYmd(now);
   const last = settings.autoAbsentLast || {};
   const cutoff = P.toMin(cfg.at);
@@ -108,9 +111,14 @@ async function runAutoAbsent(schoolId, { now = new Date(), force = false, userId
     return { ran: true, ...result, gaveUp };
   };
 
-  if (!cfg.days.includes(pkWeekday(now))) return save({ ok: false, reason: 'Today is not a school day in the auto-absent settings.' });
+  // Not a school day: nothing to do, and nothing to warn about (unless the
+  // office pressed Run now, which is told why).
+  const wd = pkWeekday(now);
   const holiday = await (await holidayLookup(schoolId, ymd, ymd))(ymd);
-  if (holiday) return save({ ok: false, reason: `Today is a holiday (${holiday}).` });
+  const notSchool = off.includes(wd) ? `Today is the school's weekly off day (${DAY_NAMES[wd]}).`
+    : !cfg.days.includes(wd) ? 'Today is not a school day in the auto-absent settings.'
+      : holiday ? `Today is a holiday (${holiday}).` : null;
+  if (notSchool) return force ? save({ ok: false, reason: notSchool }) : { ran: false, skipped: 'not a school day', reason: notSchool };
 
   const date = dayStart(now);
   const students = await prisma.student.findMany({
@@ -191,6 +199,8 @@ const STATUS_CODE = { present: 'P', late: 'L', absent: 'A', leave: 'LV' };
  */
 async function staffTimesheet(schoolId, { year, month, staffId = null, departmentId = null, now = new Date() }) {
   const rules = await deviceSettings(schoolId);
+  // Staff without a shift work the school's days (all but the weekly off).
+  const schoolDays = schoolDaysOf(weeklyOffOf(await readSettings(schoolId)));
   const count = new Date(year, month, 0).getDate();
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 1);
@@ -231,7 +241,7 @@ async function staffTimesheet(schoolId, { year, month, staffId = null, departmen
   const out = staff.map((s) => {
     const shift = rules.shiftFor(s.id);
     const from = startOf(s);
-    const workDays = shift?.days || [1, 2, 3, 4, 5, 6];
+    const workDays = shift?.days || schoolDays;
     const totals = { present: 0, late: 0, halfDay: 0, absent: 0, leave: 0, off: 0, holiday: 0, lateMin: 0, earlyMin: 0, earlyDays: 0, workedMin: 0, overtimeMin: 0, missingOut: 0 };
     const list = days.map((day) => {
       const r = rec.get(`${s.id}|${day.ymd}`);

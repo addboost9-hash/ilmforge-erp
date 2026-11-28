@@ -791,19 +791,28 @@ for each student, a column for each day.
 | **A** (red) | Absent |
 | **L** (yellow) | Leave |
 | **Lt** (blue) | Late (counts as present) |
-| · | Not marked |
-| grey column | Sunday or a holiday (holidays come from the school calendar) |
+| – (amber) | Not marked on a day the class was marked: it counts against the % |
+| · | Not marked (the class was not marked that day either) |
+| grey column | A weekly off day (Sunday, unless the administrator chose others) or a holiday (from the school calendar) |
 
 - Whatever is marked anywhere (the daily register, the kiosk, a fingerprint machine) shows
   here at once; this month's register refreshes itself every 30 seconds.
-- The last columns give each student's present, absent, leave, late and **attendance %**; the
-  bottom rows give each day's present and absent counts.
+- The last columns give each student's present, absent, leave, late, not marked (–), **Days** and
+  **attendance %**. **Days** are the school days: the days the student's section was marked, from
+  the day the student joined (admission date). The % is present and late of those days, so a
+  student marked present once in three school days is 33%, not 100%. The bottom rows give each
+  day's present, absent and not marked counts.
+- **Weekly off** (the administrator, the button at the top): Sunday; Saturday and Sunday; Friday;
+  Friday and Saturday; or any one to three days. They are shaded, never school days, auto-absent
+  does not run on them, and staff without a shift are not counted absent on them (staff shifts keep
+  their own days). On a weekly off day the register says *Today: Weekly off*.
 - **Show** picks out students below 75%, absent 3 or more days, absent today or not marked today.
 - **Correct a day:** the class teacher or the admin clicks the day and chooses Present, Absent,
   Leave, Late or Not marked. It shows who marked it and how (register, ID card scan,
   fingerprint). No message goes to parents from here; every change is kept in the audit log.
-- **A student's year:** click the name. The months appear as calendars, with the totals and the
-  attendance %; choose a session or calendar year at the top. **Print / Save as PDF** prints it
+- **A student's year:** click the name. The months appear as calendars, with the totals, the
+  school days, the days not marked and the attendance %; choose a session or calendar year at the
+  top. The student's profile (Attendance tab) counts the same way. **Print / Save as PDF** prints it
   on one page.
 - **Print / Save as PDF** prints the month on A4 landscape, each section from a new page, with
   signature lines and the school stamp. **Excel** downloads the same register.
@@ -1836,6 +1845,29 @@ account (make one for the receptionist under Staff) → **Visitor** tab → **Op
 5. **Remarks**: what the visitor said (it shows on the admin's live feed, and in the
    complaint), and **office notes**, which only the office ever sees.
 6. **Check in**, then **Print the slip**. The slip has a number (V-1042) and a QR code.
+
+### Gate passes
+
+A student leaves school early only with a gate pass, to the person named on it (**Gate Passes**,
+`/gate-passes`, or the Parents hub).
+
+1. **Student:** type the name or roll number and choose the student.
+2. **Who is collecting:** the father and mother on the student's record (with their phone and
+   CNIC), parent accounts, and people who collected the student before appear as choices. Choose
+   one, or **Someone else** and write the name (as on their CNIC), relation (uncle, driver…), phone
+   and CNIC. Someone not on the record needs a call to the parent first: tick **The parent agreed by
+   phone**, or the pass is not issued.
+3. **Reason:** Unwell, Doctor's appointment, Family emergency, Family event, Early leave, or write
+   one. A pass is for today, or a day in the next week.
+4. **Issue**, then **Print pass**: the QR code, *Release to* the person with relation, phone and CNIC,
+   the reason and the day.
+
+At the gate (this page, or the gatekeeper's portal), scan or type the code: it says **Release
+authorised** and **Release only to** the person, with relation, phone and CNIC to check, and whether
+they are on the record or the parent agreed by phone. A pass works once, on its own day; a used,
+cancelled or other day's pass is refused, still showing whom it was for. Passes made at the Visitor
+Desk (a parent's CNIC on the record) say *On the student's record*. **Recent passes** and **History**
+show who issued, released and cancelled each pass.
 
 ### A child whose record lacks the father's details
 

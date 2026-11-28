@@ -9,6 +9,8 @@ const { pkDate } = require('../services/messageTemplate');
 const { sendSMS } = require('../services/sms.service');
 const { requireRole } = require('../middleware/auth.middleware');
 const { teacherCanAccessClass } = require('../utils/teacherScope');
+const { weeklyOff: weeklyOffFor, cleanWeeklyOff, offWords } = require('../utils/weeklyOff');
+const { mergeSettings } = require('../utils/schoolSettings');
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 // The mount in app.js is being broadened to let student/parent reach this
@@ -739,15 +741,28 @@ async function holidayLookup(schoolId, start, end) {
   })?.title || null;
 }
 
-/* The days of a month, each with its weekday, Sunday and holiday. */
-function monthDays(y, m, holidayOn) {
+/* The days of a month, each with its weekday, whether it is the school's
+   weekly off day (off; Sunday unless the school chose others) and holiday. */
+function monthDays(y, m, holidayOn, off = [0]) {
   const count = new Date(y, m, 0).getDate();
   return Array.from({ length: count }, (_, i) => {
     const date = ymdOf(y, m, i + 1);
     const wd = new Date(Date.UTC(y, m - 1, i + 1)).getUTCDay();
-    return { day: i + 1, date, weekday: WEEKDAY[wd], sunday: wd === 0, holiday: holidayOn(date) };
+    return { day: i + 1, date, weekday: WEEKDAY[wd], sunday: wd === 0, off: off.includes(wd), holiday: holidayOn(date) };
   });
 }
+
+// The school's weekly off days: GET for everyone on the staff, PUT by the
+// administrator ({ days: [0] } Sunday, [6, 0] Saturday and Sunday, [5] Friday…).
+router.get('/weekly-off', wrap(async (req, res) => {
+  res.json({ success: true, data: { days: await weeklyOffFor(req.schoolId) } });
+}));
+router.put('/weekly-off', requireRole('admin', 'super_admin', 'principal'), wrap(async (req, res) => {
+  const days = cleanWeeklyOff(req.body?.days);
+  if (!days) return res.status(400).json({ success: false, message: 'Choose one to three weekly off days (at least four school days stay in the week).' });
+  await mergeSettings(req.schoolId, { weeklyOff: days });
+  res.json({ success: true, data: { days }, message: `Weekly off saved: ${offWords(days)}.` });
+}));
 
 router.get('/register', staffOnly, wrap(async (req, res) => {
   const { schoolId, campusId } = req;
@@ -774,12 +789,13 @@ router.get('/register', staffOnly, wrap(async (req, res) => {
     || String(a.rollNo || '￿').localeCompare(String(b.rollNo || '￿'), 'en', { numeric: true, sensitivity: 'base' })
     || a.name.localeCompare(b.name));
 
-  const [records, holidayOn] = await Promise.all([
+  const [records, holidayOn, off] = await Promise.all([
     students.length ? prisma.attendance.findMany({
       where: { schoolId, studentId: { in: students.map((s) => s.id) }, date: { gte: start, lt: end } },
       select: { id: true, studentId: true, date: true, status: true, method: true, markedBy: true },
     }) : [],
     holidayLookup(schoolId, start, end),
+    weeklyOffFor(schoolId),
   ]);
 
   const marks = {};
@@ -792,14 +808,14 @@ router.get('/register', staffOnly, wrap(async (req, res) => {
     ? Object.fromEntries((await prisma.user.findMany({ where: { id: { in: markerIds } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]))
     : {};
 
-  const days = monthDays(y, m, holidayOn);
+  const days = monthDays(y, m, holidayOn, off);
 
   res.json({
     success: true,
     data: {
       class: { id: cls.id, name: cls.name },
       section: sectionId ? cls.sections.find((s) => s.id === sectionId) || null : null,
-      month: mm[0], today: pkToday(), days,
+      month: mm[0], today: pkToday(), days, weeklyOff: off,
       students: students.map(({ section, ...s }) => ({ ...s, sectionName: section?.name || '' })),
       marks, markers,
       canEdit: REGISTER_EDITORS.includes(req.user?.role),
@@ -816,7 +832,7 @@ router.get('/register/student/:studentId', staffOnly, wrap(async (req, res) => {
   const studentId = parseInt(req.params.studentId);
   const student = await prisma.student.findFirst({
     where: { id: studentId, schoolId, deletedAt: null },
-    select: { id: true, name: true, rollNo: true, fatherName: true, classId: true, admissionDate: true, class: { select: { name: true } }, section: { select: { name: true } } },
+    select: { id: true, name: true, rollNo: true, fatherName: true, classId: true, sectionId: true, admissionDate: true, class: { select: { name: true } }, section: { select: { name: true } } },
   });
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
   if (!(await mayOpenClass(req, student.classId))) return res.status(403).json({ success: false, message: 'You are not assigned to this class.' });
@@ -837,18 +853,33 @@ router.get('/register/student/:studentId', staffOnly, wrap(async (req, res) => {
 
   const start = new Date(from.y, from.m - 1, 1);
   const end = new Date(to.y, to.m, 1);
-  const [records, holidayOn] = await Promise.all([
+  const [records, holidayOn, off, classDays] = await Promise.all([
     prisma.attendance.findMany({ where: { schoolId, studentId, date: { gte: start, lt: end } }, select: { date: true, status: true, method: true } }),
     holidayLookup(schoolId, start, end),
+    weeklyOffFor(schoolId),
+    // The days the student's class (section) was marked: school days.
+    student.classId ? prisma.attendance.findMany({
+      where: { schoolId, classId: student.classId, ...(student.sectionId && { sectionId: student.sectionId }), date: { gte: start, lt: end } },
+      distinct: ['date'], select: { date: true },
+    }) : [],
   ]);
-  const byDay = new Map(records.map((r) => { const d = new Date(r.date); return [ymdOf(d.getFullYear(), d.getMonth() + 1, d.getDate()), r]; }));
+  const keyOf = (v) => { const d = new Date(v); return ymdOf(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
+  const byDay = new Map(records.map((r) => [keyOf(r.date), r]));
+  // School days count from the day the student joined, up to today.
+  const joined = student.admissionDate ? new Date(new Date(student.admissionDate).getTime() + 5 * 3600e3).toISOString().slice(0, 10) : '0000-00-00';
+  const todayKey = pkToday();
+  const schoolDays = new Set([...classDays.map((c) => keyOf(c.date)), ...byDay.keys()].filter((k) => k >= joined && k <= todayKey));
   const months = [];
   for (let i = 0; i < span; i++) {
     const y = from.y + Math.floor((from.m - 1 + i) / 12);
     const m = ((from.m - 1 + i) % 12) + 1;
     months.push({
       month: `${y}-${String(m).padStart(2, '0')}`,
-      days: monthDays(y, m, holidayOn).map((d) => ({ ...d, status: byDay.get(d.date)?.status || null, method: byDay.get(d.date)?.method || null })),
+      days: monthDays(y, m, holidayOn, off).map((d) => ({
+        ...d, status: byDay.get(d.date)?.status || null, method: byDay.get(d.date)?.method || null,
+        // The class was marked that day but this student was not.
+        notMarked: !byDay.has(d.date) && schoolDays.has(d.date),
+      })),
     });
   }
   const count = (st) => records.filter((r) => r.status === st).length;
@@ -857,8 +888,11 @@ router.get('/register/student/:studentId', staffOnly, wrap(async (req, res) => {
     data: {
       student: { id: student.id, name: student.name, rollNo: student.rollNo, fatherName: student.fatherName, className: student.class?.name || '', sectionName: student.section?.name || '', admissionDate: student.admissionDate },
       from: `${from.y}-${String(from.m).padStart(2, '0')}`, to: `${to.y}-${String(to.m).padStart(2, '0')}`, today: pkToday(),
-      sessions, months,
-      totals: { present: count('present'), absent: count('absent'), leave: count('leave'), late: count('late'), marked: records.length },
+      sessions, months, weeklyOff: off,
+      totals: {
+        present: count('present'), absent: count('absent'), leave: count('leave'), late: count('late'), marked: records.length,
+        schoolDays: schoolDays.size, notMarked: [...schoolDays].filter((k) => !byDay.has(k)).length,
+      },
     },
   });
 }));
@@ -1173,7 +1207,7 @@ router.get('/student/:studentId/history', requireRole('student', 'parent', 'teac
 
   const student = await prisma.student.findFirst({
     where: { id: requestedId, schoolId, deletedAt: null },
-    select: { id: true, name: true, rollNo: true, classId: true, sectionId: true, emergencyPhone: true },
+    select: { id: true, name: true, rollNo: true, classId: true, sectionId: true, emergencyPhone: true, admissionDate: true },
   });
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
 
@@ -1250,7 +1284,21 @@ router.get('/student/:studentId/history', requireRole('student', 'parent', 'teac
   const absent  = records.filter(r => r.status === 'absent').length;
   const leave   = records.filter(r => r.status === 'leave').length;
   const late    = records.filter(r => r.status === 'late').length;
-  const total   = records.length;
+  // School days: the days the student's class (section) was marked, from the
+  // day the student joined up to today, and every day the student was marked.
+  // A day the class was marked but the student was not counts against the
+  // percentage (it used to be left out, so a student marked once showed 100%).
+  const keyOf = (v) => { const d = new Date(v); return ymdOf(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
+  const classDays = student.classId ? await prisma.attendance.findMany({
+    where: { schoolId, classId: student.classId, ...(student.sectionId && { sectionId: student.sectionId }), date: { gte: startDate, lte: endDate } },
+    distinct: ['date'], select: { date: true },
+  }) : [];
+  const own = new Set(rawRecords.map((r) => keyOf(r.date)));
+  const joined = student.admissionDate ? new Date(new Date(student.admissionDate).getTime() + 5 * 3600e3).toISOString().slice(0, 10) : '0000-00-00';
+  const todayKey = pkToday();
+  const schoolDays = [...new Set([...classDays.map((c) => keyOf(c.date)), ...own])].filter((k) => own.has(k) || (k >= joined && k <= todayKey)).sort();
+  const total = schoolDays.length;
+  const notMarked = schoolDays.filter((k) => !own.has(k)).length;
   // A student who came late was at school: late counts as attended.
   const attended = present + late;
   const sessions = await prisma.academicSession.findMany({
@@ -1262,7 +1310,8 @@ router.get('/student/:studentId/history', requireRole('student', 'parent', 'teac
   res.json({
     success: true,
     student,
-    summary: { present, absent, leave, late, total, attended, percentage: total > 0 ? Math.round((attended / total) * 100) : 0 },
+    summary: { present, absent, leave, late, total, marked: records.length, notMarked, attended, percentage: total > 0 ? Math.round((attended / total) * 100) : 0 },
+    schoolDays,
     range: { from: startDate, to: endDate, sessionName },
     sessions,
     records,

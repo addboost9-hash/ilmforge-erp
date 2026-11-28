@@ -1,7 +1,13 @@
 /**
  * Attendance Register: a class's month the way the register book is kept,
- * a row per student and a column per day (P, A, L, Lt), Sundays and
- * holidays shaded, totals and percentage per student and per day.
+ * a row per student and a column per day (P, A, L, Lt), the school's weekly
+ * off days and holidays shaded, totals and percentage per student and per day.
+ *
+ * The percentage is of school days: the days the student's section was marked,
+ * from the day the student joined. A day the section was marked but the
+ * student was not shows "–" and counts against it (it used to be left out, so
+ * a student marked once showed 100%). The administrator sets the weekly off
+ * days here (Sunday, or Saturday and Sunday, or Friday…).
  *
  * It reads the attendance records themselves, so whatever is marked (the
  * daily register, the kiosk, a fingerprint, a correction) appears here; this
@@ -13,13 +19,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { BookOpen, Printer, FileSpreadsheet, ChevronLeft, ChevronRight, RefreshCw, Search, X, CalendarDays } from 'lucide-react';
+import { BookOpen, Printer, FileSpreadsheet, ChevronLeft, ChevronRight, RefreshCw, Search, X, CalendarDays, CalendarOff } from 'lucide-react';
 import api from '../../api/client';
 import useAuthStore from '../../store/auth.store';
 import { downloadExcel } from '../../utils/export';
 import { periodOptions } from '../../utils/feeYear';
 import { useSchoolStamp, stampFor } from '../../utils/schoolStamp';
-import { LETTER, LOOK, countMonth, monthName, printAttendanceRegister, printAttendanceYear } from '../../utils/attendanceRegisterPrint';
+import { LETTER, LOOK, registerCounter, isOff, monthName, printAttendanceRegister, printAttendanceYear } from '../../utils/attendanceRegisterPrint';
 
 const NAVY = '#1B2F6E';
 const pkToday = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
@@ -32,11 +38,17 @@ const SHOW = [
   { id: 'todayAbsent', label: 'Absent today' },
   { id: 'todayUnmarked', label: 'Not marked today' },
 ];
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const offWords = (days) => (days?.length ? days.map((d) => DAY_NAMES[d]).join(' and ') : 'Sunday');
+const PRESETS = [[[0], 'Sunday'], [[0, 6], 'Saturday and Sunday'], [[5], 'Friday'], [[5, 6], 'Friday and Saturday']];
+const ADMINS = ['admin', 'super_admin', 'principal'];
 
 export default function AttendanceRegisterPage() {
   const qc = useQueryClient();
   const [params] = useSearchParams();
   const school = useAuthStore((s) => s.school);
+  const isAdmin = ADMINS.includes(useAuthStore((s) => s.user?.role));
+  const [offOpen, setOffOpen] = useState(false);
   const stamp = stampFor(useSchoolStamp(), 'attendanceRegister');
   const { data: classes = [] } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes').then((r) => r.data.data || []), staleTime: 300_000 });
   const [classId, setClassId] = useState(params.get('classId') || '');
@@ -61,7 +73,11 @@ export default function AttendanceRegisterPage() {
     refetchOnWindowFocus: true,
   });
 
-  const rows = useMemo(() => (data?.students || []).map((s) => ({ ...s, marks: data.marks[s.id] || {}, c: countMonth(data.marks[s.id]) })), [data]);
+  const rows = useMemo(() => {
+    if (!data) return [];
+    const countOf = registerCounter(data);
+    return data.students.map((s) => ({ ...s, marks: data.marks[s.id] || {}, c: countOf(s) }));
+  }, [data]);
   const needle = q.trim().toLowerCase();
   const shown = rows.filter((r) => {
     if (needle && ![r.name, r.rollNo, r.fatherName].some((v) => String(v || '').toLowerCase().includes(needle))) return false;
@@ -80,10 +96,14 @@ export default function AttendanceRegisterPage() {
 
   const days = data?.days || [];
   const schoolDays = days.filter((d) => rows.some((r) => r.marks[d.day])).length;
-  const marked = rows.reduce((n, r) => n + r.c.marked, 0);
-  const avg = marked ? Math.round((rows.reduce((n, r) => n + r.c.present + r.c.late, 0) / marked) * 100) : null;
+  // Of every student's school days (not only the days they were marked).
+  const counted = rows.reduce((n, r) => n + r.c.days, 0);
+  const avg = counted ? Math.round((rows.reduce((n, r) => n + r.c.present + r.c.late, 0) / counted) * 100) : null;
   const todayCount = (st) => (todayDay ? rows.filter((r) => r.marks[todayDay]?.status === st).length : 0);
   const unmarkedToday = todayDay ? rows.filter((r) => !r.marks[todayDay]).length : 0;
+  // Today a weekly off day or a holiday: nothing to mark.
+  const todayInfo = todayDay ? days.find((d) => d.day === todayDay) : null;
+  const todayOff = !!todayInfo && isOff(todayInfo) && !rows.some((r) => r.marks[todayDay]);
 
   // Close the day menu with Escape or a click elsewhere.
   useEffect(() => {
@@ -121,8 +141,8 @@ export default function AttendanceRegisterPage() {
     if (!shown.length) return toast.error('No students to export.');
     const sheet = shown.map((r) => {
       const o = { 'Roll No': r.rollNo || '', Student: r.name, Father: r.fatherName || '', Section: r.sectionName || '' };
-      days.forEach((d) => { o[`${d.day} ${d.weekday}`] = r.marks[d.day] ? LETTER[r.marks[d.day].status] : (d.holiday ? 'H' : ''); });
-      Object.assign(o, { Present: r.c.present, Absent: r.c.absent, Leave: r.c.leave, Late: r.c.late, 'Attendance %': r.c.pct ?? '' });
+      days.forEach((d) => { o[`${d.day} ${d.weekday}`] = r.marks[d.day] ? LETTER[r.marks[d.day].status] : d.holiday ? 'H' : r.c.missing.has(d.day) ? '–' : ''; });
+      Object.assign(o, { Present: r.c.present, Absent: r.c.absent, Leave: r.c.leave, Late: r.c.late, 'Not marked': r.c.notMarked, 'School days': r.c.days, 'Attendance %': r.c.pct ?? '' });
       return o;
     });
     const file = `Attendance Register - ${data.class.name}${data.section ? ` ${data.section.name}` : ''} - ${monthName(month)}.xlsx`.replace(/[\\/:*?"<>|]/g, '-');
@@ -138,10 +158,12 @@ export default function AttendanceRegisterPage() {
             <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '3px 0 0' }}>A class's month day by day. Attendance marked anywhere shows here; click a day to correct it, or a name for the student's whole year.</p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {isAdmin && data && <button type="button" className="btn btn-outline btn-sm" aria-expanded={offOpen} onClick={() => setOffOpen((v) => !v)}><CalendarOff size={14} /> Weekly off: {offWords(data.weeklyOff)}</button>}
             <button type="button" className="btn btn-outline btn-sm" onClick={toExcel} disabled={!shown.length}><FileSpreadsheet size={14} /> Excel</button>
             <button type="button" className="btn btn-primary btn-sm" onClick={print} disabled={!shown.length}><Printer size={14} /> Print / Save as PDF</button>
           </div>
         </div>
+        {offOpen && isAdmin && data && <WeeklyOff days={data.weeklyOff || [0]} onDone={() => { setOffOpen(false); qc.invalidateQueries({ queryKey: ['att-register'] }); qc.invalidateQueries({ queryKey: ['weekly-off'] }); }} />}
         <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 215px), 1fr))', gap: 10 }}>
           <label style={lab}>Class
             <select className="form-select" aria-label="Class" value={cls} onChange={(e) => { setClassId(e.target.value); setSectionId(''); }}>
@@ -180,8 +202,9 @@ export default function AttendanceRegisterPage() {
           <Stat label="Students" value={rows.length} />
           <Stat label="School days marked" value={schoolDays} />
           <Stat label="Average attendance" value={avg === null ? '—' : `${avg}%`} tone={avg !== null && avg < 75 ? '#991B1B' : '#166534'} />
-          {isNow && <Stat label="Today: present / absent / leave" value={`${todayCount('present') + todayCount('late')} / ${todayCount('absent')} / ${todayCount('leave')}`} />}
-          {isNow && <Stat label="Not marked today" value={unmarkedToday} tone={unmarkedToday ? '#92400E' : undefined} onClick={() => setShow('todayUnmarked')} />}
+          {isNow && todayOff && <Stat label="Today" value={todayInfo.holiday || 'Weekly off'} />}
+          {isNow && !todayOff && <Stat label="Today: present / absent / leave" value={`${todayCount('present') + todayCount('late')} / ${todayCount('absent')} / ${todayCount('leave')}`} />}
+          {isNow && !todayOff && <Stat label="Not marked today" value={unmarkedToday} tone={unmarkedToday ? '#92400E' : undefined} onClick={() => setShow('todayUnmarked')} />}
         </div>
       )}
 
@@ -198,11 +221,11 @@ export default function AttendanceRegisterPage() {
         {data && !shown.length && <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>{rows.length ? 'No student matches.' : 'No active students in this class.'}</div>}
         {shown.length > 0 && (
           <div style={{ overflow: 'auto', maxHeight: '70vh' }}>
-            <table aria-label="Attendance register" style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 12, tableLayout: 'fixed', width: W.n + W.roll + W.name + days.length * W.day + 5 * W.tot }}>
+            <table aria-label="Attendance register" style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 12, tableLayout: 'fixed', width: W.n + W.roll + W.name + days.length * W.day + TOTALS.length * W.tot }}>
               <colgroup>
                 <col style={{ width: W.n }} /><col style={{ width: W.roll }} /><col style={{ width: W.name }} />
                 {days.map((d) => <col key={d.day} style={{ width: W.day }} />)}
-                {[0, 1, 2, 3, 4].map((i) => <col key={`t${i}`} style={{ width: W.tot }} />)}
+                {TOTALS.map((t) => <col key={`t${t}`} style={{ width: W.tot }} />)}
               </colgroup>
               <thead>
                 <tr>
@@ -210,17 +233,17 @@ export default function AttendanceRegisterPage() {
                   <th style={{ ...th, ...stick(W.n), zIndex: 3 }}>Roll</th>
                   <th style={{ ...th, ...stick(W.n + W.roll), zIndex: 3, textAlign: 'left', boxShadow: 'inset -1px 0 0 #CBD5E1' }}>Student</th>
                   {days.map((d) => (
-                    <th key={d.day} title={d.holiday || (d.sunday ? 'Sunday' : '')} style={{ ...th, padding: '5px 0', background: d.day === todayDay ? '#DBEAFE' : d.sunday || d.holiday ? '#E2E8F0' : th.background }}>
+                    <th key={d.day} title={d.holiday || (isOff(d) ? `${DAY_NAMES[new Date(`${d.date}T00:00:00Z`).getUTCDay()]}: weekly off` : '')} style={{ ...th, padding: '5px 0', background: d.day === todayDay ? '#DBEAFE' : isOff(d) ? '#E2E8F0' : th.background }}>
                       {d.day}<div style={{ fontWeight: 400, fontSize: 9.5, color: 'var(--text-muted)' }}>{d.holiday ? 'Hol' : d.weekday.slice(0, 2)}</div>
                     </th>
                   ))}
-                  {['P', 'A', 'L', 'Lt', '%'].map((h) => <th key={h} style={th}>{h}</th>)}
+                  {TOTALS.map((h) => <th key={h} style={th} title={TOTAL_TIPS[h]}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {groups.map((g) => [
                   groups.length > 1 ? (
-                    <tr key={`g-${g.title}`}><td colSpan={3} style={{ ...td, ...stick(0), background: '#EEF2FF', fontWeight: 800, color: '#1E3A8A' }}>{g.title}</td><td colSpan={days.length + 5} style={{ ...td, background: '#EEF2FF' }} /></tr>
+                    <tr key={`g-${g.title}`}><td colSpan={3} style={{ ...td, ...stick(0), background: '#EEF2FF', fontWeight: 800, color: '#1E3A8A' }}>{g.title}</td><td colSpan={days.length + TOTALS.length} style={{ ...td, background: '#EEF2FF' }} /></tr>
                   ) : null,
                   ...g.students.map((r, n) => (
                     <tr key={r.id}>
@@ -236,14 +259,16 @@ export default function AttendanceRegisterPage() {
                         const m = r.marks[d.day];
                         const look = LOOK[m?.status];
                         const future = d.date > today;
-                        const off = d.sunday || d.holiday;
+                        const off = isOff(d);
+                        const missing = r.c.missing.has(d.day);
                         return (
                           <td key={d.day} style={{ ...td, padding: 1, textAlign: 'center', background: d.day === todayDay ? '#EFF6FF' : off ? '#F1F5F9' : '#fff' }}>
                             <button type="button" data-status={m?.status || ''} disabled={!data.canEdit || future}
-                              aria-label={`${r.name}, ${d.date}: ${look ? look.label : 'not marked'}`}
+                              aria-label={`${r.name}, ${d.date}: ${look ? look.label : missing ? 'not marked (the class was marked)' : 'not marked'}`}
+                              title={missing ? 'Not marked: the class was marked this day. It counts against the percentage.' : undefined}
                               onClick={(e) => { const b = e.currentTarget.getBoundingClientRect(); setMenu({ s: r, d, x: b.left, y: b.bottom }); }}
-                              style={{ width: '100%', height: 26, border: look ? `1px solid ${look.fg}33` : '1px solid transparent', borderRadius: 4, background: look ? look.bg : 'transparent', color: look ? look.fg : '#CBD5E1', fontWeight: 700, fontSize: 11, cursor: !data.canEdit || future ? 'default' : 'pointer', padding: 0 }}>
-                              {m ? LETTER[m.status] : future ? '' : off ? '' : '·'}
+                              style={{ width: '100%', height: 26, border: look ? `1px solid ${look.fg}33` : '1px solid transparent', borderRadius: 4, background: look ? look.bg : missing ? '#FFFBEB' : 'transparent', color: look ? look.fg : missing ? '#B45309' : '#CBD5E1', fontWeight: 700, fontSize: 11, cursor: !data.canEdit || future ? 'default' : 'pointer', padding: 0 }}>
+                              {m ? LETTER[m.status] : missing ? '–' : future ? '' : off ? '' : '·'}
                             </button>
                           </td>
                         );
@@ -252,17 +277,22 @@ export default function AttendanceRegisterPage() {
                       <td style={{ ...td, ...tot, color: r.c.absent ? '#991B1B' : 'var(--text-muted)' }}>{r.c.absent}</td>
                       <td style={{ ...td, ...tot }}>{r.c.leave}</td>
                       <td style={{ ...td, ...tot }}>{r.c.late}</td>
+                      <td style={{ ...td, ...tot, color: r.c.notMarked ? '#B45309' : 'var(--text-muted)' }}>{r.c.notMarked}</td>
+                      <td style={{ ...td, ...tot }}>{r.c.days}</td>
                       <td style={{ ...td, ...tot, color: r.c.pct !== null && r.c.pct < 75 ? '#991B1B' : '#166534' }}>{r.c.pct === null ? '—' : `${r.c.pct}%`}</td>
                     </tr>
                   )),
                 ])}
               </tbody>
               <tfoot>
-                {[['present', 'Present'], ['absent', 'Absent']].map(([st, label]) => (
+                {[['present', 'Present', '#166534'], ['absent', 'Absent', '#991B1B'], ['none', 'Not marked', '#B45309']].map(([st, label, color]) => (
                   <tr key={st}>
                     <td colSpan={3} style={{ ...tf, ...stick(0), zIndex: 1 }}>{label}</td>
-                    {days.map((d) => { const n = shown.filter((r) => r.marks[d.day]?.status === st || (st === 'present' && r.marks[d.day]?.status === 'late')).length; return <td key={d.day} style={{ ...tf, textAlign: 'center', color: st === 'absent' ? '#991B1B' : '#166534' }}>{n || ''}</td>; })}
-                    <td colSpan={5} style={tf} />
+                    {days.map((d) => {
+                      const n = shown.filter((r) => (st === 'none' ? r.c.missing.has(d.day) : r.marks[d.day]?.status === st || (st === 'present' && r.marks[d.day]?.status === 'late'))).length;
+                      return <td key={d.day} style={{ ...tf, textAlign: 'center', color }}>{n || ''}</td>;
+                    })}
+                    <td colSpan={TOTALS.length} style={tf} />
                   </tr>
                 ))}
               </tfoot>
@@ -272,7 +302,9 @@ export default function AttendanceRegisterPage() {
         {shown.length > 0 && (
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '10px 14px', fontSize: 11.5, color: 'var(--text-muted)', borderTop: '1px solid var(--border-light)' }}>
             {Object.entries(LOOK).map(([k, l]) => <span key={k}><b style={{ background: l.bg, color: l.fg, borderRadius: 3, padding: '0 4px' }}>{LETTER[k]}</b> {l.label}</span>)}
-            <span>· not marked</span><span>Grey: Sunday or holiday</span>
+            <span><b style={{ background: '#FFFBEB', color: '#B45309', borderRadius: 3, padding: '0 4px' }}>–</b> not marked (the class was marked that day)</span>
+            <span>Grey: weekly off ({offWords(data.weeklyOff)}) or holiday</span>
+            <span>Days: the days the class was marked since the student joined · %: present (late counts) of those days</span>
             {data.canEdit ? <span>Click a day to correct it (no message is sent to parents from here).</span> : <span>Only the class teacher or the admin can correct the register.</span>}
           </div>
         )}
@@ -318,7 +350,8 @@ function StudentYear({ student, school, stamp, onClose }) {
   const choices = options.filter((o) => o.kind === 'year' || (Number(o.to.slice(0, 4)) * 12 + Number(o.to.slice(5)) - (Number(o.from.slice(0, 4)) * 12 + Number(o.from.slice(5)))) < 12);
   const current = choices.find((o) => o.id === periodId) || choices.find((o) => data && o.from === data.from && o.to === data.to);
   const t = data?.totals;
-  const pct = t?.marked ? Math.round(((t.present + t.late) / t.marked) * 100) : null;
+  const base = t ? (t.schoolDays ?? t.marked) : 0;
+  const pct = base ? Math.round(((t.present + t.late) / base) * 100) : null;
   const close = useRef(null);
   useEffect(() => { close.current?.focus(); }, []);
 
@@ -346,7 +379,9 @@ function StudentYear({ student, school, stamp, onClose }) {
             <>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, fontSize: 12.5 }}>
                 {Object.entries(LOOK).map(([k, l]) => <span key={k} style={{ background: l.bg, color: l.fg, borderRadius: 999, padding: '3px 10px', fontWeight: 700 }}>{l.label} {t[k]}</span>)}
-                <span style={{ background: '#F1F5F9', borderRadius: 999, padding: '3px 10px', fontWeight: 700 }}>Days marked {t.marked}</span>
+                {t.schoolDays !== undefined
+                  ? <><span style={{ background: '#FFFBEB', color: '#B45309', borderRadius: 999, padding: '3px 10px', fontWeight: 700 }}>Not marked {t.notMarked}</span><span style={{ background: '#F1F5F9', borderRadius: 999, padding: '3px 10px', fontWeight: 700 }} title="The days the class was marked since the student joined">School days {t.schoolDays}</span></>
+                  : <span style={{ background: '#F1F5F9', borderRadius: 999, padding: '3px 10px', fontWeight: 700 }}>Days marked {t.marked}</span>}
                 {pct !== null && <span style={{ background: pct < 75 ? '#FEE2E2' : '#DCFCE7', color: pct < 75 ? '#991B1B' : '#166534', borderRadius: 999, padding: '3px 10px', fontWeight: 800 }}>Attendance {pct}%</span>}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 }}>
@@ -372,14 +407,14 @@ function MonthCalendar({ mo, today }) {
         {mo.days.map((d) => {
           const l = LOOK[d.status];
           return (
-            <div key={d.day} title={[d.date, l?.label, d.holiday].filter(Boolean).join(' · ')}
-              style={{ textAlign: 'center', borderRadius: 4, padding: '3px 0', lineHeight: 1.1, background: l ? l.bg : d.sunday || d.holiday ? '#F1F5F9' : 'transparent', color: l ? l.fg : d.date > today ? '#CBD5E1' : '#475569', fontWeight: l ? 800 : 500, outline: d.date === today ? `2px solid ${NAVY}` : 'none' }}>
-              {d.day}<div style={{ fontSize: 8.5 }}>{d.status ? LETTER[d.status] : d.holiday ? 'H' : ' '}</div>
+            <div key={d.day} title={[d.date, l?.label || (d.notMarked ? 'not marked (the class was marked)' : ''), d.holiday].filter(Boolean).join(' · ')}
+              style={{ textAlign: 'center', borderRadius: 4, padding: '3px 0', lineHeight: 1.1, background: l ? l.bg : d.notMarked ? '#FFFBEB' : isOff(d) ? '#F1F5F9' : 'transparent', color: l ? l.fg : d.notMarked ? '#B45309' : d.date > today ? '#CBD5E1' : '#475569', fontWeight: l || d.notMarked ? 800 : 500, outline: d.date === today ? `2px solid ${NAVY}` : 'none' }}>
+              {d.day}<div style={{ fontSize: 8.5 }}>{d.status ? LETTER[d.status] : d.holiday ? 'H' : d.notMarked ? '–' : ' '}</div>
             </div>
           );
         })}
       </div>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>P {n('present')} · A {n('absent')} · L {n('leave')} · Lt {n('late')}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>P {n('present')} · A {n('absent')} · L {n('leave')} · Lt {n('late')}{mo.days.some((d) => d.notMarked) ? ` · – ${mo.days.filter((d) => d.notMarked).length}` : ''}</div>
     </section>
   );
 }
@@ -394,6 +429,52 @@ function Stat({ label, value, tone, onClick }) {
   );
 }
 
+/* The administrator's choice of weekly off days. */
+function WeeklyOff({ days, onDone }) {
+  const [sel, setSel] = useState(days);
+  const [saving, setSaving] = useState(false);
+  const toggle = (d) => setSel((v) => (v.includes(d) ? v.filter((x) => x !== d) : [...v, d].sort((a, b) => a - b)));
+  const same = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await api.put('/attendance/weekly-off', { days: sel });
+      toast.success(r.data.message);
+      onDone();
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'It could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div role="region" aria-label="Weekly off days" style={{ margin: '0 16px 4px', padding: 12, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, display: 'grid', gap: 10 }}>
+      <div style={{ fontSize: 13, color: '#334155' }}>The days the school is closed every week. They are shaded in the register, never counted as school days, and auto-absent does not run on them.</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {PRESETS.map(([d, label]) => (
+          <button key={label} type="button" className={`btn btn-sm ${same(sel, d) ? 'btn-primary' : 'btn-outline'}`} aria-pressed={same(sel, d)} onClick={() => setSel(d)}>{label}</button>
+        ))}
+      </div>
+      <div role="group" aria-label="Or choose the days" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Or choose:</span>
+        {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+          <label key={d} style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12.5, padding: '3px 8px', borderRadius: 999, border: '1px solid #CBD5E1', background: sel.includes(d) ? '#E2E8F0' : '#fff', cursor: 'pointer' }}>
+            <input type="checkbox" checked={sel.includes(d)} onChange={() => toggle(d)} /> {DAY_NAMES[d].slice(0, 3)}
+          </label>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button type="button" className="btn btn-primary btn-sm" disabled={saving || !sel.length || sel.length > 3 || same(sel, days)} onClick={save}>{saving ? 'Saving…' : `Save: ${offWords(sel)} off`}</button>
+        <button type="button" className="btn btn-outline btn-sm" onClick={onDone}>Cancel</button>
+        {(sel.length === 0 || sel.length > 3) && <span style={{ fontSize: 12, color: '#991B1B' }}>Choose one to three days.</span>}
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Staff shifts keep their own days (Fingerprint Machines → Rules).</span>
+      </div>
+    </div>
+  );
+}
+
+const TOTALS = ['P', 'A', 'L', 'Lt', '–', 'Days', '%'];
+const TOTAL_TIPS = { P: 'Present', A: 'Absent', L: 'Leave', Lt: 'Late (counts as present)', '–': 'Not marked on a day the class was marked', Days: 'School days: the days the class was marked since the student joined', '%': 'Present and late, of the school days' };
 const W = { n: 32, roll: 92, name: 170, day: 32, tot: 40 };
 const lab = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' };
 const th = { position: 'sticky', top: 0, zIndex: 2, background: '#F1F5F9', color: '#1E293B', fontSize: 11, fontWeight: 700, padding: '6px 4px', borderBottom: '1px solid #CBD5E1', textAlign: 'center', whiteSpace: 'nowrap' };

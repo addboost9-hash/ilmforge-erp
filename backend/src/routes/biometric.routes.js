@@ -53,6 +53,7 @@ const M = require('../services/biometricMachines.service');
 const P = require('../services/biometricProtocol');
 const rulesSvc = require('../services/attendanceRules.service');
 const I = require('../services/punchIntake.service');
+const { weeklyOffOf } = require('../utils/weeklyOff');
 const {
   findPerson, markPass, devicePin, deviceSettings, isClock, personView, STUDENT_SELECT, STAFF_SELECT,
 } = require('../services/attendanceDevice.service');
@@ -692,20 +693,23 @@ router.get('/punch-log', wrap(async (req, res) => {
 
 router.get('/settings', wrap(async (req, res) => {
   const s = await deviceSettings(req.schoolId);
-  const raw = (await readSettings(req.schoolId)).attendanceDevices || {};
+  const all = await readSettings(req.schoolId);
+  const raw = all.attendanceDevices || {};
   res.json({
     success: true,
     data: {
       lateAfter: s.lateAfter, staffLateAfter: s.staffLateAfter, gapMinutes: s.gapMinutes, timeZone: raw.timeZone || '+05:00',
       shifts: s.shifts, staffShifts: s.staffShifts, defaultShift: s.defaultShift,
-      autoAbsent: rulesSvc.cleanAutoAbsent(raw.autoAbsent), lateRule: rulesSvc.cleanLateRule(raw.lateRule),
+      autoAbsent: rulesSvc.cleanAutoAbsent(raw.autoAbsent, weeklyOffOf(all)), lateRule: rulesSvc.cleanLateRule(raw.lateRule),
+      weeklyOff: weeklyOffOf(all),
     },
   });
 }));
 
 router.put('/settings', adminOnly, wrap(async (req, res) => {
   const b = req.body || {};
-  const cur = (await readSettings(req.schoolId)).attendanceDevices || {};
+  const all = await readSettings(req.schoolId);
+  const cur = all.attendanceDevices || {};
   const next = { ...cur };
   const time = (v) => (v === null || v === '' ? null : isClock(v) ? v : undefined);
   if (b.lateAfter !== undefined || b.staffLateAfter !== undefined || b.gapMinutes !== undefined || b.timeZone !== undefined) {
@@ -717,7 +721,7 @@ router.put('/settings', adminOnly, wrap(async (req, res) => {
     Object.assign(next, { lateAfter, staffLateAfter, gapMinutes, timeZone: /^[+-]\d{2}:\d{2}$/.test(b.timeZone || '') ? b.timeZone : (cur.timeZone || '+05:00') });
   }
   if (b.autoAbsent !== undefined) {
-    const a = rulesSvc.cleanAutoAbsent(b.autoAbsent);
+    const a = rulesSvc.cleanAutoAbsent(b.autoAbsent, weeklyOffOf(all));
     if (b.autoAbsent?.at && !isClock(b.autoAbsent.at)) return bad(res, 'The auto-absent time is HH:MM, such as 09:30.');
     next.autoAbsent = a;
   }
@@ -750,7 +754,7 @@ router.put('/settings', adminOnly, wrap(async (req, res) => {
 
 router.get('/auto-absent', adminOnly, wrap(async (req, res) => {
   const all = await readSettings(req.schoolId);
-  const cfg = rulesSvc.cleanAutoAbsent(all.attendanceDevices?.autoAbsent);
+  const cfg = rulesSvc.cleanAutoAbsent(all.attendanceDevices?.autoAbsent, weeklyOffOf(all));
   const last = all.autoAbsentLast || null;
   const today = rulesSvc.pkYmd();
   const date = dayStart(new Date());

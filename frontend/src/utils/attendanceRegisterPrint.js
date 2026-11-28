@@ -2,8 +2,8 @@
  * The attendance register on paper (or saved as PDF from the print dialog):
  *
  *   printAttendanceRegister(...)  a class's month on A4 landscape: a row per
- *                                 student, a column per day (Sundays and
- *                                 holidays shaded), each section from a new
+ *                                 student, a column per day (weekly off days
+ *                                 and holidays shaded), each section from a new
  *                                 page, totals, signatures and the stamp.
  *   printAttendanceYear(...)      one student's months as calendars on one
  *                                 A4 page.
@@ -29,14 +29,67 @@ const pic = (v) => {
 };
 const today = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10).split('-').reverse().join('/');
 
-/** A student's month in numbers: present, absent, leave, late, marked, %. */
-export function countMonth(marks = {}) {
+/**
+ * A student's month in numbers: present, absent, leave, late, marked, the
+ * school days counted, the days not marked, and the percentage.
+ *
+ * School days are the days the student's class (section) was marked, from
+ * the day the student joined up to today. A day the class was marked but the
+ * student was not counts as "not marked", so the percentage is the days
+ * present (late counts as present) of the school days: a student marked
+ * present once in three school days is 33%, not 100%.
+ *   opts: { schoolDays: Set of day numbers, from: the first day counted (1–31; 32: none) }
+ * Without opts: of the student's own marked days.
+ */
+export function countMonth(marks = {}, opts = null) {
   const c = { present: 0, absent: 0, leave: 0, late: 0 };
   Object.values(marks).forEach((x) => { if (c[x.status] !== undefined) c[x.status] += 1; });
   c.marked = c.present + c.absent + c.leave + c.late;
-  c.pct = c.marked ? Math.round(((c.present + c.late) / c.marked) * 100) : null;
+  if (opts?.schoolDays) {
+    const from = opts.from || 1;
+    // A mark always counts, even before the joining date on record.
+    const counted = [...opts.schoolDays].filter((d) => d >= from || marks[d]);
+    c.missing = new Set(counted.filter((d) => !marks[d]));
+    c.days = counted.length;
+  } else {
+    c.missing = new Set();
+    c.days = c.marked;
+  }
+  c.notMarked = c.missing.size;
+  c.pct = c.days ? Math.round(((c.present + c.late) / c.days) * 100) : null;
   return c;
 }
+
+/* The first day of the month a student counts from: the day they joined
+   (admission date) when it falls in this month, 32 when after it. */
+export function joinedFrom(admissionDate, month) {
+  if (!admissionDate) return 1;
+  const ymd = new Date(new Date(admissionDate).getTime() + 5 * 3600e3).toISOString().slice(0, 10);
+  if (ymd.slice(0, 7) < month) return 1;
+  if (ymd.slice(0, 7) > month) return 32;
+  return Number(ymd.slice(8));
+}
+
+/**
+ * For the register (GET /attendance/register): a function giving each
+ * student's countMonth, with their section's school days (the days anyone in
+ * the section was marked, up to today) and their joining day.
+ */
+export function registerCounter(data) {
+  const thisMonth = data.today.slice(0, 7);
+  const lastDay = data.month === thisMonth ? Number(data.today.slice(8)) : data.month < thisMonth ? 31 : 0;
+  const bySection = new Map();
+  for (const st of data.students) {
+    const key = st.sectionId ?? 0;
+    if (!bySection.has(key)) bySection.set(key, new Set());
+    const set = bySection.get(key);
+    Object.keys(data.marks[st.id] || {}).forEach((d) => { if (Number(d) <= lastDay) set.add(Number(d)); });
+  }
+  return (st) => countMonth(data.marks[st.id], { schoolDays: bySection.get(st.sectionId ?? 0) || new Set(), from: joinedFrom(st.admissionDate, data.month) });
+}
+
+/* A weekly off day (the school's own; Sunday on older answers) or a holiday. */
+export const isOff = (d) => !!(d.off ?? d.sunday) || !!d.holiday;
 
 function letterhead(school) {
   const name = school?.name || 'School';
@@ -70,30 +123,33 @@ const CSS = `
 export function printAttendanceRegister({ school, data, groups, stamp = '', note = '' }) {
   const lh = letterhead(school);
   const days = data.days;
+  const countOf = registerCounter(data);
   const pages = groups.filter((g) => g.students.length).map((g) => {
+    const counts = new Map(g.students.map((s) => [s.id, s.c || countOf(s)]));
     const rows = g.students.map((s, n) => {
       const marks = data.marks[s.id] || {};
-      const c = countMonth(marks);
+      const c = counts.get(s.id);
       return `<tr><td class="c">${n + 1}</td><td class="roll">${esc(s.rollNo || '')}</td><td class="nm"><b dir="auto">${esc(s.name)}</b></td>
-        ${days.map((d) => { const st = marks[d.day]?.status; const l = LOOK[st]; return `<td class="d${d.sunday || d.holiday ? ' off' : ''}"${l ? ` style="background:${l.bg};color:${l.fg}"` : ''}>${st ? LETTER[st] : d.holiday && !st ? 'H' : ''}</td>`; }).join('')}
-        <td class="t">${c.present}</td><td class="t">${c.absent}</td><td class="t">${c.leave}</td><td class="t">${c.late}</td><td class="t${c.pct !== null && c.pct < 75 ? ' bad' : ''}">${c.pct === null ? '' : `${c.pct}%`}</td></tr>`;
+        ${days.map((d) => { const st = marks[d.day]?.status; const l = LOOK[st]; return `<td class="d${isOff(d) ? ' off' : ''}"${l ? ` style="background:${l.bg};color:${l.fg}"` : ''}>${st ? LETTER[st] : d.holiday ? 'H' : c.missing.has(d.day) ? '–' : ''}</td>`; }).join('')}
+        <td class="t">${c.present}</td><td class="t">${c.absent}</td><td class="t">${c.leave}</td><td class="t">${c.late}</td><td class="t">${c.days}</td><td class="t${c.pct !== null && c.pct < 75 ? ' bad' : ''}">${c.pct === null ? '' : `${c.pct}%`}</td></tr>`;
     }).join('');
-    const perDay = (st) => days.map((d) => { const n = g.students.filter((s) => data.marks[s.id]?.[d.day]?.status === st).length; return `<td class="d">${n || ''}</td>`; }).join('');
+    const perDay = (st) => days.map((d) => { const n = g.students.filter((s) => (st === 'none' ? counts.get(s.id).missing.has(d.day) : data.marks[s.id]?.[d.day]?.status === st)).length; return `<td class="d">${n || ''}</td>`; }).join('');
     return `<section class="pg">${lh.html}
       <div class="band"><span>Attendance Register</span><span dir="auto">${esc(g.title)}</span><span>${esc(monthName(data.month))}</span></div>
       ${note ? `<div class="note">${esc(note)}</div>` : ''}
       <table>
         <thead><tr><th style="width:18px">#</th><th style="width:58px">Roll No.</th><th class="nm">Student</th>
-          ${days.map((d) => `<th class="d${d.sunday || d.holiday ? ' off' : ''}"${d.holiday ? ` title="${esc(d.holiday)}"` : ''}>${d.day}<div class="wd">${d.weekday[0]}</div></th>`).join('')}
-          <th class="t">P</th><th class="t">A</th><th class="t">L</th><th class="t">Lt</th><th class="t">%</th></tr></thead>
+          ${days.map((d) => `<th class="d${isOff(d) ? ' off' : ''}"${d.holiday ? ` title="${esc(d.holiday)}"` : ''}>${d.day}<div class="wd">${d.weekday[0]}</div></th>`).join('')}
+          <th class="t">P</th><th class="t">A</th><th class="t">L</th><th class="t">Lt</th><th class="t">Days</th><th class="t">%</th></tr></thead>
         <tbody>${rows}</tbody>
         <tfoot>
-          <tr><td colspan="3">Present</td>${perDay('present')}<td colspan="5"></td></tr>
-          <tr><td colspan="3">Absent</td>${perDay('absent')}<td colspan="5"></td></tr>
+          <tr><td colspan="3">Present</td>${perDay('present')}<td colspan="6"></td></tr>
+          <tr><td colspan="3">Absent</td>${perDay('absent')}<td colspan="6"></td></tr>
+          <tr><td colspan="3">Not marked</td>${perDay('none')}<td colspan="6"></td></tr>
         </tfoot>
       </table>
       <div class="tail">
-        <div class="legend"><span>P present · A absent · L leave · Lt late · H holiday · shaded: Sunday or holiday · % = days present (late counts as present) of days marked${days.some((d) => d.holiday) ? ` · Holidays: ${esc([...new Set(days.filter((d) => d.holiday).map((d) => `${d.holiday} (${d.day})`))].join(', '))}` : ''}</span></div>
+        <div class="legend"><span>P present · A absent · L leave · Lt late · H holiday · – not marked · shaded: weekly off or holiday · Days = days the class was marked since the student joined · % = days present (late counts as present) of those days${days.some((d) => d.holiday) ? ` · Holidays: ${esc([...new Set(days.filter((d) => d.holiday).map((d) => `${d.holiday} (${d.day})`))].join(', '))}` : ''}</span></div>
         <div class="signs"><div class="sg"><div class="ln"></div><div class="lb">Class teacher</div></div><div class="when">${g.students.length} student${g.students.length === 1 ? '' : 's'} · Printed ${today()}</div><div class="sg pr">${stampImg(pic(stamp))}<div class="ln"></div><div class="lb">Principal</div></div></div>
       </div>
     </section>`;
@@ -124,12 +180,13 @@ export function printAttendanceYear({ school, year, stamp = '' }) {
   const lh = letterhead(school);
   const s = year.student;
   const t = year.totals;
-  const pct = t.marked ? Math.round(((t.present + t.late) / t.marked) * 100) : null;
+  const base = t.schoolDays ?? t.marked;
+  const pct = base ? Math.round(((t.present + t.late) / base) * 100) : null;
   const months = year.months.map((mo) => {
     const lead = (new Date(`${mo.days[0].date}T00:00:00Z`).getUTCDay() + 6) % 7; // weeks start on Monday
     const cells = [...Array(lead).fill('<td></td>'), ...mo.days.map((d) => {
       const l = LOOK[d.status];
-      return `<td class="${d.sunday || d.holiday ? 'off' : ''}"${l ? ` style="background:${l.bg};color:${l.fg};font-weight:700"` : ''}${d.holiday ? ` title="${esc(d.holiday)}"` : ''}>${d.day}${d.status ? `<i>${LETTER[d.status]}</i>` : d.holiday ? '<i>H</i>' : ''}</td>`;
+      return `<td class="${isOff(d) ? 'off' : ''}"${l ? ` style="background:${l.bg};color:${l.fg};font-weight:700"` : ''}${d.holiday ? ` title="${esc(d.holiday)}"` : ''}>${d.day}${d.status ? `<i>${LETTER[d.status]}</i>` : d.holiday ? '<i>H</i>' : d.notMarked ? '<i>–</i>' : ''}</td>`;
     })];
     const weeks = [];
     for (let i = 0; i < cells.length; i += 7) weeks.push(`<tr>${cells.slice(i, i + 7).join('')}${'<td></td>'.repeat(Math.max(0, 7 - cells.slice(i, i + 7).length))}</tr>`);
@@ -153,8 +210,8 @@ export function printAttendanceYear({ school, year, stamp = '' }) {
     <div class="info"><div>Student: <b dir="auto">${esc(s.name)}</b></div><div>Roll No.: <b>${esc(s.rollNo || '—')}</b></div>
       <div>Father's name: <b dir="auto">${esc(s.fatherName || '—')}</b></div><div>Class: <b dir="auto">${esc([s.className, s.sectionName].filter(Boolean).join(' — ') || '—')}</b></div></div>
     <div class="grid">${months}</div>
-    <div class="tot"><span>Present <b>${t.present}</b></span><span>Absent <b>${t.absent}</b></span><span>Leave <b>${t.leave}</b></span><span>Late <b>${t.late}</b></span><span>Days marked <b>${t.marked}</b></span>${pct !== null ? `<span>Attendance <b>${pct}%</b></span>` : ''}</div>
-    <div class="tail"><div class="legend"><span>P present · A absent · L leave · Lt late · H holiday · grey: Sunday or holiday</span><span class="when">Printed ${today()}</span></div>
+    <div class="tot"><span>Present <b>${t.present}</b></span><span>Absent <b>${t.absent}</b></span><span>Leave <b>${t.leave}</b></span><span>Late <b>${t.late}</b></span>${t.schoolDays !== undefined ? `<span>School days <b>${t.schoolDays}</b></span><span>Not marked <b>${t.notMarked}</b></span>` : `<span>Days marked <b>${t.marked}</b></span>`}${pct !== null ? `<span>Attendance <b>${pct}%</b></span>` : ''}</div>
+    <div class="tail"><div class="legend"><span>P present · A absent · L leave · Lt late · H holiday · – not marked (the class was) · grey: weekly off or holiday · % of school days since joining</span><span class="when">Printed ${today()}</span></div>
       <div class="signs"><div class="sg"><div class="ln"></div><div class="lb">Class teacher</div></div><div class="sg pr">${stampImg(pic(stamp))}<div class="ln"></div><div class="lb">Principal</div></div></div></div>
   </body></html>`), { title: `Attendance — ${s.name}` });
 }

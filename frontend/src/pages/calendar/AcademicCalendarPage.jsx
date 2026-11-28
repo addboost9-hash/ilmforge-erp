@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
+import { useWeeklyOff } from '../../utils/weeklyOff';
 import toast from 'react-hot-toast';
 import { ChevronLeft, ChevronRight, Plus, Calendar, Trash2, Filter } from 'lucide-react';
 
@@ -31,6 +32,7 @@ function EventDot({ type }) {
 }
 
 export default function AcademicCalendarPage() {
+  const weeklyOff = useWeeklyOff();
   const qc  = useQueryClient();
   const now  = new Date();
   const [year,  setYear]       = useState(now.getFullYear());
@@ -182,7 +184,7 @@ export default function AcademicCalendarPage() {
                 const dayEvents = byDate[dateStr] || [];
                 const isToday   = dateStr === todayStr;
                 const isSel     = dateStr === selected;
-                const isWeekend = new Date(dateStr).getDay() === 0 || new Date(dateStr).getDay() === 5 || new Date(dateStr).getDay() === 6;
+                const isWeekend = weeklyOff.includes(new Date(`${dateStr}T00:00:00Z`).getUTCDay());
                 const hasHoliday = dayEvents.some(e => e.isHoliday || e.type === 'holiday');
                 return (
                   <div key={day} onClick={() => setSelected(isSel ? null : dateStr)}

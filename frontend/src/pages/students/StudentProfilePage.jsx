@@ -28,6 +28,7 @@ import { printStudentRecord } from '../../utils/studentPrint';
 // a hundred times too large; money()/amount() divide by 100.
 import { money, amount, fromPaisa, toPaisa, rupeesInput } from '../../utils/currency';
 import toast from 'react-hot-toast';
+import { useWeeklyOff, offWords } from '../../utils/weeklyOff';
 import {
   ArrowLeft, FileText, Printer, User, CreditCard, ClipboardList, Award, GraduationCap, Camera, Tag,
   Edit2, ChevronLeft, ChevronRight, ChevronDown, Receipt, CalendarDays, FolderOpen,
@@ -408,14 +409,23 @@ const ATT = {
   leave:   { l: 'L', bg: '#DBEAFE', fg: '#1D4ED8', name: 'Leave' },
 };
 function AttendancePanel({ data, isLoading, sessionId, onSession, error }) {
+  const weeklyOff = useWeeklyOff();
+  // Each month: the student's marks, and its school days (the days the class
+  // was marked since the student joined; a school day with no mark is "–").
   const months = useMemo(() => {
     const m = new Map();
+    const month = (y, mo) => {
+      const key = `${y}-${String(mo + 1).padStart(2, '0')}`;
+      if (!m.has(key)) m.set(key, { key, year: y, month: mo, days: {}, school: new Set() });
+      return m.get(key);
+    };
     for (const r of data?.records || []) {
       const d = new Date(r.date);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (!m.has(key)) m.set(key, { key, year: d.getFullYear(), month: d.getMonth(), days: {} });
-      m.get(key).days[d.getDate()] = r;
+      const x = month(d.getFullYear(), d.getMonth());
+      x.days[d.getDate()] = r;
+      x.school.add(d.getDate());
     }
+    for (const k of data?.schoolDays || []) month(Number(k.slice(0, 4)), Number(k.slice(5, 7)) - 1).school.add(Number(k.slice(8, 10)));
     return [...m.values()].sort((a, b) => b.key.localeCompare(a.key));
   }, [data]);
 
@@ -439,7 +449,8 @@ function AttendancePanel({ data, isLoading, sessionId, onSession, error }) {
         {[
           ['Attended', `${s.percentage ?? 0}%`, (s.percentage ?? 0) >= 75 ? '#15803D' : '#DC2626'],
           ['Present', s.present ?? 0, '#15803D'], ['Late', s.late ?? 0, '#A16207'],
-          ['Absent', s.absent ?? 0, '#B91C1C'], ['Leave', s.leave ?? 0, '#1D4ED8'], ['School days', s.total ?? 0, '#1E3A5F'],
+          ['Absent', s.absent ?? 0, '#B91C1C'], ['Leave', s.leave ?? 0, '#1D4ED8'],
+          ...(s.notMarked ? [['Not marked', s.notMarked, '#B45309']] : []), ['School days', s.total ?? 0, '#1E3A5F'],
         ].map(([l, v, c]) => (
           <div key={l} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: '9px 12px', textAlign: 'center' }}>
             <div style={{ fontSize: 19, fontWeight: 800, color: c, fontVariantNumeric: 'tabular-nums' }}>{v}</div>
@@ -457,18 +468,19 @@ function AttendancePanel({ data, isLoading, sessionId, onSession, error }) {
             <div key={m.key} style={{ border: '1px solid #E2E8F0', borderRadius: 10, padding: '10px 12px' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
                 <b style={{ color: NAVY, fontSize: 13.5 }}>{new Date(m.year, m.month, 1).toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })}</b>
-                <span style={{ fontSize: 12, color: '#64748B' }}>{att}/{recs.length} days attended · {recs.length ? Math.round((att / recs.length) * 100) : 0}%</span>
+                <span style={{ fontSize: 12, color: '#64748B' }}>{att}/{m.school.size} school days attended · {m.school.size ? Math.round((att / m.school.size) * 100) : 0}%</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(26px,1fr))', gap: 4 }}>
                 {Array.from({ length: n }, (_, i) => i + 1).map((d) => {
                   const r = m.days[d];
                   const st = r && ATT[r.status];
                   const weekday = new Date(m.year, m.month, d).getDay();
+                  const missing = !r && m.school.has(d);
                   return (
-                    <div key={d} title={r ? `${d} ${new Date(m.year, m.month, d).toLocaleDateString('en-PK', { month: 'short' })}: ${st?.name || r.status}${r.remarks ? ` — ${r.remarks}` : ''}` : `${d}: not marked`}
+                    <div key={d} title={r ? `${d} ${new Date(m.year, m.month, d).toLocaleDateString('en-PK', { month: 'short' })}: ${st?.name || r.status}${r.remarks ? ` — ${r.remarks}` : ''}` : missing ? `${d}: not marked (the class was marked)` : `${d}: not marked`}
                       style={{ height: 30, borderRadius: 6, display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 700, lineHeight: 1.1,
-                        background: st ? st.bg : weekday === 0 ? '#F1F5F9' : '#fff', color: st ? st.fg : '#CBD5E1', border: `1px solid ${st ? st.bg : '#EEF2F6'}` }}>
-                      <span>{d}<br />{st ? st.l : ''}</span>
+                        background: st ? st.bg : missing ? '#FFFBEB' : weeklyOff.includes(weekday) ? '#F1F5F9' : '#fff', color: st ? st.fg : missing ? '#B45309' : '#CBD5E1', border: `1px solid ${st ? st.bg : missing ? '#FDE68A' : '#EEF2F6'}` }}>
+                      <span>{d}<br />{st ? st.l : missing ? '–' : ''}</span>
                     </div>
                   );
                 })}
@@ -479,7 +491,8 @@ function AttendancePanel({ data, isLoading, sessionId, onSession, error }) {
       </div>
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 12, fontSize: 11.5, color: '#64748B' }}>
         {Object.values(ATT).map((a) => <span key={a.l}><b style={{ background: a.bg, color: a.fg, padding: '1px 6px', borderRadius: 4 }}>{a.l}</b> {a.name}</span>)}
-        <span>Grey: Sunday</span>
+        <span><b style={{ background: '#FFFBEB', color: '#B45309', padding: '1px 6px', borderRadius: 4 }}>–</b> not marked (the class was marked)</span>
+        <span>Grey: weekly off ({offWords(weeklyOff)})</span>
       </div>
     </div>
   );

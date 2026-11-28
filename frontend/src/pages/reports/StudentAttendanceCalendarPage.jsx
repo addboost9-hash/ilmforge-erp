@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/client';
+import { useWeeklyOff } from '../../utils/weeklyOff';
 import { Search, Printer, ChevronRight } from 'lucide-react';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -14,6 +15,7 @@ const STATUS_COLORS  = { present: '#15803d', absent: '#dc2626', leave: '#d97706'
 function daysInMonth(month, year) { return new Date(year, month, 0).getDate(); }
 
 export default function StudentAttendanceCalendarPage() {
+  const weeklyOff = useWeeklyOff();
   const [search,    setSearch]    = useState('');
   const [studentId, setStudentId] = useState(null);
   const [student,   setStudent]   = useState(null);
@@ -163,8 +165,8 @@ export default function StudentAttendanceCalendarPage() {
                           return <td key={di} style={{ background: '#f8f9fa' }} />;
                         }
                         const dateStr = `${year}-${String(mi + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                        const dow = new Date(dateStr).getDay(); // 0=Sun, 5=Fri, 6=Sat
-                        const isWeekend = dow === 0 || dow === 5 || dow === 6;
+                        const dow = new Date(`${dateStr}T00:00:00Z`).getUTCDay();
+                        const isWeekend = weeklyOff.includes(dow); // the school's weekly off days
                         const status = dayMap[dateStr];
                         if (status === 'present' || status === 'late') mPresent++;
                         if (status === 'absent') mAbsent++;

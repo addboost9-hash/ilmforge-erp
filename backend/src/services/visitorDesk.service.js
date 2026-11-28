@@ -396,6 +396,11 @@ async function startWork(tx, { schoolId, campusId, userId, visit, d, students, l
           passCode: `GP-${schoolId}-${stamp}${i}`,
           validDate: new Date(),
           issuedBy: userId || null,
+          // Checked at reception: the CNIC is the father's or mother's on the record.
+          onRecord: true,
+          relation: d.relation ? RELATIONS[d.relation] || null : null,
+          pickupCnic: isRealCnic(d.cnic) ? formatCnic(d.cnic) : null,
+          pickupPhone: d.phone ? String(d.phone).replace(/\D/g, '').slice(0, 13) || null : null,
         },
       });
       out.gatePasses.push({ studentId: s.id, name: fullName(s), passCode: pass.passCode });

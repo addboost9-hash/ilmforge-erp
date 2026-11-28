@@ -1183,19 +1183,26 @@ export default function GatekeeperPortalPage() {
                   Gate Pass Verified
                 </div>
 
+                {/* Who the student goes with: the gate checks the person against this. */}
+                {gatePass.pickup?.name && (
+                  <div style={{ background: 'rgba(255,255,255,0.08)', border: `1px solid ${CYAN}55`, borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
+                    <div style={{ color: '#94A3B8', fontSize: 11.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Release only to</div>
+                    <div style={{ color: '#fff', fontSize: 18, fontWeight: 800 }} dir="auto">{gatePass.pickup.name}{gatePass.pickup.relation ? <span style={{ fontWeight: 600, fontSize: 14, color: CYAN }}> · {gatePass.pickup.relation}</span> : null}</div>
+                    <div style={{ color: '#CBD5E1', fontSize: 12.5, marginTop: 2 }}>
+                      {[gatePass.pickup.phone && `Phone ${gatePass.pickup.phone}`, gatePass.pickup.cnic && `CNIC ${gatePass.pickup.cnic}`].filter(Boolean).join(' · ') || 'Ask for their CNIC'}
+                    </div>
+                    <div style={{ color: gatePass.pickup.onRecord ? '#86EFAC' : '#FCD34D', fontSize: 12, marginTop: 4, fontWeight: 600 }}>
+                      {gatePass.pickup.onRecord ? 'On the student\'s record' : gatePass.pickup.parentConfirmed ? 'Not on the record: the parent agreed by phone' : 'Not on the record'}
+                    </div>
+                  </div>
+                )}
                 {[
                   ['Student',       gatePass.studentName || gatePass.student?.name || '—'],
                   ['Roll No',       gatePass.rollNo || gatePass.student?.rollNo || '—'],
-                  ['Class',         gatePass.class || gatePass.student?.class || '—'],
-                  ['Authorized By', gatePass.authorizedBy || gatePass.issuedBy || '—'],
+                  ['Class',         [gatePass.student?.className, gatePass.student?.sectionName].filter(Boolean).join(' — ') || gatePass.class || '—'],
                   ['Reason',        gatePass.reason || gatePass.purpose || '—'],
-                  ['Valid Until',   gatePass.validUntil
-                    ? new Date(gatePass.validUntil).toLocaleString('en-PK')
-                    : gatePass.expiresAt
-                      ? new Date(gatePass.expiresAt).toLocaleString('en-PK')
-                      : '—'],
-                  ['Status',        <span style={{ color: gatePass.status === 'used' ? '#F87171' : CYAN, fontWeight: 700 }}>
-                    {gatePass.status || 'Active'}
+                  ['Status',        <span style={{ color: CYAN, fontWeight: 700 }}>
+                    {gatePass.status === 'used' ? 'Released now' : (gatePass.status || 'Active')}
                   </span>],
                 ].map(([label, val], i, arr) => (
                   <div
@@ -1220,28 +1227,24 @@ export default function GatekeeperPortalPage() {
                   <button
                     className="gk-release"
                     onClick={handleRelease}
-                    disabled={releasing || gatePass.status === 'used'}
+                    disabled={releasing}
                     style={{
                       flex: 1,
-                      background: releasing || gatePass.status === 'used'
+                      background: releasing
                         ? `${CYAN}40`
                         : `linear-gradient(135deg,${CYAN},#0099c7)`,
                       color: '#fff',
                       border: 'none',
                       borderRadius: 10,
                       padding: '12px 0',
-                      cursor: releasing || gatePass.status === 'used' ? 'not-allowed' : 'pointer',
+                      cursor: releasing ? 'not-allowed' : 'pointer',
                       fontWeight: 700,
                       fontSize: 14,
                       fontFamily: 'inherit',
                       transition: 'opacity 0.15s',
                     }}
                   >
-                    {releasing
-                      ? 'Releasing...'
-                      : gatePass.status === 'used'
-                        ? 'Already Released'
-                        : 'Release Student'}
+                    {releasing ? 'Releasing...' : 'Done: student released'}
                   </button>
                   <button
                     onClick={() => setGatePass(null)}

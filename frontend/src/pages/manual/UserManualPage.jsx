@@ -186,13 +186,13 @@ const SECTIONS = [
       {
         title: 'Gate Passes (QR)',
         steps: [
-          { n:1, text:'Students → Gate Pass (or /gatepass)' },
-          { n:2, text:'Select the student → choose a reason (early leave, half-day, visitor pickup)' },
-          { n:3, text:'Click "Generate Pass" → a gate pass with a QR code is created' },
-          { n:4, text:'The pass is verified by scanning the QR code on the Gatekeeper portal' },
-          { n:5, text:'Every pass logs its timestamp and the staff member who issued it' },
+          { n:1, text:'Gate Passes (/gate-passes, or the Parents hub) → find the student by name or roll number' },
+          { n:2, text:'Who is collecting: choose the father or mother from the record (phone and CNIC filled in), someone who collected before, or "Someone else" with name, relation, phone and CNIC' },
+          { n:3, text:'Someone not on the record: call the parent, then tick "The parent agreed by phone"' },
+          { n:4, text:'Pick a reason, Issue, then Print pass: QR code and "Release to" the person' },
+          { n:5, text:'At the gate (this page or the Gatekeeper portal) scan the code: "Release only to" the person, with relation, phone and CNIC to check' },
         ],
-        note: 'A gate pass QR code is valid for a single use only — scanning it again shows "already used".',
+        note: 'A pass works once, on its own day. A used, cancelled or other day\'s pass is refused. History shows who issued, released and cancelled each pass.',
       },
       {
         title: 'Visitor Desk (reception and kiosk)',
@@ -587,11 +587,13 @@ const SECTIONS = [
       {
         title: 'New: attendance register with calendar',
         steps: [
-          { n:1, text:'Attendance Tracker → Attendance Register (teachers: Attendance Register tab): a row per student, a column per day — P, A, L, Lt; Sundays and holidays shaded' },
-          { n:2, text:'Updates by itself: attendance marked anywhere (register, kiosk, fingerprint) shows within 30 seconds' },
-          { n:3, text:'Click a day to correct it (class teacher or admin); it shows who marked it and how' },
-          { n:4, text:'Click a name for the student\'s whole year as calendars, with attendance %' },
-          { n:5, text:'Print / Save as PDF (A4 landscape, signatures and stamp) or Excel' },
+          { n:1, text:'Attendance Tracker → Attendance Register (teachers: Attendance Register tab): a row per student, a column per day — P, A, L, Lt; weekly off days and holidays shaded' },
+          { n:2, text:'% is of school days (the days the class was marked since the student joined): a day the class was marked without the student shows "–" and counts against it' },
+          { n:3, text:'Weekly off (administrator, button at the top): Sunday, Saturday and Sunday, Friday… Never school days; auto-absent does not run on them' },
+          { n:4, text:'Updates by itself: attendance marked anywhere (register, kiosk, fingerprint) shows within 30 seconds' },
+          { n:5, text:'Click a day to correct it (class teacher or admin); it shows who marked it and how' },
+          { n:6, text:'Click a name for the student\'s whole year as calendars, with attendance %' },
+          { n:7, text:'Print / Save as PDF (A4 landscape, signatures and stamp) or Excel' },
         ],
       },
       {

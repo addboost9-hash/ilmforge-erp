@@ -1229,7 +1229,7 @@ model GatePass {
   id         Int       @id @default(autoincrement())
   schoolId   Int
   studentId  Int
-  parentName String
+  parentName String // who collects the student
   passCode   String    @unique
   reason     String?
   validDate  DateTime  @default(now())
@@ -1237,6 +1237,15 @@ model GatePass {
   usedAt     DateTime?
   issuedBy   Int?
   createdAt  DateTime  @default(now())
+  // Who collects, as the office checked it: their relation to the student,
+  // phone and CNIC; whether they are on the student's record; and, when not,
+  // that the parent agreed by phone.
+  relation        String?
+  pickupPhone     String?
+  pickupCnic      String?
+  onRecord        Boolean @default(false)
+  parentConfirmed Boolean @default(false)
+  usedBy          Int?
 
   @@index([schoolId, studentId])
 }
